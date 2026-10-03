@@ -1,0 +1,14 @@
+{
+  "name": "claude-cookbook",
+  "owner": { "name": "TOKYO-BEANS" },
+  "metadata": {
+    "description": "A cookbook for Claude Code: which tool, skill or workflow to use for which task, and how."
+  },
+  "plugins": [
+    {
+      "name": "cookbook",
+      "source": "./plugins/cookbook",
+      "description": "The cookbook skill: task-to-tool recipes for research, web data, code search, security scanning, CI, hosting, classification, memory and multi-agent workflows."
+    }
+  ]
+}
