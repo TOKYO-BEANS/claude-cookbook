@@ -83,6 +83,9 @@ When a tool is missing or fails, use the fallback named here and say that you di
 
 ## Multi-agent workflows (`sa-*`)
 
+**Claude Code only:** these run on Claude Code's Workflow tool. In Codex, follow the same steps by
+hand: one implementer, one reviewer, evidence first, and the same owner stops.
+
 Named workflows in `~/.claude/workflows/` keep ultracode's structure with proportionate execution:
 one implementer and one reviewer per task, real evidence (tests, CI, Semgrep, Graphify) over extra
 opinions, an agent budget, and owner stops for merges, deploys, first publications and paid services.
