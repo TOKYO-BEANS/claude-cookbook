@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, hosting, deploys, classification or ranking, project memory, session history, terminal output, debugging or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, hosting, deploys, classification or ranking, project memory, session history, terminal output, debugging, visual design or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -25,6 +25,7 @@ When a tool is missing or fails, use the fallback named here and say that you di
 | Remember a decision or result across sessions | **Waggle** (project-scoped; store outcomes, not chatter) | the project's handoff file |
 | Save, resume, inspect or publish an agent session's history | **AgentGit** (`agit`; only when asked, or when the session already has an AgentGit identity) | the project's handoff file; code stays in GitHub |
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
+| Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool; Claude Code only) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
 | Several agents on one job | the named **`sa-*` workflows** (below) with their budgets | plain parallel subagents |
 | Source control, PRs | **GitHub** via `gh` | GitHub MCP |
 | CI | **Depot CI** (`.depot/workflows`) | GitHub Actions only as a documented exception |
@@ -83,6 +84,22 @@ When a tool is missing or fails, use the fallback named here and say that you di
 ### Debugging
 - Reproduce first, trace the data flow (Graphify), form one hypothesis, write the failing test, then
   fix. After three failed fixes, question the design instead of trying a fourth.
+
+### Visual design (Claude Design)
+- The default for anything visual: new pages, screens, dashboards, layouts, component looks and
+  redesigns. Start on a Design canvas before writing UI code whenever the look needs a decision.
+- Call the Artifact tool with `action: "quickstart"` and `intent: "design"`, then publish from the
+  Design type it returns. Use the project's design system when one exists, otherwise the default.
+- Put 2–3 options side by side, let the user pick or comment, then build the chosen one in code. The
+  canvas is the decision record; the repository holds the real implementation (themes, components,
+  tests).
+- Not for backend or non-visual work, or a small fix inside an existing, clear design.
+- Canvases stay private until the user shares them. Send only what the mockup needs: no secrets,
+  customer data or private repository content.
+- Syncing a local component library to a claude.ai design system is a separate flow (`/design-sync`)
+  that the user starts.
+- **Claude Code only:** Codex has no access to Design artifacts. In Codex, sketch a plain HTML mockup
+  and say so.
 
 ### Session history (AgentGit)
 - Run `agit` only when the user asks to save, resume, inspect or publish a session, or when the
