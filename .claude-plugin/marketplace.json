@@ -8,7 +8,7 @@
     {
       "name": "cookbook",
       "source": "./plugins/cookbook",
-      "description": "The cookbook skill: task-to-tool recipes for research, web data, code search, security scanning, CI, hosting, classification, memory and multi-agent workflows."
+      "description": "The cookbook skill: task-to-tool recipes and the list of tools in the stack, for research, web data, code search, security scanning, CI and releases, hosting, classification, visual design, SEO and multi-agent workflows."
     }
   ]
 }

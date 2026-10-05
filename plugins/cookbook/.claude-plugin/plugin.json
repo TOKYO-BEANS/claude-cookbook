@@ -1,6 +1,6 @@
 {
   "name": "cookbook",
-  "version": "0.4.0",
-  "description": "Task-to-tool recipes for Claude Code and Codex: pick the right tool, skill or workflow for a task and use it the way that works.",
+  "version": "0.5.0",
+  "description": "Task-to-tool recipes for Claude Code and the list of tools in the stack (catalog.json).",
   "author": { "name": "TOKYO-BEANS" }
 }
