@@ -3,7 +3,8 @@
 One skill, **cookbook**, for Claude Code and Codex: which tool, skill or workflow to use for which task,
 and how to use it without the usual mistakes (research, web pages, code search, security scanning, CI,
 Cloudflare, classification with Jev, project memory, session history with AgentGit, compact terminal
-output with RTK, terse replies with Caveman, debugging and the `sa-*` multi-agent workflows).
+output with RTK, terse replies with Caveman, debugging, visual design (Claude Design) and the `sa-*`
+multi-agent workflows).
 
 ## Install in Claude Code
 
@@ -29,7 +30,8 @@ On Windows PowerShell, use
 `Copy-Item -Recurse claude-cookbook\plugins\cookbook\skills\cookbook $HOME\.codex\skills\` for the last
 step. Restart Codex. To update, pull the clone and copy the folder again.
 
-Everything except the `sa-*` workflows works in Codex; those need Claude Code's Workflow tool. The recipes
+Everything except the `sa-*` workflows and Claude Design works in Codex: the workflows need Claude Code's
+Workflow tool, and Codex has no access to Design artifacts (sketch a plain HTML mockup there). The recipes
 name tools and plugins, so install the ones you want (Firecrawl, Parallel, Graphify, Depot and so on) in
 Codex as well.
 
