@@ -2,7 +2,8 @@
 
 One skill, **cookbook**, for Claude Code and Codex: which tool, skill or workflow to use for which task,
 and how to use it without the usual mistakes (research, web pages, code search, security scanning, CI,
-Cloudflare, classification with Jev, project memory, debugging and the `sa-*` multi-agent workflows).
+Cloudflare, classification with Jev, project memory, session history with AgentGit, compact terminal
+output with RTK, terse replies with Caveman, debugging and the `sa-*` multi-agent workflows).
 
 ## Install in Claude Code
 

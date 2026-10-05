@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, hosting, deploys, classification or ranking, project memory, debugging or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, hosting, deploys, classification or ranking, project memory, session history, terminal output, debugging or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -23,6 +23,7 @@ When a tool is missing or fails, use the fallback named here and say that you di
 | A literal string, comment or config value | `rg` (ripgrep) | — |
 | Judge, classify, route, rank, match, dedupe, extract from text | **TypeSafe / Jev** (typed judgments with probabilities; explicit no-match and uncertainty) | an LLM call only when no typed primitive fits |
 | Remember a decision or result across sessions | **Waggle** (project-scoped; store outcomes, not chatter) | the project's handoff file |
+| Save, resume, inspect or publish an agent session's history | **AgentGit** (`agit`; only when asked, or when the session already has an AgentGit identity) | the project's handoff file; code stays in GitHub |
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
 | Several agents on one job | the named **`sa-*` workflows** (below) with their budgets | plain parallel subagents |
 | Source control, PRs | **GitHub** via `gh` | GitHub MCP |
@@ -30,6 +31,8 @@ When a tool is missing or fails, use the fallback named here and say that you di
 | Security scanning | **Semgrep** (CI scan gate) + **OSV-Scanner, Gitleaks, Trivy** (independent review job) + **Aikido** (Safe Chain before installs) | — |
 | Hosting, edge, storage, access control | **Cloudflare** (Workers, D1, R2, KV, Access) via Wrangler or the `cf` CLI | — |
 | Polish substantial English prose | **Grammarly** through the browser | careful self-edit |
+| Shorten a noisy command's output (status, test and build summaries) | **RTK** (`rtk <command>` for supported commands; check the exit status separately) | the plain command when exact output, parsing or failure detail matters |
+| Terser replies, when the user asks for them | **Caveman** skill (`/caveman`; off by default) | normal, clear prose |
 
 ## Recipes
 
@@ -80,6 +83,35 @@ When a tool is missing or fails, use the fallback named here and say that you di
 ### Debugging
 - Reproduce first, trace the data flow (Graphify), form one hypothesis, write the failing test, then
   fix. After three failed fixes, question the design instead of trying a fourth.
+
+### Session history (AgentGit)
+- Run `agit` only when the user asks to save, resume, inspect or publish a session, or when the
+  session already has an explicit AgentGit identity. Unrelated tasks need no AgentGit checks.
+- It versions conversations in its own Agent repo; GitHub stays the source control for code.
+- Name the target explicitly (`<owner/repo>@<branch>`). Never pick a repo or session from the
+  directory name, the newest transcript or the one used last time.
+- `agit commit` saves locally; `agit push` publishes. No bulk upload of past conversations, share
+  links or remote control (`rc`) unless the user asks for that exact action.
+
+### Compact terminal output (RTK)
+- Prefix supported commands whose readable output is long (`rtk git status`, test and build
+  summaries). Leave shell built-ins, pipelines, login or provisioning commands and anything a parser
+  reads as JSON unwrapped. RTK keeps full output locally, so keep secrets out of it.
+- A summary is not the full record: check the exit status separately, and get the raw output
+  (`rtk recall <hash>`, `rtk proxy <command>` or the plain command) before diagnosing a failure or
+  calling it fixed. Do not rerun a command with side effects just to see its output.
+- Never let compressed output hide a failing test or a security finding; run scans and required
+  validation without it.
+- `rtk gain` reports estimates. Label them as estimates; claim no token savings you have not measured.
+
+### Terse replies (Caveman)
+- Keep it off unless the user asks: the plugin starts in `full` mode on its own unless
+  `CAVEMAN_DEFAULT_MODE=off`. `/caveman lite|full|ultra` turns it on; "normal mode" turns it off.
+- It shortens prose only. Code, commands, exact error text, approvals, security warnings and evidence
+  stay verbatim; commits, PR text and docs stay normal prose.
+- The skill (how the agent writes), the CLI proxy (shrinks what the agent reads) and the app
+  middleware are separate. Use the proxy only for a supported workload you have verified.
+- Claim savings only from a measured A/B run on your own work.
 
 ## Multi-agent workflows (`sa-*`)
 
