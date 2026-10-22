@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 const CATEGORIES = ["Development", "Research", "Infrastructure", "Memory", "Security", "Productivity", "Workflows"];
 const SOURCES = ["npm", "github", "vendor"];
 const FIELDS = ["id", "name", "category", "purpose", "source", "repository", "package", "website", "lifecycle", "recipe", "uses"];
+// Optional: a version feed for a vendor tool (Stack Atlas spec 2026-10-21
+// version watch). Each kind reads one fixed host; a feed never carries a URL.
+const OPTIONAL = ["feed"];
+const FEED_FIELDS = { npm: ["package", "tag"], github: ["repository"], gitForWindows: [], jevModels: [] };
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const NPM = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -17,6 +21,22 @@ const httpsUrl = (v) => {
     return false;
   }
 };
+
+function feedErrors(feed, source, at) {
+  if (source !== "vendor") return [`${at}: npm and github tools already have a feed`];
+  if (!feed || typeof feed !== "object" || Array.isArray(feed)) return [`${at}: feed must be an object`];
+  if (!Object.hasOwn(FEED_FIELDS, feed.kind)) return [`${at}: feed kind must be npm, github, gitForWindows or jevModels`];
+  const allowed = FEED_FIELDS[feed.kind];
+  const errors = [];
+  for (const k of Object.keys(feed))
+    if (!["kind", "updater", ...allowed].includes(k)) errors.push(`${at}: feed field ${k} is not allowed for ${feed.kind}`);
+  if (feed.kind === "npm" && !NPM.test(String(feed.package))) errors.push(`${at}: feed package`);
+  if (feed.kind === "npm" && "tag" in feed && !["latest", "stable"].includes(feed.tag)) errors.push(`${at}: feed tag must be latest or stable`);
+  if (feed.kind === "github" && !REPO.test(String(feed.repository))) errors.push(`${at}: feed repository must be owner/name`);
+  if ("updater" in feed && (typeof feed.updater !== "string" || feed.updater.length > 200))
+    errors.push(`${at}: feed updater must be text of at most 200 characters`);
+  return errors;
+}
 
 export function checkCookbook({ catalogText, skillText }) {
   const skill = skillText.replace(/\r/g, "");
@@ -38,7 +58,8 @@ export function checkCookbook({ catalogText, skillText }) {
   catalog.tools.forEach((t, i) => {
     const at = `tools[${i}]${t && typeof t.id === "string" ? ` (${t.id})` : ""}`;
     if (!t || typeof t !== "object" || Array.isArray(t)) return errors.push(`${at}: not an object`);
-    for (const k of Object.keys(t)) if (!FIELDS.includes(k)) errors.push(`${at}: unknown field ${k}`);
+    for (const k of Object.keys(t)) if (!FIELDS.includes(k) && !OPTIONAL.includes(k)) errors.push(`${at}: unknown field ${k}`);
+    if ("feed" in t) errors.push(...feedErrors(t.feed, t.source, at));
     for (const k of FIELDS) if (!(k in t)) errors.push(`${at}: missing ${k}`);
     if (typeof t.id !== "string" || !ID.test(t.id)) errors.push(`${at}: id`);
     else if (ids.has(t.id)) errors.push(`${at}: duplicate id`);

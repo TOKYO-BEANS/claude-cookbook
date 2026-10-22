@@ -42,6 +42,24 @@ test("field rules", () => {
   assert.ok(broken({ source: "github", repository: "" }).some((e) => /owner\/name/.test(e)));
 });
 
+test("feeds: only on vendor tools, only each kind's own fields", () => {
+  assert.equal(catalog.tools.filter((t) => "feed" in t).length, 11);
+  const withFeed = (id, feed) =>
+    errors({ catalogText: withTools((t) => ((t.find((x) => x.id === id).feed = feed), t)) });
+  assert.deepEqual(withFeed("graphify", { kind: "jevModels" }), []);
+  assert.deepEqual(withFeed("graphify", { kind: "npm", package: "@scope/name", tag: "stable", updater: "x" }), []);
+  assert.ok(withFeed("node", { kind: "github", repository: "nodejs/node" }).some((e) => /\(node\): npm and github tools already have a feed/.test(e)));
+  assert.ok(withFeed("graphify", "npm").some((e) => /feed must be an object/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "pypi" }).some((e) => /feed kind must be/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "toString" }).some((e) => /feed kind must be/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "npm", package: "Not A Name" }).some((e) => /feed package/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "npm", package: "x", tag: "next" }).some((e) => /feed tag/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "github", repository: "https://github.com/a/b" }).some((e) => /feed repository/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "gitForWindows", repository: "a/b" }).some((e) => /feed field repository is not allowed/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "jevModels", url: "https://x.test/" }).some((e) => /feed field url is not allowed/.test(e)));
+  assert.ok(withFeed("graphify", { kind: "jevModels", updater: "x".repeat(201) }).some((e) => /feed updater/.test(e)));
+});
+
 test("a bold first choice must name a listed tool", () => {
   const skill = skillText.replace("**Graphify**", "**Sourcegraph**");
   assert.ok(errors({ skillText: skill }).some((e) => /"Sourcegraph" names no tool/.test(e)));
