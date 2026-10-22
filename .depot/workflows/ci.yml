@@ -1,0 +1,174 @@
+name: Depot CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  security:
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 15
+    # A workflow-level `defaults` would change how every step runs (for example
+    # `shell: true {0}` skips every script); a job's own `defaults` win over it.
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+    env:
+      OSV_VERSION: v2.6.0
+      OSV_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+      GITLEAKS_VERSION: 8.30.1
+      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+      # Semgrep: version and wheel hashes live in .depot/semgrep-requirements.txt.
+      # Trivy: immutable release only, never trivy-action/setup-trivy (CVE-2026-33634).
+      TRIVY_VERSION: 0.74.0
+      TRIVY_SHA256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Install pinned scanners
+        retry:
+          retries: 3
+          backoff: exponential
+          delay-seconds: 10
+        run: |
+          set -euo pipefail
+          bin="$RUNNER_TEMP/scanners"; mkdir -p "$bin"
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$bin/osv-scanner" "https://github.com/google/osv-scanner/releases/download/${OSV_VERSION}/osv-scanner_linux_amd64"
+          echo "${OSV_SHA256}  $bin/osv-scanner" | sha256sum -c -
+          chmod +x "$bin/osv-scanner"
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$RUNNER_TEMP/gitleaks.tgz" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$bin" gitleaks
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o "$RUNNER_TEMP/trivy.tgz" "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          echo "${TRIVY_SHA256}  $RUNNER_TEMP/trivy.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$bin" trivy
+          python3 -m venv "$RUNNER_TEMP/semgrep"
+          "$RUNNER_TEMP/semgrep/bin/python" -m pip install --require-hashes --no-deps --only-binary :all: -r .depot/semgrep-requirements.txt
+          # The lock overrides Semgrep's exact mcp==1.29.0 pin (GHSA-84m7-p3x7-pcfv, see
+          # the lock's header): pip check may report that one conflict and nothing else.
+          broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$broken" = "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0." ] || { echo "$broken"; exit 1; }
+          echo "pip check: $broken"
+          echo "$bin" >> "$GITHUB_PATH"
+          echo "$RUNNER_TEMP/semgrep/bin" >> "$GITHUB_PATH"
+      - fail-fast: false
+        parallel:
+          # OSV-Scanner reads every lockfile, the Semgrep hash lock
+          # .depot/semgrep-requirements.txt included: an advisory in a pinned
+          # package fails this step until the lock is regenerated.
+          # ADAPT: --recursive already finds every lockfile OSV-Scanner recognises,
+          # in subprojects too (Probiz's cloudflare/package-lock.json). Only a
+          # lockfile with an unrecognised name needs an explicit --lockfile
+          # argument (`osv-scanner scan source --help`). Keep project lockfiles out of
+          # .depot/, which holds the CI tooling's own lock and its osv-scanner.toml.
+          - name: Dependencies (OSV-Scanner)
+            run: osv-scanner scan source --recursive .
+          # ADAPT: copy the starter .gitleaks.toml to the repository root. Keep the
+          # explicit --config: Probiz omits it and relies on Gitleaks finding
+          # .gitleaks.toml in the scanned folder, which works but hides the config.
+          # --ignore-gitleaks-allow: a `gitleaks:allow` comment on a line silences
+          # that line otherwise. Exceptions live in .gitleaks.toml only.
+          - name: Secrets (Gitleaks)
+            run: gitleaks dir . --config .gitleaks.toml --redact --no-banner --verbose --exit-code 1 --ignore-gitleaks-allow
+          - name: Infrastructure config (Trivy)
+            run: trivy fs --scanners misconfig --severity HIGH,CRITICAL --exit-code 1 --no-progress .
+          - name: Code (Semgrep community rules)
+            run: semgrep scan --config p/default --error --severity ERROR --metrics off
+
+  semgrep:
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Diff-aware scans on pull requests fetch the base branch with this
+          # read-only token (permissions: contents: read).
+          persist-credentials: true
+          fetch-depth: 0
+      # Version and wheel hashes live in .depot/semgrep-requirements.txt; pip installs
+      # only those wheels and refuses any file whose hash does not match.
+      - name: Install Semgrep
+        retry:
+          retries: 3
+          backoff: exponential
+          delay-seconds: 10
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/semgrep"
+          "$RUNNER_TEMP/semgrep/bin/python" -m pip install --require-hashes --no-deps --only-binary :all: -r .depot/semgrep-requirements.txt
+          # The lock overrides Semgrep's exact mcp==1.29.0 pin (GHSA-84m7-p3x7-pcfv, see
+          # the lock's header): pip check may report that one conflict and nothing else.
+          broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$broken" = "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0." ] || { echo "$broken"; exit 1; }
+          echo "pip check: $broken"
+          echo "$RUNNER_TEMP/semgrep/bin" >> "$GITHUB_PATH"
+      - name: Semgrep (Pro rules and Supply Chain)
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        run: |
+          if [ -z "${SEMGREP_APP_TOKEN:-}" ]; then
+            echo "::error::Depot CI secret SEMGREP_APP_TOKEN is not set"
+            exit 1
+          fi
+          semgrep ci --no-suppress-errors --json-output="$RUNNER_TEMP/semgrep.json"
+      # Our own gate, versioned here instead of in the Semgrep account policy: fail on
+      # high/critical code findings with at least medium confidence, and on reachable
+      # vulnerable dependencies. Prints rule and location only, never code.
+      - name: Gate on high-severity findings
+        run: |
+          python3 - "$RUNNER_TEMP/semgrep.json" <<'PY'
+          import json, os, sys
+          if not os.path.exists(sys.argv[1]):
+              print("Semgrep gate: no results file - the scan did not complete")
+              sys.exit(1)
+          data = json.load(open(sys.argv[1]))
+          high = {"ERROR", "HIGH", "CRITICAL"}
+          blocking = []
+          for r in data.get("results", []):
+              extra = r.get("extra") or {}
+              severity = str(extra.get("severity", "")).upper()
+              confidence = str((extra.get("metadata") or {}).get("confidence", "HIGH")).upper()
+              sca = extra.get("sca_info")
+              if sca is not None:
+                  hit = bool(sca.get("reachable")) and severity in high
+              else:
+                  hit = severity in high and confidence != "LOW"
+              if hit:
+                  blocking.append(f"{r.get('check_id')} {r.get('path')}:{(r.get('start') or {}).get('line')} [{severity}/{confidence}]")
+          total = len(data.get("results", []))
+          print(f"Semgrep gate: {total} findings, {len(blocking)} blocking (high/critical, or reachable dependency)")
+          for b in blocking:
+              print("  BLOCKING " + b)
+          sys.exit(1 if blocking else 0)
+          PY
+
+  test:
+    runs-on: depot-ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+      - name: Install Aikido Safe Chain (malware check on npm and pip installs)
+        retry:
+          retries: 3
+          backoff: exponential
+          delay-seconds: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://github.com/AikidoSec/safe-chain/releases/download/1.5.23/install-safe-chain.sh -o "$RUNNER_TEMP/install-safe-chain.sh"
+          echo "b7eac1c7152f300b229b865193d16424ad52386d1898c75ffaf374fcb4eeed3d  $RUNNER_TEMP/install-safe-chain.sh" | sha256sum -c -
+          sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
+      - run: npm ci
+      - run: npm test

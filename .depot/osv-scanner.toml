@@ -1,0 +1,23 @@
+# OSV-Scanner reads an osv-scanner.toml only for files in its own directory
+# (OSV-Scanner 2.6.0, docs/configuration.md): this one covers files directly in
+# .depot/ and nothing else, not .depot/workflows/ and not the rest of the repo.
+#
+# The only lockfile here is semgrep-requirements.txt, the hash lock for the
+# Semgrep CLI that the CI scan jobs install. It is a CI tool's transitive
+# dependency set, but OSV-Scanner scans it like any other lockfile, so a new
+# advisory in a pinned package surfaces in the `security` job. Until 3 October
+# 2026 this file skipped every PyPI package here, and that hid 13 advisories in
+# pyjwt 2.13.0 (one critical). There is nothing to ignore today: every pin in
+# the lock is clean.
+#
+# If an advisory appears and no fixed release exists that Semgrep allows yet,
+# first try regenerating the lock (see its header). Only then ignore that one
+# advisory by ID, with the reason and an expiry date, so it comes back:
+#
+#   [[IgnoredVulns]]
+#   id = "GHSA-xxxx-xxxx-xxxx"  # an alias (CVE or PYSEC id) is ignored too
+#   ignoreUntil = 2026-12-31
+#   reason = "<package> <version>: why it does not apply to a CI tool"
+#
+# Never add a [[PackageOverrides]] entry for the whole ecosystem or the whole
+# lock: it hides every future advisory along with the one it was meant for.
