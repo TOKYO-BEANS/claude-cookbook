@@ -1,0 +1,34 @@
+# Gitleaks configuration for the Depot CI security job (.depot/workflows/ci.yml),
+# started from Stack Atlas's templates/depot-security. Copy it to the repository
+# root. Keep the full default ruleset; add only narrowly scoped, explained
+# exceptions.
+#
+# Every exception is one [[allowlists]] entry that:
+#   - names exactly one rule in targetRules,
+#   - has exactly one anchored value pattern (^...$) in regexes, matched against
+#     the secret Gitleaks found (the default). Never set regexTarget: a pattern
+#     against the whole line or match covers far more than the value,
+#   - names the value: at least eight literal characters on every way through the
+#     pattern, and nothing that matches a key, token or hash in general,
+#   - says in a comment why the value is not a credential.
+# Never add `paths`: in testing a paths entry exempted the whole file from every
+# rule. Never add [[rules]]: a rule with a default rule's id replaces that rule.
+# Never add .gitleaksignore or `gitleaks:allow` comments: the standard's check
+# reads them as modified, and CI ignores the comments. test/security-template.test.mjs
+# in Stack Atlas enforces these rules for this starter and for Stack Atlas's own
+# .gitleaks.toml.
+#
+# A real credential that Gitleaks finds is never allowlisted: rotate it, then
+# remove it from the code (the old value stays in Git history).
+[extend]
+useDefault = true
+
+# Example from Stack Atlas. ACCESS_AUD is the Cloudflare Access application
+# audience tag, a public identifier carried in every Access JWT's `aud` claim.
+# Uncomment and adapt only when the repository has such a value, and write the
+# value itself in the pattern (here a made-up one).
+#
+# [[allowlists]]
+# description = "Cloudflare Access audience tag (public identifier)"
+# targetRules = ["generic-api-key"]
+# regexes = ['''^abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789$''']
