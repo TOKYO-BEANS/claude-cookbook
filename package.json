@@ -1,0 +1,12 @@
+{
+  "name": "claude-cookbook",
+  "private": true,
+  "description": "The tool stack (catalog.json) and the cookbook skill; checked with no dependencies.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node scripts/check.mjs && node --test"
+  }
+}
