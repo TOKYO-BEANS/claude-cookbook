@@ -50,9 +50,16 @@ jobs:
           tar -xzf "$RUNNER_TEMP/trivy.tgz" -C "$bin" trivy
           python3 -m venv "$RUNNER_TEMP/semgrep"
           "$RUNNER_TEMP/semgrep/bin/python" -m pip install --require-hashes --no-deps --only-binary :all: -r .depot/semgrep-requirements.txt
-          # The lock overrides Semgrep's exact mcp==1.29.0 pin (GHSA-84m7-p3x7-pcfv, see
-          # the lock's header): pip check may report that one conflict and nothing else.
-          broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$broken" = "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0." ] || { echo "$broken"; exit 1; }
+          # The lock overrides Semgrep's mcp and OpenTelemetry pins (GHSA-84m7-p3x7-pcfv,
+          # GHSA-xcq7-p3pf-p88h; see the lock's header): pip check may report exactly these
+          # four conflicts, in any order, and nothing else.
+          accepted=(
+            "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0."
+            "semgrep 1.179.0 has requirement opentelemetry-api~=1.37.0, but you have opentelemetry-api 1.45.1."
+            "semgrep 1.179.0 has requirement opentelemetry-exporter-otlp-proto-http~=1.37.0, but you have opentelemetry-exporter-otlp-proto-http 1.45.1."
+            "semgrep 1.179.0 has requirement opentelemetry-sdk~=1.37.0, but you have opentelemetry-sdk 1.45.1."
+          )
+          broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$(sort <<<"$broken")" = "$(printf '%s\n' "${accepted[@]}" | sort)" ] || { echo "$broken"; exit 1; }
           echo "pip check: $broken"
           echo "$bin" >> "$GITHUB_PATH"
           echo "$RUNNER_TEMP/semgrep/bin" >> "$GITHUB_PATH"
@@ -105,9 +112,16 @@ jobs:
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/semgrep"
           "$RUNNER_TEMP/semgrep/bin/python" -m pip install --require-hashes --no-deps --only-binary :all: -r .depot/semgrep-requirements.txt
-          # The lock overrides Semgrep's exact mcp==1.29.0 pin (GHSA-84m7-p3x7-pcfv, see
-          # the lock's header): pip check may report that one conflict and nothing else.
-          broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$broken" = "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0." ] || { echo "$broken"; exit 1; }
+          # The lock overrides Semgrep's mcp and OpenTelemetry pins (GHSA-84m7-p3x7-pcfv,
+          # GHSA-xcq7-p3pf-p88h; see the lock's header): pip check may report exactly these
+          # four conflicts, in any order, and nothing else.
+          accepted=(
+            "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0."
+            "semgrep 1.179.0 has requirement opentelemetry-api~=1.37.0, but you have opentelemetry-api 1.45.1."
+            "semgrep 1.179.0 has requirement opentelemetry-exporter-otlp-proto-http~=1.37.0, but you have opentelemetry-exporter-otlp-proto-http 1.45.1."
+            "semgrep 1.179.0 has requirement opentelemetry-sdk~=1.37.0, but you have opentelemetry-sdk 1.45.1."
+          )
+          broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$(sort <<<"$broken")" = "$(printf '%s\n' "${accepted[@]}" | sort)" ] || { echo "$broken"; exit 1; }
           echo "pip check: $broken"
           echo "$RUNNER_TEMP/semgrep/bin" >> "$GITHUB_PATH"
       - name: Semgrep (Pro rules and Supply Chain)
