@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, debugging, visual design, SEO or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, debugging, reverse engineering, visual design, SEO or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -24,6 +24,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Papers and studies | **Firecrawl research index** | Parallel Search |
 | Where is X defined, who calls Y, what breaks if Z changes | **Graphify** (`graphify_find`, `graphify_callers`, `graphify_impact`, `graphify_tests_for`) — check its indexed commit against your branch first | `rg` / reading files |
 | A literal string, comment or config value | `rg` (ripgrep) | — |
+| How shipped software works when you have no source: a binary, .NET assembly, Electron app, installer, SQLite file or saved HAR capture | **REA** (MCP server `rea` with its `reverse-engineer-anything` skill; static inspection first) | the `rea` CLI when the MCP tools are absent; native decompilation needs Ghidra, IDA or Hopper |
 | Judge, classify, route, rank, match, dedupe, extract from text | **TypeSafe / Jev** (typed judgments with probabilities; explicit no-match and uncertainty) | an LLM call only when no typed primitive fits |
 | Remember a decision or result across sessions | the project's handoff file and the agent's own memory | — |
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
@@ -98,6 +99,30 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 ### Debugging
 - Reproduce first, trace the data flow (Graphify), form one hypothesis, write the failing test, then
   fix. After three failed fixes, question the design instead of trying a fourth.
+
+### Reverse engineering (REA)
+- Use REA when a claim depends on shipped software whose source you don't have: a vendor binary or
+  .NET assembly, an Electron or JavaScript app, an installer or archive, a database file, a saved
+  HAR/SAZ capture. Typical jobs: how a closed system stores or exports its data, what changed between
+  two versions of an app, how a feature in someone's product works before building your own.
+- Not for a repository you have the source of (Graphify, `rg`), for reading live web pages (Firecrawl),
+  or for anything you are not authorized to examine. REA's own disclaimer rules out bypassing DRM,
+  licence checks, anti-cheat or authentication, and copying protected code.
+- Follow the `reverse-engineer-anything` skill: route by target type, take the summary first, cite
+  Evidence IDs, and keep observed, inferred and unknown apart. Close native sessions with
+  `close_binary`. Decompiled output can be wrong: check consequential conclusions against a second
+  kind of evidence.
+- Static before runtime. Browser capture, process capture, Frida and adb run or attach to the target.
+  Use them only when static evidence cannot answer, and ask first before touching a live third-party
+  system (logins and licence pools count) or a production machine.
+- Work on copies. Open a live SQLite database only through a quiescent backup snapshot. REA runs
+  locally, but its results go to the model: keep credentials and personal data out of what you open.
+- Native decompilation needs a provider (Ghidra, IDA or Hopper). Check `binary_session` with `{}`
+  first; without a provider, say so and use the static PE/ELF tools (imports, exports, resources,
+  certificates). Commercial providers must be properly licensed; REA grants no licence.
+- Register one exact version (`rea-agents@<version>`), never `@latest`. Before applying REA's own
+  `setup --client claude_code`, review its `--dry-run` plan. To update, install the new exact version,
+  run a dependency scan, rerun setup, then restart Claude Code.
 
 ### Visual design (Claude Design)
 - The default for anything visual: new pages, screens, dashboards, layouts, component looks and
