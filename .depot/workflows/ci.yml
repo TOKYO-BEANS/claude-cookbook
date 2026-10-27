@@ -19,14 +19,14 @@ jobs:
         shell: bash
         working-directory: .
     env:
-      OSV_VERSION: v2.6.0
-      OSV_SHA256: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+      OSV_VERSION: v2.7.0
+      OSV_SHA256: 160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b
       GITLEAKS_VERSION: 8.30.1
       GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
       # Semgrep: version and wheel hashes live in .depot/semgrep-requirements.txt.
       # Trivy: immutable release only, never trivy-action/setup-trivy (CVE-2026-33634).
-      TRIVY_VERSION: 0.74.0
-      TRIVY_SHA256: 2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a
+      TRIVY_VERSION: 0.76.1
+      TRIVY_SHA256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -54,10 +54,10 @@ jobs:
           # GHSA-xcq7-p3pf-p88h; see the lock's header): pip check may report exactly these
           # four conflicts, in any order, and nothing else.
           accepted=(
-            "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0."
-            "semgrep 1.179.0 has requirement opentelemetry-api~=1.37.0, but you have opentelemetry-api 1.45.1."
-            "semgrep 1.179.0 has requirement opentelemetry-exporter-otlp-proto-http~=1.37.0, but you have opentelemetry-exporter-otlp-proto-http 1.45.1."
-            "semgrep 1.179.0 has requirement opentelemetry-sdk~=1.37.0, but you have opentelemetry-sdk 1.45.1."
+            "semgrep 1.182.0 has requirement mcp==1.29.0, but you have mcp 1.30.0."
+            "semgrep 1.182.0 has requirement opentelemetry-api~=1.37.0, but you have opentelemetry-api 1.45.1."
+            "semgrep 1.182.0 has requirement opentelemetry-exporter-otlp-proto-http~=1.37.0, but you have opentelemetry-exporter-otlp-proto-http 1.45.1."
+            "semgrep 1.182.0 has requirement opentelemetry-sdk~=1.37.0, but you have opentelemetry-sdk 1.45.1."
           )
           broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$(sort <<<"$broken")" = "$(printf '%s\n' "${accepted[@]}" | sort)" ] || { echo "$broken"; exit 1; }
           echo "pip check: $broken"
@@ -116,10 +116,10 @@ jobs:
           # GHSA-xcq7-p3pf-p88h; see the lock's header): pip check may report exactly these
           # four conflicts, in any order, and nothing else.
           accepted=(
-            "semgrep 1.179.0 has requirement mcp==1.29.0, but you have mcp 1.30.0."
-            "semgrep 1.179.0 has requirement opentelemetry-api~=1.37.0, but you have opentelemetry-api 1.45.1."
-            "semgrep 1.179.0 has requirement opentelemetry-exporter-otlp-proto-http~=1.37.0, but you have opentelemetry-exporter-otlp-proto-http 1.45.1."
-            "semgrep 1.179.0 has requirement opentelemetry-sdk~=1.37.0, but you have opentelemetry-sdk 1.45.1."
+            "semgrep 1.182.0 has requirement mcp==1.29.0, but you have mcp 1.30.0."
+            "semgrep 1.182.0 has requirement opentelemetry-api~=1.37.0, but you have opentelemetry-api 1.45.1."
+            "semgrep 1.182.0 has requirement opentelemetry-exporter-otlp-proto-http~=1.37.0, but you have opentelemetry-exporter-otlp-proto-http 1.45.1."
+            "semgrep 1.182.0 has requirement opentelemetry-sdk~=1.37.0, but you have opentelemetry-sdk 1.45.1."
           )
           broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$(sort <<<"$broken")" = "$(printf '%s\n' "${accepted[@]}" | sort)" ] || { echo "$broken"; exit 1; }
           echo "pip check: $broken"
