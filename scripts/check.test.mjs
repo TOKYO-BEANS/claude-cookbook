@@ -13,7 +13,7 @@ const errors = (o = {}) => checkCookbook({ catalogText, skillText, ...o });
 
 test("the real files pass", () => {
   assert.deepEqual(errors(), []);
-  assert.equal(catalog.tools.length, 32);
+  assert.equal(catalog.tools.length, 33);
 });
 
 test("file shape", () => {
@@ -43,7 +43,7 @@ test("field rules", () => {
 });
 
 test("feeds: only on vendor tools, only each kind's own fields", () => {
-  assert.equal(catalog.tools.filter((t) => "feed" in t).length, 11);
+  assert.equal(catalog.tools.filter((t) => "feed" in t).length, 12);
   const withFeed = (id, feed) =>
     errors({ catalogText: withTools((t) => ((t.find((x) => x.id === id).feed = feed), t)) });
   assert.deepEqual(withFeed("graphify", { kind: "jevModels" }), []);

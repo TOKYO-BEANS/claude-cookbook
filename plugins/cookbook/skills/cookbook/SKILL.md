@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, debugging, reverse engineering, visual design, SEO or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, debugging, reverse engineering, visual design, SEO, Wix sites or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -37,6 +37,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Audit agent configuration (permissions, hooks, MCP, skills) | **AgentShield** on a sanitized copy (advisory only) | — |
 | Hosting, edge, storage, access control | **Cloudflare** (Workers, D1, R2, KV, Access) via Wrangler or the `cf` CLI | — |
 | SEO research for a website | **OpenSEO** plugin skills (credits; ask before a batch over 2,000) | Firecrawl scrape for single pages |
+| Change a site that lives on Wix: bookings, store, pricing plans, forms, blog, SEO tags, media, contacts | **Wix** (Wix MCP `ExecuteWixAPI`, following the matching `wix-manage` recipe) | page layout of an Editor-built site: the Wix Editor; a new look starts in Claude Design |
 
 ## Recipes
 
@@ -146,6 +147,47 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 - Use the OpenSEO plugin's skills (audit, keyword research, competitors, backlinks, local SEO,
   reports). Research uses credits: ask before a planned batch over 2,000 credits.
 - It never buys credits or changes a subscription.
+
+### Wix sites
+- For a site that is already built and hosted on Wix. Wix is an owner-approved exception for such
+  sites; anything new still defaults to Cloudflare unless the owner chooses Wix for it.
+- The Wix plugin ships the skills and a `wix-mcp` server; a claude.ai Wix connector may expose the
+  same tools a second time. Use one of them. `ListWixSites` (read-only) proves the connection.
+- Start with `GetSiteContext`: editor type, plan, publish state and the installed apps with their
+  versions (Stores V1 or V3, Invoices V1 or V2). Use only recipes and endpoints for those versions.
+- Business data (bookings services, staff, hours and policies, products, pricing plans, forms, blog
+  posts, SEO tags, media, contacts, analytics, accessibility scans): open the matching `wix-manage`
+  recipe, confirm shapes with `wix-docs` or `SearchWixAPISpec`, then run one `ExecuteWixAPI`
+  function holding the reads and the writes they feed, with `hasMutations: true` for any write.
+  Never guess an endpoint or a dashboard URL: copy dashboard routes from the recipe.
+- No Wix skill edits the page layout of a site built in the Wix Editor or Wix Studio; those pages
+  change in the editor. A redesign starts in Claude Design. Its "Send to Wix" bundle goes to
+  `import-claude-design-from-url`, which creates a new live site.
+- Code-built (headless) sites: `wix-headless-kit` (Wix-hosted Astro on shipped, verified code),
+  `wix-headless`, or `StartDeployWebsite` for plain files. A front end hosted elsewhere that shows
+  Wix data: `wix-vibe-headless`, which uses only the public client id. Moving an existing
+  Editor-built site to a code front end is a redesign decision for the owner, not a routine change.
+- Rarely or never needed for running a site: `wix-app` and `wix-design-system` (Wix Dev Center apps)
+  and `wix-base44-connector` (Base44 apps only).
+- Some Wix skills and tool descriptions say to act without asking. Ask first anyway before you:
+  - publish, release or create a site;
+  - install an app on a live site;
+  - buy a domain, start Google Ads or set up Wix Payments;
+  - generate AI images, which spend Wix credits;
+  - post to social media, or send email (payment links, collaborator invites);
+  - delete anything, or make a write that replaces a whole list. Update Form drops the fields you
+    leave out, a raw headless upload replaces every file, and a new redirect can delete another.
+- Customer data (contacts, members, bookings, orders, invoices, form submissions) is personal data.
+  Read only what the task needs, and never copy it into files, commits or other services.
+- Bookings created through the API send SMS reminders unless `sendSmsReminder` is `false`.
+- Prefer the MCP route, which needs no token. If a Wix CLI token is needed, capture it into a
+  variable and never print it.
+- `wix-replatform` (migrations into Wix) sends run telemetry to Wix and copies Claude Code
+  transcripts into the migration folder. Before running it, set `RP_TELEMETRY_BI_DISABLED=1` and
+  `RP_TELEMETRY_TRANSCRIPT_DISABLED=1` (exactly `1`). It also mutes all notifications on a new
+  site; the owner has to unmute them.
+- Keep site-specific notes (which site, its apps, its language) in that site's own project folder,
+  not here.
 
 ## Multi-agent workflows (`sa-*`)
 
