@@ -1,6 +1,6 @@
 {
   "name": "cookbook",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Task-to-tool recipes for Claude Code and the list of tools in the stack (catalog.json).",
   "author": { "name": "TOKYO-BEANS" }
 }
