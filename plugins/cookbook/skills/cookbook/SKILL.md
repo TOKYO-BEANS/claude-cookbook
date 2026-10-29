@@ -31,9 +31,9 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
 | Several agents on one job | the named **`sa-*` workflows** (below) with their budgets | plain parallel subagents |
 | Source control, PRs | **GitHub** via `gh` | GitHub MCP |
-| CI | **Depot CI** (`.depot/workflows`) | GitHub Actions only as a documented exception |
+| CI | **Depot CI** (`.depot/workflows`) | GitHub Actions only as a documented exception (today: Windows checks on Depot runners; CodeQL during the Advanced Security trial) |
 | After a merge or deploy | **Release Maintenance** (exact-commit checks, recorded by the release verifier) through `sa-release` | — |
-| Security scanning | **Semgrep** (CI scan gate) + **OSV-Scanner, Gitleaks, Trivy** (independent review job) + **Aikido** (Safe Chain before installs) | — |
+| Security scanning | **Semgrep** (CI scan gate) + **OSV-Scanner, Gitleaks, Trivy** (independent review job) + **Aikido** (Safe Chain before installs) + **GitHub Secret Protection** (push protection) | — |
 | Audit agent configuration (permissions, hooks, MCP, skills) | **AgentShield** on a sanitized copy (advisory only) | — |
 | Hosting, edge, storage, access control | **Cloudflare** (Workers, D1, R2, KV, Access) via Wrangler or the `cf` CLI | — |
 | SEO research for a website | **OpenSEO** plugin skills (credits; ask before a batch over 2,000) | Firecrawl scrape for single pages |
@@ -80,6 +80,19 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 - A Gitleaks exception is one rule and one exact value pattern — never a `paths` allowlist, never a
   model's judgment alone. A false-positive verdict is not a clean scan.
 - Aikido Safe Chain runs before every `npm ci` / `pip install`.
+- GitHub (the TOKYO-BEANS organization is on GitHub Team): every repository with CI has a ruleset on its
+  default branch. It requires a pull request and the repository's Depot CI checks (integration id
+  219785; the Windows exception checks come from GitHub Actions, 15368), and blocks force-pushes and
+  deletion, with no bypass. Renaming or retiring a required check means updating the ruleset in the
+  same change, or every pull request waits for a check that never reports. A repository gets its
+  ruleset once its CI passes.
+- GitHub Secret Protection (secret scanning, push protection, validity checks) is on for every
+  repository. A push blocked over a fake test value is bypassed with a reason. A real secret is
+  rotated, never bypassed.
+- CodeQL runs through GitHub's default setup on GitHub Actions. This is a documented exception for
+  the GitHub Advanced Security trial (29 October to about 28 November 2026), not a required check.
+  When the trial ends, the owner decides whether to buy Code Security (and keep CodeQL there or move
+  it into Depot CI) or let it lapse. Code scanning alerts are triaged like Semgrep findings.
 
 ### Agent configuration audit (AgentShield)
 - Scan a sanitized copy of the agent configuration, never the live one with secrets in it.
