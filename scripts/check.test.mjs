@@ -13,7 +13,7 @@ const errors = (o = {}) => checkCookbook({ catalogText, skillText, ...o });
 
 test("the real files pass", () => {
   assert.deepEqual(errors(), []);
-  assert.equal(catalog.tools.length, 33);
+  assert.equal(catalog.tools.length, 34);
 });
 
 test("file shape", () => {
