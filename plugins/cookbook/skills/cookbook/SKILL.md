@@ -26,7 +26,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | A literal string, comment or config value | `rg` (ripgrep) | — |
 | How shipped software works when you have no source: a binary, .NET assembly, Electron app, installer, SQLite file or saved HAR capture | **REA** (MCP server `rea` with its `reverse-engineer-anything` skill; static inspection first) | the `rea` CLI when the MCP tools are absent; native decompilation needs Ghidra, IDA or Hopper |
 | Judge, classify, route, rank, match, dedupe, extract from text | **TypeSafe / Jev** (typed judgments with probabilities; explicit no-match and uncertainty) | an LLM call only when no typed primitive fits |
-| A terminal Claude Code session where each turn should run on the cheapest model that can do it | **Jev Router** (`jev-claude`, same arguments as `claude`) | plain `claude` |
+| Each turn of a Claude Code session on the cheapest model that can do it | **Jev Router**: the `jev-turn-router` plugin (on by default, in the app and terminals); `jev-claude` for a proxied terminal | `/jev-router off` for one session |
 | Remember a decision or result across sessions | the project's handoff file and the agent's own memory | — |
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
 | Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
@@ -70,17 +70,49 @@ remove a tool there and here in the same pull request, and run `node scripts/che
   authorizes a write or clears a security finding.
 
 ### Model routing (Jev Router)
+Two ways to run it. Both make one Jev call per new prompt, and the tool loop keeps the chosen
+model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance.
+
+**In the app and in terminal sessions: the `jev-turn-router` plugin.** It's on by default
+(user scope, local `claude-local` marketplace, read from
+`~/.claude/vendor/compaction/local-marketplace/jev-turn-router`).
+- **What it does:** a Claude Code mod. Its `turn.start` hook asks Jev, and its `turn.step` hook
+  names Haiku, Sonnet or Opus 5.5 for every request of that turn. The session keeps its own
+  model setting, so `opus[1m]`'s 1M window and tool search stay as they are.
+- **What is routed:** only the main loop of an Opus session a person works in, meaning a
+  terminal REPL, or a Code-tab session recognised by the app's `mcp__ccd_*` tools.
+- **What is left alone:** plain `claude -p` and SDK jobs, subagents, a model picked by hand,
+  and turns that are only a machine message (task notifications, messages from other
+  sessions). So follow-ups another session sends to a test session are never routed.
+- **Guards:**
+  - a prompt overrides Jev only by naming one model after "use" or "switch to", not negated
+    and not inside code;
+  - low confidence never steps down;
+  - after the first turn it doesn't step down once the context passes 20k tokens (the cache
+    would be rebuilt). A Code-tab session starts at about 150k tokens, so in practice only a
+    session's first turn steps down, and later turns can step up;
+  - a Jev error, or no answer within 2.5 s, keeps the current model.
+- **Day to day:** the status line shows the model that ran. `/jev-router` shows the last pick;
+  `/jev-router off` or `on` switches it for the session.
+- **Decision log:** `~/.claude/vendor/compaction/state/jev-turn-router-decisions.jsonl` (no
+  prompt text). The engine has no debug log for Code-tab sessions, so read this log first when
+  routing looks wrong.
+- **Testing it:** test in a new Code-tab session and read the model from its transcript
+  (`~/.claude/projects/<folder>/<session>.jsonl`). `claude plugin test <folder>` runs its tests.
+  Haiku, Sonnet and Opus 5.5 all take 1M input tokens (`runtime.max_input_tokens` in
+  Claude Code's model catalog); only Haiku 4.5 had 200k.
+
+**In a terminal through a proxy: `jev-claude`.**
 - Start `jev-claude` instead of `claude` in a terminal. One Jev call per new user turn picks
   Haiku, Sonnet or Opus from the account's own model list; tool-loop continuations keep that
   model. The status line shows the routed model and Jev's confidence, and `/jev-explain` shows
   why. Choosing a model in `/model` pauses routing; the "Jev Router" row resumes it.
-- Only terminal sessions are routed: the desktop app's Code tab starts its own Claude Code. The
-  terminal CLI must be signed in (`claude auth login`, from a Start-menu PowerShell).
+- It can't serve the app: a folder's settings may not set `ANTHROPIC_BASE_URL` (Claude Code
+  only lets project settings set an approved list of variables). The terminal CLI must be signed
+  in (`claude auth login`, from a Start-menu PowerShell).
 - Routing fails open: a Jev error or timeout keeps the current model. A prompt overrides Jev
-  only with "use" or "switch to" followed by a model name (haiku, sonnet, opus, fable). Leave
-  `JEV_ALLOW_FABLE` unset: Fable bills extra usage.
-- Each new turn's prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
-  (one small call per turn).
+  only with "use" or "switch to" followed by one model name, not negated and not inside code.
+  Leave `JEV_ALLOW_FABLE` unset: Fable bills extra usage.
 - To Claude Code the model is the unknown name `jev-router`, so a session gets a 200k context
   window (not `opus[1m]`'s 1M). Behind a custom base URL it also turns tool search off, which puts
   every MCP tool schema (about 220k tokens with the claude.ai connectors) into each request; the
