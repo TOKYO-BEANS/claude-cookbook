@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, debugging, reverse engineering, visual design, SEO, Wix sites or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model routing, debugging, reverse engineering, visual design, SEO, Wix sites or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -26,6 +26,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | A literal string, comment or config value | `rg` (ripgrep) | — |
 | How shipped software works when you have no source: a binary, .NET assembly, Electron app, installer, SQLite file or saved HAR capture | **REA** (MCP server `rea` with its `reverse-engineer-anything` skill; static inspection first) | the `rea` CLI when the MCP tools are absent; native decompilation needs Ghidra, IDA or Hopper |
 | Judge, classify, route, rank, match, dedupe, extract from text | **TypeSafe / Jev** (typed judgments with probabilities; explicit no-match and uncertainty) | an LLM call only when no typed primitive fits |
+| A terminal Claude Code session where each turn should run on the cheapest model that can do it | **Jev Router** (`jev-claude`, same arguments as `claude`) | plain `claude` |
 | Remember a decision or result across sessions | the project's handoff file and the agent's own memory | — |
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
 | Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
@@ -65,6 +66,29 @@ remove a tool there and here in the same pull request, and run `node scripts/che
   and evaluate on labelled examples that are never sent as inputs.
 - Keep exact calculations, permissions and fixed business rules in code; confidence alone never
   authorizes a write or clears a security finding.
+
+### Model routing (Jev Router)
+- Start `jev-claude` instead of `claude` in a terminal. One Jev call per new user turn picks
+  Haiku, Sonnet or Opus from the account's own model list; tool-loop continuations keep that
+  model. The status line shows the routed model and Jev's confidence, and `/jev-explain` shows
+  why. Choosing a model in `/model` pauses routing; the "Jev Router" row resumes it.
+- Only terminal sessions are routed: the desktop app's Code tab starts its own Claude Code. The
+  terminal CLI must be signed in (`claude auth login`, from a Start-menu PowerShell).
+- Routing fails open: a Jev error or timeout keeps the current model. A prompt overrides Jev
+  only with "use" or "switch to" followed by a model name (haiku, sonnet, opus, fable). Leave
+  `JEV_ALLOW_FABLE` unset: Fable bills extra usage.
+- Each new turn's prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
+  (one small call per turn).
+- On this PC: the checkout `~/.local/share/jev-router` is an upstream commit plus the patches in
+  `~/.local/share/jev-router-patches` (local branch `local-<sha>`). `jev-claude` runs
+  `~/.local/bin/jev-claude-secure.mjs`, which decrypts the DPAPI key into its own process only,
+  reads no `.env` file, ignores `TYPESAFE_BASE_URL`, and gives Claude Code `--add-dir` for the
+  skill folder `~/.local/share/jev-router-skill` only. Never follow upstream's README setup
+  (`npm install -g`, a `~/.jev-router.env` key file).
+- To update: review the new upstream range with `sa-review`, check out the exact commit, re-apply
+  the patches (drop any that upstream fixed), run `npm ci --ignore-scripts` and `npm test`,
+  compare `bin/jev-claude.mjs` with the launcher, then route one real prompt. Upstream does not
+  accept Claude-written contributions; report bugs there as issues, and only with the owner's yes.
 
 ### Building a change (Superpowers)
 - New behaviour starts with brainstorming (intent, then a design the user approves); multi-step work
