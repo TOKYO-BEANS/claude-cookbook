@@ -79,6 +79,14 @@ remove a tool there and here in the same pull request, and run `node scripts/che
   `JEV_ALLOW_FABLE` unset: Fable bills extra usage.
 - Each new turn's prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
   (one small call per turn).
+- To Claude Code the model is the unknown name `jev-router`, so a session gets a 200k context
+  window (not `opus[1m]`'s 1M). Behind a custom base URL it also turns tool search off, which puts
+  every MCP tool schema (about 220k tokens with the claude.ai connectors) into each request; the
+  launcher sets `ENABLE_TOOL_SEARCH=true` to prevent that. A `-p` test with `--tools` must include
+  `ToolSearch`.
+- On a claude.ai login Claude Code fetches no model list through the proxy, so routing uses the
+  fixed ids in `src/config.mjs` (`TIERS`). When Anthropic ships new models, update them there (a
+  local patch with a test).
 - On this PC: the checkout `~/.local/share/jev-router` is an upstream commit plus the patches in
   `~/.local/share/jev-router-patches` (local branch `local-<sha>`). `jev-claude` runs
   `~/.local/bin/jev-claude-secure.mjs`, which decrypts the DPAPI key into its own process only,
