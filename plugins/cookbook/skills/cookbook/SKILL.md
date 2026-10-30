@@ -91,7 +91,8 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
   - after the first turn it doesn't step down once the context passes 20k tokens (the cache
     would be rebuilt). A Code-tab session starts at about 150k tokens, so in practice only a
     session's first turn steps down, and later turns can step up;
-  - a Jev error, or no answer within 2.5 s, keeps the current model.
+  - a Jev error, or no answer within 2.5 s, keeps the current model. The prompt that first
+    reads the key gets 6 s instead, because in the app the key is usually read then.
 - **Day to day:** the status line shows the model that ran. `/jev-router` shows the last pick;
   `/jev-router off` or `on` switches it for the session.
 - **Decision log:** `~/.claude/vendor/compaction/state/jev-turn-router-decisions.jsonl` (no
