@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model routing, debugging, reverse engineering, visual design, SEO, Wix sites or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model routing, debugging, reverse engineering, visual design, SEO, Wix sites, Claude Code add-ons (skills and mods) or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -39,6 +39,8 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Hosting, edge, storage, access control | **Cloudflare** (Workers, D1, R2, KV, Access) via Wrangler or the `cf` CLI | — |
 | SEO research for a website | **OpenSEO** plugin skills (credits; ask before a batch over 2,000) | Firecrawl scrape for single pages |
 | Change a site that lives on Wix: bookings, store, pricing plans, forms, blog, SEO tags, media, contacts | **Wix** (Wix MCP `ExecuteWixAPI`, following the matching `wix-manage` recipe) | page layout of an Editor-built site: the Wix Editor; a new look starts in Claude Design |
+| Make a task or prompt more ambitious; write a prompt that loops until it beats a bar | **be-ambitious**, **gauntlet-loop** skills | — |
+| Check the Claude Code setup and its instructions; audit or write a skill | **doctor-plus**, **skill-creator-plus** skills (report first) | Superpowers `writing-skills` for a skill's description |
 
 ## Recipes
 
@@ -233,6 +235,50 @@ remove a tool there and here in the same pull request, and run `node scripts/che
   site; the owner has to unmute them.
 - Keep site-specific notes (which site, its apps, its language) in that site's own project folder,
   not here.
+
+### Claude Code add-ons
+Skills and mods the owner added on 30 October 2026. Every file was read before install. Mods run
+in every session, headless ones included, so a misbehaving one affects scheduled jobs too.
+
+- **Make a task or prompt more ambitious**: `/be-ambitious`. Its own ask-first list is narrower than
+  ours: merges, deploys, publications and stack changes still need the owner's yes.
+- **A prompt that loops until it wins**: `/gauntlet-loop` writes the prompt; it does not run it.
+  Before running one, add an agent or token budget, a round cap and a Firecrawl credit ceiling.
+  Never accept a bar that means running untrusted code. Not for scheduled jobs.
+- **Health check of the Claude setup and its instructions**: `/doctor-plus`, report first. Make
+  accepted fixes through a worktree pull request. Leave alone the standard-managed CLAUDE.md
+  section, AGENTS.md's shared owner decisions and the junctioned shared skills
+  (`release-maintenance`, `typesafe-ai`).
+- **Audit or write a skill**: `/skill-creator-plus`, audit mode first. Run its scripts with `python`,
+  not `python3`, which is the Microsoft Store stub on this PC. Give `init_skill.py` an absolute
+  `--path`. Fix a skill in its source repository, never in a plugin cache or a junctioned folder.
+  Where its advice on descriptions disagrees with Superpowers' `writing-skills`, Superpowers wins.
+- **Orchestrated build with tiered workers**: `/savvy-flow:savvy-flow`, only in a worktree or feature
+  branch, because it runs `git init` and commits in a new folder. `sa-build` stays the default for a
+  written plan. **savvy-progress** draws the progress bar for it; `/agents-info` opens its agents
+  panel.
+- **Save a correction as a rule (claude-reflect)**: the reflect-mod row above the prompt offers a
+  rule it found. Press "Save to ./CLAUDE.md" only in a `.claude/worktrees` session, so the change
+  goes through a pull request. Never press "Global instead": HOME is unset on this PC, so it writes
+  `C:\.claude\CLAUDE.md`. `/reflect-pause` stops its model checks.
+- **Prompt cache (cache-tax)**: the guard is warn (set once with `/cache-tax guard warn`).
+  `/keepwarm 90m` holds the cache through a break and `/keepwarm off` stops it. Never run
+  `/keepwarm always`: it is global and warms every session, headless ones included. Warming
+  spends tokens.
+- **The band above the prompt (prompt-band)**: a limits row (7-day and 5-hour usage, cache warm or
+  cold) and a session row (turn, speed, cost, context). Other mods' rows show beneath it.
+  `/prompt-band hide`, `show` or `status`. Its cache-expiry notification stays off unless its
+  `notify` option is set to `on`.
+- Updates: cache-tax and prompt-band are pinned copies in the local `claude-local` marketplace
+  (`~/.claude/vendor/compaction/local-marketplace`, each with a PROVENANCE.json). Refresh one only
+  after reading the upstream diff. The skills are plain copies in `~/.claude/skills`. For the
+  claude-reflect and claude-kit marketplaces, read the new commit before running
+  `claude plugin update`.
+- Not installed: blast-radius (anthropics/claude-code-playground). On Windows it refuses every risky
+  Bash command at once, because `sleep` and `du` are not on the PATH and `bash` is the WSL launcher.
+  It also does not watch PowerShell; use permission deny rules for hard blocks. claude-reflect's
+  Python hooks plugin is not installed either: its hooks call the `python3` Store stub, and its
+  checks start `claude -p` children with every tool.
 
 ## Multi-agent workflows (`sa-*`)
 
