@@ -42,3 +42,22 @@ test("counts each tool_use id and each slash message once, inside the window", a
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("skips malformed lines, reads array content, and names folders from a root with a trailing slash", async () => {
+  const root = mkdtempSync(join(tmpdir(), "mcp-use-"));
+  try {
+    mkdirSync(join(root, "proj-b"));
+    const lines = [
+      '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t9","name":"mcp__x__y"', // cut off
+      user("u3", recent, [{ type: "text", text: "<command-name>/cache-tax</command-name>" }]),
+      assistant(recent, [call("t5", "mcp__a__b", {})]),
+    ];
+    writeFileSync(join(root, "proj-b", "s.jsonl"), lines.join("\n") + "\n");
+    const r = await census({ root: root + "/", days: 30, now });
+    assert.deepEqual([...r.slash], [["cache-tax", 1]]);
+    assert.equal(r.servers.has("x"), false);
+    assert.deepEqual([...r.servers.get("a").projects], ["proj-b"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

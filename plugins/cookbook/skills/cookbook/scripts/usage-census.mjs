@@ -1,9 +1,12 @@
 // Count MCP tool calls, Skill tool calls and slash commands in Claude Code
 // transcripts over the last N days. Each tool_use id and each user message
 // uuid counts once. Prints only names and counts.
-// Usage: node usage-census.mjs <projects-root> [days]
-import { createReadStream, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+// Usage: node usage-census.mjs [projects-root] [days]
+// Defaults: ~/.claude/projects and 30 days. Claude.ai connectors print as
+// their ids: name them from the session's connector list before sharing.
+import { createReadStream, existsSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, relative } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
@@ -34,7 +37,7 @@ export async function census({ root, days = 30, now = Date.now() }) {
   for (const f of walk(root)) {
     if (statSync(f).mtimeMs < since) continue;
     files++;
-    const project = f.slice(root.length + 1).split(/[\\/]/)[0];
+    const project = relative(root, f).split(/[\\/]/)[0];
     const rl = createInterface({ input: createReadStream(f), crlfDelay: Infinity });
     for await (const line of rl) {
       lines++;
@@ -91,7 +94,13 @@ export function report({ files, lines, servers, skills, slash }, days) {
   return out.join("\n");
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+// realpath on both sides, so a run through a junction or symlink still prints.
+if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
+  const root = process.argv[2] || join(homedir(), ".claude", "projects");
   const days = Number(process.argv[3] || 30);
-  console.log(report(await census({ root: process.argv[2], days }), days));
+  if (!existsSync(root) || !(days > 0)) {
+    console.error(`Usage: node usage-census.mjs [projects-root] [days]; no folder ${root} or days not a positive number`);
+    process.exit(2);
+  }
+  console.log(report(await census({ root, days }), days));
 }
