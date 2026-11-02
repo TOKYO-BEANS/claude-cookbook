@@ -31,7 +31,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
 | Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
 | Several agents on one job | the named **`sa-*` workflows** (below) with their budgets | plain parallel subagents |
-| Source control, PRs | **GitHub** via `gh` | GitHub MCP |
+| Source control, PRs | **GitHub** via `gh` | — |
 | CI | **Depot CI** (`.depot/workflows`) | GitHub Actions only as a documented exception (today: Windows checks on Depot runners; CodeQL during the Advanced Security trial) |
 | After a merge or deploy | **Release Maintenance** (exact-commit checks, recorded by the release verifier) through `sa-release` | — |
 | Security scanning | **Semgrep** (CI scan gate) + **OSV-Scanner, Gitleaks, Trivy** (independent review job) + **Aikido** (Safe Chain before installs) + **GitHub Secret Protection** (push protection) | — |
@@ -204,6 +204,12 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
 - Run Wrangler with `WRANGLER_SEND_METRICS=false`, `WRANGLER_SEND_ERROR_REPORTS=false` and
   `WRANGLER_NO_SKILLS_UPDATE_PROMPTS=true`. Wrangler 4.151's skills install and update prompt can
   write into `~/.claude/skills` from an interactive terminal.
+- Queries without an MCP server (the deprecated `cloudflare-bindings`, `-builds` and `-observability`
+  servers are removed): D1 through `wrangler d1 execute <database> --remote --command "<SQL>"`; Worker
+  logs through `POST /accounts/<account>/workers/observability/telemetry/query` with the same
+  DPAPI token (`with-key.mjs cloudflare-wrangler CLOUDFLARE_API_TOKEN`), or the Cloudflare plugin's
+  `execute` once its login grants the observability and D1 scopes (the owner re-authorizes it in
+  `/mcp`). `cloudflare-docs` stays for documentation search.
 - `wrangler dev` reads a Worker's required secrets from the environment, so start it without
   secret-looking variables set. For local dev, keep `compatibility_date` at or below the date of the
   bundled workerd.
