@@ -245,6 +245,9 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
 - Register one exact version (`rea-agents@<version>`), never `@latest`. Before applying REA's own
   `setup --client claude_code`, review its `--dry-run` plan. To update, install the new exact version,
   run a dependency scan, rerun setup, then restart Claude Code.
+- The `rea` server (229 tool names) is registered per project, not at user scope (1 call in 30 days;
+  moved on 2 November 2026). In a folder that needs it: `claude mcp add-json -s local rea "$(cat
+  ~/.local/share/rea/claude-mcp.json)"`, then a new session. The `rea` command line works without it.
 
 ### Visual design (Claude Design)
 - The default for anything visual: new pages, screens, dashboards, layouts, component looks and
