@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model routing, debugging, reverse engineering, visual design, SEO, Wix sites, Claude Code add-ons (skills and mods) or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model routing, debugging, reverse engineering, visual design, SEO, Wix sites, Claude Code add-ons (skills and mods), scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -41,6 +41,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Change a site that lives on Wix: bookings, store, pricing plans, forms, blog, SEO tags, media, contacts | **Wix** (Wix MCP `ExecuteWixAPI`, following the matching `wix-manage` recipe) | page layout of an Editor-built site: the Wix Editor; a new look starts in Claude Design |
 | Make a task or prompt more ambitious; write a prompt that loops until it beats a bar | **be-ambitious**, **gauntlet-loop** skills | — |
 | Check the Claude Code setup and its instructions; audit or write a skill | **doctor-plus**, **skill-creator-plus** skills (report first) | Superpowers `writing-skills` for a skill's description |
+| Run Claude Code from a script, routine or workflow (`claude -p`) | the **Scripted Claude Code runs** recipe below | — |
 
 ## Recipes
 
@@ -68,6 +69,13 @@ remove a tool there and here in the same pull request, and run `node scripts/che
   and evaluate on labelled examples that are never sent as inputs.
 - Keep exact calculations, permissions and fixed business rules in code; confidence alone never
   authorizes a write or clears a security finding.
+- Measure the fixed rule first and write the bar before any call. In one local test (October 2026,
+  small sets, one labeller per set) Jev cleared its bar in 5 of 19 tries, and never where a fixed rule
+  already scored 0.925 or more.
+- To match a request to a list (projects, files, tools), ask one Choice over the list plus two Nouls in
+  the same request: "does it point to any of these?" and "could it mean more than one?". In that test
+  this scored 0.917 on 24 held-out requests (7 of them answered with "which one?") against 0.417 for
+  word overlap.
 
 ### Model routing (Jev Router)
 Two ways to run it. Both make one Jev call per new prompt, and the tool loop keeps the chosen
@@ -164,6 +172,14 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
 ### Agent configuration audit (AgentShield)
 - Scan a sanitized copy of the agent configuration, never the live one with secrets in it.
 - Findings are advisory: report what is new since the baseline; change nothing automatically.
+- MCP servers: once a quarter and after adding a plugin, compare `claude mcp list` with `/context`.
+  Flag a server that loads twice (a plugin copy and a connector copy), a server whose own instructions
+  say it is deprecated (Cloudflare's per-product `cloudflare-bindings`, `cloudflare-builds` and
+  `cloudflare-observability` servers point to the Cloudflare API MCP), and a large server only some
+  projects use. Moving REA (229 tools) and OpenSEO (83) to project scope would remove more tool names
+  than every duplicate together (about 95). Each removal or scope change is standing configuration:
+  the owner decides it. Measure `/context` before and after.
+- Flag any `Write(...)` allow rule in a settings file: it never matches (see Scripted Claude Code runs).
 
 ### CI and releases
 - Depot CI with `.depot/workflows`; read failures with `depot ci logs` / `depot ci diagnose`.
@@ -176,6 +192,12 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
 - Projects with a `wrangler.jsonc` use the project-pinned Wrangler; otherwise the `cf` CLI.
 - Before a deploy: build, test, dry run, list pending D1 migrations, note the rollback version.
   Deploys and Access changes need the owner's explicit yes.
+- Run Wrangler with `WRANGLER_SEND_METRICS=false`, `WRANGLER_SEND_ERROR_REPORTS=false` and
+  `WRANGLER_NO_SKILLS_UPDATE_PROMPTS=true`. Wrangler 4.151's skills install and update prompt can
+  write into `~/.claude/skills` from an interactive terminal.
+- `wrangler dev` reads a Worker's required secrets from the environment, so start it without
+  secret-looking variables set. For local dev, keep `compatibility_date` at or below the date of the
+  bundled workerd.
 
 ### Debugging
 - Reproduce first, trace the data flow (Graphify), form one hypothesis, write the failing test, then
@@ -268,6 +290,30 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
   site; the owner has to unmute them.
 - Keep site-specific notes (which site, its apps, its language) in that site's own project folder,
   not here.
+
+### Scripted Claude Code runs (`claude -p`)
+From a local test of 94 headless runs (Claude Code 2.1.314, October 2026). Each rule here was broken
+at least once in that test.
+
+- Pass every limit on the command line: `--permission-mode` (`acceptEdits`, or `default` with
+  `--allowedTools`; never `bypassPermissions` or `--dangerously-skip-permissions`),
+  `--max-budget-usd` and `--no-session-persistence`. Without the last, the transcript is saved under
+  `~/.claude/projects`.
+- File rules use `Edit(...)`, which also covers the Write tool; a `Write(path)` rule never matches. On
+  Windows, write the path as `//c/...`.
+- A Bash allow rule matches the command word for word. A run that phrases a command differently is
+  denied and can still exit 0 having done nothing, so check the result, not the exit code.
+- Under `acceptEdits`, add `--disallowedTools Bash PowerShell` unless the run needs a shell: in the
+  test, `acceptEdits` let an `echo >>` append through outside the allow list.
+- From Git Bash, start with `MSYS_NO_PATHCONV=1`, or `/skill-name` and `//c/` paths turn into Windows
+  paths.
+- Files under a `.claude/` folder are protected: a headless run cannot edit them, even with an allow
+  rule. Run self-editing skills interactively.
+- Read `--output-format stream-json` to confirm the skill ran; tool calls, denials and errors are there.
+- Limits: `--setting-sources project,local` and `--strict-mcp-config` narrow what loads but do not
+  isolate the run. Claude Code still writes its own files under the user profile (`~/.claude.json`
+  backups, session-env folders). `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` was set on every run, but no run
+  proved that it stops a memory save.
 
 ### Claude Code add-ons
 Skills and mods the owner added on 30 October 2026. Every file was read before install. Mods run
