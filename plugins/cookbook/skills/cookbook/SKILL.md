@@ -42,6 +42,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Make a task or prompt more ambitious; write a prompt that loops until it beats a bar | **be-ambitious**, **gauntlet-loop** skills | — |
 | Check the Claude Code setup and its instructions; audit or write a skill | **doctor-plus**, **skill-creator-plus** skills (report first) | Superpowers `writing-skills` for a skill's description |
 | Run Claude Code from a script, routine or workflow (`claude -p`) | the **Scripted Claude Code runs** recipe below | — |
+| Connect Claude to a new app or service | the **Cookbook** first, then the lightest route that does the job, MCP server last (recipe "Connecting a new app or service") | — |
 
 ## Recipes
 
@@ -154,6 +155,12 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
   releases.
 - A Gitleaks exception is one rule and one exact value pattern — never a `paths` allowlist, never a
   model's judgment alone. A false-positive verdict is not a clean scan.
+- An ad-hoc Gitleaks scan (a download, a copied folder, a deploy pre-flight) passes `--config` with a
+  config you control and `--gitleaks-ignore-path` set to a folder with no `.gitleaksignore`, with
+  `GITLEAKS_CONFIG` and `GITLEAKS_CONFIG_TOML` unset. Otherwise Gitleaks loads `.gitleaks.toml` and
+  `.gitleaksignore` from the scanned folder, and a planted one turns a real finding into a pass. The
+  CI security job is already covered: it passes `--config .gitleaks.toml`, and the standard flags any
+  `.gitleaksignore`.
 - Aikido Safe Chain runs before every `npm ci` / `pip install`.
 - GitHub (the TOKYO-BEANS organization is on GitHub Team): every repository with CI has a ruleset on its
   default branch. It requires a pull request and the repository's Depot CI checks (integration id
@@ -175,10 +182,12 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
 - MCP servers: once a quarter and after adding a plugin, compare `claude mcp list` with `/context`.
   Flag a server that loads twice (a plugin copy and a connector copy), a server whose own instructions
   say it is deprecated (Cloudflare's per-product `cloudflare-bindings`, `cloudflare-builds` and
-  `cloudflare-observability` servers point to the Cloudflare API MCP), and a large server only some
-  projects use. Moving REA (229 tools) and OpenSEO (83) to project scope would remove more tool names
-  than every duplicate together (about 95). Each removal or scope change is standing configuration:
-  the owner decides it. Measure `/context` before and after.
+  `cloudflare-observability` servers point to the Cloudflare API MCP), a large server only some
+  projects use, and a server whose job a CLI already in the stack does (`gh` instead of the GitHub
+  MCP; the `rea`, `firecrawl` and `parallel-cli` command lines). Moving REA (229 tools) and OpenSEO
+  (83) to project scope would remove more tool names than every duplicate together (about 95). Each
+  removal or scope change is standing configuration: the owner decides it. Measure `/context` before
+  and after.
 - Flag any `Write(...)` allow rule in a settings file: it never matches (see Scripted Claude Code runs).
 
 ### CI and releases
@@ -290,6 +299,18 @@ model. Prompt text goes to TypeSafe on the `jev-compaction` key's free allowance
   site; the owner has to unmute them.
 - Keep site-specific notes (which site, its apps, its language) in that site's own project folder,
   not here.
+
+### Connecting a new app or service
+- Check this Cookbook first: the stack may already do the job.
+- Then take the lightest route that works, in this order: the maker's official connector or CLI, a
+  community CLI, the API (a key from the encrypted store, called from a small script), and a community
+  MCP server last. A CLI call is one short command with one short answer; an API answer is longer; an
+  MCP server adds its tool names to every session in its scope. Say which case applied.
+- Find candidates with Parallel Search and Firecrawl developer search, and check that each one exists
+  today, is maintained and has a licence that fits. Never guess one.
+- Before any install: read the code, scan it (OSV-Scanner, Gitleaks with `--config`, Trivy) and get
+  the owner's yes. Then add the tool here in the same pull request.
+- An MCP server that only some projects need goes in project scope (`.mcp.json`), not user scope.
 
 ### Scripted Claude Code runs (`claude -p`)
 From a local test of 94 headless runs (Claude Code 2.1.314, October 2026). Each rule here was broken
