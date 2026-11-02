@@ -353,6 +353,11 @@ at least once in that test.
 - The Claude API key (`anthropic-api` in the DPAPI store, the Ultra plan's monthly API credits) is for
   own scripts that call the Messages API only. Never Claude Code, `apiKeyHelper`, a global
   `ANTHROPIC_API_KEY` or a script that starts `claude`: Claude Code would bill the key, not the plan.
+  It is a personal key not scoped to a workspace, so every request sends `anthropic-workspace-id`
+  (a `wrkspc_` ID from the Console's Workspaces page; not a secret). The first such script,
+  `~/.local/share/claude-api/caption/` (one-line image captions on `claude-haiku-5-5`), shows the
+  pattern: run through `with-key.mjs anthropic-api ANTHROPIC_API_KEY`, the model named in every
+  call, a per-run spend cap checked before each call, and each call's `usage` logged beside its output.
 - File rules use `Edit(...)`, which also covers the Write tool; a `Write(path)` rule never matches. On
   Windows, write the path as `//c/...`.
 - A Bash allow rule matches the command word for word. A run that phrases a command differently is
@@ -368,6 +373,19 @@ at least once in that test.
   isolate the run. Claude Code still writes its own files under the user profile (`~/.claude.json`
   backups, session-env folders). `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` was set on every run, but no run
   proved that it stops a memory save.
+
+Desktop scheduled tasks (probed 2 November 2026 on desktop 4.4212, Claude Code 2.1.309):
+
+- A task's model is the `model:` line in its `~/.claude/scheduled-tasks/<task>/SKILL.md` frontmatter,
+  although the docs say the model is not in that file. A full ID such as `claude-sonnet-5-5` works,
+  and the line survives `update_scheduled_task`. The project `model` setting does not reach the run.
+- Effort cannot be set per task: frontmatter `effort` and `effortLevel` are ignored. A run takes
+  `effortLevel` from its folder's settings, else the model's default (Opus 5.5 `xhigh`, Sonnet 5.5 and
+  Haiku 5.5 `medium`). Tasks that share a folder share that setting. The run transcript's
+  `api-request` entry shows the model and effort actually sent.
+- Every `update_scheduled_task` passes `cronExpression` explicitly; re-read the task list afterwards.
+- A task whose folder is not trusted never starts and leaves no run, while its `lastRunAt` still
+  advances. Compare `lastRunAt` with the newest run in `list_task_runs`.
 
 ### Claude Code add-ons
 Skills and mods the owner added on 30 October 2026. Every file was read before install. Mods run
