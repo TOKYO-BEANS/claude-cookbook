@@ -69,3 +69,8 @@ test("a tool with a recipe is named in the skill", () => {
   const text = withTools((t) => (t.find((x) => x.id === "openseo").name = "Open SEO Pro", t));
   assert.ok(errors({ catalogText: text }).some((e) => /\(openseo\): name not mentioned/.test(e)));
 });
+
+test("no dollar sign before a digit: Claude Code fills it with an argument", () => {
+  assert.ok(errors({ skillText: `${skillText}\nCosts $5.` }).some((e) => /line \d+: dollar sign before a digit/.test(e)));
+  assert.deepEqual(errors({ skillText: `${skillText}\nUse "\${1}", $ARGUMENTS and USD 30.` }), []);
+});

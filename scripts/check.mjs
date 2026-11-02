@@ -53,6 +53,10 @@ export function checkCookbook({ catalogText, skillText }) {
   )
     return ["catalog.json needs exactly { \"version\": 1, \"tools\": [ …at least one… ] }"];
   const errors = [];
+  // A skill called with arguments gets $0, $1 and so on replaced, prices included.
+  skill.split("\n").forEach((line, i) => {
+    if (/\$\d/.test(line)) errors.push(`SKILL.md line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`);
+  });
   const headings = new Set([...skill.matchAll(/^#{2,3} (.+)$/gm)].map((m) => m[1].trim()));
   const ids = new Set();
   catalog.tools.forEach((t, i) => {
