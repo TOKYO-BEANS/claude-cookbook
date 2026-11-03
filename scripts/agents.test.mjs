@@ -21,6 +21,11 @@ test("a profile needs its own tool list", () => {
   assert.ok(errors({ files: edit("review", (t) => t.replace(/^tools: .*\n/m, "")) }).some((e) => /review: tools/.test(e)));
 });
 
+test("a profile resolves to the same tools in the foreground and the background", () => {
+  const files = edit("mechanical", (t) => t.replace(/^tools: (.*)$/m, "tools: $1, AskUserQuestion"));
+  assert.ok(errors({ files }).some((e) => /mechanical: AskUserQuestion is dropped when the profile runs in the background/.test(e)));
+});
+
 test("unknown fields and names that differ from the file are caught", () => {
   assert.ok(errors({ files: edit("research", (t) => t.replace(/^model:/m, "colour: red\nmodel:")) }).some((e) => /research: unknown field colour/.test(e)));
   assert.ok(errors({ files: edit("research", (t) => t.replace(/^name: .*$/m, "name: researcher")) }).some((e) => /research: name/.test(e)));

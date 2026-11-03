@@ -30,11 +30,26 @@ The agent files ship in this plugin's `agents/` folder. Call one with the Agent 
 - Two mechanical pieces that may touch the same files each get `isolation: "worktree"` on the Agent
   call; each then comes back with its own branch for the main chat to merge. A single piece edits
   the main chat's worktree directly, so the agent file does not force isolation.
-- `run_in_background: true` for a piece the main chat need not wait for. A background subagent
-  cannot answer a permission prompt, so an ask rule (Firecrawl `crawl` and `agent`) refuses there.
+- Background is the default run mode. A background subagent keeps every MCP tool but only a fixed
+  set of built-in tools; each profile lists only built-ins from that set, so it gets the same tools
+  either way (`npm test` checks it). A background subagent's permission prompts appear in the main
+  chat, and a lasting answer there applies to the whole session.
+- None of the profiles has the Agent tool, so none can start subagents of its own.
 - What the tool list does not limit: Bash can do whatever the shell can, so mechanical's and
   review's shell rules live in their prompts, beside the permission rules that still apply.
   `CLAUDE.md` still loads. No profile has the Skill tool, so none loads skills.
+- Proved on 3 November 2026 with `claude -p` (CLI 2.1.316): a Haiku parent in `dontAsk` mode made
+  one Agent call per profile, with this plugin loaded by `--plugin-dir` and the installed copy
+  switched off. The subagent's saved transcript (`prefix.json` and its `api-request` entries) shows
+  the tools it was given and the model and effort sent. The parent had 11 MCP servers, the Claude
+  Docs connector among them; each subagent got only the servers in its own list.
+
+  | Profile | Tools given | Sent | Real task | Forbidden calls |
+  | --- | --- | --- | --- | --- |
+  | mechanical, foreground and background | its 6 built-ins, no MCP | `claude-haiku-5-5`, low | renamed a function; its test printed `ok` | Graphify, WebFetch: "No such tool available" |
+  | research | Read, Grep, Glob, 2 Parallel, 21 Firecrawl (none of the 7 withheld) | `claude-sonnet-5-5`, medium | a cited answer from the subagent docs, 1 Parallel call | Write, `firecrawl_crawl`: "No such tool available" |
+  | review | Read, Grep, Glob, Bash, 26 Graphify (not `remember` or `set_workspace`) | `claude-opus-5-5`, high | found both seeded bugs, each shown by a `node` check | Edit, Parallel `web_search`: not available |
+
 - A plugin agent ignores `hooks`, `mcpServers` and `permissionMode` in its file. These profiles use
   none of them: they name MCP servers by wildcard in `tools`. Every server named there must be in
   `connector-register.md`; `npm test` checks it.

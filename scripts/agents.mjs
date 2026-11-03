@@ -3,7 +3,10 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const FIELDS = ["name", "description", "tools", "disallowedTools", "model", "effort", "maxTurns", "color"];
+const FIELDS = ["name", "description", "tools", "disallowedTools", "model", "effort", "maxTurns"];
+// The built-in tools a background subagent keeps (docs/en/sub-agents, "Available tools"). A
+// profile that lists only these resolves to the same tools in the foreground and the background.
+const BACKGROUND = ["Read", "Grep", "Glob", "LSP", "Bash", "PowerShell", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite", "Skill", "ToolSearch", "EnterWorktree", "ExitWorktree", "Monitor", "TaskStop", "SendMessage", "Artifact"];
 const MODELS = ["haiku", "sonnet", "opus"];
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const MODES = ["default", "acceptEdits", "plan", "auto", "bypassPermissions", "inherit"];
@@ -67,6 +70,8 @@ export function checkAgents({ files, registerText, profilesText }) {
     if (!list(f.tools).length) errors.push(`${at}: tools must list what the profile may use (without it, it inherits every tool)`);
     for (const tool of [...list(f.tools), ...list(f.disallowedTools)])
       if (!BUILT_IN.test(tool)) errors.push(...mcpErrors(tool, servers, at));
+    for (const tool of list(f.tools))
+      if (BUILT_IN.test(tool) && !BACKGROUND.includes(tool)) errors.push(`${at}: ${tool} is dropped when the profile runs in the background`);
     if (!text.replace(/\r/g, "").replace(/^---\n[\s\S]*?\n---\n/, "").trim()) errors.push(`${at}: no instructions after the frontmatter`);
     const row = subagentRows.get(name);
     if (!row) errors.push(`${at}: no row in the subagent table of dispatch-profiles.md`);
