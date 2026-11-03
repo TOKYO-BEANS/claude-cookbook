@@ -7,6 +7,6 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node scripts/check.mjs && node --test"
+    "test": "node scripts/check.mjs && node scripts/agents.mjs && node --test"
   }
 }

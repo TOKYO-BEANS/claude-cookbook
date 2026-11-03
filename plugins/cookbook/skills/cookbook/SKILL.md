@@ -31,6 +31,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
 | Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
 | Several agents on one job | the named **`sa-*` workflows** (below) with their budgets | plain parallel subagents |
+| One bounded piece of a task on a fixed profile (an edit, a cited answer, a read-only review) | the Dispatch profiles recipe: subagents `cookbook:mechanical`, `cookbook:research`, `cookbook:review` | a side chat when the owner must open or steer the piece |
 | Source control, PRs | **GitHub** via `gh` | — |
 | CI | **Depot CI** (`.depot/workflows`) | GitHub Actions only as a documented exception (today: Windows checks on Depot runners; CodeQL during the Advanced Security trial) |
 | After a merge or deploy | **Release Maintenance** (exact-commit checks, recorded by the release verifier) through `sa-release` | — |
@@ -433,6 +434,22 @@ in every session, headless ones included, so a misbehaving one affects scheduled
   It also does not watch PowerShell; use permission deny rules for hard blocks. claude-reflect's
   Python hooks plugin is not installed either: its hooks call the `python3` Store stub, and its
   checks start `claude -p` children with every tool.
+
+### Dispatch profiles
+Six fixed profiles for running the pieces of a task (dispatcher phase B1, 3 November 2026). The
+tables, the brief and report template, each side chat's start-up self-check and the proofs are in
+`dispatch-profiles.md` beside this skill.
+
+- **Subagents**, limited to a tool list and cheap to start: `cookbook:mechanical` (Haiku, low: one
+  bounded edit or test run), `cookbook:research` (Sonnet, medium: a cited public answer from
+  Parallel and Firecrawl, no shell or writes), `cookbook:review` (Opus, high: read-only, with Bash
+  and Graphify).
+- **Side chats** (`start_session`), for pieces the owner opens or approves in: code (Sonnet, medium,
+  own worktree), design (Opus, medium), ops-deploy (Opus, medium, `default` permission mode). Nothing
+  limits a side chat's tools, MCP servers or skills, so its brief carries the rules and its first
+  step is the self-check.
+- Every piece ends in the same report: a status line, changes, evidence, tests, open items, known
+  failures and dead ends. Check the evidence, not the status line.
 
 ## Multi-agent workflows (`sa-*`)
 
