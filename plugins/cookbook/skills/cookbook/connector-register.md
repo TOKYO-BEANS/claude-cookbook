@@ -22,7 +22,7 @@ zero calls is a removal candidate.
 | parallel-search | plugin, HTTP | web search and fetch | 383 (17) | 2 | plugin MCP; `parallel-cli` for extract and research | Keep: the default research route, 2 names |
 | cloudflare | plugin, HTTP | Cloudflare API `execute`, `search`, docs | 25 (5) | 4 | plugin MCP; Wrangler or `cf` for D1 and Workers logs (its login lacks those scopes) | Keep: 4 names for the whole API |
 | cloudflare-docs | user, HTTP | Cloudflare documentation search | 40 (4) | 2 | user-scope MCP | Keep: used weekly, 2 names |
-| aikido-mcp | plugin, **stdio** | local Aikido scans and issues | 1 (1). The user-scope copy removed on 2 November had 27, of them 25 the fixer's daily probe and 2 dependency scans | 10 | **project scope** | Move: about 188 MB and 5 processes in every open session for about 2 scans a month. The fixer's probe now calls this copy, so first point the probe at a project where the plugin stays on (as was done for OpenSEO), then turn the plugin off at user scope |
+| aikido-mcp | plugin, **stdio** | local Aikido scans and issues | 1 (1). The user-scope copy removed on 2 November had 27, of them 25 the fixer's daily probe and 2 dependency scans | 10 | **project scope**: `"aikido@claude-plugins-official": false` in user settings, `true` in the `.claude/settings.local.json` of the two projects where local scans ran | **Done 2 November**: it cost about 188 MB and 5 processes in every open session for about 2 scans a month. The fixer's probe now reads `claude mcp get plugin:aikido:aikido-mcp` from one of those projects, as OpenSEO's does. A fresh session starts 5 Aikido processes there and none elsewhere |
 | wix-mcp | plugin synced from claude.ai, HTTP | Wix site work, with 11 `wix:*` skills | 37 (2) | 34 | **project scope**: `"wix@synced": false` in user settings, `true` in the site folder's `.claude/settings.local.json` | **Done 2 November**: one site uses it, and its skills carry the longest descriptions in the listing |
 | Wix | claude.ai connector | the same Wix server, delivered a second time | 11 (2) | 32 | duplicate of `wix-mcp` in Code | Keep connected for chat; denied in terminal sessions; covers the odd Wix call outside the site folder |
 | Shopify | claude.ai connector | Shopify docs and store tools | 3 (1), all docs search | 48 | Shopify CLI for theme work; a project-scope server if a store project needs more | Keep connected for chat; denied in terminal sessions |
@@ -59,7 +59,7 @@ skills, including plugins synced from claude.ai, follow their plugin's scope: `e
 | Skills added on 30 October (`be-ambitious`, `doctor-plus`, `gauntlet-loop`, `skill-creator-plus`) and `reverse-engineer-anything` | 0-1 | On: younger than the 30-day window |
 | Skills a rule names (`release-maintenance`, `stack-atlas-onboard`, `stop-slop`, `typesafe-ai`, the `sa-*` workflows) | 0-33 | On: the rule gives the name and the moment |
 | `wix:*` | 4 | With the plugin, to project scope (done 2 November) |
-| `aikido:*` | 0 | With the plugin, to project scope after the probe moves |
+| `aikido:*` | 0 | With the plugin, to project scope (done 2 November) |
 | `anthropic-skills:*` (from claude.ai, delivered by the app as a plugin) | 0-100 | On: `skillOverrides` does not reach them; the browser skill is the most called skill |
 | Parallel, Cloudflare, Depot, Superpowers, Firecrawl and Cookbook plugin skills | 0-41 | On: core stack; the plugins carry the routes this Cookbook names |
 
