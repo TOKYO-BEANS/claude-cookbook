@@ -181,8 +181,8 @@ jobs:
           delay-seconds: 10
         run: |
           set -euo pipefail
-          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://github.com/AikidoSec/safe-chain/releases/download/1.5.23/install-safe-chain.sh -o "$RUNNER_TEMP/install-safe-chain.sh"
-          echo "b7eac1c7152f300b229b865193d16424ad52386d1898c75ffaf374fcb4eeed3d  $RUNNER_TEMP/install-safe-chain.sh" | sha256sum -c -
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://github.com/AikidoSec/safe-chain/releases/download/1.5.27/install-safe-chain.sh -o "$RUNNER_TEMP/install-safe-chain.sh"
+          echo "600ebddcb3aaf1fd53653a8d7985df44528722c0f5ee7eb9fff86f26a1a4e5a8  $RUNNER_TEMP/install-safe-chain.sh" | sha256sum -c -
           # Outside the checkout: the installer sources nvm, and nvm stops it (exit 3)
           # on a .nvmrc naming a Node version that nvm does not hold.
           cd "$RUNNER_TEMP"

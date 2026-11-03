@@ -22,9 +22,9 @@ Project; the owner sets its purpose in Stack Atlas.
 | Aikido connection | MCP | Security scanning and reviewable fixes through normal CI. |
 | Depot connection | CLI | CI runners and container builds where configured. |
 | GitHub connection | CLI | Source code, pull requests and workflow coordination. |
-| Claude Code: aikido | Plugin | Claude Code on this laptop: Local SAST/secrets scans and issue review before PRs. |
+| Claude Code: aikido | Plugin | Claude Code on this laptop: local SAST/secrets scans and issue review before PRs, through the aikido plugin's aikido-mcp server only (sign-in: /aikido:setup). The user-scope aikido server was removed on 2 November 2026. |
 | Claude Code: depot | CLI | Claude Code on this laptop: Depot CI and remote builds. |
-| Claude Code: github | MCP | Claude Code on this laptop: Repos, PRs and CI status. |
+| Claude Code: github | CLI | Claude Code on this laptop: repos, PRs and CI status through the gh CLI only (owner decision, 2 November 2026: the GitHub MCP was removed). |
 | Claude Code: semgrep | CLI | Claude Code on this laptop: local Semgrep scans and checks (CLI), plus reading the CI semgrep job results. |
 
 Live connection evidence and its expiry are shown in Stack Atlas. Keep existing project instructions and access rules in force. Credential values do not belong in this file.
