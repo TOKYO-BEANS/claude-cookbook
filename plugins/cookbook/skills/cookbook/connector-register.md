@@ -18,7 +18,7 @@ zero calls is a removal candidate.
 |---|---|---|---|---|---|---|
 | graphify | user, HTTP | code graph: symbols, callers, impact, tests | 685 (5) | 28 | user-scope MCP; no CLI | Keep: the most called server, used across code projects |
 | firecrawl | user, HTTP | hosted scrape, search, crawl, map, agent | 273 (11) | 31 | MCP, plus the `firecrawl` CLI for scripts | Keep: the page-extraction route; crawl and agent have ask rules |
-| Firecrawl | claude.ai connector | search, developer and research indexes | 1 (1) | 10 | duplicate of the user server in Code | Keep: the Firecrawl route in chat; Code has no switch for it (below) |
+| Firecrawl | claude.ai connector | search, developer and research indexes | 1 (1) | 10 | duplicate of the user server in Code | **Disconnected 3 November**: the user `firecrawl` server has the same search, developer and research tools, and connectors are used only through Claude Code |
 | parallel-search | plugin, HTTP | web search and fetch | 383 (17) | 2 | plugin MCP; `parallel-cli` for extract and research | Keep: the default research route, 2 names |
 | cloudflare | plugin, HTTP | Cloudflare API `execute`, `search`, docs | 25 (5) | 4 | plugin MCP; Wrangler or `cf` for D1 and Workers logs (its login lacks those scopes) | Keep: 4 names for the whole API |
 | cloudflare-docs | user, HTTP | Cloudflare documentation search | 40 (4) | 2 | user-scope MCP | Keep: used weekly, 2 names |
