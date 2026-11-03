@@ -27,7 +27,7 @@ zero calls is a removal candidate.
 | Wix | claude.ai connector | the same Wix server, delivered a second time | 11 (2) | 32 | duplicate of `wix-mcp` in Code | **Disconnected 3 November**: the owner uses connectors only through Claude Code, not claude.ai chat. Wix work runs in the site folder through `wix-mcp` (`ListWixSites` checked after the disconnect) |
 | Shopify | claude.ai connector | Shopify docs and store tools | 3 (1), all docs search | 48 | Shopify CLI for theme work; the store project's own Admin API scripts for store data; a project-scope server if a store project needs more | **Disconnected 3 November**, same reason |
 | Wispr Flow | claude.ai connector | meeting notes and scratchpad | 0 | 15 | none needed in Code | **Disconnected** by 3 November, same reason |
-| Google Drive | claude.ai connector | Drive files | 8 (1) | 11 | official connector | Keep: used, 11 names |
+| Google Drive | claude.ai connector | Drive files | 8 (1) | 11 | official connector | **Disconnected 3 November** by the owner. A Drive file a task needs is downloaded into the project folder, or Drive is reconnected for that task |
 | Claude Docs | claude.ai connector | Claude's own documents | 60 (4) | 8 | first-party connector | Keep: the document route |
 | savvy-progress | plugin mod | progress bar for savvy-flow | 538 (3) | 2 | in-process, no process of its own | Keep: costs 2 names |
 | self-compact-claude | plugin mod | `note_to_self` before compaction | 178 (3) | 1 | in-process | Keep: costs 1 name |
