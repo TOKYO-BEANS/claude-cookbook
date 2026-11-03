@@ -8,8 +8,8 @@ Which profiles run as what was decided on 3 November 2026 (dispatcher phase B0) 
 limits:
 
 - **Subagent** when the piece is bounded, ends in a report and gains from a tool limit. Only
-  subagents can be limited to a tool list, and one starts at about 14,000 tokens against about
-  119,000 for a desktop side chat.
+  subagents can be limited to a tool list, and one started at about 14,000 tokens in the B0 probe,
+  against about 119,000 for a desktop side chat (the register's measurement).
 - **Side chat** (`start_session`) when the owner must be able to open the piece, steer it or
   approve inside it, or when it ends in a branch or pull request of its own.
 
@@ -19,12 +19,16 @@ model family and effort, and a later raise misses the first turn, where most of 
 ## Subagent profiles
 
 The agent files ship in this plugin's `agents/` folder. Call one with the Agent tool,
-`subagent_type: "cookbook:<profile>"`, and the brief below as the prompt.
+`subagent_type: "cookbook:<profile>"`, and the brief below as the prompt. Leave the call's `model`
+and `effort` out: either one overrides the profile's file, and the `CLAUDE_CODE_EFFORT_LEVEL`
+environment variable, when set, overrides every effort (docs/en/sub-agents, "Choose a model" and
+"Choose an effort level"). The profile's effort does beat a per-model `effortLevel` in user
+settings: the review proof sent `high` under a user `xhigh` for Opus.
 
 | Profile | Agent | Model | Effort | May use | Refused |
 | --- | --- | --- | --- | --- | --- |
 | mechanical | `cookbook:mechanical` | haiku | low | Read, Edit, Write, Bash, Glob, Grep | every MCP server and connector, web tools, Skill, Agent |
-| research | `cookbook:research` | sonnet | medium | Read, Grep, Glob, the Parallel Search MCP, the hosted Firecrawl MCP | shell, file writes, Firecrawl crawl, agent, interact and monitor changes, every other MCP server |
+| research | `cookbook:research` | sonnet | medium | Read, Grep, Glob, the Parallel Search MCP, the hosted Firecrawl MCP | shell, file writes, Firecrawl crawl, agent, interact, parse (a local-file upload) and monitor changes, every other MCP server |
 | review | `cookbook:review` | opus | high | Read, Grep, Glob, Bash, the Graphify MCP | Edit, Write, NotebookEdit, Graphify `remember` and `set_workspace`, web tools, every other MCP server |
 
 - Two mechanical pieces that may touch the same files each get `isolation: "worktree"` on the Agent
@@ -47,8 +51,13 @@ The agent files ship in this plugin's `agents/` folder. Call one with the Agent 
   | Profile | Tools given | Sent | Real task | Forbidden calls |
   | --- | --- | --- | --- | --- |
   | mechanical, foreground and background | its 6 built-ins, no MCP | `claude-haiku-5-5`, low | renamed a function; its test printed `ok` | Graphify, WebFetch: "No such tool available" |
-  | research | Read, Grep, Glob, 2 Parallel, 21 Firecrawl (none of the 7 withheld) | `claude-sonnet-5-5`, medium | a cited answer from the subagent docs, 1 Parallel call | Write, `firecrawl_crawl`: "No such tool available" |
+  | research | Read, Grep, Glob, 2 Parallel, 20 Firecrawl (none of the 8 withheld) | `claude-sonnet-5-5`, medium | a cited answer from the subagent docs, 1 Parallel call | Write (first run), `firecrawl_parse`, `firecrawl_crawl`: "No such tool available" |
   | review | Read, Grep, Glob, Bash, 26 Graphify (not `remember` or `set_workspace`) | `claude-opus-5-5`, high | found both seeded bugs, each shown by a `node` check | Edit, Parallel `web_search`: not available |
+
+  The review subagent ran above its parent (Haiku at medium), so a profile's model and effort hold
+  either way. In a desktop session (Opus at `xhigh`, with the app's session, browser, computer-use
+  and connector servers loaded), a user-level copy of the research profile's frontmatter got the
+  same research tools and nothing else, on Sonnet at medium, in the background.
 
 - A plugin agent ignores `hooks`, `mcpServers` and `permissionMode` in its file. These profiles use
   none of them: they name MCP servers by wildcard in `tools`. Every server named there must be in
@@ -81,9 +90,11 @@ The agent files ship in this plugin's `agents/` folder. Call one with the Agent 
 - **Model, effort and permission mode above the main chat's.** A higher model or effort is ignored
   at start; a higher permission mode is refused. `set_session_model` and `set_session_effort` apply
   from the next turn and, outside auto and bypass modes, need the owner's approval.
-- **Starting further side chats.** A session started by another session cannot start one, and the
-  app refuses a start from a turn that another session's message began. A retry is a `SendMessage`
-  to the same side chat.
+- **Starting further side chats.** The desktop app refuses `start_session` in a session that another
+  session started, and in a turn that another session's message began (the app's own session
+  instructions; B0 hit both). A retry is a `SendMessage` to the same side chat, and a side chat in
+  another permission mode than the main chat's, such as ops-deploy, holds that message for the
+  owner's approval and may let it expire, with nothing reported back (`SendMessage`'s contract).
 - **Another folder or a preset** only when the owner's own words name it.
 
 So the brief carries the profile's rules, and the side chat's start-up self-check is required: it
@@ -134,7 +145,8 @@ Known failures and dead ends: item - reason - what clears it, or "none"
 
 The main chat checks the evidence, not the status line: a claimed test run needs its output, a PR
 its checks. A failed check gets one retry (`SendMessage` to the same side chat, or a new subagent
-call with the failure in the brief), then goes to the owner.
+call with the failure in the brief), then goes to the owner. An ops-deploy retry goes to the owner
+from the start: its messages wait for the owner's approval anyway.
 
 ## Archiving side chats
 

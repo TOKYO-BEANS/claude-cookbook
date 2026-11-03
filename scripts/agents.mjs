@@ -7,6 +7,10 @@ const FIELDS = ["name", "description", "tools", "disallowedTools", "model", "eff
 // The built-in tools a background subagent keeps (docs/en/sub-agents, "Available tools"). A
 // profile that lists only these resolves to the same tools in the foreground and the background.
 const BACKGROUND = ["Read", "Grep", "Glob", "LSP", "Bash", "PowerShell", "Edit", "Write", "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite", "Skill", "ToolSearch", "EnterWorktree", "ExitWorktree", "Monitor", "TaskStop", "SendMessage", "Artifact"];
+const OTHER_BUILT_INS = ["Agent", "AskUserQuestion", "EndConversation", "EnterPlanMode", "ExitPlanMode", "ListAgents", "ScheduleWakeup", "WaitForMcpServers", "Workflow"];
+// The plugin that delivers each plugin server in the register: Claude Code names those tools
+// mcp__plugin_<plugin>_<server>__<tool>. A profile that names another plugin server adds it here.
+const PLUGIN_OF = { "parallel-search": "parallel", cloudflare: "cloudflare", "aikido-mcp": "aikido", "wix-mcp": "wix" };
 const MODELS = ["haiku", "sonnet", "opus"];
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const MODES = ["default", "acceptEdits", "plan", "auto", "bypassPermissions", "inherit"];
@@ -31,29 +35,39 @@ function frontmatter(text) {
 const list = (v) => (v ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const cells = (line) => line.split("|").slice(1, -1).map((c) => c.trim().replace(/`/g, ""));
 
-// Rows of the first table under a `## heading`, without the header and divider rows.
+// Rows of the tables directly under a `## heading` (not indented ones), without header and divider rows.
 function tableRows(text, heading) {
   const section = text.replace(/\r/g, "").split(/^## /m).find((s) => s.startsWith(heading)) ?? "";
   const lines = section.split("\n").filter((l) => l.startsWith("|") && !/^\|[\s:|-]+\|$/.test(l));
   return lines.slice(1).map(cells);
 }
 
-function registeredServers(registerText) {
-  return new Set(tableRows(registerText, "Servers and connectors").map((r) => r[0]).filter(Boolean));
+// The tool-name prefix of every server in the register that still loads. Connectors are left out:
+// their tool names carry an ID, not the name in the register.
+function serverPrefixes(registerText) {
+  const prefixes = new Set();
+  for (const [name, kind = "", , , , , decision = ""] of tableRows(registerText, "Servers and connectors")) {
+    if (!name || /disconnected/i.test(decision)) continue;
+    if (/^plugin(,| synced)/.test(kind) && PLUGIN_OF[name]) prefixes.add(`plugin_${PLUGIN_OF[name]}_${name}`);
+    else if (/^(user|plugin mod|desktop app)/.test(kind)) prefixes.add(name);
+  }
+  return prefixes;
 }
 
-function mcpErrors(tool, servers, at) {
+function mcpErrors(tool, prefixes, at) {
   const m = tool.match(MCP);
   if (!m) return [`${at}: ${tool} is not a tool name`];
-  const id = m[1].startsWith("plugin_") ? m[1].slice("plugin_".length) : m[1];
-  const known = [...servers].some((s) => id === s || id.endsWith(`_${s}`));
-  return known ? [] : [`${at}: ${tool} names no server in connector-register.md`];
+  return prefixes.has(m[1]) ? [] : [`${at}: ${tool} names no server in connector-register.md that loads under that prefix`];
 }
 
 export function checkAgents({ files, registerText, profilesText }) {
   const errors = [];
-  const servers = registeredServers(registerText);
-  const subagentRows = new Map(tableRows(profilesText, "Subagent profiles").map((r) => [r[0], r]));
+  const prefixes = serverPrefixes(registerText);
+  const subagentRows = new Map();
+  for (const r of tableRows(profilesText, "Subagent profiles")) {
+    if (subagentRows.has(r[0])) errors.push(`subagent table: ${r[0]} has more than one row`);
+    subagentRows.set(r[0], r);
+  }
   for (const { name, text } of files) {
     const at = name;
     const f = frontmatter(text);
@@ -69,9 +83,12 @@ export function checkAgents({ files, registerText, profilesText }) {
     if ("maxTurns" in f && !/^[1-9]\d{0,2}$/.test(f.maxTurns)) errors.push(`${at}: maxTurns must be a whole number`);
     if (!list(f.tools).length) errors.push(`${at}: tools must list what the profile may use (without it, it inherits every tool)`);
     for (const tool of [...list(f.tools), ...list(f.disallowedTools)])
-      if (!BUILT_IN.test(tool)) errors.push(...mcpErrors(tool, servers, at));
+      if (!BUILT_IN.test(tool)) errors.push(...mcpErrors(tool, prefixes, at));
     for (const tool of list(f.tools))
-      if (BUILT_IN.test(tool) && !BACKGROUND.includes(tool)) errors.push(`${at}: ${tool} is dropped when the profile runs in the background`);
+      if (BUILT_IN.test(tool) && !BACKGROUND.includes(tool))
+        errors.push(`${at}: ${tool} is not a built-in tool that a background subagent keeps (a typo, or dropped in the background)`);
+    for (const tool of list(f.disallowedTools))
+      if (BUILT_IN.test(tool) && ![...BACKGROUND, ...OTHER_BUILT_INS].includes(tool)) errors.push(`${at}: ${tool} is not a built-in tool`);
     if (!text.replace(/\r/g, "").replace(/^---\n[\s\S]*?\n---\n/, "").trim()) errors.push(`${at}: no instructions after the frontmatter`);
     const row = subagentRows.get(name);
     if (!row) errors.push(`${at}: no row in the subagent table of dispatch-profiles.md`);

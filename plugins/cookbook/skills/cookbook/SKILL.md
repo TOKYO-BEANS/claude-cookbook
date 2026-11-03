@@ -31,7 +31,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
 | Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
 | Several agents on one job | the named **`sa-*` workflows** (below) with their budgets | plain parallel subagents |
-| One bounded piece of a task on a fixed, cheaper profile (an edit, a cited answer, a read-only review) | the Dispatch profiles recipe: subagents `cookbook:mechanical`, `cookbook:research`, `cookbook:review` | a side chat when the owner must open or steer the piece |
+| One bounded piece of a task on a fixed profile (an edit, a cited answer, a read-only review) | the Dispatch profiles recipe: subagents `cookbook:mechanical`, `cookbook:research`, `cookbook:review` | a side chat when the owner must open or steer the piece |
 | Source control, PRs | **GitHub** via `gh` | — |
 | CI | **Depot CI** (`.depot/workflows`) | GitHub Actions only as a documented exception (today: Windows checks on Depot runners; CodeQL during the Advanced Security trial) |
 | After a merge or deploy | **Release Maintenance** (exact-commit checks, recorded by the release verifier) through `sa-release` | — |

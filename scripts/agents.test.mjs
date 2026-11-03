@@ -23,7 +23,7 @@ test("a profile needs its own tool list", () => {
 
 test("a profile resolves to the same tools in the foreground and the background", () => {
   const files = edit("mechanical", (t) => t.replace(/^tools: (.*)$/m, "tools: $1, AskUserQuestion"));
-  assert.ok(errors({ files }).some((e) => /mechanical: AskUserQuestion is dropped when the profile runs in the background/.test(e)));
+  assert.ok(errors({ files }).some((e) => /mechanical: AskUserQuestion is not a built-in tool that a background subagent keeps/.test(e)));
 });
 
 test("unknown fields and names that differ from the file are caught", () => {
@@ -41,6 +41,26 @@ test("every MCP server in a tool list is in the connector register", () => {
   assert.ok(errors({ files }).some((e) => /research: mcp__nosuch__\* names no server in connector-register.md/.test(e)));
   const plugin = edit("research", (t) => t.replace(/^tools: (.*)$/m, "tools: $1, mcp__plugin_cloudflare_cloudflare__execute"));
   assert.deepEqual(errors({ files: plugin }), []);
+});
+
+test("an MCP entry must use the server's real tool prefix", () => {
+  for (const wrong of ["mcp__parallel-search__*", "mcp__plugin_nosuch_parallel-search__*", "mcp__evil_graphify__x", "mcp__Wix__*"]) {
+    const files = edit("research", (t) => t.replace(/^tools: (.*)$/m, `tools: $1, ${wrong}`));
+    assert.ok(errors({ files }).some((e) => e.includes(`research: ${wrong} names no server`)), wrong);
+  }
+});
+
+test("built-in names are checked in both lists", () => {
+  const typo = edit("review", (t) => t.replace(/^disallowedTools: Edit,/m, "disallowedTools: Edti,"));
+  assert.ok(errors({ files: typo }).some((e) => /review: Edti is not a built-in tool/.test(e)));
+  const read = edit("review", (t) => t.replace(/^tools: Read,/m, "tools: Raed,"));
+  assert.ok(errors({ files: read }).some((e) => /review: Raed is not a built-in tool that a background subagent keeps/.test(e)));
+});
+
+test("a profile has one row in the subagent table", () => {
+  const row = real.profilesText.match(/^\| mechanical \|.*$/m)[0];
+  const profilesText = real.profilesText.replace(row, `${row.replace(" haiku | low ", " sonnet | high ")}\n${row}`);
+  assert.ok(errors({ profilesText }).some((e) => /subagent table: mechanical has more than one row/.test(e)));
 });
 
 test("the recipe's subagent table matches the agent files", () => {
