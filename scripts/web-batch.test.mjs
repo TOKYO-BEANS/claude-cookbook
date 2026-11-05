@@ -389,6 +389,18 @@ test("score: recall over labelled relevant pages and false answers; labels never
   }
 });
 
+test("table cells escape backslashes before pipes, so a cell cannot split a row", () => {
+  const manifest = {
+    question: QUESTION,
+    pages: [{ i: 0, url: "https://a.test/x\\|y", status: "error", verdict: "error", reason: "Firecrawl: a\\|b | c" }],
+  };
+  const row = renderReport(manifest, ".").text.split("\n").find((l) => l.startsWith("| 0 "));
+  assert.ok(row.includes("a\\\\\\|b \\| c"), row);
+  assert.ok(row.includes("https://a.test/x\\\\\\|y"), row);
+  // Unescaped pipes are exactly the 7 column borders.
+  assert.equal(row.replace(/\\\\/g, "").replace(/\\\|/g, "").split("|").length - 1, 7);
+});
+
 test("parseCredits and parseArgs guard the inputs", () => {
   assert.deepEqual(parseCredits("\x1b[2mCredits:\x1b[0m 733 / 1,000 \x1b[2m(73% left)\x1b[0m"), { remaining: 733, total: 1000 });
   assert.equal(parseCredits("not authenticated"), null);

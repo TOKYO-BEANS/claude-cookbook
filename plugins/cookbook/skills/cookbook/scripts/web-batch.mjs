@@ -392,7 +392,8 @@ export async function judgeStage(manifest, outDir, providers, opts) {
 
 export function renderReport(manifest, outDir) {
   const rows = [...manifest.pages].sort((a, b) => VERDICTS.indexOf(a.verdict) - VERDICTS.indexOf(b.verdict) || a.i - b.i);
-  const cell = (s) => String(s ?? "-").replace(/\|/g, "\\|");
+  // Backslashes first, so a "\|" in the input cannot end up as an unescaped pipe.
+  const cell = (s) => String(s ?? "-").replace(/\\/g, "\\\\").replace(/\|/g, "\\|");
   // A page judged in several parts points at its best part: read those lines first.
   const where = (p) => (p.file && p.chunks > 1 && p.jev?.best ? `${p.file} lines ${p.jev.best.startLine}-${p.jev.best.endLine}` : p.file);
   const readChars = (p) => (p.chunks > 1 && p.jev?.best ? p.jev.best.chars : p.chars ?? 0);
