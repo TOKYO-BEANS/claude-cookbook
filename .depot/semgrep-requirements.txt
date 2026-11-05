@@ -1,4 +1,4 @@
-# Hash-locked Semgrep CLI for the Depot CI `semgrep` and `security` jobs.
+# Hash-locked Semgrep CLI for the Depot CI `semgrep` job.
 # .depot/workflows/ci.yml installs it into a throwaway venv with
 #   python -m pip install --require-hashes --no-deps --only-binary :all: \
 #     -r .depot/semgrep-requirements.txt
@@ -6,18 +6,17 @@
 # not listed here gets installed.
 #
 # This is a CI tool's own transitive dependency set, not this project's
-# dependencies, but OSV-Scanner scans it like any other lockfile: .depot/
-# osv-scanner.toml has no override for it. An advisory in a pinned package
-# therefore fails the `security` job until this lock is regenerated (a newer
-# Semgrep usually allows a fixed release) or the advisory is ignored by ID,
-# with a reason and an expiry date, in .depot/osv-scanner.toml.
+# dependencies. Until standard v13 retired the `security` job, OSV-Scanner
+# scanned it there; check a regenerated lock for known advisories before its
+# pull request (templates/depot-security/README.md, "Regenerate the Semgrep
+# lock"), and move a package with no fix that Semgrep allows by an override.
 #
 # Four packages are overridden because no Semgrep release allows their fixed
 # versions. Each override breaks one of Semgrep's own pins, so `pip check` in
-# both jobs accepts exactly those four conflicts, in any order, and fails on
-# anything else. Remove an override (its echo line below, and its accepted
-# conflict in both jobs; --override too once none is left) when a Semgrep
-# release allows the fixed version.
+# the semgrep job accepts exactly those four conflicts, in any order, and fails
+# on anything else. Remove an override (its echo line below, and its accepted
+# conflict in the semgrep job; --override too once none is left) when a
+# Semgrep release allows the fixed version.
 #
 # mcp is overridden to 1.30.0 (owner decision, 16 October 2026). Semgrep
 # 1.179.0, like every release up to 1.182.1, requires exactly mcp==1.29.0,
