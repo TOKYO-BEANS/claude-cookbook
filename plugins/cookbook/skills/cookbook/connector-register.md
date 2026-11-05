@@ -29,6 +29,7 @@ zero calls is a removal candidate.
 | Wispr Flow | claude.ai connector | meeting notes and scratchpad | 0 | 15 | none needed in Code | **Disconnected** by 3 November, same reason |
 | Google Drive | claude.ai connector | Drive files | 8 (1) | 11 | official connector | **Disconnected 3 November** by the owner. A Drive file a task needs is downloaded into the project folder, or Drive is reconnected for that task |
 | Claude Docs | claude.ai connector | Claude's own documents | 60 (4) | 8 | first-party connector | Keep: the document route |
+| context-mode | plugin, **stdio** | keeps big tool output out of the context: `ctx_execute`, `ctx_batch`, `ctx_search`, `ctx_doctor` | new on 5 November | 9 | user-scope plugin MCP; the same bundle's `cli.mjs` for `doctor` | **Added 5 November** by the owner for every project and every new session. One Node process per session; recount at the next census |
 | savvy-progress | plugin mod | progress bar for savvy-flow | 538 (3) | 2 | in-process, no process of its own | Keep: costs 2 names |
 | self-compact-claude | plugin mod | `note_to_self` before compaction | 178 (3) | 1 | in-process | Keep: costs 1 name |
 | scheduled-tasks | desktop app | scheduled runs | 177 (7) | 6 | built in | Keep: runs the scheduled jobs |
