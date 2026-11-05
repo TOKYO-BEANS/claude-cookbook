@@ -27,6 +27,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | How shipped software works when you have no source: a binary, .NET assembly, Electron app, installer, SQLite file or saved HAR capture | **REA** (MCP server `rea` with its `reverse-engineer-anything` skill; static inspection first) | the `rea` CLI when the MCP tools are absent; native decompilation needs Ghidra, IDA or Hopper |
 | Judge, classify, route, rank, match, dedupe, extract from text | **TypeSafe / Jev** (typed judgments with probabilities; explicit no-match and uncertainty) | an LLM call only when no typed primitive fits |
 | Each turn of a Claude Code session on the cheapest model that can do it | **Jev Router**: the `jev-turn-router` plugin (on by default, in the app and terminals); `jev-claude` for a proxied terminal | `/jev-router off` for one session |
+| Count, filter or search big output (logs, test or build output, large JSON/CSV, long files, web pages) | **context-mode** (`ctx_execute` / `ctx_batch` print only the answer; `ctx_search` finds indexed output; on in every session) | ranged `Read` (`offset`/`limit`) and `rg` |
 | Remember a decision or result across sessions | the project's handoff file and the agent's own memory | — |
 | Plan, build, debug, review a change | **Superpowers** skills (brainstorming → writing-plans → subagent-driven-development or executing-plans; systematic-debugging; test-driven-development; verification-before-completion) | — |
 | Sketch, mock up or design a UI, page, screen or prototype | **Claude Design** (a Design artifact on claude.ai, made with the Artifact tool) | build the chosen design in the repo; a plain HTML mockup only if Design artifacts are unavailable (say so) |
@@ -387,6 +388,40 @@ Desktop scheduled tasks (probed 2 November 2026 on desktop 4.4212, Claude Code 2
 - Every `update_scheduled_task` passes `cronExpression` explicitly; re-read the task list afterwards.
 - A task whose folder is not trusted never starts and leaves no run, while its `lastRunAt` still
   advances. Compare `lastRunAt` with the newest run in `list_task_runs`.
+
+### Context window (context-mode)
+The owner added it on 5 November 2026 for every project and every new session: the
+`context-mode@context-mode` plugin (marketplace `mksglu/context-mode`, version 2.1.0, licence
+Elastic-2.0) at user scope. No project turns it off; a new project gets it without a step.
+
+- **What it does:** a stdio MCP server (`node server.mjs`, 9 tool names) and hooks on SessionStart,
+  UserPromptSubmit, PreToolUse and PostToolUse. A tool result over 16 KB (Bash, PowerShell, Read,
+  Grep, WebFetch and every MCP server, Firecrawl and Parallel included) is indexed and cut to its
+  best-matching parts. The index is a local SQLite FTS5 store in `~/.context-mode`, outside
+  `~/.claude` and AppData. Its only network calls are a version check against the npm registry
+  and `ctx_index` fetching a URL it is given; no telemetry.
+- **Use it:** when a step counts, sums, filters or finds something in more than about 20 lines of
+  data, run it through `ctx_execute` (or `ctx_batch` for several commands) and print only the
+  answer. `ctx_search` finds the rest of a result that was cut. Small output and edits use the
+  normal tools.
+- **What it refuses:** a `Read` of a file over 16 KB without `offset`/`limit` (use a ranged Read
+  or `ctx_execute` with `file`), large `cat`-style shell dumps, and `WebFetch`. Its deny message
+  offers `ctx_index`; web pages still go to Parallel or Firecrawl, as the Research recipe says, and
+  their large results are cut and indexed the same way. It applies the user permission deny rules to
+  `ctx_execute` and `ctx_batch` too.
+- **Headless runs:** the hooks also run in `claude -p` jobs and scheduled tasks. A job without the
+  `ctx_*` tools in `--allowedTools` still works through ranged Reads. When a job reads big files on
+  purpose, add `mcp__plugin_context-mode_context-mode__ctx_execute` to its allow list.
+- **Check it:** `/context-mode:ctx-doctor` in a session (12 checks), or
+  `node ~/.claude/plugins/cache/context-mode/context-mode/<version>/cli.mjs doctor --agents claude-code`
+  from a shell. `/context-mode:ctx-stats` shows what it saved.
+- **Updates:** never `/ctx-upgrade` or `context-mode upgrade`: they install from npm, and a global
+  npm install from Claude's container vanishes on reboot. Read the new commit's diff, then
+  `claude plugin marketplace update context-mode` and `claude plugin update context-mode@context-mode`,
+  check the installed files with `sha256sum -c SHA256SUMS` in the plugin folder, and run the doctor
+  in a new session.
+- Indexed output can contain anything a tool printed. Treat `~/.context-mode` like a transcript:
+  keep credentials out of tool output, and `ctx_purge` clears the index.
 
 ### Claude Code add-ons
 Skills and mods the owner added on 30 October 2026. Every file was read before install. Mods run
