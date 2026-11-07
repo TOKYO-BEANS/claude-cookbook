@@ -1,0 +1,16 @@
+# Dependabot version updates, written by the Stack Atlas standard (item
+# dependabot-config). Change it in Stack Atlas, never by hand: the standard
+# writes it again when the repository's package folders change.
+# Weekly, one grouped pull request per ecosystem, GitHub's default cooldown.
+# Never .depot/: the Semgrep and AI review locks there are the standard's.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm:
+        patterns:
+          - "*"
