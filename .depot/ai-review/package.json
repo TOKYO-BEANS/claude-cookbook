@@ -1,0 +1,14 @@
+{
+  "name": "stack-atlas-ai-review",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Advisory AI review of a pull request, run by the ai-review Depot CI job. Managed by the Stack Atlas standard.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.4.0"
+  }
+}

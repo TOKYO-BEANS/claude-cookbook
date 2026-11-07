@@ -46,7 +46,7 @@ jobs:
           broken="$("$RUNNER_TEMP/semgrep/bin/python" -m pip check)" || [ "$(sort <<<"$broken")" = "$(printf '%s\n' "${accepted[@]}" | sort)" ] || { echo "$broken"; exit 1; }
           echo "pip check: $broken"
           echo "$RUNNER_TEMP/semgrep/bin" >> "$GITHUB_PATH"
-      - name: Semgrep (Pro rules and Supply Chain)
+      - name: Semgrep (Supply Chain)
         env:
           SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
         run: |
@@ -54,11 +54,12 @@ jobs:
             echo "::error::Depot CI secret SEMGREP_APP_TOKEN is not set"
             exit 1
           fi
-          semgrep ci --no-suppress-errors --json-output="$RUNNER_TEMP/semgrep.json"
-      # Our own gate, versioned here instead of in the Semgrep account policy: fail on
-      # high/critical code findings with at least medium confidence, and on reachable
-      # vulnerable dependencies. Prints rule and location only, never code.
-      - name: Gate on high-severity findings
+          semgrep ci --supply-chain --no-suppress-errors --json-output="$RUNNER_TEMP/semgrep.json"
+      # Our own gate, versioned here instead of in the Semgrep account policy: fail only
+      # on a reachable vulnerable dependency of high or critical severity. A code
+      # finding is CodeQL's to gate, and an unreachable one never fails the job.
+      # Prints rule and location only, never code.
+      - name: Gate on reachable vulnerable dependencies
         run: |
           python3 - "$RUNNER_TEMP/semgrep.json" <<'PY'
           import json, os, sys
@@ -71,16 +72,11 @@ jobs:
           for r in data.get("results", []):
               extra = r.get("extra") or {}
               severity = str(extra.get("severity", "")).upper()
-              confidence = str((extra.get("metadata") or {}).get("confidence", "HIGH")).upper()
               sca = extra.get("sca_info")
-              if sca is not None:
-                  hit = bool(sca.get("reachable")) and severity in high
-              else:
-                  hit = severity in high and confidence != "LOW"
-              if hit:
-                  blocking.append(f"{r.get('check_id')} {r.get('path')}:{(r.get('start') or {}).get('line')} [{severity}/{confidence}]")
+              if sca is not None and bool(sca.get("reachable")) and severity in high:
+                  blocking.append(f"{r.get('check_id')} {r.get('path')}:{(r.get('start') or {}).get('line')} [{severity}/reachable]")
           total = len(data.get("results", []))
-          print(f"Semgrep gate: {total} findings, {len(blocking)} blocking (high/critical, or reachable dependency)")
+          print(f"Semgrep gate: {total} findings, {len(blocking)} blocking (reachable high/critical dependency)")
           for b in blocking:
               print("  BLOCKING " + b)
           sys.exit(1 if blocking else 0)
@@ -111,3 +107,90 @@ jobs:
           sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
       - run: npm ci
       - run: npm test
+
+  ai-review:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: depot-ubuntu-24.04
+    # Two API attempts of at most 12 minutes each, plus checkout and install.
+    timeout-minutes: 30
+    # Depot CI's GITHUB_TOKEN is a Depot Code Access app token; the app holds
+    # pull_requests: write, so this job can post its one comment.
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          # Full history: the base commit (for the reviewer and the rules) and
+          # the merge base (for the diff) are both in the checkout.
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+      - name: Copy the reviewer from the base branch
+        id: reviewer
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          reason=""
+          if ! [[ "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            reason="the base commit id is missing"
+          elif ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            reason="the base commit is not in the checkout"
+          else
+            for f in review.mjs package.json package-lock.json; do
+              git cat-file -e "${BASE_SHA}:.depot/ai-review/$f" 2>/dev/null || reason="no reviewer on the base branch"
+            done
+          fi
+          if [ -n "$reason" ]; then
+            echo "review unavailable: $reason" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/ai-review"
+          for f in review.mjs package.json package-lock.json; do
+            git show "${BASE_SHA}:.depot/ai-review/$f" > "$RUNNER_TEMP/ai-review/$f"
+          done
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - name: Install Aikido Safe Chain (malware check on npm and pip installs)
+        if: steps.reviewer.outputs.ready == 'true'
+        retry:
+          retries: 3
+          backoff: exponential
+          delay-seconds: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://github.com/AikidoSec/safe-chain/releases/download/1.5.27/install-safe-chain.sh -o "$RUNNER_TEMP/install-safe-chain.sh"
+          echo "600ebddcb3aaf1fd53653a8d7985df44528722c0f5ee7eb9fff86f26a1a4e5a8  $RUNNER_TEMP/install-safe-chain.sh" | sha256sum -c -
+          # Outside the checkout: the installer sources nvm, and nvm stops it (exit 3)
+          # on a .nvmrc naming a Node version that nvm does not hold.
+          cd "$RUNNER_TEMP"
+          sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
+      - name: Install the reviewer's locked dependencies
+        if: steps.reviewer.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/ai-review"
+          npm ci --ignore-scripts
+      # node, never npx or npm exec: Safe Chain checks every npx call against the
+      # registry (10 s limit, fails closed) even for an installed package. Runs
+      # from the checkout's root, where review.mjs reads the diff with git.
+      - name: AI review (advisory)
+        if: steps.reviewer.outputs.ready == 'true'
+        env:
+          ANTHROPIC_API_KEY_REVIEW: ${{ secrets.ANTHROPIC_API_KEY_REVIEW }}
+          ANTHROPIC_WORKSPACE_ID_REVIEW: ${{ vars.ANTHROPIC_WORKSPACE_ID_REVIEW }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BASE_REPO: ${{ github.repository }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # Passed through env, never interpolated into the script: the title and
+          # body are the pull request author's text.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node "$RUNNER_TEMP/ai-review/review.mjs"
