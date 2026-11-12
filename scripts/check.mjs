@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 const CATEGORIES = ["Development", "Research", "Infrastructure", "Memory", "Security", "Productivity", "Workflows"];
 const SOURCES = ["npm", "github", "vendor"];
 const FIELDS = ["id", "name", "category", "purpose", "source", "repository", "package", "website", "lifecycle", "recipe", "uses"];
-// Optional: a version feed for a vendor tool (Stack Atlas spec 2026-10-21
-// version watch). Each kind reads one fixed host; a feed never carries a URL.
+// Optional: where a vendor tool publishes its releases and how it is updated
+// on the PC. Each kind names one fixed host; a feed never carries a URL.
 const OPTIONAL = ["feed"];
 const FEED_FIELDS = { npm: ["package", "tag"], github: ["repository"], gitForWindows: [], jevModels: [] };
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
