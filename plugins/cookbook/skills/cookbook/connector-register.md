@@ -33,7 +33,7 @@ zero calls is a removal candidate.
 | savvy-progress | plugin mod | progress bar for savvy-flow | 538 (3) | 2 | in-process, no process of its own | Keep: costs 2 names |
 | self-compact-claude | plugin mod | `note_to_self` before compaction | 178 (3) | 1 | in-process | Keep: costs 1 name |
 | scheduled-tasks | desktop app | scheduled runs | 177 (7) | 6 | built in | Keep: runs the scheduled jobs |
-| atlas (Stack Atlas CLI) | own CLI, one process per command | Stack Atlas status, Sync and `Claude Code:` records | new on 6 November | 0 (its skill adds one description) | our own CLI wrapped in a skill, with its own Access service token through `with-key.mjs`; no MCP server | **Added 6 November** (trial until proven live): replaces driving the dashboard through the browser, which needed the owner's Access sign-in and spent page text. The browser stays the fallback |
+| atlas (Stack Atlas CLI) | own CLI, one process per command | Stack Atlas status, Sync and `Claude Code:` records | 6 to 12 November | 0 | none: removed | **Removed 12 November**: the owner slimmed Stack Atlas to its standard and the `sa-*` workflows, and the dashboard this CLI talked to was deleted |
 | Adobe for creativity | claude.ai connector, and the `adobe-for-creativity` plugin server (HTTP) | Adobe image, PDF, font, video and Stock actions (Photoshop, Lightroom, Illustrator, Firefly, Express, Acrobat, InDesign, Premiere) | new on 10 November | 116 | official hosted connector with OAuth; no CLI | **Added 10 November** by the owner (trial until a task uses it). Loads twice in a desktop session: the connector's tools, and a plugin server that waits for sign-in. No tool upscales or sharpens, so photo sharpening uses the Firefly web app instead (recipe "Photos (Adobe Firefly and Adobe for creativity)"). Whether it stays user-wide is the owner's call; recount at the next census |
 
 The desktop app's other built-in servers (sessions, pull requests, browser, Chrome, computer use,
@@ -60,7 +60,7 @@ skills, including plugins synced from claude.ai, follow their plugin's scope: `e
 | `code-review`, `simplify`, `keybindings-help`, `fewer-permission-prompts` | 0 | `name-only` (done 2 November): no calls and no typed uses in 30 days; the name still lets the model or the owner call them |
 | `run`, `loop`, `schedule`, `artifact-diagramming` | 0 | On: the names are too general to pick without the description, which is what makes them trigger from a plain request |
 | Skills added on 30 October (`be-ambitious`, `doctor-plus`, `gauntlet-loop`, `skill-creator-plus`) and `reverse-engineer-anything` | 0-1 | On: younger than the 30-day window |
-| Skills a rule names (`release-maintenance`, `stack-atlas-onboard`, `stack-atlas-cli`, `stop-slop`, `typesafe-ai`, the `sa-*` workflows) | 0-33 | On: the rule gives the name and the moment |
+| Skills a rule names (`release-maintenance`, `stack-atlas-onboard`, `stop-slop`, `typesafe-ai`, the `sa-*` workflows) | 0-33 | On: the rule gives the name and the moment |
 | `wix:*` | 4 | With the plugin, to project scope (done 2 November) |
 | `aikido:*` | 0 | With the plugin, to project scope (done 2 November) |
 | `anthropic-skills:*` (from claude.ai, delivered by the app as a plugin) | 0-100 | On: `skillOverrides` does not reach them; the browser skill is the most called skill |
