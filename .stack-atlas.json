@@ -1,6 +1,5 @@
 {
-  "standard": 15,
+  "standard": 16,
   "level": "full",
-  "project": "claude-cookbook",
   "private": false
 }
