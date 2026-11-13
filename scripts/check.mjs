@@ -2,15 +2,35 @@
 // dependencies: run `node scripts/check.mjs` before every merge.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { CHANGELOG_HOSTS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
+
+export { CHANGELOG_HOSTS };
 
 const CATEGORIES = ["Development", "Research", "Infrastructure", "Memory", "Security", "Productivity", "Workflows"];
 const SOURCES = ["npm", "github", "vendor"];
-const FIELDS = ["id", "name", "category", "purpose", "source", "repository", "package", "website", "lifecycle", "recipe", "uses"];
-// Optional: where a vendor tool publishes its releases and how it is updated
-// on the PC. Each kind names one fixed host; a feed never carries a URL.
-const OPTIONAL = ["feed"];
-const FEED_FIELDS = { npm: ["package", "tag"], github: ["repository"], gitForWindows: [], jevModels: [] };
+const LIFECYCLES = ["active", "trial", "watching"];
+const FIELDS = ["id", "name", "category", "purpose", "source", "repository", "package", "website", "lifecycle", "recipe", "uses", "parts"];
+const OPTIONAL = ["dates"];
+// Per kind, the fields beyond `kind` (and, for a feed, `updater`). The catalog
+// names kinds and constants only: never a command line or a pattern.
+const INSTALLED_FIELDS = Object.freeze({
+  plugin: ["id"], pinned: ["folder", "package"], command: [], skill: ["folder"],
+  project: ["repository", "package"], hosted: ["server"], none: [],
+});
+const INSTALLED_REQUIRED = Object.freeze({
+  plugin: ["id"], pinned: ["folder", "package"], skill: ["folder"], project: ["repository", "package"],
+});
+const FEED_FIELDS = Object.freeze({
+  npm: ["package", "tag"], github: ["repository"], marketplace: ["repository", "plugin"],
+  commit: ["repository", "path"], changelog: ["url"], gitForWindows: [], jevModels: [], nodeDist: [], none: ["reason"],
+});
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
+const PART = /^[a-z0-9-]{1,40}$/;
+const FOLDER = /^[a-zA-Z0-9._-]{1,80}$/;
+const PLUGIN_ID = /^[a-zA-Z0-9._-]{1,80}@[a-zA-Z0-9._-]{1,80}$/;
+const SERVER = /^[a-zA-Z0-9_.-]{1,80}$/;
+const SUBPATH = /^(?!.*\.\.)[A-Za-z0-9._\/-]{1,200}$/;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const NPM = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const httpsUrl = (v) => {
@@ -21,20 +41,75 @@ const httpsUrl = (v) => {
     return false;
   }
 };
+const isObject = (v) => v && typeof v === "object" && !Array.isArray(v);
+const validDay = (v) => typeof v === "string" && DAY.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
 
-function feedErrors(feed, source, at) {
-  if (source !== "vendor") return [`${at}: npm and github tools already have a feed`];
-  if (!feed || typeof feed !== "object" || Array.isArray(feed)) return [`${at}: feed must be an object`];
-  if (!Object.hasOwn(FEED_FIELDS, feed.kind)) return [`${at}: feed kind must be npm, github, gitForWindows or jevModels`];
+function installedErrors(inst, at) {
+  if (!isObject(inst)) return [`${at}: installed must be an object`];
+  if (!Object.hasOwn(INSTALLED_FIELDS, inst.kind)) return [`${at}: installed kind must be plugin, pinned, command, skill, project, hosted or none`];
+  const errors = [];
+  for (const k of Object.keys(inst))
+    if (k !== "kind" && !INSTALLED_FIELDS[inst.kind].includes(k)) errors.push(`${at}: installed field ${k} is not allowed for ${inst.kind}`);
+  for (const k of INSTALLED_REQUIRED[inst.kind] ?? []) if (!(k in inst)) errors.push(`${at}: installed ${k} is missing`);
+  if ("id" in inst && !PLUGIN_ID.test(String(inst.id))) errors.push(`${at}: installed id must be plugin@marketplace`);
+  if ("folder" in inst && !FOLDER.test(String(inst.folder))) errors.push(`${at}: installed folder must be a plain folder name`);
+  if ("package" in inst && !NPM.test(String(inst.package))) errors.push(`${at}: installed package`);
+  if ("repository" in inst && !REPO.test(String(inst.repository))) errors.push(`${at}: installed repository must be owner/name`);
+  if ("server" in inst && !SERVER.test(String(inst.server))) errors.push(`${at}: installed server`);
+  return errors;
+}
+
+function feedErrors(feed, at) {
+  if (!isObject(feed)) return [`${at}: feed must be an object`];
+  if (!Object.hasOwn(FEED_FIELDS, feed.kind)) return [`${at}: feed kind must be one of ${Object.keys(FEED_FIELDS).join(", ")}`];
   const allowed = FEED_FIELDS[feed.kind];
   const errors = [];
   for (const k of Object.keys(feed))
     if (!["kind", "updater", ...allowed].includes(k)) errors.push(`${at}: feed field ${k} is not allowed for ${feed.kind}`);
   if (feed.kind === "npm" && !NPM.test(String(feed.package))) errors.push(`${at}: feed package`);
   if (feed.kind === "npm" && "tag" in feed && !["latest", "stable"].includes(feed.tag)) errors.push(`${at}: feed tag must be latest or stable`);
-  if (feed.kind === "github" && !REPO.test(String(feed.repository))) errors.push(`${at}: feed repository must be owner/name`);
+  if (["github", "marketplace", "commit"].includes(feed.kind) && !REPO.test(String(feed.repository)))
+    errors.push(`${at}: feed repository must be owner/name`);
+  if (feed.kind === "marketplace" && (typeof feed.plugin !== "string" || !ID.test(feed.plugin))) errors.push(`${at}: feed plugin must be the plugin name`);
+  if (feed.kind === "commit" && "path" in feed && !SUBPATH.test(String(feed.path))) errors.push(`${at}: feed path`);
+  if (feed.kind === "changelog") {
+    if (!httpsUrl(feed.url)) errors.push(`${at}: feed url must be an https URL without credentials, query or fragment`);
+    else if (!CHANGELOG_HOSTS.includes(new URL(feed.url).hostname))
+      errors.push(`${at}: feed host ${new URL(feed.url).hostname} is not on the allow list`);
+  }
+  if (feed.kind === "none" && (typeof feed.reason !== "string" || !feed.reason.trim() || feed.reason.length > 200))
+    errors.push(`${at}: feed none needs a reason of at most 200 characters`);
   if ("updater" in feed && (typeof feed.updater !== "string" || feed.updater.length > 200))
     errors.push(`${at}: feed updater must be text of at most 200 characters`);
+  return errors;
+}
+
+function partsErrors(parts, at) {
+  if (!Array.isArray(parts) || !parts.length) return [`${at}: needs at least one part`];
+  const errors = [];
+  const seen = new Set();
+  parts.forEach((p, i) => {
+    const pat = `${at} part ${isObject(p) && typeof p.name === "string" ? p.name : i}`;
+    if (!isObject(p)) return errors.push(`${pat}: not an object`);
+    for (const k of Object.keys(p)) if (!["name", "installed", "feed"].includes(k)) errors.push(`${pat}: unknown field ${k}`);
+    if (typeof p.name !== "string" || !PART.test(p.name)) errors.push(`${pat}: part name must match [a-z0-9-], at most 40`);
+    else if (seen.has(p.name)) errors.push(`${at}: duplicate part ${p.name}`);
+    else seen.add(p.name);
+    errors.push(...installedErrors(p.installed, pat), ...feedErrors(p.feed, pat));
+  });
+  return errors;
+}
+
+function datesErrors(dates, at) {
+  if (!Array.isArray(dates)) return [`${at}: dates must be an array`];
+  const errors = [];
+  for (const d of dates) {
+    if (!isObject(d) || Object.keys(d).sort().join(",") !== "label,on") errors.push(`${at}: a date is { label, on }`);
+    else {
+      if (typeof d.label !== "string" || !d.label.trim() || d.label.length > 200) errors.push(`${at}: date label`);
+      if (!validDay(d.on)) errors.push(`${at}: date on must be YYYY-MM-DD`);
+    }
+  }
   return errors;
 }
 
@@ -49,10 +124,16 @@ export function checkCookbook({ catalogText, skillText }) {
   if (
     !catalog || typeof catalog !== "object" || catalog.version !== 1 ||
     !Array.isArray(catalog.tools) || !catalog.tools.length ||
-    Object.keys(catalog).sort().join(",") !== "tools,version"
+    Object.keys(catalog).sort().join(",") !== "ignored,tools,version"
   )
-    return ["catalog.json needs exactly { \"version\": 1, \"tools\": [ …at least one… ] }"];
+    return ["catalog.json needs exactly { \"version\": 1, \"tools\": [ …at least one… ], \"ignored\": [ … ] }"];
   const errors = [];
+  if (!Array.isArray(catalog.ignored)) errors.push("ignored must be an array");
+  else
+    for (const g of catalog.ignored) {
+      if (!isObject(g) || typeof g.name !== "string" || !g.name.trim()) errors.push("ignored entry needs a name");
+      else if (typeof g.reason !== "string" || !g.reason.trim()) errors.push(`ignored entry needs a reason (${g.name})`);
+    }
   // A skill called with arguments gets $0, $1 and so on replaced, prices included.
   skill.split("\n").forEach((line, i) => {
     if (/\$\d/.test(line)) errors.push(`SKILL.md line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`);
@@ -63,7 +144,8 @@ export function checkCookbook({ catalogText, skillText }) {
     const at = `tools[${i}]${t && typeof t.id === "string" ? ` (${t.id})` : ""}`;
     if (!t || typeof t !== "object" || Array.isArray(t)) return errors.push(`${at}: not an object`);
     for (const k of Object.keys(t)) if (!FIELDS.includes(k) && !OPTIONAL.includes(k)) errors.push(`${at}: unknown field ${k}`);
-    if ("feed" in t) errors.push(...feedErrors(t.feed, t.source, at));
+    if ("parts" in t) errors.push(...partsErrors(t.parts, at));
+    if ("dates" in t) errors.push(...datesErrors(t.dates, at));
     for (const k of FIELDS) if (!(k in t)) errors.push(`${at}: missing ${k}`);
     if (typeof t.id !== "string" || !ID.test(t.id)) errors.push(`${at}: id`);
     else if (ids.has(t.id)) errors.push(`${at}: duplicate id`);
@@ -76,7 +158,7 @@ export function checkCookbook({ catalogText, skillText }) {
     if (t.source === "npm" && !NPM.test(String(t.package))) errors.push(`${at}: npm package name`);
     if (t.source === "github" && !REPO.test(String(t.repository))) errors.push(`${at}: repository must be owner/name`);
     if (t.website !== "" && !httpsUrl(t.website)) errors.push(`${at}: website must be an https URL without credentials, query or fragment`);
-    if (!["active", "trial"].includes(t.lifecycle)) errors.push(`${at}: lifecycle must be active or trial`);
+    if (!LIFECYCLES.includes(t.lifecycle)) errors.push(`${at}: lifecycle must be active, trial or watching`);
     if (t.recipe !== null && (typeof t.recipe !== "string" || !headings.has(t.recipe))) errors.push(`${at}: recipe heading not in SKILL.md`);
     if (!Array.isArray(t.uses) || t.uses.some((u) => typeof u !== "string" || !ID.test(u))) errors.push(`${at}: uses`);
     else if (t.uses.length && t.category !== "Workflows") errors.push(`${at}: only workflows list uses`);

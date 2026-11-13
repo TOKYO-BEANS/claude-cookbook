@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkCookbook } from "./check.mjs";
+import { CHANGELOG_HOSTS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const catalogText = read("plugins/cookbook/catalog.json");
@@ -13,7 +14,7 @@ const errors = (o = {}) => checkCookbook({ catalogText, skillText, ...o });
 
 test("the real files pass", () => {
   assert.deepEqual(errors(), []);
-  assert.equal(catalog.tools.length, 50);
+  assert.ok(catalog.tools.length >= 50);
 });
 
 test("file shape", () => {
@@ -32,8 +33,6 @@ test("every recipe heading exists", () => {
 });
 
 test("field rules", () => {
-  const broken = (patch) =>
-    errors({ catalogText: withTools((t) => (Object.assign(t.find((x) => x.id === "git"), patch), t)) });
   assert.ok(broken({ extra: 1 }).some((e) => /unknown field extra/.test(e)));
   assert.ok(broken({ category: "Other" }).some((e) => /category/.test(e)));
   assert.ok(broken({ website: "http://git-scm.com/" }).some((e) => /website/.test(e)));
@@ -42,22 +41,50 @@ test("field rules", () => {
   assert.ok(broken({ source: "github", repository: "" }).some((e) => /owner\/name/.test(e)));
 });
 
-test("feeds: only on vendor tools, only each kind's own fields", () => {
-  assert.equal(catalog.tools.filter((t) => "feed" in t).length, 13);
-  const withFeed = (id, feed) =>
-    errors({ catalogText: withTools((t) => ((t.find((x) => x.id === id).feed = feed), t)) });
-  assert.deepEqual(withFeed("graphify", { kind: "jevModels" }), []);
-  assert.deepEqual(withFeed("graphify", { kind: "npm", package: "@scope/name", tag: "stable", updater: "x" }), []);
-  assert.ok(withFeed("node", { kind: "github", repository: "nodejs/node" }).some((e) => /\(node\): npm and github tools already have a feed/.test(e)));
-  assert.ok(withFeed("graphify", "npm").some((e) => /feed must be an object/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "pypi" }).some((e) => /feed kind must be/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "toString" }).some((e) => /feed kind must be/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "npm", package: "Not A Name" }).some((e) => /feed package/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "npm", package: "x", tag: "next" }).some((e) => /feed tag/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "github", repository: "https://github.com/a/b" }).some((e) => /feed repository/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "gitForWindows", repository: "a/b" }).some((e) => /feed field repository is not allowed/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "jevModels", url: "https://x.test/" }).some((e) => /feed field url is not allowed/.test(e)));
-  assert.ok(withFeed("graphify", { kind: "jevModels", updater: "x".repeat(201) }).some((e) => /feed updater/.test(e)));
+const P = (name, extra = {}) => ({ name, installed: { kind: "command" }, feed: { kind: "none", reason: "test" }, ...extra });
+const broken = (patch, id = "git") =>
+  errors({ catalogText: withTools((t) => (Object.assign(t.find((x) => x.id === id), patch), t)) });
+const part = (patch) =>
+  errors({ catalogText: withTools((t) => ((t.find((x) => x.id === "git").parts[0] = { ...t.find((x) => x.id === "git").parts[0], ...patch }), t)) });
+const withTop = (patch) => JSON.stringify({ ...catalog, ...patch });
+
+test("parts: every tool has at least one, names are unique", () => {
+  assert.ok(broken({ parts: [] }).some((e) => /at least one part/.test(e)));
+  assert.ok(broken({ parts: [P("cli"), P("cli")] }).some((e) => /duplicate part cli/.test(e)));
+  assert.ok(broken({ feed: { kind: "npm", package: "x" } }).some((e) => /unknown field feed/.test(e)));
+});
+test("installed: only known kinds and each kind's own fields", () => {
+  assert.ok(part({ installed: { kind: "script" } }).some((e) => /installed kind/.test(e)));
+  assert.ok(part({ installed: { kind: "command", run: "x --version" } }).some((e) => /installed field run is not allowed/.test(e)));
+  assert.ok(part({ installed: { kind: "pinned", folder: "../x", package: "x" } }).some((e) => /installed folder/.test(e)));
+  assert.ok(part({ installed: { kind: "project", repository: "a/b" } }).some((e) => /installed package/.test(e)));
+});
+test("feed: known kinds, own fields, changelog host on the allow list", () => {
+  assert.ok(part({ feed: { kind: "pypi" } }).some((e) => /feed kind/.test(e)));
+  assert.ok(part({ feed: { kind: "changelog", url: "http://x.test/" } }).some((e) => /feed url/.test(e)));
+  assert.ok(part({ feed: { kind: "changelog", url: "https://evil.test/log" } }).some((e) => /feed host evil.test is not on the allow list/.test(e)));
+  assert.ok(part({ feed: { kind: "none" } }).some((e) => /feed none needs a reason/.test(e)));
+  assert.ok(part({ feed: { kind: "marketplace", repository: "a/b" } }).some((e) => /feed plugin/.test(e)));
+  assert.ok(Object.isFrozen(CHANGELOG_HOSTS) && Array.isArray(CHANGELOG_HOSTS));
+});
+test("feed: each kind's own fields and values", () => {
+  assert.deepEqual(part({ feed: { kind: "npm", package: "@scope/name", tag: "stable", updater: "x" } }), []);
+  assert.deepEqual(part({ feed: { kind: "jevModels" } }), []);
+  assert.deepEqual(part({ feed: { kind: "commit", repository: "a/b", path: "skills/x" } }), []);
+  assert.ok(part({ feed: "npm" }).some((e) => /feed must be an object/.test(e)));
+  assert.ok(part({ feed: { kind: "toString" } }).some((e) => /feed kind/.test(e)));
+  assert.ok(part({ feed: { kind: "npm", package: "Not A Name" } }).some((e) => /feed package/.test(e)));
+  assert.ok(part({ feed: { kind: "npm", package: "x", tag: "next" } }).some((e) => /feed tag/.test(e)));
+  assert.ok(part({ feed: { kind: "github", repository: "https://github.com/a/b" } }).some((e) => /feed repository/.test(e)));
+  assert.ok(part({ feed: { kind: "gitForWindows", repository: "a/b" } }).some((e) => /feed field repository is not allowed/.test(e)));
+  assert.ok(part({ feed: { kind: "nodeDist", url: "https://x.test/" } }).some((e) => /feed field url is not allowed/.test(e)));
+  assert.ok(part({ feed: { kind: "jevModels", updater: "x".repeat(201) } }).some((e) => /feed updater/.test(e)));
+  assert.ok(part({ name: "Bad Name" }).some((e) => /part name/.test(e)));
+});
+test("lifecycle watching, dates and ignored", () => {
+  assert.deepEqual(broken({ lifecycle: "watching" }), []);
+  assert.ok(broken({ dates: [{ label: "Trial ends", on: "19 Nov" }] }).some((e) => /date on must be YYYY-MM-DD/.test(e)));
+  assert.ok(errors({ catalogText: withTop({ ignored: [{ name: "ruff" }] }) }).some((e) => /ignored entry needs a reason/.test(e)));
 });
 
 test("a bold first choice must name a listed tool", () => {
