@@ -25,6 +25,7 @@ const ev = {
   result: (t, over = {}) => ({
     type: "result", subtype: "success", is_error: false, result: t, permission_denials: [],
     usage: { input_tokens: 2, cache_creation_input_tokens: 1322, cache_read_input_tokens: 0, output_tokens: 195 },
+    modelUsage: { [READ_MODEL]: { inputTokens: 2, outputTokens: 195 } },
     ...over,
   }),
 };
@@ -81,19 +82,22 @@ test("buildRequest: the env drops every API key, token and base URL and the pare
   assert.equal(env.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "1");
   assert.equal(env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL, "1");
 
-  const base = {
-    PATH: "C:/bin", ANTHROPIC_API_KEY: "fake", anthropic_base_url: "http://proxy.test", ANTHROPIC_CUSTOM_HEADERS: "x: y",
-    ANTHROPIC_MODEL: "other", CLAUDE_CODE_USE_BEDROCK: "1", CLAUDE_CODE_MESSAGING_TOKEN: "fake", CLAUDE_CODE_MESSAGING_SOCKET: "pipe",
-    CLAUDE_CODE_SESSION_ID: "s", CLAUDE_PROJECT_DIR: "C:/p", CLAUDE_PLUGIN_ROOT: "C:/r", CLAUDECODE: "1", CLAUDE_CODE_OAUTH_TOKEN: "kept",
-  };
-  const spec = readEnv(base);
-  const child = runEnv(base, spec);
+  const removed = [
+    "CLAUDE_CODE_API_BASE_URL", "CLAUDE_CODE_EXTRA_BODY", "CLAUDE_CODE_CHILD_SESSION", "CLAUDE_CODE_SESSION_ATTENDED", "CLAUDE_PID",
+    "CLAUDE_EFFORT", "CLAUDECODE", "anthropic_api_key", "HTTPS_PROXY", "http_proxy", "All_Proxy", "NODE_EXTRA_CA_CERTS",
+    "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PLUGIN_ROOT",
+  ];
+  const base = { PATH: "C:/bin", CLAUDE_CONFIG_DIR: "C:/cfg", CLAUDE_CODE_OAUTH_TOKEN: "kept", CLAUDE_CODE_DISABLE_AUTO_MEMORY: "0" };
+  for (const k of removed) base[k] = "x";
+  const child = runEnv(base, readEnv(base));
   const names = Object.keys(child).map((k) => k.toUpperCase());
-  assert.ok(!names.some((k) => k.startsWith("ANTHROPIC_")), "no ANTHROPIC_* variable reaches the child");
-  for (const k of ["CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_CODE_MESSAGING_SOCKET", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT", "CLAUDECODE"]) {
-    assert.ok(!names.includes(k), `${k} does not reach the child`);
-  }
+  for (const k of removed) assert.ok(!names.includes(k.toUpperCase()), `${k} does not reach the child`);
+  assert.deepEqual(
+    names.filter((k) => k.startsWith("CLAUDE") || k.startsWith("ANTHROPIC")).sort(),
+    ["CLAUDE_CODE_DISABLE_ADVISOR_TOOL", "CLAUDE_CODE_DISABLE_AUTO_MEMORY", "CLAUDE_CODE_OAUTH_TOKEN", "CLAUDE_CONFIG_DIR"],
+  );
   assert.equal(child.PATH, "C:/bin");
+  assert.equal(child.CLAUDE_CONFIG_DIR, "C:/cfg", "the configuration folder is kept");
   assert.equal(child.CLAUDE_CODE_OAUTH_TOKEN, "kept", "the plan login is left alone");
   assert.equal(child.CLAUDE_CODE_DISABLE_AUTO_MEMORY, "1");
   assert.equal(child.CLAUDE_CODE_DISABLE_ADVISOR_TOOL, "1");
@@ -267,6 +271,12 @@ test("readChange: a tool-use event in the stream fails the read", async () => {
     [stream(ev.init({ model: "claude-opus-5-5" }), ev.result(answer)), /model was claude-opus-5-5/],
     [stream(ev.result(answer)), /no init event/],
     [stream(ev.init(), ev.result(answer), ev.text(answer)), /no final result/],
+    [stream(ev.init(), ev.init(), ev.result(answer)), /more than one init event/],
+    [stream(ev.init(), ev.result(answer), ev.result(answer)), /more than one result event/],
+    [stream(ev.init({ apiKeySource: "ANTHROPIC_API_KEY" }), ev.result(answer)), /not on the plan login/],
+    [stream(ev.init({ apiKeySource: undefined }), ev.result(answer)), /not on the plan login/],
+    [stream(ev.init(), ev.result(answer, { modelUsage: { [READ_MODEL]: {}, "claude-haiku-5-5": {} } })), /another model was used/],
+    [stream(ev.init(), ev.result(answer, { modelUsage: { "claude-opus-5-5": {} } })), /another model was used/],
     [stream(ev.init()) + "not json\n" + stream(ev.result(answer)), /not JSON lines/],
   ];
   for (const [out, want] of streams) {
@@ -284,4 +294,52 @@ test("readChange: no release text means no request", async () => {
     assert.equal(run.calls.length, 0);
     assert.equal(got.notRead, "failed: no release text");
   }
+});
+
+// ---- fix round 1 --------------------------------------------------------------------
+
+const cp = (...points) => String.fromCodePoint(...points);
+
+test("parseAnswers: invisible characters are removed, and a field that is only invisible or not well-formed is rejected", () => {
+  const ok3 = (adopt) => JSON.stringify({ changed: "a", affects: "b", adopt });
+  assert.equal(parseAnswers(ok3(cp(0x200b))), null, "a zero-width space alone");
+  assert.equal(parseAnswers(ok3(`ok${cp(0xe0041, 0xe0042, 0xe007f)}`)).adopt, "ok", "tag characters go");
+  assert.equal(parseAnswers(ok3(`a${cp(0xfeff)}b${cp(0xad)}c${cp(0x202e)}d${cp(0x61c)}e${cp(0x2066)}f`)).adopt, "abcdef");
+  assert.equal(parseAnswers(ok3(`p${cp(0xe000)}q`)).adopt, "pq", "private use goes");
+  assert.equal(parseAnswers(ok3(`x${String.fromCharCode(0xd800)}y`)), null, "a lone surrogate");
+  assert.equal(parseAnswers(ok3(`${cp(0x1f600)} fine`)).adopt, `${cp(0x1f600)} fine`, "a real emoji stays");
+});
+
+test("cuts never split a surrogate pair", async () => {
+  const smile = cp(0x1f600);
+  const reason = "x".repeat(171) + smile.repeat(20); // a cut by code units at 180 would split a pair
+  const got = await readChange(change, tool, recipe, notes, { run: fakeRun(new Error(reason)) });
+  assert.ok(got.notRead.isWellFormed());
+  assert.ok(got.notRead.endsWith(smile));
+  const { stdin } = buildRequest(change, { ...tool, name: "n".repeat(199) + smile + smile }, recipe, notes);
+  assert.ok(stdin.isWellFormed());
+  assert.ok(stdin.includes(`${"n".repeat(199)}${smile} (`), "the name is cut after 200 code points");
+});
+
+test("readChange: an unknown change kind is a failed read without a request", async () => {
+  for (const kind of ["constructor", "__proto__", "toString", "other", undefined]) {
+    const run = fakeRun(ok(okStream()));
+    const got = await readChange({ ...change, kind }, tool, recipe, notes, { run });
+    assert.equal(run.calls.length, 0, String(kind));
+    assert.equal(got.notRead, "failed: the change kind is not known");
+  }
+  assert.doesNotMatch(buildRequest({ ...change, kind: "constructor" }, tool, recipe, notes).stdin, /function/);
+});
+
+test("readChange: readUsage comes only from this result; an old value never survives", async () => {
+  const stale = { ...change, readUsage: { input: 9, output: 9 } };
+  const fresh = await readChange(stale, tool, recipe, notes, { run: fakeRun(ok(okStream())) });
+  assert.deepEqual(fresh.readUsage, { input: 1324, output: 195 });
+  const answer = JSON.stringify(ANSWER);
+  const noUsage = await readChange(stale, tool, recipe, notes, { run: fakeRun(ok(stream(ev.init(), ev.result(answer, { usage: undefined })))) });
+  assert.deepEqual(noUsage.answers, ANSWER);
+  assert.ok(!("readUsage" in noUsage));
+  const failedRead = await readChange(stale, tool, recipe, notes, { run: fakeRun(new Error("boom")) });
+  assert.ok(!("readUsage" in failedRead));
+  assert.deepEqual(stale.readUsage, { input: 9, output: 9 }, "the input change is not changed");
 });

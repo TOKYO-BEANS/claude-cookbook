@@ -59,7 +59,8 @@ export function normalizeVersion(text) {
 //   never the caller's folder, and with the process environment minus every
 //   `GIT_*` variable and `NODE_OPTIONS`.
 // - `env` (optional) changes that environment for this child only: a name set
-//   to null is removed (in any letter case), a string value is set.
+//   to null is removed (in any letter case), a string value is set. Any other
+//   value (undefined, a number, an object) throws a TypeError.
 // - `input` (optional) is written to the child's stdin, which is then closed.
 //   Without it the child's stdin is empty.
 // - Each of stdout and stderr is read up to `maxBytes` bytes. More output stops
@@ -68,6 +69,9 @@ export function normalizeVersion(text) {
 //   `code: null, timedOut: true`.
 export function runEnv(env = process.env, extra = {}) {
   extra = extra ?? {};
+  for (const [k, v] of Object.entries(extra)) {
+    if (v !== null && typeof v !== "string") throw new TypeError(`env ${k}: a string or null, not ${typeof v}`);
+  }
   const changed = new Set(Object.keys(extra).map((k) => k.toUpperCase()));
   const out = {};
   for (const [k, v] of Object.entries(env)) {

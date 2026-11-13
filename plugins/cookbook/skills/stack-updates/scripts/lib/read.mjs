@@ -19,15 +19,19 @@
 // - `--disable-slash-commands`: no skills or commands.
 // - `--system-prompt`: a fixed role in place of the coding-agent prompt.
 // - `dontAsk`, no session persistence, a budget cap and the model by name.
-// The environment (`readEnv`): no ANTHROPIC_* variable (no API key, token, base URL
-// or proxy header: the request uses the plan login), no provider switch
-// (CLAUDE_CODE_USE_*), none of the parent session's links; auto memory and the
-// server-side advisor tool off (without CLAUDE_CODE_DISABLE_ADVISOR_TOOL the
-// request carries an advisor tool that sends the conversation to another model).
+// The environment (`readEnv`): every variable whose name starts with CLAUDE or
+// ANTHROPIC is removed except KEEP_ENV (so no API key, token, base URL, extra
+// request body, provider switch or link to the parent session: the request uses
+// the plan login), and so are the proxy and extra-CA variables; then auto memory
+// and the server-side advisor tool are turned off (without
+// CLAUDE_CODE_DISABLE_ADVISOR_TOOL the request carries an advisor tool that sends
+// the conversation to another model).
 //
-// Defence in depth when reading the answer: the read fails unless the init event
-// shows no tools, no MCP servers and the named model; any tool use or tool result
-// anywhere in the stream fails it; the answer comes only from the final result event.
+// Defence in depth when reading the answer: the read fails unless the stream holds
+// exactly one init event and one result event, the init event shows no tools, no
+// MCP servers, the named model and `apiKeySource: "none"` (the plan login), and the
+// result names no other model; any tool use or tool result anywhere in the stream
+// fails it; the answer comes only from the final result event.
 import { createHash } from "node:crypto";
 import { defaultRun } from "./inventory.mjs";
 
@@ -61,19 +65,20 @@ const READ_ARGV = Object.freeze([
   "--system-prompt", SYSTEM_PROMPT,
 ]);
 
-// Variables that tie a child to the session that started it.
-const SESSION_LINKS = [
-  "CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_MESSAGING_SOCKET",
-  "CLAUDE_CODE_MESSAGING_TOKEN", "CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "CLAUDE_AGENT_SDK_VERSION",
-];
+// The only CLAUDE*/ANTHROPIC* variables the child keeps: where Claude Code keeps its
+// configuration and login, and a plan login given as a token.
+export const KEEP_ENV = Object.freeze(["CLAUDE_CONFIG_DIR", "CLAUDE_CODE_OAUTH_TOKEN"]);
+const NETWORK_ENV = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NODE_EXTRA_CA_CERTS"];
 
 const KIND = { "new-release": "a new release", "installed-changed": "already installed: the installed version changed" };
 
 const cause = (e) => String(e?.message ?? e).split("\n")[0];
+// Cut to at most `n` code points, so a surrogate pair is never split.
+const cutPoints = (s, n) => [...s].slice(0, n).join("");
 const CONTROL = /[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g;
 const oneLine = (v, fallback = "unknown") => {
   const s = typeof v === "string" || typeof v === "number" ? String(v).replace(CONTROL, " ").replace(/\s+/g, " ").trim() : "";
-  return s ? s.slice(0, META_LIMIT) : fallback;
+  return s ? cutPoints(s, META_LIMIT) : fallback;
 };
 // Line ends become "\n"; every other control character but the tab goes.
 const cleanText = (v) => String(v ?? "").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g, "");
@@ -86,10 +91,10 @@ function cut(text, limit) {
 /** The environment changes for the child: `{ NAME: null }` removes, a string sets. */
 export function readEnv(base = process.env) {
   const env = { ANTHROPIC_API_KEY: null, ANTHROPIC_AUTH_TOKEN: null, ANTHROPIC_BASE_URL: null };
-  for (const k of SESSION_LINKS) env[k] = null;
+  for (const k of NETWORK_ENV) env[k] = null; // runEnv removes these in any letter case
   for (const k of Object.keys(base)) {
     const up = k.toUpperCase();
-    if (up.startsWith("ANTHROPIC_") || up.startsWith("CLAUDE_CODE_USE_")) env[k] = null;
+    if ((up.startsWith("CLAUDE") || up.startsWith("ANTHROPIC")) && !KEEP_ENV.includes(up)) env[k] = null;
   }
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
   env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL = "1";
@@ -112,7 +117,7 @@ export function buildRequest(change, tool, recipeText, releaseText) {
     "You answer three questions about one update of a tool in a small tool stack. You have no tools, and nothing you write is run or followed; your answer is stored as text.",
     "",
     `Tool: ${oneLine(tool?.name)} (${oneLine(tool?.id ?? change?.tool)}), part: ${oneLine(change?.part)}`,
-    `Update: ${oneLine(change?.from)} -> ${oneLine(change?.to)} (${KIND[change?.kind] ?? "a change"})`,
+    `Update: ${oneLine(change?.from)} -> ${oneLine(change?.to)} (${Object.hasOwn(KIND, String(change?.kind)) ? KIND[change.kind] : "a change"})`,
     `Purpose in the stack: ${oneLine(tool?.purpose, "not stated")}`,
     ...(uses.length ? [`Tools this workflow uses: ${uses.join(", ")}`] : []),
     "",
@@ -145,20 +150,24 @@ export function buildRequest(change, tool, recipeText, releaseText) {
 
 const FENCED = /^```(?:json)?[ \t]*\n([\s\S]*?)\n?```$/i;
 const LINE_BREAK = /[\n\r\u000B\u000C\u0085\u2028\u2029]/;
-// Other control characters, and the marks that reorder displayed text.
-const STRIP = /[\u0000-\u0008\u000E-\u001F\u007F-\u0084\u0086-\u009F\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+
+// Invisible characters: controls, format characters (bidi marks and overrides,
+// zero-width characters, the soft hyphen, U+061C, the tag characters), private-use
+// and unassigned code points.
+const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}]/gu;
 
 function cleanAnswer(v) {
-  if (typeof v !== "string" || LINE_BREAK.test(v)) return null;
-  const s = v.replace(/\t/g, " ").replace(STRIP, "").trim();
+  if (typeof v !== "string" || !v.isWellFormed() || LINE_BREAK.test(v)) return null;
+  const s = v.replace(/\t/g, " ").replace(INVISIBLE, "").trim();
   return s.length > 0 && s.length <= ANSWER_LIMIT ? s : null;
 }
 
 /**
  * `parseAnswers(text) -> { changed, affects, adopt } | null` for the final result's
  * text: one JSON object, bare or in one code fence, with exactly the three keys,
- * each a non-empty one-line string of at most 300 characters (control characters
- * stripped). Anything else is null. The values are only ever text.
+ * each well-formed Unicode and, once invisible characters are removed, a non-empty
+ * one-line string of at most 300 characters. Anything else is null. The values are
+ * only ever text.
  */
 export function parseAnswers(text) {
   if (typeof text !== "string") return null;
@@ -214,13 +223,18 @@ function readStream(stdout) {
     if (e === null || typeof e !== "object" || Array.isArray(e)) return { error: "the stream is not JSON lines" };
     events.push(e);
   }
-  const init = events.find((e) => e.type === "system" && e.subtype === "init");
-  if (!init) return { error: "the stream has no init event" };
+  const inits = events.filter((e) => e.type === "system" && e.subtype === "init");
+  if (inits.length === 0) return { error: "the stream has no init event" };
+  if (inits.length > 1) return { error: "the stream has more than one init event" };
+  const results = events.filter((e) => e.type === "result");
+  if (results.length > 1) return { error: "the stream has more than one result event" };
+  const init = inits[0];
   if (!Array.isArray(init.tools) || init.tools.length > 0) return { error: "tools were available" };
   if (!Array.isArray(init.mcp_servers) || init.mcp_servers.length > 0) return { error: "MCP servers were loaded" };
+  if (init.apiKeySource !== "none") return { error: "not on the plan login" };
   const models = [init.model, ...events.filter((e) => e.type === "assistant" && e.message?.model !== undefined).map((e) => e.message.model)];
   const other = models.find((m) => m !== READ_MODEL);
-  if (other !== undefined) return { error: `the model was ${oneLine(other, "not named").slice(0, 60)}` };
+  if (other !== undefined) return { error: `the model was ${cutPoints(oneLine(other, "not named"), 60)}` };
   for (const e of events) {
     const hit = hasToolBlock(e);
     if (hit === null) return { error: "the stream is nested too deeply to check" };
@@ -231,8 +245,12 @@ function readStream(stdout) {
   if (Array.isArray(last.permission_denials) && last.permission_denials.length > 0) return { error: "a tool was used" };
   const server = last.usage?.server_tool_use;
   if (server && typeof server === "object" && Object.values(server).some((v) => typeof v === "number" && v > 0)) return { error: "a tool was used" };
+  const used = last.modelUsage;
+  if (used !== undefined && (used === null || typeof used !== "object" || Array.isArray(used) || Object.keys(used).some((m) => m !== READ_MODEL))) {
+    return { error: "another model was used" };
+  }
   if (last.subtype !== "success" || last.is_error !== false || typeof last.result !== "string") {
-    return { error: `the run ended with ${oneLine(last.subtype, "an error").slice(0, 60)}` };
+    return { error: `the run ended with ${cutPoints(oneLine(last.subtype, "an error"), 60)}` };
   }
   return { text: last.result, usage: usageOf(last.usage) };
 }
@@ -244,11 +262,18 @@ function lastSubtype(stdout) {
 
 /**
  * `readChange(change, tool, recipeText, releaseText, { run, home }) -> Promise<Change>`:
- * a new change with `answers` (and `readUsage` when the result reports tokens), or
- * with `notRead: "failed: <reason>"` and no answers. The input change is not changed.
+ * a new change with `answers` (and `readUsage` when this result reports tokens), or
+ * with `notRead: "failed: <reason>"` and no answers. A `readUsage` already on the
+ * input change never survives. The input change is not changed.
  */
 export async function readChange(change, tool, recipeText, releaseText, { run = defaultRun, home } = {}) {
-  const failed = (reason) => ({ ...change, answers: null, notRead: `failed: ${oneLine(reason).slice(0, REASON_LIMIT)}` });
+  const fresh = (fields) => {
+    const out = { ...change, ...fields };
+    delete out.readUsage;
+    return out;
+  };
+  const failed = (reason) => fresh({ answers: null, notRead: `failed: ${cutPoints(oneLine(reason), REASON_LIMIT)}` });
+  if (!Object.hasOwn(KIND, String(change?.kind))) return failed("the change kind is not known");
   if (typeof releaseText !== "string" || !releaseText.trim()) return failed("no release text");
   const { argv, stdin, env } = buildRequest(change, tool, recipeText, releaseText);
   let res;
@@ -268,7 +293,7 @@ export async function readChange(change, tool, recipeText, releaseText, { run = 
   if (read.error) return failed(read.error);
   const answers = parseAnswers(read.text);
   if (!answers) return failed("the answer was not three short fields");
-  const out = { ...change, answers, notRead: null };
+  const out = fresh({ answers, notRead: null });
   if (read.usage) out.readUsage = read.usage;
   return out;
 }

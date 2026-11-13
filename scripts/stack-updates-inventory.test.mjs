@@ -377,3 +377,7 @@ test("defaultRun: the env option removes and adds variables for that child only"
     for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
   }
 });
+
+test("runEnv: an extra value that is neither null nor a string throws a TypeError", () => {
+  for (const v of [undefined, 1, true, {}, ["x"]]) assert.throws(() => runEnv({ PATH: "p" }, { X: v }), TypeError);
+});
