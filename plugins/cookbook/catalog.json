@@ -88,6 +88,9 @@
     { "name": "jev-claude-secure.mjs", "reason": "launcher behind jev-claude, not a tool" },
     { "name": "jev-proxy-secure.mjs", "reason": "launcher for the Jev proxy, not a tool" },
     { "name": "cli-refresh-2026-10-01.ps1", "reason": "a one-off refresh script from 1 October 2026, not a tool" },
-    { "name": "pysemgrep.exe", "reason": "Semgrep's own helper binary, installed with semgrep.exe" }
+    { "name": "pysemgrep.exe", "reason": "Semgrep's own helper binary, installed with semgrep.exe" },
+    { "name": "shopify", "reason": "the shim for the Shopify CLI tool (shopify-cli), pinned in ~/.local/share" },
+    { "name": "parallel-cli", "reason": "the shim for the Parallel CLI tool (parallel), pinned in ~/.local/share" },
+    { "name": "jev-claude", "reason": "the launcher shim of the Jev router tool (jev-router)" }
   ]
 }

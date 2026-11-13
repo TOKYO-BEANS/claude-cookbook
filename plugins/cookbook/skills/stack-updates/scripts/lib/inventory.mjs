@@ -16,7 +16,9 @@
 //   date", never a guess.
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
+import { mkdirSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join, normalize } from "node:path";
 import { VERSION_COMMANDS } from "./tables.mjs";
 import { ghFile } from "./feeds.mjs";
@@ -33,6 +35,10 @@ const SCRIPT_EXT = /\.(exe|cmd|bat|com|ps1|mjs|js|sh)$/i;
 
 const cause = (e) => String(e?.message ?? e).split("\n")[0].slice(0, 180) || "unreadable";
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+// A version or commit read from disk: at most 100 characters, no control characters.
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001F\u007F-\u009F]/;
+const cleanText = (v) => (typeof v === "string" && v.length > 0 && v.length <= 100 && !CONTROL.test(v) ? v : null);
 const unreadable = (message) => ({ state: "unreadable", message: String(message).slice(0, 180) });
 const notFound = (message) => ({ state: "not-found", message });
 
@@ -43,39 +49,84 @@ export function normalizeVersion(text) {
   return m ? m[0] : "";
 }
 
-// The real `run`: `(argv, { timeoutMs, maxBytes }) -> { code, stdout, stderr }`.
-// No shell: on Windows a command must be a real executable (a `.exe` found on
-// PATH); a `.cmd` or `.bat` shim cannot be started this way and comes back as
-// a spawn failure (code -1). Output past `maxBytes` is dropped and the process
-// is stopped. A timeout returns code null.
-export function defaultRun(argv, { timeoutMs = COMMAND_TIMEOUT_MS, maxBytes = OUTPUT_LIMIT } = {}) {
+// The real `run`: `(argv, { timeoutMs, maxBytes, home }) -> { code, stdout, stderr,
+// timedOut?, truncated? }`.
+// - No shell: on Windows a command must be a real executable (a `.exe` found on
+//   PATH); a `.cmd` or `.bat` shim cannot be started this way and comes back as
+//   a spawn failure (code -1).
+// - It always runs in `<home>/.local/share/stack-updates` (created if missing),
+//   never the caller's folder, and with the process environment minus every
+//   `GIT_*` variable and `NODE_OPTIONS`.
+// - Each of stdout and stderr is read up to `maxBytes` bytes. More output stops
+//   the process and sets `truncated: true` (not a timeout).
+// - A timeout stops the process (on Windows its whole tree) and returns
+//   `code: null, timedOut: true`.
+export function runEnv(env = process.env) {
+  const out = {};
+  for (const [k, v] of Object.entries(env)) {
+    const up = k.toUpperCase();
+    if (up.startsWith("GIT_") || up === "NODE_OPTIONS") continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function stopTree(child) {
+  try {
+    if (process.platform === "win32" && child.pid) {
+      const k = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { shell: false, windowsHide: true, stdio: "ignore" });
+      k.on("error", () => {});
+    }
+  } catch { /* fall through to the plain kill */ }
+  try { child.kill(); } catch { /* already gone */ }
+}
+
+export function defaultRun(argv, { timeoutMs = COMMAND_TIMEOUT_MS, maxBytes = OUTPUT_LIMIT, home = homedir() } = {}) {
   return new Promise((resolve) => {
-    let settled = false;
-    let out = "", err = "", timedOut = false;
+    let cwd;
+    try {
+      cwd = join(home, ".local", "share", "stack-updates");
+      mkdirSync(cwd, { recursive: true });
+    } catch (e) {
+      return resolve({ code: -1, stdout: "", stderr: `cannot create the working folder: ${cause(e)}` });
+    }
+    let settled = false, timedOut = false, truncated = false;
+    const bufs = { out: [], err: [] };
+    const sizes = { out: 0, err: 0 };
     const finish = (code, extra = "") => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      resolve({ code, stdout: out, stderr: (extra || err).slice(0, maxBytes) });
+      const text = (k) => Buffer.concat(bufs[k]).toString("utf8");
+      const result = { code, stdout: text("out"), stderr: extra || text("err") };
+      if (timedOut) result.timedOut = true;
+      if (truncated) result.truncated = true;
+      resolve(result);
     };
     let child;
     try {
-      child = spawn(argv[0], argv.slice(1), { shell: false, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+      child = spawn(argv[0], argv.slice(1), { shell: false, windowsHide: true, cwd, env: runEnv(), stdio: ["ignore", "pipe", "pipe"] });
     } catch (e) {
       return resolve({ code: -1, stdout: "", stderr: cause(e) });
     }
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill();
+      stopTree(child);
       finish(null, `timed out after ${Math.round(timeoutMs / 1000)} s`);
     }, timeoutMs);
-    child.stdout.on("data", (d) => {
-      if (out.length < maxBytes) out += d.toString("utf8").slice(0, maxBytes - out.length);
-      else child.kill();
-    });
-    child.stderr.on("data", (d) => {
-      if (err.length < maxBytes) err += d.toString("utf8").slice(0, maxBytes - err.length);
-    });
+    const take = (k) => (d) => {
+      const room = maxBytes - sizes[k];
+      if (d.length > room) {
+        truncated = true;
+        if (room > 0) { bufs[k].push(d.subarray(0, room)); sizes[k] += room; }
+        stopTree(child);
+      } else {
+        bufs[k].push(d);
+        sizes[k] += d.length;
+      }
+    };
+    child.stdout.on("data", take("out"));
+    child.stderr.on("data", take("err"));
     child.on("error", (e) => finish(-1, cause(e)));
     child.on("close", (code) => finish(timedOut ? null : code));
   });
@@ -119,9 +170,14 @@ async function readPlugin(installed, home) {
   const entries = isObject(reg.value?.plugins) ? reg.value.plugins[installed.id] : undefined;
   if (!Array.isArray(entries) || entries.length === 0) return notFound(`${installed.id} is not in the plugin registry`);
   const entry = entries.find((e) => e?.scope === "user") ?? entries[0];
-  if (typeof entry?.version !== "string" || !entry.version) return unreadable(`${installed.id} has no version in the registry`);
-  const out = { state: "read", version: entry.version };
-  if (typeof entry.gitCommitSha === "string" && entry.gitCommitSha) out.commit = entry.gitCommitSha;
+  const version = cleanText(entry?.version);
+  if (!version) return unreadable(`${installed.id} has no usable version in the registry`);
+  const out = { state: "read", version };
+  if (entry.gitCommitSha !== undefined) {
+    const commit = cleanText(entry.gitCommitSha);
+    if (!commit) return unreadable(`${installed.id} has an unusable commit in the registry`);
+    out.commit = commit;
+  }
   return out;
 }
 
@@ -133,7 +189,7 @@ async function readPinned(installed, home) {
   if (lock.missing) return notFound(`no package-lock.json in ~/.local/share/${installed.folder}`);
   const version = lock.value?.packages?.[`node_modules/${installed.package}`]?.version;
   if (version === undefined) return notFound(`${installed.package} is not in that lockfile`);
-  if (typeof version !== "string" || !version) return unreadable(`${installed.package} has no version in the lockfile`);
+  if (!cleanText(version)) return unreadable(`${installed.package} has no usable version in the lockfile`);
   return { state: "read", version };
 }
 
@@ -142,12 +198,15 @@ async function readCommand(key, run, home) {
   if (!entry) return unreadable(`no version command is listed for ${key}`);
   let result;
   try {
-    result = await run(expandShare(entry.argv, home), { timeoutMs: COMMAND_TIMEOUT_MS });
+    result = await run(expandShare(entry.argv, home), { timeoutMs: COMMAND_TIMEOUT_MS, home });
   } catch (e) {
     return unreadable(`${entry.argv[0]} could not run: ${cause(e)}`);
   }
   const first = (s) => String(s ?? "").trim().split("\n")[0].slice(0, 120);
-  if (result?.code !== 0)
+  if (result?.timedOut) return unreadable(`${entry.argv[0]} timed out after ${COMMAND_TIMEOUT_MS / 1000} s`);
+  if (result?.truncated && result?.code !== 0 && !entry.pattern.test(String(result.stdout ?? "").slice(0, OUTPUT_LIMIT)))
+    return unreadable(`the output of ${entry.argv[0]} was cut at ${OUTPUT_LIMIT} bytes before a version`);
+  if (result?.code !== 0 && !result?.truncated)
     return unreadable(result?.code == null ? `${entry.argv[0]}: ${first(result?.stderr) || "timed out"}` : `${entry.argv[0]} exited with exit ${result.code}: ${first(result.stderr)}`);
   const stdout = String(result.stdout ?? "").slice(0, OUTPUT_LIMIT);
   const m = entry.pattern.exec(stdout);
@@ -176,7 +235,7 @@ async function readProject(installed, gh) {
   const text = await ghFile(gh, installed.repository, "package-lock.json");
   const version = JSON.parse(text)?.packages?.[`node_modules/${installed.package}`]?.version;
   if (version === undefined) return notFound(`${installed.package} is not in the lockfile of ${installed.repository}`);
-  if (typeof version !== "string" || !version) return unreadable(`${installed.package} has no version in that lockfile`);
+  if (!cleanText(version)) return unreadable(`${installed.package} has no usable version in that lockfile`);
   return { state: "read", version };
 }
 
@@ -214,7 +273,6 @@ function named(catalog) {
     sets.toolWords.add(norm(t.id));
     sets.toolWords.add(norm(t.name));
     sets.binWords.add(norm(t.id));
-    sets.binWords.add(norm(t.name));
     for (const p of t.parts ?? []) {
       const i = p.installed ?? {};
       if (i.kind === "plugin" && typeof i.id === "string") {
@@ -226,9 +284,7 @@ function named(catalog) {
       if (i.kind === "skill") sets.skills.add(i.folder);
       if (i.kind === "pinned") {
         sets.pinned.add(i.folder);
-        sets.binWords.add(norm(i.folder));
         if (i.package) sets.binWords.add(norm(i.package));
-        sets.binWords.add(norm(String(i.folder).replace(/-cli$/, "")));
       }
       if (i.kind === "hosted" && i.server) sets.servers.add(norm(i.server));
     }
@@ -245,11 +301,9 @@ function named(catalog) {
   return sets;
 }
 
-const covers = (words, stem) => {
-  const s = norm(stem);
-  for (const w of words) if (w && (s === w || s.startsWith(`${w}-`))) return true;
-  return false;
-};
+// A bin is listed only on an exact match of its base name: a tool id, a pinned
+// part's package, or the executable of a table command.
+const covers = (words, stem) => words.has(norm(stem));
 
 // Parse `claude mcp list` lines ("<name>: <target> - <status>") into names.
 function mcpNames(text) {
@@ -314,11 +368,15 @@ export async function findUnlisted(catalog, { home, run } = {}) {
 
   let mcp;
   try {
-    mcp = await run(["claude", "mcp", "list"], { timeoutMs: COMMAND_TIMEOUT_MS, maxBytes: MCP_LIST_LIMIT });
+    mcp = await run(["claude", "mcp", "list"], { timeoutMs: COMMAND_TIMEOUT_MS, maxBytes: MCP_LIST_LIMIT, home });
   } catch (e) {
     mcp = { code: -1, stdout: "", stderr: cause(e) };
   }
-  if (mcp?.code !== 0) {
+  if (mcp?.timedOut) {
+    unreadableSources.push("claude mcp list: timed out");
+  } else if (mcp?.truncated) {
+    unreadableSources.push(`claude mcp list: output cut at ${MCP_LIST_LIMIT} bytes`);
+  } else if (mcp?.code !== 0) {
     unreadableSources.push(`claude mcp list: ${String(mcp?.stderr ?? "").trim().split("\n")[0].slice(0, 120) || (mcp?.code == null ? "timed out" : `exit ${mcp?.code}`)}`);
   } else {
     for (const name of mcpNames(mcp.stdout)) {

@@ -241,3 +241,96 @@ test("normalizeVersion", () => {
   assert.equal(normalizeVersion("2.1.323 (Claude Code)"), "2.1.323");
   assert.equal(normalizeVersion("nothing here"), "");
 });
+
+// ---- fix round 1 ------------------------------------------------------------
+
+import { mkdtempSync, mkdirSync, writeFileSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { defaultRun } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
+
+function tempHome(binFiles = []) {
+  const h = mkdtempSync(join(tmpdir(), "inv-home-"));
+  mkdirSync(join(h, ".local", "bin"), { recursive: true });
+  for (const f of binFiles) writeFileSync(join(h, ".local", "bin", f), "stub");
+  return h;
+}
+
+test("findUnlisted: bins match exactly (tool id, pinned package, table executable); prefixes do not", async () => {
+  const h = tempHome(["git-foo.exe", "node-anything.cmd", "firecrawl-anything", "firecrawl.cmd", "odd-pkg.exe", "git.exe", "Firecrawl-CLI.cmd"]);
+  const cat = {
+    version: 1, ignored: [],
+    tools: [
+      { id: "firecrawl", name: "Firecrawl", parts: [part("cli", { kind: "pinned", folder: "firecrawl-cli", package: "firecrawl-cli" })] },
+      { id: "git", name: "Git", parts: [part("cli", { kind: "command" })] },
+      { id: "node", name: "Node.js", parts: [part("runtime", { kind: "command" })] },
+      { id: "other", name: "Other", parts: [part("cli", { kind: "pinned", folder: "zzz", package: "odd-pkg" })] },
+    ],
+  };
+  const { items } = await findUnlisted(cat, { home: h, run: fakeRun({ claude: { code: 0, stdout: "", stderr: "" } }) });
+  const bins = items.filter((i) => i.kind === "bin").map((i) => i.name).sort();
+  // tool id (firecrawl), table executable (git) and package (odd-pkg, firecrawl-cli) are listed.
+  assert.deepEqual(bins, ["firecrawl-anything", "git-foo", "node-anything"]);
+});
+
+test("defaultRun: fixed cwd, no GIT_* or NODE_OPTIONS, PATH kept", async () => {
+  const h = tempHome();
+  const saved = { GIT_DIR: process.env.GIT_DIR, NODE_OPTIONS: process.env.NODE_OPTIONS };
+  process.env.GIT_DIR = "C:/should-not-leak";
+  process.env.NODE_OPTIONS = "--no-warnings";
+  try {
+    const script = "console.log(JSON.stringify({cwd:process.cwd(),git:process.env.GIT_DIR??null,node:process.env.NODE_OPTIONS??null,path:!!process.env.PATH}))";
+    const r = await defaultRun([process.execPath, "-e", script], { home: h });
+    assert.equal(r.code, 0);
+    const o = JSON.parse(r.stdout);
+    assert.equal(realpathSync(o.cwd), realpathSync(join(h, ".local", "share", "stack-updates")));
+    assert.equal(o.git, null);
+    assert.equal(o.node, null);
+    assert.equal(o.path, true);
+  } finally {
+    for (const [k, v] of Object.entries(saved)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+  }
+});
+
+test("defaultRun: a timeout is reported as timed out through readInstalled", async () => {
+  const h = tempHome();
+  const run = (argv, o) => defaultRun([process.execPath, "-e", "setTimeout(()=>{},5000)"], { ...o, timeoutMs: 300, home: h });
+  const direct = await run([], {});
+  assert.equal(direct.code, null);
+  assert.equal(direct.timedOut, true);
+  const r = await readInstalled({ kind: "command" }, "git/cli", deps({ run }));
+  assert.equal(r.state, "unreadable");
+  assert.match(r.message, /timed out/);
+});
+
+test("defaultRun: output over the cap is cut by bytes and reported as cut, not as a timeout", async () => {
+  const h = tempHome();
+  const run = (argv, o) => defaultRun([process.execPath, "-e", "process.stdout.write('é'.repeat(5000)); setTimeout(()=>{},3000)"], { ...o, home: h });
+  const direct = await run([], {});
+  assert.equal(direct.truncated, true);
+  assert.ok(!direct.timedOut);
+  assert.ok(Buffer.byteLength(direct.stdout) <= 2_000 + 1);
+  const r = await readInstalled({ kind: "command" }, "git/cli", deps({ run }));
+  assert.equal(r.state, "unreadable");
+  assert.match(r.message, /cut/);
+  assert.doesNotMatch(r.message, /timed out/);
+});
+
+test("plugin registry and lockfile strings: capped at 100 characters, no control characters", async () => {
+  const h = tempHome();
+  mkdirSync(join(h, ".claude", "plugins"), { recursive: true });
+  const reg = (v, c = "abc") => JSON.stringify({ plugins: { "p@m": [{ scope: "user", version: v, gitCommitSha: c }] } });
+  const put = (text) => writeFileSync(join(h, ".claude", "plugins", "installed_plugins.json"), text);
+  put(reg("1.0.0"));
+  assert.equal((await readInstalled({ kind: "plugin", id: "p@m" }, "t/p", deps({ home: h }))).state, "read");
+  put(reg("1".repeat(101)));
+  assert.equal((await readInstalled({ kind: "plugin", id: "p@m" }, "t/p", deps({ home: h }))).state, "unreadable");
+  put(reg("1.0.0\u001b[31m"));
+  assert.equal((await readInstalled({ kind: "plugin", id: "p@m" }, "t/p", deps({ home: h }))).state, "unreadable");
+  put(reg("1.0.0", "x\ny"));
+  assert.equal((await readInstalled({ kind: "plugin", id: "p@m" }, "t/p", deps({ home: h }))).state, "unreadable");
+  mkdirSync(join(h, ".local", "share", "pin"), { recursive: true });
+  writeFileSync(join(h, ".local", "share", "pin", "package-lock.json"), JSON.stringify({ packages: { "node_modules/a": { version: "1.0\n0" } } }));
+  const pinned = await readInstalled({ kind: "pinned", folder: "pin", package: "a" }, "t/p", deps({ home: h }));
+  assert.equal(pinned.state, "unreadable");
+  assert.match(pinned.message, /usable/);
+});
