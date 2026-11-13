@@ -17,7 +17,7 @@
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { readFile, readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { join, normalize } from "node:path";
 import { VERSION_COMMANDS } from "./tables.mjs";
 import { ghFile } from "./feeds.mjs";
 
@@ -107,6 +107,11 @@ async function names(dir) {
 
 // ---- readInstalled ---------------------------------------------------------
 
+// `{share}` in a table argv element means <home>/.local/share. It is the only
+// substitution, and it exists only in the fixed table, never in the catalog.
+export const expandShare = (argv, home) => argv.map((a) => (a.includes("{share}") ? normalize(a.replaceAll("{share}", join(home, ".local", "share"))) : a));
+
+
 async function readPlugin(installed, home) {
   if (!PLUGIN_ID.test(String(installed.id))) return unreadable("the plugin id must be plugin@marketplace");
   const reg = await readJson(join(home, ".claude", "plugins", "installed_plugins.json"));
@@ -132,12 +137,12 @@ async function readPinned(installed, home) {
   return { state: "read", version };
 }
 
-async function readCommand(key, run) {
+async function readCommand(key, run, home) {
   const entry = Object.hasOwn(VERSION_COMMANDS, key) ? VERSION_COMMANDS[key] : undefined;
   if (!entry) return unreadable(`no version command is listed for ${key}`);
   let result;
   try {
-    result = await run(entry.argv, { timeoutMs: COMMAND_TIMEOUT_MS });
+    result = await run(expandShare(entry.argv, home), { timeoutMs: COMMAND_TIMEOUT_MS });
   } catch (e) {
     return unreadable(`${entry.argv[0]} could not run: ${cause(e)}`);
   }
@@ -147,6 +152,8 @@ async function readCommand(key, run) {
   const stdout = String(result.stdout ?? "").slice(0, OUTPUT_LIMIT);
   const m = entry.pattern.exec(stdout);
   const version = m ? normalizeVersion(m[1] ?? m[0]) : "";
+  // A 40-character hex id is a git commit, not a version.
+  if (/^[0-9a-f]{40}$/.test(m?.[1] ?? "")) return { state: "read", commit: m[1] };
   return version ? { state: "read", version } : unreadable(`no version found in the output of ${entry.argv[0]}`);
 }
 
@@ -180,7 +187,7 @@ export async function readInstalled(installed, key, { home, run, gh } = {}) {
     switch (installed?.kind) {
       case "plugin": return await readPlugin(installed, home);
       case "pinned": return await readPinned(installed, home);
-      case "command": return await readCommand(key, run);
+      case "command": return await readCommand(key, run, home);
       case "skill": return await readSkill(installed, home);
       case "project": return await readProject(installed, gh);
       case "hosted": return { state: "hosted" };
@@ -220,14 +227,20 @@ function named(catalog) {
       if (i.kind === "pinned") {
         sets.pinned.add(i.folder);
         sets.binWords.add(norm(i.folder));
+        if (i.package) sets.binWords.add(norm(i.package));
         sets.binWords.add(norm(String(i.folder).replace(/-cli$/, "")));
       }
       if (i.kind === "hosted" && i.server) sets.servers.add(norm(i.server));
-      if (i.kind === "command") {
-        const cmd = VERSION_COMMANDS[`${t.id}/${p.name}`]?.argv[0];
-        if (cmd) sets.binWords.add(norm(cmd));
-      }
     }
+  }
+  // Every executable the fixed table runs counts as listed (base name, no extension).
+  for (const { argv } of Object.values(VERSION_COMMANDS)) {
+    // A `{share}/<folder>/...` binary makes that ~/.local/share folder listed.
+    for (const a of argv) {
+      const m = /^\{share\}[\\/]+([^\\/]+)/.exec(a);
+      if (m) sets.pinned.add(m[1]);
+    }
+    sets.binWords.add(norm(stemOf(argv[0].split(/[\/]/).pop())));
   }
   return sets;
 }
@@ -249,7 +262,8 @@ function mcpNames(text) {
 }
 
 // Everything found on the PC that no part and no `ignored` entry names. The
-// returned array also carries `unreadable`: sources that could not be read.
+// result is `{ items: { kind, name }[], unreadable: string[] }`; `unreadable` lists
+// the sources that could not be read.
 export async function findUnlisted(catalog, { home, run } = {}) {
   const sets = named(catalog);
   const found = [];
@@ -319,6 +333,5 @@ export async function findUnlisted(catalog, { home, run } = {}) {
       if (!covered) add("mcp", name);
     }
   }
-  found.unreadable = unreadableSources;
-  return found;
+  return { items: found, unreadable: unreadableSources };
 }

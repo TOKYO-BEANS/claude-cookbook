@@ -176,6 +176,14 @@ export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMA
     if (!allParts.has(key)) errors.push(`version commands: ${key} names no part in catalog.json`);
     else if (!commandParts.has(key)) errors.push(`version commands: ${key} names a part whose installed kind is not command`);
   }
+  for (const [key, c] of Object.entries(commands)) {
+    const cmd = Array.isArray(c?.argv) ? c.argv[0] : undefined;
+    const bare = typeof cmd === "string" && /^[A-Za-z0-9._-]+$/.test(cmd);
+    const underShare = typeof cmd === "string" && /^\{share\}\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/.test(cmd) && !cmd.split("/").some((seg) => seg === ".." || seg === ".");
+    if (!bare && !underShare) errors.push(`version commands: ${key} argv[0] must be a bare command name or {share}/ and a relative path without ..`);
+    if (Array.isArray(c?.argv) && c.argv.slice(1).some((a) => typeof a !== "string" || /\{(?!share\})[^}]*\}/.test(a) || a.includes("..")))
+      errors.push(`version commands: ${key} has an argument with an unknown token or ..`);
+  }
   for (const key of commandParts) if (!Object.hasOwn(commands, key)) errors.push(`version commands: ${key} has no version command`);
   const names = catalog.tools.map((t) => String(t?.name ?? "").toLowerCase()).filter(Boolean);
   const table = skill.split(/^## /m).find((s) => s.startsWith("Choosing quickly")) ?? "";

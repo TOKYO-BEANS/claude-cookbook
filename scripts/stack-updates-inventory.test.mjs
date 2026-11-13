@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 import { readInstalled, findUnlisted, normalizeVersion } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
 import { VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
@@ -102,14 +103,20 @@ test("every table entry runs a bare command name and matches its own sample outp
     "gitleaks/cli": ["8.30.1\n", "8.30.1"],
     "trivy/cli": ["Version: 0.76.2\nVulnerability DB:\n  Version: 2\n", "0.76.2"],
     "osv-scanner/cli": ["osv-scanner version: 2.7.0\nosv-scalibr version: 0.5.3\n", "2.7.0"],
+    "boat/cli": ["boat 1.0.97\n", "1.0.97"],
+    "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
+    "google-workspace-cli/cli": ["gws 0.22.5\nThis is not an officially supported Google product.\n", "0.22.5"],
+    "jev-router/pinned": ["ec7775fb0f54cfe2809dbf75fc1fb3aa27f830c7\n", "ec7775fb0f54cfe2809dbf75fc1fb3aa27f830c7"],
   };
   assert.deepEqual(Object.keys(VERSION_COMMANDS).sort(), Object.keys(samples).sort());
   for (const [key, { argv, pattern }] of Object.entries(VERSION_COMMANDS)) {
-    assert.match(argv[0], /^[A-Za-z0-9._-]+$/, `${key}: argv[0] is a bare command name`);
+    assert.match(argv[0], /^([A-Za-z0-9._-]+|\{share\}\/[A-Za-z0-9._\/-]+)$/, `${key}: argv[0] is a bare name or under {share}`);
+    assert.ok(!argv.some((a) => a.includes("..")));
     assert.ok(pattern instanceof RegExp);
     const m = pattern.exec(samples[key][0]);
     assert.ok(m, `${key}: pattern matches`);
-    assert.equal(normalizeVersion(m[1] ?? m[0]), samples[key][1], key);
+    const got = m[1] ?? m[0];
+    assert.equal(/^[0-9a-f]{40}$/.test(got) ? got : normalizeVersion(got), samples[key][1], key);
   }
 });
 
@@ -173,7 +180,7 @@ const mcpOut = [
 
 test("findUnlisted: reports only what no part and no ignored entry names", async () => {
   const run = fakeRun({ claude: { code: 0, stdout: mcpOut, stderr: "" } });
-  const found = await findUnlisted(catalog, { home, run });
+  const { items: found } = await findUnlisted(catalog, { home, run });
   const keys = found.map((f) => `${f.kind}:${f.name}`).sort();
   assert.deepEqual(keys, [
     "bin:odd-tool",
@@ -193,10 +200,38 @@ test("findUnlisted: reports only what no part and no ignored entry names", async
 test("findUnlisted: an ignored name clears it, and a failed `claude mcp list` is noted, not guessed", async () => {
   const cat = { ...catalog, ignored: [...catalog.ignored, { name: "odd-tool.exe", reason: "x" }, { name: "stray-market", reason: "x" }, { name: "stray@stray-market", reason: "x" }] };
   const run = fakeRun({ claude: { code: 1, stdout: "", stderr: "failed" } });
-  const found = await findUnlisted(cat, { home, run });
+  const { items: found, unreadable } = await findUnlisted(cat, { home, run });
   const keys = found.map((f) => `${f.kind}:${f.name}`).sort();
   assert.deepEqual(keys, ["pinned:other-tool", "plugin:onlyproject@market-a", "skill:unlisted-skill"]);
-  assert.match(found.unreadable.join(" "), /claude mcp list/);
+  assert.match(unreadable.join(" "), /claude mcp list/);
+});
+
+test("command: {share} in the table argv becomes <home>/.local/share", async () => {
+  const boat = join(home, ".local", "share", "boat", "boat.exe");
+  const run = fakeRun({ [boat]: { code: 0, stdout: "boat 1.0.97\n", stderr: "" } });
+  const r = await readInstalled({ kind: "command" }, "boat/cli", deps({ run }));
+  assert.deepEqual(r, { state: "read", version: "1.0.97" });
+  assert.equal(run.calls[0].argv[0], boat);
+  assert.ok(!run.calls[0].argv.join(" ").includes("{share}"));
+});
+
+test("command: a 40-character hex capture is a commit, not a version", async () => {
+  const sha = "ec7775fb0f54cfe2809dbf75fc1fb3aa27f830c7";
+  const run = fakeRun({ git: { code: 0, stdout: `${sha}\n`, stderr: "" } });
+  const r = await readInstalled({ kind: "command" }, "jev-router/pinned", deps({ run }));
+  assert.deepEqual(r, { state: "read", commit: sha });
+  assert.deepEqual(run.calls[0].argv, ["git", "-C", join(home, ".local", "share", "jev-router"), "rev-parse", "HEAD"]);
+});
+
+test("findUnlisted: a bin file equal to a pinned package or a table executable is listed", async () => {
+  const cat = {
+    version: 1, ignored: [],
+    tools: [{ id: "other", name: "Other", parts: [part("cli", { kind: "pinned", folder: "zzz", package: "odd-tool" })] }],
+  };
+  const { items } = await findUnlisted(cat, { home, run: fakeRun({ claude: { code: 0, stdout: "", stderr: "" } }) });
+  const bins = items.filter((i) => i.kind === "bin").map((i) => i.name);
+  assert.ok(!bins.includes("odd-tool"));
+  assert.ok(bins.includes("helper-key"));
 });
 
 test("normalizeVersion", () => {

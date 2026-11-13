@@ -8,7 +8,9 @@ export const CHANGELOG_HOSTS = Object.freeze([]);
 // The only commands the daily update check ever runs to read an installed
 // version, keyed by part key "<tool id>/<part name>". argv[0] is a bare command
 // name that must be a real executable on PATH (no .cmd or .bat shim: it is run
-// without a shell). `pattern` is matched against stdout; group 1 is the version.
+// without a shell), or `{share}/<relative path>` for a binary under ~/.local/share.
+// `{share}` is the only substitution, allowed only in this table, never in the
+// catalog. When the capture is a 40-character hex id it is a commit, not a version. `pattern` is matched against stdout; group 1 is the version.
 // Each pattern was written against the real output on the owner's PC on
 // 13 November 2026. A part whose command cannot run here has no entry.
 export const VERSION_COMMANDS = Object.freeze({
@@ -21,4 +23,8 @@ export const VERSION_COMMANDS = Object.freeze({
   "gitleaks/cli": { argv: ["gitleaks", "version"], pattern: /^(\d+\.\d+\.\d+)\s*$/m },
   "trivy/cli": { argv: ["trivy", "--version"], pattern: /^Version: (\d+\.\d+\.\d+)/m },
   "osv-scanner/cli": { argv: ["osv-scanner", "--version"], pattern: /^osv-scanner version: (\d+\.\d+\.\d+)/m },
+  "boat/cli": { argv: ["{share}/boat/boat.exe", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
+  "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli.exe", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
+  "google-workspace-cli/cli": { argv: ["{share}/gws/gws.exe", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },
+  "jev-router/pinned": { argv: ["git", "-C", "{share}/jev-router", "rev-parse", "HEAD"], pattern: /^([0-9a-f]{40})\s*$/m },
 });
