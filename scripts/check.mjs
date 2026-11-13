@@ -6,6 +6,15 @@ import { CHANGELOG_HOSTS, CONNECTION_CHECKS, SELF_UPDATING_TOOLS, VERSION_COMMAN
 
 export { CHANGELOG_HOSTS };
 
+// The plugin's other skill and prompt bodies, checked for the dollar-sign rule like
+// the cookbook skill (a scheduled task's prompt gets arguments too).
+export const OTHER_TEXTS = Object.freeze([
+  "plugins/cookbook/skills/stack-updates/SKILL.md",
+  "plugins/cookbook/skills/stack-updates/daily-prompt.md",
+]);
+const dollarErrors = (name, text) =>
+  text.replace(/\r/g, "").split("\n").flatMap((line, i) => (/\$\d/.test(line) ? [`${name} line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`] : []));
+
 const CATEGORIES = ["Development", "Research", "Infrastructure", "Memory", "Security", "Productivity", "Workflows"];
 const SOURCES = ["npm", "github", "vendor"];
 const LIFECYCLES = ["active", "trial", "watching"];
@@ -146,7 +155,7 @@ export function argvProblems(argv) {
   return problems;
 }
 
-export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMANDS, selfUpdating = SELF_UPDATING_TOOLS, checks = CONNECTION_CHECKS }) {
+export function checkCookbook({ catalogText, skillText, otherTexts = [], commands = VERSION_COMMANDS, selfUpdating = SELF_UPDATING_TOOLS, checks = CONNECTION_CHECKS }) {
   const skill = skillText.replace(/\r/g, "");
   let catalog;
   try {
@@ -168,9 +177,8 @@ export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMA
       else if (typeof g.reason !== "string" || !g.reason.trim()) errors.push(`ignored entry needs a reason (${g.name})`);
     }
   // A skill called with arguments gets $0, $1 and so on replaced, prices included.
-  skill.split("\n").forEach((line, i) => {
-    if (/\$\d/.test(line)) errors.push(`SKILL.md line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`);
-  });
+  errors.push(...dollarErrors("SKILL.md", skill));
+  for (const { name, text } of otherTexts) errors.push(...dollarErrors(name, String(text)));
   const headings = new Set([...skill.matchAll(/^#{2,3} (.+)$/gm)].map((m) => m[1].trim()));
   const ids = new Set();
   catalog.tools.forEach((t, i) => {
@@ -242,6 +250,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const errors = checkCookbook({
     catalogText: readFileSync(new URL("plugins/cookbook/catalog.json", root), "utf8"),
     skillText: readFileSync(new URL("plugins/cookbook/skills/cookbook/SKILL.md", root), "utf8"),
+    otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: readFileSync(new URL(p, root), "utf8") })),
   });
   for (const e of errors) console.error(e);
   console.log(errors.length ? `${errors.length} problem(s)` : "Cookbook check passed.");

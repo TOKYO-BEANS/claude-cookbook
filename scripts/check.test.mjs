@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { checkCookbook } from "./check.mjs";
+import { OTHER_TEXTS, checkCookbook } from "./check.mjs";
 import { CHANGELOG_HOSTS, SELF_UPDATING_TOOLS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -66,6 +66,34 @@ test("feed: known kinds, own fields, changelog host on the allow list", () => {
   assert.ok(part({ feed: { kind: "none" } }).some((e) => /feed none needs a reason/.test(e)));
   assert.ok(part({ feed: { kind: "marketplace", repository: "a/b" } }).some((e) => /feed plugin/.test(e)));
   assert.ok(Object.isFrozen(CHANGELOG_HOSTS) && Array.isArray(CHANGELOG_HOSTS));
+});
+test("feed: a changelog page on an allowed host passes; the same path on another host does not", () => {
+  for (const host of CHANGELOG_HOSTS) assert.deepEqual(part({ feed: { kind: "changelog", url: `https://${host}/changelog` } }), [], host);
+  assert.ok(part({ feed: { kind: "changelog", url: "https://browserbase.com/changelog" } }).some((e) => /feed host browserbase.com is not on the allow list/.test(e)));
+  assert.ok(part({ feed: { kind: "changelog", url: "https://www.browserbase.com/changelog?page=2" } }).some((e) => /feed url/.test(e)));
+});
+test("the real catalog keeps the shapes the first real run corrected (13 November 2026)", () => {
+  const partOf = (id, name) => catalog.tools.find((t) => t.id === id).parts.find((p) => p.name === name);
+  // The OpenSEO plugin's version is its manifest's (1.0.x), not the app's GitHub releases (0.1.x).
+  assert.equal(partOf("openseo", "plugin").feed.kind, "marketplace");
+  // Safe Chain is a CI pin: the Claude plugin's version (1.2.x) is not Safe Chain's (1.5.x).
+  assert.equal(partOf("aikido", "safe-chain").installed.kind, "none");
+  assert.equal(partOf("aikido", "safe-chain").feed.repository, "AikidoSec/safe-chain");
+  // Wix updates itself and its version is outside the folders the check reads: an npm release is not a change.
+  assert.equal(partOf("wix", "plugin").feed.kind, "none");
+  // Only the folder that records its source gets a feed.
+  assert.deepEqual(partOf("shopify-theme-skills", "themes").feed, { kind: "commit", repository: "Shopify/liquid-skills", path: "plugins/liquid-skills/skills/shopify-liquid-themes" });
+  assert.equal(partOf("shopify-theme-skills", "standards").feed.kind, "none");
+  assert.equal(partOf("proton-pass-cli", "cli").feed.url, "https://proton.me/download/pass-cli/versions.json");
+  assert.equal(partOf("browserbase", "service").feed.url, "https://www.browserbase.com/changelog");
+});
+test("no dollar sign before a digit in the plugin's other skill and prompt bodies", () => {
+  const found = errors({ otherTexts: [{ name: "skills/x/daily-prompt.md", text: "Rules\r\nIt costs $5 a day." }] });
+  assert.deepEqual(found, ['skills/x/daily-prompt.md line 2: dollar sign before a digit (write "${1}" or USD 30)']);
+  assert.deepEqual(errors({ otherTexts: [{ name: "a.md", text: 'Use "${1}" and USD 20.' }] }), []);
+  // The real files named by OTHER_TEXTS pass.
+  assert.deepEqual(errors({ otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: read(p) })) }), []);
+  assert.ok(OTHER_TEXTS.includes("plugins/cookbook/skills/stack-updates/daily-prompt.md"));
 });
 test("feed: each kind's own fields and values", () => {
   assert.deepEqual(part({ feed: { kind: "npm", package: "@scope/name", tag: "stable", updater: "x" } }), []);
