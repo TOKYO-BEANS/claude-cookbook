@@ -16,6 +16,8 @@ export const CHANGELOG_HOSTS = Object.freeze([
 // Tool ids whose installed version moves without us: Claude Code updates itself,
 // and the app syncs the Wix and Adobe for creativity plugins. A part of such a
 // tool is reported when its installed version changes, never as "still behind".
+// Today only Claude Code has a readable version: Wix and Adobe are hosted parts with
+// no feed, so they are never reported; their ids take effect only if they get one.
 // `check.mjs` requires each id to name a tool in the catalog.
 export const SELF_UPDATING_TOOLS = Object.freeze([
   "1c9ccea9-8ebf-4d9c-9512-38e6890ea5b6", // Claude Code

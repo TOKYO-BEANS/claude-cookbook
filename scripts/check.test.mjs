@@ -87,6 +87,22 @@ test("the real catalog keeps the shapes the first real run corrected (13 Novembe
   assert.equal(partOf("proton-pass-cli", "cli").feed.url, "https://proton.me/download/pass-cli/versions.json");
   assert.equal(partOf("browserbase", "service").feed.url, "https://www.browserbase.com/changelog");
 });
+test("the real catalog keeps the shapes of review fix round 1", () => {
+  const partOf = (id, name) => catalog.tools.find((t) => t.id === id).parts.find((p) => p.name === name);
+  // The local Semgrep (a uv tool) and the standard's CI pin are two installs: only the local one is followed here.
+  const cli = partOf("semgrep", "cli");
+  assert.equal(cli.installed.kind, "command");
+  assert.match(cli.feed.updater, /uv tool upgrade semgrep/);
+  assert.doesNotMatch(cli.feed.updater, /standard bump/);
+  assert.deepEqual(partOf("semgrep", "ci-pin"), {
+    name: "ci-pin", installed: { kind: "none" },
+    feed: { kind: "none", reason: "the standard's pin moves through a standard bump; the standard's own daily run reports it" },
+  });
+  // agent-browser's part tracks the library it is built on, and is named after it.
+  const ab = catalog.tools.find((t) => t.id === "agent-browser");
+  assert.deepEqual(ab.parts.map((p) => p.name), ["playwright-core"]);
+  assert.equal(ab.parts[0].installed.package, "playwright-core");
+});
 test("no dollar sign before a digit in the plugin's other skill and prompt bodies", () => {
   const found = errors({ otherTexts: [{ name: "skills/x/daily-prompt.md", text: "Rules\r\nIt costs $5 a day." }] });
   assert.deepEqual(found, ['skills/x/daily-prompt.md line 2: dollar sign before a digit (write "${1}" or USD 30)']);

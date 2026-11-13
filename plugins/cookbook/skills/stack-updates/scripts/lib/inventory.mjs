@@ -324,11 +324,11 @@ function named(catalog) {
     }
     sets.binWords.add(norm(stemOf(argv[0].split(/[\/]/).pop())));
   }
-  // So does every executable a connection check starts: its argv[0], or for the
-  // `cmd.exe /d /c {bin}/<name>.cmd` shape the shim (the `google` launcher of gws).
+  // So does every shim a connection check starts through `cmd.exe /d /c {bin}/<name>.cmd`
+  // (the `google` launcher of gws). A check's other argv[0] (gh, depot, node) is already
+  // a version-table executable; a test keeps it that way.
   for (const { argv } of Object.values(CONNECTION_CHECKS)) {
-    const exe = argv[0] === "cmd.exe" ? argv[3] : argv[0];
-    sets.binWords.add(norm(stemOf(String(exe).split(/[\/]/).pop())));
+    if (argv[0] === "cmd.exe") sets.binWords.add(norm(stemOf(String(argv[3]).split(/[\/]/).pop())));
   }
   return sets;
 }

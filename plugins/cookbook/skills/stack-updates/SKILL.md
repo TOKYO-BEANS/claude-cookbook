@@ -19,6 +19,10 @@ node <this skill's folder>/scripts/updates.mjs run
 
 - A quiet day (no change, nothing broken, no warning) prints one line. Otherwise it prints the path
   of `report.md` and its text: give the owner that text as it is.
+- No call prints more than 3,500 bytes, because context-mode replaces any tool output over 4,096
+  bytes with a search pointer. A longer report starts with `Page 1 of N: <path>`; run the same
+  command with `page 2`, then `page 3`, up to `page N` in place of `run`, and give the owner every
+  page in order.
 - State lives in `~/.local/share/stack-updates/`: `state.json` and `runs/<date>/`. The first run
   records the baseline and reports only what is already behind, unlisted, missing or broken.
 - `--no-read` skips the release notes. `--state <folder>`, and with it `--today YYYY-MM-DD`, runs a
@@ -59,25 +63,29 @@ the daily run updates anything by itself, and a release note never decides it. B
 | `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, `npm ci --ignore-scripts`, one real call | "Cloud browser (Browserbase)" (To update) |
 | `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
+| `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
 | `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit | "Claude Code add-ons" (Updates) |
 | `project` | The version pull request Dependabot opens in that repository | "Security in a repository" |
-| A standard pin (Semgrep, Safe Chain) | A standard bump pull request in Stack Atlas | "Security in a repository" |
+| The standard's own pins (Semgrep in CI, Safe Chain) | Nothing on this PC. Semgrep's CI pin is not followed here; a Safe Chain release is reported for information only. A pin moves when Stack Atlas bumps the standard, decided there, never because of this report | "Security in a repository" |
 | Jev Router | Its own steps | "Model routing (Jev Router)" |
 
-A recipe that names the old version is updated in the same pull request. Self-updating tools
-(Claude Code, the Wix and Adobe plugins) are reported once they have updated; there is nothing to
-run.
+A recipe that names the old version is updated in the same pull request. Claude Code updates
+itself: it is reported once its installed version has moved, and there is nothing to run. (The Wix
+and Adobe plugins also update themselves, but their versions cannot be read here, so they are never
+reported.)
 
 ## After an update
 
-For a part whose feed follows commits (a skill copy, a local plugin port, `jev-router`), record the
-commit that is now installed, so the next run compares from it:
+Only skill copies (`skill` parts) and local plugin ports (plugins of the `claude-local`
+marketplace) need a `record`: nothing on disk says which commit they came from. Record the commit
+now installed, so the next run compares from it:
 
 ```bash
 node <this skill's folder>/scripts/updates.mjs record <tool id>/<part> <40-character commit>
 ```
 
-A plugin, pinned or command part needs nothing: its version is read from disk on every run.
+Registry plugins, pinned parts and command parts (`jev-router` included) need nothing: their
+version or commit is read from disk on every run, and a recorded commit would override that read.
 
 ## Common mistakes
 

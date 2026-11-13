@@ -704,8 +704,11 @@ of every tool in `catalog.json` with its newest release, makes one real call per
 about the dates the catalog records. It installs, updates and commits nothing.
 
 - **Run it:** say "check for updates", or run `scripts/updates.mjs run` in the skill's folder. A
-  quiet day prints one line; otherwise the report. The scheduled task `stack-updates-daily` (07:00,
-  Haiku) runs the skill's `daily-prompt.md`; it is created only after the owner's yes.
+  quiet day prints one line; otherwise the report. No call prints more than 3,500 bytes, because
+  context-mode replaces any tool output over 4,096 bytes with a search pointer: a longer report
+  starts with `Page 1 of N` and `updates.mjs page 2` to `page N` print the rest. The scheduled task
+  `stack-updates-daily` (07:00, Haiku) runs the skill's `daily-prompt.md`; it is created only after
+  the owner's yes.
 - **State:** `~/.local/share/stack-updates/` (`state.json`, and `runs/<date>/` with `result.json`
   and `report.md`). The first run records the baseline. A trial passes `--state <folder>`, so the
   real baseline is not created.
@@ -723,8 +726,8 @@ about the dates the catalog records. It installs, updates and commits nothing.
   `skills/stack-updates/scripts/lib/tables.mjs`, and a `changelog` page's host must be on the allow
   list there. Something on the PC that the catalog does not name shows under "Not in the Cookbook"
   until it is added to the catalog or to `ignored`.
-- Proven on 13 and 14 November 2026 on a trial state: 79 parts read in about 45 s, none unreadable,
-  15 already behind; one real read (GitHub CLI 2.104.0: 3,488 input and 238 output tokens, no
+- Proven on 13 and 14 November 2026 on a trial state: 79 parts checked in about 45 s, 48 with a
+  readable version, none unreadable, 15 already behind; one real read (GitHub CLI 2.104.0: 3,488 input and 238 output tokens, no
   tools, on the plan); the daily prompt on Haiku made one Bash call and ended with the report.
 
 ### Scripted Claude Code runs (`claude -p`)

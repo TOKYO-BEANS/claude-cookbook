@@ -7,7 +7,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { readInstalled, findUnlisted, normalizeVersion } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
-import { VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
+import { CONNECTION_CHECKS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const home = fileURLToPath(new URL("./fixtures/stack-updates/home", import.meta.url));
 const noRun = async () => { throw new Error("no command may run in this test"); };
@@ -235,12 +235,18 @@ test("findUnlisted: a claude.ai connector is listed by the hosted part that name
   assert.deepEqual(mcp, ["firecrawl", "newserver", "plugin:superpowers:thing"]);
 });
 
-test("findUnlisted: a bin that a connection check starts (its argv[0], or the shim of the cmd.exe shape) is listed", async () => {
-  const h = tempHome(["google.cmd", "parallel-cli.cmd", "gh.exe", "cmd.cmd", "stray.cmd"]);
+test("findUnlisted: a shim that a connection check starts through the cmd.exe shape is listed; cmd.exe itself names nothing", async () => {
+  const h = tempHome(["google.cmd", "parallel-cli.cmd", "cmd.cmd", "stray.cmd"]);
   const { items } = await findUnlisted({ version: 1, ignored: [], tools: [] }, { home: h, run: fakeRun({ claude: { code: 0, stdout: "", stderr: "" } }) });
   const bins = items.filter((i) => i.kind === "bin").map((i) => i.name).sort();
-  // google and parallel-cli are shims the table starts; gh is a check's argv[0]; cmd.exe itself names nothing.
   assert.deepEqual(bins, ["cmd", "stray"]);
+});
+
+test("every connection check that is not the cmd.exe shape starts an executable the version table already runs", () => {
+  // So findUnlisted needs only the shims from the connection table; if this fails, a new
+  // check starts a new executable and findUnlisted must count its argv[0] too.
+  const versionExes = new Set(Object.values(VERSION_COMMANDS).map(({ argv }) => argv[0]));
+  for (const [id, { argv }] of Object.entries(CONNECTION_CHECKS)) if (argv[0] !== "cmd.exe") assert.ok(versionExes.has(argv[0]), `${id}: ${argv[0]}`);
 });
 
 test("findUnlisted: a bin file equal to a pinned package or a table executable is listed", async () => {
