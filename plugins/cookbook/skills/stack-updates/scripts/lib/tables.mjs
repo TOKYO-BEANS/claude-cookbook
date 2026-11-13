@@ -5,6 +5,16 @@
 // changelog page; add the host here in the same pull request.
 export const CHANGELOG_HOSTS = Object.freeze([]);
 
+// Tool ids whose installed version moves without us: Claude Code updates itself,
+// and the app syncs the Wix and Adobe for creativity plugins. A part of such a
+// tool is reported when its installed version changes, never as "still behind".
+// `check.mjs` requires each id to name a tool in the catalog.
+export const SELF_UPDATING_TOOLS = Object.freeze([
+  "1c9ccea9-8ebf-4d9c-9512-38e6890ea5b6", // Claude Code
+  "wix", // Wix
+  "adobe-for-creativity", // Adobe for creativity
+]);
+
 // The only commands the daily update check ever runs to read an installed
 // version, keyed by part key "<tool id>/<part name>". argv[0] is a bare command
 // name that must be a real executable on PATH (no .cmd or .bat shim: it is run

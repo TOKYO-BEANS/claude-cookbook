@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { checkCookbook } from "./check.mjs";
-import { CHANGELOG_HOSTS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
+import { CHANGELOG_HOSTS, SELF_UPDATING_TOOLS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const catalogText = read("plugins/cookbook/catalog.json");
@@ -111,6 +111,14 @@ test("version commands: every key names a command part and every command part ha
   assert.ok(errors({ commands: { ...all, [notCommand]: good["git/cli"] } }).some((e) => /not command/.test(e)));
   const { "git/cli": _drop, ...missing } = all;
   assert.ok(errors({ commands: missing }).some((e) => /git\/cli has no version command/.test(e)));
+});
+
+test("self-updating tools: each id names a tool in the catalog", () => {
+  assert.ok(Object.isFrozen(SELF_UPDATING_TOOLS));
+  const names = SELF_UPDATING_TOOLS.map((id) => catalog.tools.find((t) => t.id === id)?.name);
+  assert.deepEqual(names.sort(), ["Adobe for creativity", "Claude Code", "Wix"]);
+  assert.deepEqual(errors({ selfUpdating: [...SELF_UPDATING_TOOLS] }), []);
+  assert.ok(errors({ selfUpdating: [...SELF_UPDATING_TOOLS, "ghost"] }).some((e) => /self-updating tools: ghost names no tool/.test(e)));
 });
 
 test("version commands: argv[0] is a bare name or {share}/ without .., and {share} is the only token", () => {

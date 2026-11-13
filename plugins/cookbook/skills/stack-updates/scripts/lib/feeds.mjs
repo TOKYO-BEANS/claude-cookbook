@@ -43,11 +43,17 @@ const stable = (v) => {
   const s = typeof v === "string" ? v.replace(/^v/, "") : "";
   return STABLE.test(s) ? s : null;
 };
-const compare = (a, b) => {
-  const x = STABLE.exec(a), y = STABLE.exec(b);
-  for (let i = 1; i <= 3; i++) if (x[i] !== y[i]) return Number(x[i]) - Number(y[i]);
+// Numeric dotted versions of any length ("1.2" equals "1.2.0"): -1, 0 or 1.
+// Callers pass digits and dots only; BigInt keeps long segments exact.
+export const compareNumeric = (a, b) => {
+  const x = String(a).split("."), y = String(b).split(".");
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    const p = BigInt(x[i] || 0), q = BigInt(y[i] || 0);
+    if (p !== q) return p > q ? 1 : -1;
+  }
   return 0;
 };
+const compare = compareNumeric;
 
 async function boundedBytes(response, limit = RESPONSE_LIMIT) {
   if (!response.ok) throw new Error(`Provider returned HTTP ${response.status}`);

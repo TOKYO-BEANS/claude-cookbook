@@ -2,7 +2,7 @@
 // dependencies: run `node scripts/check.mjs` before every merge.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { CHANGELOG_HOSTS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
+import { CHANGELOG_HOSTS, SELF_UPDATING_TOOLS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 export { CHANGELOG_HOSTS };
 
@@ -113,7 +113,7 @@ function datesErrors(dates, at) {
   return errors;
 }
 
-export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMANDS }) {
+export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMANDS, selfUpdating = SELF_UPDATING_TOOLS }) {
   const skill = skillText.replace(/\r/g, "");
   let catalog;
   try {
@@ -164,6 +164,8 @@ export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMA
     else if (t.uses.length && t.category !== "Workflows") errors.push(`${at}: only workflows list uses`);
     if (t.recipe !== null && typeof t.name === "string" && !skill.includes(t.name)) errors.push(`${at}: name not mentioned in SKILL.md`);
   });
+  // The self-updating table names tools of the catalog.
+  for (const id of selfUpdating) if (!ids.has(id)) errors.push(`self-updating tools: ${id} names no tool in catalog.json`);
   // The fixed version-command table and the catalog agree: a key names a part whose
   // installed kind is command, and every such part has a key.
   const commandParts = new Set();
