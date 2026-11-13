@@ -101,3 +101,14 @@ test("no dollar sign before a digit: Claude Code fills it with an argument", () 
   assert.ok(errors({ skillText: `${skillText}\nCosts $5.` }).some((e) => /line \d+: dollar sign before a digit/.test(e)));
   assert.deepEqual(errors({ skillText: `${skillText}\nUse "\${1}", $ARGUMENTS and USD 30.` }), []);
 });
+
+test("version commands: every key names a command part and every command part has a key", () => {
+  const good = { "git/cli": { argv: ["git", "--version"], pattern: /(\d+)/ } };
+  const all = Object.fromEntries(catalog.tools.flatMap((t) => t.parts.filter((p) => p.installed.kind === "command").map((p) => [`${t.id}/${p.name}`, good["git/cli"]])));
+  assert.deepEqual(errors({ commands: all }), []);
+  assert.ok(errors({ commands: { ...all, "ghost/cli": good["git/cli"] } }).some((e) => /names no part/.test(e)));
+  const notCommand = catalog.tools.flatMap((t) => t.parts.filter((p) => p.installed.kind !== "command").map((p) => `${t.id}/${p.name}`))[0];
+  assert.ok(errors({ commands: { ...all, [notCommand]: good["git/cli"] } }).some((e) => /not command/.test(e)));
+  const { "git/cli": _drop, ...missing } = all;
+  assert.ok(errors({ commands: missing }).some((e) => /git\/cli has no version command/.test(e)));
+});

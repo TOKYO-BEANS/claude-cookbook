@@ -87,7 +87,7 @@ async function ghJson(gh, endpoint) {
   if (typeof stdout !== "string" || Buffer.byteLength(stdout) > RESPONSE_LIMIT) throw new Error("Response exceeded the size limit");
   return JSON.parse(stdout);
 }
-async function ghFile(gh, repo, path, ref) {
+export async function ghFile(gh, repo, path, ref) {
   const data = await ghJson(gh, `repos/${repo}/contents/${path}${ref ? `?ref=${ref}` : ""}`);
   if (!isObject(data) || data.type !== "file" || data.encoding !== "base64" || typeof data.content !== "string")
     throw new Error("Unexpected file answer");

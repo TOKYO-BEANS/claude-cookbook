@@ -2,7 +2,7 @@
 // dependencies: run `node scripts/check.mjs` before every merge.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { CHANGELOG_HOSTS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
+import { CHANGELOG_HOSTS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 export { CHANGELOG_HOSTS };
 
@@ -113,7 +113,7 @@ function datesErrors(dates, at) {
   return errors;
 }
 
-export function checkCookbook({ catalogText, skillText }) {
+export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMANDS }) {
   const skill = skillText.replace(/\r/g, "");
   let catalog;
   try {
@@ -164,6 +164,19 @@ export function checkCookbook({ catalogText, skillText }) {
     else if (t.uses.length && t.category !== "Workflows") errors.push(`${at}: only workflows list uses`);
     if (t.recipe !== null && typeof t.name === "string" && !skill.includes(t.name)) errors.push(`${at}: name not mentioned in SKILL.md`);
   });
+  // The fixed version-command table and the catalog agree: a key names a part whose
+  // installed kind is command, and every such part has a key.
+  const commandParts = new Set();
+  const allParts = new Set();
+  for (const t of catalog.tools) for (const p of Array.isArray(t?.parts) ? t.parts : []) {
+    allParts.add(`${t.id}/${p?.name}`);
+    if (p?.installed?.kind === "command") commandParts.add(`${t.id}/${p.name}`);
+  }
+  for (const key of Object.keys(commands)) {
+    if (!allParts.has(key)) errors.push(`version commands: ${key} names no part in catalog.json`);
+    else if (!commandParts.has(key)) errors.push(`version commands: ${key} names a part whose installed kind is not command`);
+  }
+  for (const key of commandParts) if (!Object.hasOwn(commands, key)) errors.push(`version commands: ${key} has no version command`);
   const names = catalog.tools.map((t) => String(t?.name ?? "").toLowerCase()).filter(Boolean);
   const table = skill.split(/^## /m).find((s) => s.startsWith("Choosing quickly")) ?? "";
   for (const line of table.split("\n")) {

@@ -1,0 +1,4 @@
+{
+  "claude-plugins-official": { "source": { "source": "github", "repo": "anthropics/claude-plugins-official" } },
+  "stray-market": { "source": { "source": "github", "repo": "someone/stray-market" } }
+}
