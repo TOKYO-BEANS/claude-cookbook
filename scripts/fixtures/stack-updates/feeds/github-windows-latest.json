@@ -1,0 +1,7 @@
+{
+  "tag_name": "v2.56.1.windows.1",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-11-10T22:13:20Z",
+  "body": "Changes since Git for Windows v2.56.0(4) (October 26th 2026)\r\n\r\nThis addresses the security issues CVE-2026-111760, CVE-2026-113408, CVE-2026-114466, CVE-2026-114467, CVE-2026-114469 and CVE-2026-105437.\r\n\r\n### Security bug fixes\r\n\r\n* [CVE-2026-111760](https://github.com/git/git/security/advisories/GHSA-vp2w-7xxj-jvxr):\r\n\r\n  Recursive clones are susceptible to Remote Code Execution: an attacker-co"
+}

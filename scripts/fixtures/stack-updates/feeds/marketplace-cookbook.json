@@ -1,0 +1,9 @@
+{
+  "name": "claude-cookbook",
+  "plugins": [
+    {
+      "name": "cookbook",
+      "source": "./plugins/cookbook"
+    }
+  ]
+}

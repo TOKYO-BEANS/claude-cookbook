@@ -1,0 +1,21 @@
+{
+  "name": "claude-plugins-official",
+  "plugins": [
+    {
+      "name": "firecrawl",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/firecrawl/firecrawl-claude-plugin.git",
+        "sha": "3e1fb0c319d71b067906b8b602208dded3932cdb"
+      }
+    },
+    {
+      "name": "superpowers",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/obra/superpowers.git",
+        "sha": "22f0b463e7a5e579904dd6211a520321035526f7"
+      }
+    }
+  ]
+}

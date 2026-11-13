@@ -1,0 +1,7 @@
+{
+  "tag_name": "v0.8.0",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-10-21T22:34:39Z",
+  "body": "Install with `npm install -D tsc-rs`, use it as the `typescript` package with `\"typescript\": \"npm:@tsc-rs/typescript@0.8.0\"` in package.json, or download the archive for your platform.\n\n## What's Changed\n* feat: @tsc-rs/typescript drop-in package; faster incremental noEmit runs by @t3dotgg in https://github.com/pingdotgg/ts-rust/pull/96\n\n\n**Full Changelog**: https://github.com/pingdotgg/ts-rust/co"
+}

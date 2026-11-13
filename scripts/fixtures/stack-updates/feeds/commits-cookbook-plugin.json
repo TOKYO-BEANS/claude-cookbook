@@ -1,0 +1,29 @@
+[
+  {
+    "sha": "24654db5508cbd50c46488c85ee4e4ff77397bcb",
+    "commit": {
+      "message": "Google accounts: the sign-in screen is published, grants no longer expire weekly",
+      "committer": {
+        "date": "2026-11-13T19:04:32Z"
+      }
+    }
+  },
+  {
+    "sha": "309c6d2550b981df7640fe9f1318eec56be951d1",
+    "commit": {
+      "message": "Add Google accounts: the google command and the Google Workspace CLI",
+      "committer": {
+        "date": "2026-11-13T18:55:29Z"
+      }
+    }
+  },
+  {
+    "sha": "499046927c7ac199d97bd465a7083863dda175fa",
+    "commit": {
+      "message": "Sign-ins: add the mail-link route (login inbox on nofix.dev)",
+      "committer": {
+        "date": "2026-11-13T15:48:58Z"
+      }
+    }
+  }
+]
