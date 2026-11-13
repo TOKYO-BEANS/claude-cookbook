@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState,
+  ALL_FEEDS, READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState,
 } from "../plugins/cookbook/skills/stack-updates/scripts/lib/compare.mjs";
 import { SELF_UPDATING_TOOLS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
@@ -197,6 +197,71 @@ test("a self-updating tool: a change when the installed version moves, marked in
   assert.deepEqual(d4.result.changes.map((c) => [c.kind, c.from, c.to, c.risky]), [["installed-changed", "2.1.2", "3.0.0", true]]);
 });
 
+test("a self-updating tool rolled back and forward again is not reported twice", () => {
+  const at = (v) => ({ installed: { [CC]: read(v) }, latest: { [CC]: ok({ version: "2.1.3" }) } });
+  const d1 = day("2026-11-13", null, at("2.1.0"));
+  const d2 = day("2026-11-14", d1.state, at("2.1.2"));
+  assert.deepEqual(d2.result.changes.map((c) => [c.kind, c.from, c.to]), [["installed-changed", "2.1.0", "2.1.2"]]);
+  const d3 = day("2026-11-15", d2.state, at("2.1.0")); // rolled back
+  assert.deepEqual(d3.result.changes, []);
+  const d4 = day("2026-11-16", d3.state, at("2.1.2")); // forward again: already reported
+  assert.deepEqual(d4.result.changes, []);
+  assert.equal(d4.state.parts[CC].reported, "2.1.2");
+  const d5 = day("2026-11-17", d4.state, at("2.1.3")); // a version not reported before
+  assert.deepEqual(d5.result.changes.map((c) => [c.kind, c.from, c.to]), [["installed-changed", "2.1.2", "2.1.3"]]);
+});
+
+test("a release that arrives already installed is reported once, as installed-changed", () => {
+  const at = (inst, lat) => ({ installed: { "browse/cli": read(inst) }, latest: { "browse/cli": ok({ version: lat }) } });
+  const d1 = day("2026-11-13", null, at("1.0.0", "1.0.0"));
+  assert.deepEqual(d1.result.changes, []); // the baseline reports no change
+  const d2 = day("2026-11-14", d1.state, at("1.1.0", "1.1.0"));
+  assert.deepEqual(d2.result.changes, [{
+    key: "browse/cli", tool: "browse", part: "cli", kind: "installed-changed", from: "1.0.0", to: "1.1.0",
+    installedKind: "pinned", risky: false, source: "https://source.test/", textFile: null, answers: null, notRead: null,
+  }]);
+  assert.equal(d2.state.parts["browse/cli"].reported, "1.1.0");
+  assert.equal(d2.state.parts["browse/cli"].behindSince, null);
+  const d3 = day("2026-11-15", d2.state, at("1.1.0", "1.1.0"));
+  assert.deepEqual(d3.result.changes, []);
+  // Installed before the feed showed it: compared from the release seen before, never from itself.
+  const e1 = day("2026-11-13", null, at("1.1.0", "1.0.0"));
+  const e2 = day("2026-11-14", e1.state, at("1.1.0", "1.1.0"));
+  assert.deepEqual(e2.result.changes.map((c) => [c.kind, c.from, c.to]), [["installed-changed", "1.0.0", "1.1.0"]]);
+  // Installed newer than the new release: not this release, so no change.
+  const f1 = day("2026-11-13", null, at("1.2.0", "1.0.0"));
+  assert.deepEqual(day("2026-11-14", f1.state, at("1.2.0", "1.1.0")).result.changes, []);
+  // A commit feed whose new commit was recorded before the check saw it: refs from the last commit seen.
+  const recorded = structuredClone(d1.state);
+  recorded.parts["skilly/skill"].installedCommit = SHA("d");
+  const g = day("2026-11-14", recorded, { latest: { "skilly/skill": ok({ commit: SHA("d") }) } });
+  assert.deepEqual(
+    g.result.changes.map((c) => [c.key, c.kind, c.from, c.to, c.fromRef, c.toRef]),
+    [["skilly/skill", "installed-changed", SHA("c"), SHA("d"), SHA("c"), SHA("d")]],
+  );
+  // Not for a part with no readable installed version: a watching tool's release stays a new release.
+  const w = day("2026-11-14", d1.state, { latest: { "watch/watch": ok({ version: "1.1.0" }) } });
+  assert.deepEqual(w.result.changes.map((c) => [c.key, c.kind]), [["watch/watch", "new-release"]]);
+});
+
+test("a failing feed on a Monday still shows the remembered still-behind line", () => {
+  const behind = { latest: { "browse/cli": ok({ version: "0.11.4" }) } };
+  const fri = day("2026-11-13", null, behind);
+  const line = { key: "browse/cli", installed: "0.11.3", latest: "0.11.4", since: "2026-11-13" };
+  const mon = day("2026-11-16", fri.state, { latest: { "browse/cli": failed("Provider returned HTTP 503") } });
+  assert.deepEqual(mon.result.stillBehind, [line]);
+  assert.deepEqual(mon.result.couldNotCheck.map((c) => c.key), ["browse/cli"]);
+  assert.equal(mon.state.parts["browse/cli"].behindSince, "2026-11-13");
+  const tue = day("2026-11-17", mon.state, { latest: { "browse/cli": failed("Provider returned HTTP 503") } });
+  assert.deepEqual(tue.result.stillBehind, []);
+  assert.deepEqual(tue.result.suppressed, held({ stillBehind: 1, couldNotCheck: 1 }));
+  // Every feed failing on the Monday: one could-not-check line, and the remembered line still.
+  const offline = Object.fromEntries(Object.entries(LATEST).map(([k, v]) => [k, k === "plain/skill" ? v : failed("fetch failed")]));
+  const monOff = day("2026-11-16", fri.state, { latest: offline });
+  assert.deepEqual(monOff.result.stillBehind, [line]);
+  assert.deepEqual(monOff.result.couldNotCheck.map((c) => c.key), [ALL_FEEDS]);
+});
+
 test("a self-updating tool: a newer release that has not arrived is not a change", () => {
   const d1 = day("2026-11-13", null);
   const waiting = { latest: { [CC]: ok({ version: "2.1.3" }) } };
@@ -285,15 +350,20 @@ test("all feeds failing collapses to one could-not-check entry with the count", 
   const offline = Object.fromEntries(Object.entries(LATEST).map(([k, v]) => [k, k === "plain/skill" ? v : failed("fetch failed")]));
   offline["graph/mcp"] = failed("getaddrinfo ENOTFOUND changelog.test");
   const sat = day("2026-11-14", fri.state, { latest: offline, installed: { [CC]: read("2.1.2") } });
-  assert.deepEqual(sat.result.couldNotCheck, [{ key: "all feeds", message: "all 6 feeds failed: fetch failed", since: "2026-11-14" }]);
+  assert.equal(ALL_FEEDS, "all feeds");
+  assert.deepEqual(sat.result.couldNotCheck, [{ key: ALL_FEEDS, message: "all 6 feeds failed: fetch failed", since: "2026-11-14", count: 6 }]);
   assert.deepEqual(sat.result.changes, []);
   assert.equal(sat.result.quiet, false);
   // Nothing is marked seen: every part keeps what it had, the installed version included.
   const kept = (st) => Object.fromEntries(Object.entries(st.parts).map(([k, p]) => [k, [p.installed, p.latest, p.reported, p.behindSince]]));
   assert.deepEqual(kept(sat.state), kept(fri.state));
+  // No line named a part, so none counts as shown: a partial recovery names the ones still failing.
+  assert.ok(Object.values(sat.state.parts).every((p) => p.feedErrorShown === null));
+  const partial = day("2026-11-15", sat.state, { latest: { "browse/cli": failed("fetch failed") } });
+  assert.deepEqual(partial.result.couldNotCheck, [{ key: "browse/cli", message: "fetch failed", since: "2026-11-14" }]);
   // Still offline the next day: one line again, since a run that read nothing is never quiet.
   const sun = day("2026-11-15", sat.state, { latest: offline, installed: { [CC]: read("2.1.2") } });
-  assert.deepEqual(sun.result.couldNotCheck, [{ key: "all feeds", message: "all 6 feeds failed: fetch failed", since: "2026-11-14" }]);
+  assert.deepEqual(sun.result.couldNotCheck, [{ key: ALL_FEEDS, message: "all 6 feeds failed: fetch failed", since: "2026-11-14", count: 6 }]);
   // Online again: the self-update that happened meanwhile is reported once.
   const mon = day("2026-11-16", sun.state, { installed: { [CC]: read("2.1.2") }, latest: { [CC]: ok({ version: "2.1.2" }) } });
   assert.deepEqual(mon.result.couldNotCheck, []);
@@ -420,7 +490,7 @@ test("a second run the same day reports nothing new and does not double the week
   assert.deepEqual(sat2.state.week, { runs: 2, changes: 1 });
   const sun = day("2026-11-15", sat2.state, newer);
   const monA = day("2026-11-16", sun.state, newer);
-  assert.deepEqual(monA.result.weekly, { runs: 3, changes: 1 });
+  assert.deepEqual(monA.result.weekly, { runs: 3, changes: 1, from: "2026-11-09" });
   assert.deepEqual(monA.result.stillBehind.map((s) => s.key), ["browse/cli"]);
   assert.deepEqual(monA.result.unlisted, [stray]);
   assert.deepEqual(monA.state.week, { runs: 1, changes: 0 });
@@ -449,7 +519,7 @@ test("the first run after a week off still shows the Monday sections", () => {
   assert.deepEqual(wed.result.stillBehind, [{ key: "browse/cli", installed: "0.11.3", latest: "0.11.4", since: "2026-11-13" }]);
   assert.deepEqual(wed.result.missing, [{ key: "alpha/plugin" }]);
   assert.deepEqual(wed.result.unlisted, [stray]);
-  assert.deepEqual(wed.result.weekly, { runs: 2, changes: 0 });
+  assert.deepEqual(wed.result.weekly, { runs: 2, changes: 0, from: "2026-11-09" }); // the week that began on the 9th
   assert.equal(wed.state.lastMonday, "2026-11-23");
   const thu = day("2026-11-26", wed.state, setup);
   assert.deepEqual([thu.result.stillBehind, thu.result.missing, thu.result.unlisted, thu.result.weekly], [[], [], [], null]);

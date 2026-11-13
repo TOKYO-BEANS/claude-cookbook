@@ -8,10 +8,12 @@
 //
 // What is reported when (the spec's "What is reported when"):
 // - A new release: in full once, the day it is first seen after the baseline.
-// - Still behind afterwards: one line on the first run on or after each Monday.
+//   One that is already installed by then is reported once as "installed-changed".
+// - Still behind afterwards: one line on the first run on or after each Monday,
+//   from the values last read when the feed fails that day.
 // - A self-updating tool (SELF_UPDATING_TOOLS) whose installed version is read:
-//   a change when that version moves ("installed-changed"); a newer release
-//   that has not arrived is neither a change nor "still behind".
+//   a change when that version moves ("installed-changed"), never twice for one
+//   version; a newer release that has not arrived is neither a change nor "still behind".
 // - Unlisted and missing: the first day, then the first run on or after each Monday.
 // - Could not check (a feed or an installed version that could not be read):
 //   the first day, then again every 7 days while it lasts. The part's state is
@@ -33,6 +35,7 @@ import { normalizeVersion } from "./inventory.mjs";
 import { SELF_UPDATING_TOOLS } from "./tables.mjs";
 
 export const READ_LIMIT = 10; // changes whose release text is read in one run
+export const ALL_FEEDS = "all feeds"; // the couldNotCheck key of the line that stands for every feed
 const RESHOW_DAYS = 7; // a lasting "could not check" is shown again after this many days
 const DAY_MS = 86_400_000;
 // The lists that make a day not quiet. `unchecked` is not one: a service with no
@@ -211,6 +214,22 @@ function fromOf(inst, lat, ps) {
   return ps.latest;
 }
 
+// Is the installed part exactly at the newest release (not merely newer)?
+function atRelease(inst, lat, ps) {
+  if (str(lat.version)) return compareVersions(inst.version, lat.version) === 0;
+  if (str(lat.commit)) return (ps.installedCommit ?? inst.commit) === lat.commit;
+  return false;
+}
+
+// For a release that arrived already installed: the newest value the owner knew
+// before it (last reported, last installed or last seen), never the release itself.
+// A commit feed has no order, so the last reported commit, else the last seen.
+function knownBefore(lv, lat, ps) {
+  if (!str(lat.version)) return [ps.reported, ps.latest].find((v) => v !== null && v !== lv) ?? null;
+  const older = [ps.reported, ps.installed, ps.latest].filter((v) => v !== null && compareVersions(v, lv) < 0);
+  return older.sort(compareVersions).at(-1) ?? null;
+}
+
 // The commits a new release is compared between, for the release text of
 // marketplace and commit feeds: from the recorded installed commit, the installed
 // commit, or (a commit feed) the last commit seen; to the newest commit. Only
@@ -282,12 +301,18 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
       if (firstMissing) next.missing[key] = firstMissing; // unknown, so still remembered
       ps.feedErrorSince ??= today;
       if (feedFailed && allFailed) {
-        ps.feedErrorShown = today;
+        // One line stands for every feed and names no part, so no part counts as shown.
         allFailedParts.push({ since: ps.feedErrorSince, message: lat.message });
       } else if (ps.feedErrorShown === null || daysBetween(ps.feedErrorShown, today) >= RESHOW_DAYS) {
         ps.feedErrorShown = today;
         couldNotCheck.push({ key, message, since: ps.feedErrorSince });
       } else suppressed.couldNotCheck += 1;
+      // A failing feed does not hide a remembered "still behind" on its Monday: the line uses what was last read.
+      if (feedFailed && ps.behindSince !== null && ps.latest !== null) {
+        const installedThen = COMMIT.test(ps.latest) ? (ps.installedCommit ?? ps.installed) : ps.installed;
+        if (mondaySections) stillBehind.push({ key, installed: installedThen, latest: ps.latest, since: ps.behindSince });
+        else suppressed.stillBehind += 1;
+      }
       continue;
     }
     ps.feedErrorSince = null;
@@ -299,7 +324,9 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     const behind = behindOf(inst, lat, ps);
     const baseline = firstRun || ps.latest === null; // this part has no release seen before
 
-    if (self && ps.installed !== null && iv !== null && iv !== ps.installed && newer(iv, ps.installed)) {
+    // A self-updating tool moved by itself; a version already reported (a rollback undone) is not news.
+    if (self && ps.installed !== null && iv !== null && iv !== ps.installed && newer(iv, ps.installed)
+      && (ps.reported === null || newer(iv, ps.reported))) {
       changes.push(changeOf(t, p, key, "installed-changed", ps.installed, iv, lat));
       ps.reported = iv;
     }
@@ -309,6 +336,12 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
       changes.push(changeOf(t, p, key, "new-release", fromOf(inst, lat, ps), lv, lat, refsOf(inst, lat, ps)));
       ps.reported = lv;
       reportedNew = true;
+    } else if (isNew && !self && behind === false && atRelease(inst, lat, ps)) {
+      // Installed before the check first saw it: still news once, as already installed.
+      const from = knownBefore(lv, lat, ps);
+      const refs = COMMIT.test(String(lat.commit)) ? { ...(COMMIT.test(String(from)) ? { fromRef: from } : {}), toRef: lat.commit } : {};
+      changes.push(changeOf(t, p, key, "installed-changed", from, lv, lat, refs));
+      ps.reported = lv;
     }
 
     // Behind: known from the versions, or (position unknown) since a new release was reported.
@@ -328,9 +361,10 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
 
   if (allFailedParts.length) {
     couldNotCheck.unshift({
-      key: "all feeds",
+      key: ALL_FEEDS,
       message: `all ${feeds.length} feeds failed: ${mostCommon(allFailedParts.map((f) => f.message))}`,
       since: allFailedParts.map((f) => f.since).sort()[0],
+      count: feeds.length,
     });
   }
 
@@ -352,7 +386,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   let weekly = null;
   if (firstRun) next.week = { runs: 1, changes: changes.length };
   else if (newWeek) {
-    weekly = { ...prev.week };
+    weekly = { ...prev.week, from: prev.lastMonday }; // the Monday the counted week began
     next.week = { runs: 1, changes: changes.length };
   } else next.week = { runs: prev.week.runs + (prev.lastRun === today ? 0 : 1), changes: prev.week.changes + changes.length };
 
