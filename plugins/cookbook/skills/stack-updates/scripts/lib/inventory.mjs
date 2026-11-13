@@ -50,7 +50,7 @@ export function normalizeVersion(text) {
   return m ? m[0] : "";
 }
 
-// The real `run`: `(argv, { timeoutMs, maxBytes, home }) -> { code, stdout, stderr,
+// The real `run`: `(argv, { timeoutMs, maxBytes, home, input?, env? }) -> { code, stdout, stderr,
 // timedOut?, truncated? }`.
 // - No shell: on Windows a command must be a real executable (a `.exe` found on
 //   PATH); a `.cmd` or `.bat` shim cannot be started this way and comes back as
@@ -58,17 +58,24 @@ export function normalizeVersion(text) {
 // - It always runs in `<home>/.local/share/stack-updates` (created if missing),
 //   never the caller's folder, and with the process environment minus every
 //   `GIT_*` variable and `NODE_OPTIONS`.
+// - `env` (optional) changes that environment for this child only: a name set
+//   to null is removed (in any letter case), a string value is set.
+// - `input` (optional) is written to the child's stdin, which is then closed.
+//   Without it the child's stdin is empty.
 // - Each of stdout and stderr is read up to `maxBytes` bytes. More output stops
 //   the process and sets `truncated: true` (not a timeout).
 // - A timeout stops the process (on Windows its whole tree) and returns
 //   `code: null, timedOut: true`.
-export function runEnv(env = process.env) {
+export function runEnv(env = process.env, extra = {}) {
+  extra = extra ?? {};
+  const changed = new Set(Object.keys(extra).map((k) => k.toUpperCase()));
   const out = {};
   for (const [k, v] of Object.entries(env)) {
     const up = k.toUpperCase();
-    if (up.startsWith("GIT_") || up === "NODE_OPTIONS") continue;
+    if (up.startsWith("GIT_") || up === "NODE_OPTIONS" || changed.has(up)) continue;
     out[k] = v;
   }
+  for (const [k, v] of Object.entries(extra)) if (typeof v === "string") out[k] = v;
   return out;
 }
 
@@ -82,7 +89,7 @@ function stopTree(child) {
   try { child.kill(); } catch { /* already gone */ }
 }
 
-export function defaultRun(argv, { timeoutMs = COMMAND_TIMEOUT_MS, maxBytes = OUTPUT_LIMIT, home = homedir() } = {}) {
+export function defaultRun(argv, { timeoutMs = COMMAND_TIMEOUT_MS, maxBytes = OUTPUT_LIMIT, home = homedir(), input, env } = {}) {
   return new Promise((resolve) => {
     let cwd;
     try {
@@ -106,9 +113,14 @@ export function defaultRun(argv, { timeoutMs = COMMAND_TIMEOUT_MS, maxBytes = OU
     };
     let child;
     try {
-      child = spawn(argv[0], argv.slice(1), { shell: false, windowsHide: true, cwd, env: runEnv(), stdio: ["ignore", "pipe", "pipe"] });
+      const stdin = typeof input === "string" ? "pipe" : "ignore";
+      child = spawn(argv[0], argv.slice(1), { shell: false, windowsHide: true, cwd, env: runEnv(process.env, env), stdio: [stdin, "pipe", "pipe"] });
     } catch (e) {
       return resolve({ code: -1, stdout: "", stderr: cause(e) });
+    }
+    if (child.stdin) {
+      child.stdin.on("error", () => {}); // a child that exits without reading its input is not an error here
+      child.stdin.end(input, "utf8");
     }
     const timer = setTimeout(() => {
       timedOut = true;
