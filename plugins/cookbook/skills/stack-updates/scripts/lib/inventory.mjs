@@ -21,9 +21,11 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import { VERSION_COMMANDS } from "./tables.mjs";
+import { CONNECTION_CHECKS, VERSION_COMMANDS } from "./tables.mjs";
 import { ghFile } from "./feeds.mjs";
 
+// Also the timeout of `claude mcp list`, which checks every server's health: on
+// 13 November 2026 it took 4.7 to 5.0 s on the owner's PC with nine servers.
 export const COMMAND_TIMEOUT_MS = 15_000;
 export const OUTPUT_LIMIT = 2_000; // bytes of a version command's output that are read
 const MCP_LIST_LIMIT = 20_000;
@@ -322,6 +324,12 @@ function named(catalog) {
     }
     sets.binWords.add(norm(stemOf(argv[0].split(/[\/]/).pop())));
   }
+  // So does every executable a connection check starts: its argv[0], or for the
+  // `cmd.exe /d /c {bin}/<name>.cmd` shape the shim (the `google` launcher of gws).
+  for (const { argv } of Object.values(CONNECTION_CHECKS)) {
+    const exe = argv[0] === "cmd.exe" ? argv[3] : argv[0];
+    sets.binWords.add(norm(stemOf(String(exe).split(/[\/]/).pop())));
+  }
   return sets;
 }
 
@@ -329,12 +337,14 @@ function named(catalog) {
 // part's package, or the executable of a table command.
 const covers = (words, stem) => words.has(norm(stem));
 
-// Parse `claude mcp list` lines ("<name>: <target> - <status>") into names.
+// Parse `claude mcp list` lines ("<name>: <target> - <status>") into names. The name
+// ends at the first ": " (colon and space): a plugin's server is "plugin:<plugin>:<server>".
 function mcpNames(text) {
   const out = [];
   for (const line of String(text).split("\n")) {
-    const m = /^([^\s:][^:]*?): \S/.exec(line.trim());
-    if (m) out.push(m[1]);
+    const t = line.trim();
+    const colon = t.indexOf(": ");
+    if (colon > 0 && /\S/.test(t.charAt(colon + 2))) out.push(t.slice(0, colon));
   }
   return out;
 }
@@ -411,7 +421,7 @@ export async function findUnlisted(catalog, { home, run } = {}) {
         sets.servers.has(n) ||
         sets.toolWords.has(n) ||
         (plugin && (sets.pluginNames.has(norm(plugin[1])) || sets.toolWords.has(norm(plugin[1])))) ||
-        (connector && sets.toolWords.has(norm(connector[1])));
+        (connector && (sets.servers.has(norm(connector[1])) || sets.toolWords.has(norm(connector[1]))));
       if (!covered) add("mcp", name);
     }
   }

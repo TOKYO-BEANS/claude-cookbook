@@ -106,7 +106,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "boat/cli": ["boat 1.0.97\n", "1.0.97"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
     "google-workspace-cli/cli": ["gws 0.22.5\nThis is not an officially supported Google product.\n", "0.22.5"],
-    "jev-router/pinned": ["ec7775fb0f54cfe2809dbf75fc1fb3aa27f830c7\n", "ec7775fb0f54cfe2809dbf75fc1fb3aa27f830c7"],
+    "jev-router/pinned": ["38da6b84ea01241bfc41fbddc0928d0f40a703f0\n", "38da6b84ea01241bfc41fbddc0928d0f40a703f0"],
   };
   assert.deepEqual(Object.keys(VERSION_COMMANDS).sort(), Object.keys(samples).sort());
   for (const [key, { argv, pattern }] of Object.entries(VERSION_COMMANDS)) {
@@ -216,11 +216,31 @@ test("command: {share} in the table argv becomes <home>/.local/share", async () 
 });
 
 test("command: a 40-character hex capture is a commit, not a version", async () => {
-  const sha = "ec7775fb0f54cfe2809dbf75fc1fb3aa27f830c7";
+  const sha = "38da6b84ea01241bfc41fbddc0928d0f40a703f0";
   const run = fakeRun({ git: { code: 0, stdout: `${sha}\n`, stderr: "" } });
   const r = await readInstalled({ kind: "command" }, "jev-router/pinned", deps({ run }));
   assert.deepEqual(r, { state: "read", commit: sha });
-  assert.deepEqual(run.calls[0].argv, ["git", "-C", join(home, ".local", "share", "jev-router"), "rev-parse", "HEAD"]);
+  // The upstream commit the local patches sit on, not the local HEAD (13 November 2026:
+  // HEAD was four local patch commits on top of upstream 38da6b8).
+  assert.deepEqual(run.calls[0].argv, ["git", "-C", join(home, ".local", "share", "jev-router"), "merge-base", "HEAD", "origin/HEAD"]);
+});
+
+test("findUnlisted: a claude.ai connector is listed by the hosted part that names it as its server", async () => {
+  const cat = {
+    version: 1, ignored: [],
+    tools: [{ id: "adobe-for-creativity", name: "Adobe for creativity", parts: [part("connector", { kind: "hosted", server: "Adobe" })] }],
+  };
+  const { items } = await findUnlisted(cat, { home: tempHome(), run: fakeRun({ claude: { code: 0, stdout: mcpOut, stderr: "" } }) });
+  const mcp = items.filter((i) => i.kind === "mcp").map((i) => i.name).sort();
+  assert.deepEqual(mcp, ["firecrawl", "newserver", "plugin:superpowers:thing"]);
+});
+
+test("findUnlisted: a bin that a connection check starts (its argv[0], or the shim of the cmd.exe shape) is listed", async () => {
+  const h = tempHome(["google.cmd", "parallel-cli.cmd", "gh.exe", "cmd.cmd", "stray.cmd"]);
+  const { items } = await findUnlisted({ version: 1, ignored: [], tools: [] }, { home: h, run: fakeRun({ claude: { code: 0, stdout: "", stderr: "" } }) });
+  const bins = items.filter((i) => i.kind === "bin").map((i) => i.name).sort();
+  // google and parallel-cli are shims the table starts; gh is a check's argv[0]; cmd.exe itself names nothing.
+  assert.deepEqual(bins, ["cmd", "stray"]);
 });
 
 test("findUnlisted: a bin file equal to a pinned package or a table executable is listed", async () => {

@@ -1,9 +1,17 @@
 // Fixed tables the daily update check and the catalog check both read. They
 // live inside the plugin because the plugin ships only plugins/cookbook.
 
-// Hosts a `changelog` feed may name. Empty until a hosted part gets a chosen
-// changelog page; add the host here in the same pull request.
-export const CHANGELOG_HOSTS = Object.freeze([]);
+// Hosts a `changelog` feed may name; add a host here in the same pull request as
+// its feed. A page qualifies only when it is the vendor's own, answers without a
+// redirect, and its text changes only with a release: on 13 November 2026 these
+// two read the same twice and carried no live counter. Rejected that day:
+// graphify.com and firecrawl.dev (a live star count in the page text),
+// docs.parallel.ai (the docs build id) and developers.cloudflare.com (several
+// entries a day across every product).
+export const CHANGELOG_HOSTS = Object.freeze([
+  "proton.me", // Proton Pass CLI: its version list, download/pass-cli/versions.json
+  "www.browserbase.com", // Browserbase: the platform changelog
+]);
 
 // Tool ids whose installed version moves without us: Claude Code updates itself,
 // and the app syncs the Wix and Adobe for creativity plugins. A part of such a
@@ -35,7 +43,8 @@ export const VERSION_COMMANDS = Object.freeze({
   "boat/cli": { argv: ["{share}/boat/boat.exe", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
   "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli.exe", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
   "google-workspace-cli/cli": { argv: ["{share}/gws/gws.exe", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },
-  "jev-router/pinned": { argv: ["git", "-C", "{share}/jev-router", "rev-parse", "HEAD"], pattern: /^([0-9a-f]{40})\s*$/m },
+  // The upstream commit the local patches sit on (HEAD is local patch commits on top of it).
+  "jev-router/pinned": { argv: ["git", "-C", "{share}/jev-router", "merge-base", "HEAD", "origin/HEAD"], pattern: /^([0-9a-f]{40})\s*$/m },
 });
 
 // The only commands the daily update check runs to prove a service answers,
