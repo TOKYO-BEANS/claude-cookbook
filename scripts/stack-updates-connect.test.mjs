@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runChecks, dueDates, scrub, JEV_LOG } from "../plugins/cookbook/skills/stack-updates/scripts/lib/connect.mjs";
+import { runChecks, dueDates, scrub, JEV_LOG, JEV_ANSWER_OUTCOMES } from "../plugins/cookbook/skills/stack-updates/scripts/lib/connect.mjs";
 import { expandTokens } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
 import { CONNECTION_CHECKS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
@@ -50,10 +50,17 @@ test("a non-zero exit, a timeout or output that does not match is broken, with t
   assert.equal(r.broken.length, 0, "a matched line is proof even when the output was cut");
 });
 
-test("an active tool with no table entry is unchecked; a watching tool is skipped", async () => {
-  const cat = catalogOf(tool("svc", "Svc"), tool("other", "Other", "trial"), tool("idle", "Idle", "watching"));
+test("only a tool with a hosted part and no check is unchecked; skills, local CLIs and watching tools are not", async () => {
+  const hosted = [{ name: "service", installed: { kind: "hosted" } }];
+  const cat = catalogOf(
+    tool("svc", "Svc"),
+    tool("web", "Web", "trial", hosted),
+    tool("skill", "Skill", "active", [{ name: "skill", installed: { kind: "skill" } }]),
+    tool("pin", "Pin", "trial", [{ name: "cli", installed: { kind: "pinned" } }]),
+    tool("idle", "Idle", "watching", hosted),
+  );
   const r = await runChecks(cat, { run: okRun, home, now: NOW, checks });
-  assert.deepEqual(r.unchecked, ["Other"]);
+  assert.deepEqual(r.unchecked, ["Web"]);
   assert.deepEqual(r.working, ["Svc"]);
   assert.deepEqual(r.broken, []);
 });
@@ -165,33 +172,36 @@ function writeJevLog(lines) {
 }
 const jevCat = catalogOf(tool("jev", "TypeSafe / Jev", "active", [{ name: "models", installed: { kind: "hosted" } }]));
 const noRun = async () => { throw new Error("Jev gets no call of its own"); };
+const entry = (ts, outcome) => JSON.stringify({ ts, outcome, reason: "r" });
+const jevState = async () => runChecks(jevCat, { run: noRun, home, now: NOW, checks: {} });
 
-test("Jev: a decision within 48 hours is working; older, missing or unparsable is unchecked", async () => {
+test("Jev: only a real answer counts, and only within 48 hours", async () => {
   assert.ok(JEV_LOG.endsWith("jev-turn-router-decisions.jsonl"));
-  const fresh = (iso) => `${JSON.stringify({ ts: "2026-01-01T00:00:00Z" })}\n${JSON.stringify({ ts: iso, outcome: "x" })}\n`;
-  const state = async () => runChecks(jevCat, { run: noRun, home, now: NOW, checks: {} });
+  assert.deepEqual([...JEV_ANSWER_OUTCOMES], ["routed"]);
   rmSync(join(home, ".claude"), { recursive: true, force: true });
-  let r = await state();
-  assert.deepEqual(r.unchecked, ["TypeSafe / Jev"], "no log");
-  writeJevLog(fresh("2026-11-13T08:00:00Z"));
-  r = await state();
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "no log");
+  writeJevLog(entry("2026-11-13T08:00:00Z", "routed") + "\n");
+  let r = await jevState();
   assert.deepEqual(r.working, ["TypeSafe / Jev"]);
   assert.deepEqual(r.unchecked, []);
-  writeJevLog(fresh("2026-11-12T06:00:00Z"));
-  r = await state();
-  assert.deepEqual(r.unchecked, ["TypeSafe / Jev"], "older than 48 hours");
-  writeJevLog("not json\n");
-  r = await state();
-  assert.deepEqual(r.unchecked, ["TypeSafe / Jev"], "unparsable");
-  writeJevLog(`${JSON.stringify({ ts: "2026-11-14T06:00:00Z" })}\n\n`);
-  r = await state();
-  assert.deepEqual(r.working, ["TypeSafe / Jev"], "trailing blank lines are skipped");
-  writeJevLog(`${JSON.stringify({ ts: "2026-11-14T09:00:00Z" })}\n`);
-  r = await state();
-  assert.deepEqual(r.working, ["TypeSafe / Jev"], "a timestamp after now is not stale");
-  writeJevLog(`${JSON.stringify({ outcome: "no ts" })}\n`);
-  r = await state();
-  assert.deepEqual(r.unchecked, ["TypeSafe / Jev"], "no timestamp");
+  writeJevLog([entry("2026-11-14T03:00:00Z", "routed"), entry("2026-11-14T06:30:00Z", "skipped")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "newest line skipped, answer 4 hours earlier");
+  writeJevLog([entry("2026-11-14T05:00:00Z", "skipped"), entry("2026-11-14T06:00:00Z", "skipped")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "only skipped lines");
+  writeJevLog([entry("2026-11-12T05:59:00Z", "routed"), entry("2026-11-14T06:00:00Z", "skipped")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "a real answer 49 hours old");
+  writeJevLog([entry("2026-11-13T06:00:00Z", "routed"), "not json {"].join("\n") + "\n");
+  assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "an unparsable last line is ignored");
+  writeJevLog([entry("2026-11-14T06:00:00Z", "error"), entry("2026-11-14T06:00:00Z", "timeout")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "error and timeout outcomes are not answers");
+  writeJevLog(JSON.stringify({ outcome: "routed" }) + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "no timestamp");
+});
+
+test("Jev: only the last 200 lines are read", async () => {
+  const filler = Array.from({ length: 200 }, () => entry("2026-11-14T06:00:00Z", "skipped"));
+  writeJevLog([entry("2026-11-14T05:00:00Z", "routed"), ...filler].join("\n") + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"]);
 });
 
 const withDate = (on) => catalogOf(tool("t", "T", "active", undefined, { dates: [{ label: "L", on }] }));

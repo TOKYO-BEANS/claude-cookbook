@@ -63,6 +63,7 @@ export const CONNECTION_CHECKS = Object.freeze({
   firecrawl: { argv: shim("firecrawl", "--status"), ok: /Credits: [\d,]+ \/ [\d,]+/ },
   boat: { argv: shim("boat", "limits"), ok: /"billingStatus":"[a-z_]+"/ },
   browserbase: { argv: shim("browse", "cloud", "projects", "list"), ok: /"concurrency":\s*\d+/ },
+  // UNPROVEN ok pattern: the CLI had no session on 13 November 2026, so it never saw a signed-in answer.
   "proton-pass-cli": { argv: shim("pass-cli", "info"), ok: /^[A-Za-z][A-Za-z ]*:\s*\S/m },
   "google-workspace-cli": { argv: shim("google", "status"), ok: /^(?!.*"works":\s*false).*"ok":\s*true/s },
   cloudflare: { argv: ["node", "{bin}/with-key.mjs", "cloudflare-wrangler", "CLOUDFLARE_API_TOKEN", "node", "{lib}/cloudflare-verify.mjs"], ok: /^active\s*$/m },
