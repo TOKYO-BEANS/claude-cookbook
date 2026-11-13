@@ -25,7 +25,8 @@ node <this skill's folder>/scripts/updates.mjs run
   trial that never touches the real state. `record <tool id>/<part> <commit>` is below.
 - Cost: free requests (the npm registry, `gh api`, plain page reads); one tiny paid Parallel check,
   at most once per real day; one request with no tools on the Claude plan per changed part
-  (Sonnet, about 1,400 input and 200 output tokens), at most 10 a run. No Firecrawl credits.
+  (Sonnet, 1,400 to 3,500 input and about 200 output tokens, by the length of the notes), at most
+  10 a run. No Firecrawl credits.
 
 ## Reading what it found
 
