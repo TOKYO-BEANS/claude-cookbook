@@ -103,7 +103,22 @@ export const isQuiet = (result) => NEWS.every((k) => (result?.[k] ?? []).length 
 // ---- state ---------------------------------------------------------------------
 
 const emptyPart = () => Object.fromEntries(PART_FIELDS.map((k) => [k, null]));
-const emptyState = () => ({ version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: null, lastMonday: null, week: { runs: 0, changes: 0 } });
+const emptyState = () => ({ version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: null, lastMonday: null, week: { runs: 0, changes: 0 }, paidCheck: null });
+
+// The last paid connection check: its day and each paid service's outcome (an error
+// text or null), so a second run that day reuses it instead of paying again.
+// `compare` carries it over unchanged; updates.mjs sets it. Anything else is null.
+const SERVICE_ID = /^[A-Za-z0-9._-]{1,80}$/;
+const okError = (e) => e === null || (typeof e === "string" && e.length <= 200);
+function paidCheckOf(v) {
+  if (!isObject(v) || !validDay(v.on) || !isObject(v.results)) return null;
+  const results = Object.fromEntries(
+    Object.entries(v.results)
+      .filter(([id, r]) => SERVICE_ID.test(id) && isObject(r) && okError(r.error))
+      .map(([id, r]) => [id, { error: r.error }]),
+  );
+  return { on: v.on, results };
+}
 
 // A version 1 state with every field checked, or null when it is not one.
 // Object.fromEntries keeps a "__proto__" key an ordinary property.
@@ -125,19 +140,29 @@ function normalizeState(raw) {
   return {
     version: 1, parts, unlisted: firstSeen(raw.unlisted), missing: firstSeen(raw.missing),
     lastRun: day(raw.lastRun), lastMonday: day(raw.lastMonday), week: { runs: count(week.runs), changes: count(week.changes) },
+    paidCheck: paidCheckOf(raw.paidCheck),
   };
 }
 
-const stateFolder = (home) => {
+// `<home>/.local/share/stack-updates`, or `folder` when one is given (`--state`, a trial run).
+const stateFolder = (home, folder) => {
+  if (folder !== undefined) {
+    if (typeof folder !== "string" || !folder) throw new TypeError("folder must be a folder");
+    return folder;
+  }
   if (typeof home !== "string" || !home) throw new TypeError("home must be a folder");
   return join(home, ".local", "share", "stack-updates");
 };
 
-/** `{ state, fresh }`; `fresh` (an empty state, so a first run) when the file is missing, empty or not a valid state. */
-export function loadState(home) {
+/**
+ * `loadState(home, { folder }?) -> { state, fresh }`; `fresh` (an empty state, so a
+ * first run) when the file is missing, empty or not a valid state. The file is
+ * `<home>/.local/share/stack-updates/state.json`, or `<folder>/state.json`.
+ */
+export function loadState(home, { folder } = {}) {
   let text;
   try {
-    text = readFileSync(join(stateFolder(home), "state.json"), "utf8");
+    text = readFileSync(join(stateFolder(home, folder), "state.json"), "utf8");
   } catch (e) {
     if (e?.code === "ENOENT" || e?.code === "ENOTDIR") return { state: emptyState(), fresh: true };
     throw e;
@@ -152,11 +177,11 @@ export function loadState(home) {
   return state ? { state, fresh: false } : { state: emptyState(), fresh: true };
 }
 
-/** Writes the state to a temp file beside state.json, flushes it and renames it over the old one. */
-export function saveState(home, state) {
+/** `saveState(home, state, { folder }?)`: writes a temp file beside state.json, flushes it and renames it over the old one. */
+export function saveState(home, state, { folder: where } = {}) {
+  const folder = stateFolder(home, where);
   const clean = normalizeState(state);
   if (!clean) throw new TypeError("saveState needs a version 1 state");
-  const folder = stateFolder(home);
   mkdirSync(folder, { recursive: true });
   const tmp = join(folder, `state.json.${process.pid}.${randomBytes(6).toString("hex")}.tmp`);
   try {
@@ -269,7 +294,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   const mondaySections = firstRun || newWeek;
   const selfUpdating = new Set(SELF_UPDATING_TOOLS);
   const tools = Array.isArray(catalog?.tools) ? catalog.tools.filter(isObject) : [];
-  const next = { version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: today, lastMonday: monday, week: null };
+  const next = { version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: today, lastMonday: monday, week: null, paidCheck: prev.paidCheck };
   const changes = [], stillBehind = [], couldNotCheck = [], missing = [], allFailedParts = [];
   // Entries a rule held back today because it is not their day, so a quiet day can say so.
   const suppressed = { couldNotCheck: 0, stillBehind: 0, unlisted: 0, missing: 0 };
