@@ -130,3 +130,43 @@ test("version commands: argv[0] is a bare name or {share}/ without .., and {shar
   assert.ok(withArgv(["/abs/git"]).some((e) => /bare command name/.test(e)));
   assert.ok(withArgv(["git", "{home}/x"]).some((e) => /unknown token/.test(e)));
 });
+
+test("version commands: {bin}/ and the fixed cmd.exe shape are allowed; .., a second token and other cmd.exe forms are not", () => {
+  const all = Object.fromEntries(catalog.tools.flatMap((t) => t.parts.filter((p) => p.installed.kind === "command").map((p) => [`${t.id}/${p.name}`, { argv: ["git", "--version"], pattern: /(\d+)/ }])));
+  const withArgv = (argv) => errors({ commands: { ...all, "git/cli": { argv, pattern: /(\d+)/ } } });
+  assert.deepEqual(withArgv(["cmd.exe", "/d", "/c", "{bin}/boat.cmd", "limits"]), []);
+  assert.deepEqual(withArgv(["node", "{bin}/with-key.mjs", "k", "E", "node", "{lib}/cloudflare-verify.mjs"]), []);
+  assert.deepEqual(withArgv(["{bin}/tool.exe", "--version"]), []);
+  assert.ok(withArgv(["cmd.exe", "/d", "/c", "{bin}/../evil.cmd"]).length > 0);
+  assert.ok(withArgv(["cmd.exe", "/d", "/c", "{bin}/a/b.cmd"]).length > 0);
+  assert.ok(withArgv(["cmd.exe", "/d", "/c", "{share}/x.cmd"]).length > 0);
+  assert.ok(withArgv(["cmd.exe", "/d", "/c", "{bin}/x.exe"]).length > 0);
+  assert.ok(withArgv(["cmd.exe", "/k", "{bin}/boat.cmd"]).length > 0);
+  assert.ok(withArgv(["cmd.exe", "/c", "{bin}/boat.cmd"]).length > 0);
+  assert.ok(withArgv(["cmd.exe", "/d", "/c", "echo", "{bin}/boat.cmd"]).length > 0);
+  assert.ok(withArgv(["cmd.exe"]).length > 0);
+  assert.ok(withArgv(["cmd", "/d", "/c", "{bin}/boat.cmd"]).length > 0);
+  assert.ok(withArgv(["powershell", "-File", "x"]).length > 0);
+  assert.ok(withArgv(["{bin}/../x.exe"]).length > 0);
+  assert.ok(withArgv(["{bin}/a/b.exe"]).length > 0);
+  assert.ok(withArgv(["git", "{bin}/{share}/x"]).some((e) => /unknown token/.test(e)));
+  assert.ok(withArgv(["git", "{share}/a/{bin}/b"]).some((e) => /unknown token/.test(e)));
+  assert.ok(withArgv(["git", "--x={share}/a"]).some((e) => /unknown token/.test(e)));
+  assert.ok(withArgv(["git", "{bin}/../x"]).some((e) => /unknown token/.test(e)));
+});
+
+const goodCheck = { argv: ["gh", "api", "user"], ok: /\S/ };
+test("connection checks: every key names a tool id", () => {
+  assert.deepEqual(errors({ checks: { github: goodCheck } }), []);
+  assert.ok(errors({ checks: { github: goodCheck, ghost: goodCheck } }).some((e) => /connection checks: ghost names no tool/.test(e)));
+});
+test("connection checks: at most one entry is paid", () => {
+  assert.deepEqual(errors({ checks: { github: { ...goodCheck, paid: true }, depot: goodCheck } }), []);
+  assert.ok(errors({ checks: { github: { ...goodCheck, paid: true }, depot: { ...goodCheck, paid: true } } }).some((e) => /connection checks: at most one check may be paid/.test(e)));
+});
+test("connection checks: argv follows the table rules and ok is a RegExp", () => {
+  assert.ok(errors({ checks: { github: { argv: ["cmd.exe", "/k", "x"], ok: /x/ } } }).some((e) => /connection checks: github/.test(e)));
+  assert.ok(errors({ checks: { github: { argv: ["gh", "{home}/x"], ok: /x/ } } }).some((e) => /unknown token/.test(e)));
+  assert.ok(errors({ checks: { github: { argv: ["gh"], ok: "x" } } }).some((e) => /ok must be a RegExp/.test(e)));
+  assert.ok(errors({ checks: { github: { argv: ["gh"], ok: /x/, paid: "yes" } } }).some((e) => /paid must be true/.test(e)));
+});

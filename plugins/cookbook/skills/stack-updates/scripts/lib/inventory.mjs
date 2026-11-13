@@ -162,6 +162,12 @@ async function names(dir) {
 // substitution, and it exists only in the fixed table, never in the catalog.
 export const expandShare = (argv, home) => argv.map((a) => (a.includes("{share}") ? normalize(a.replaceAll("{share}", join(home, ".local", "share"))) : a));
 
+// The connection checks add two tokens: `{bin}` is <home>/.local/bin and `{lib}` is
+// the plugin's scripts/lib folder (passed in by the caller). Same rule: fixed
+// tables only, never the catalog.
+export const expandTokens = (argv, home, lib) =>
+  expandShare(argv, home).map((a) => (/{(bin|lib)}/.test(a) ? normalize(a.replaceAll("{bin}", join(home, ".local", "bin")).replaceAll("{lib}", lib ?? "{lib}")) : a));
+
 
 async function readPlugin(installed, home) {
   if (!PLUGIN_ID.test(String(installed.id))) return unreadable("the plugin id must be plugin@marketplace");

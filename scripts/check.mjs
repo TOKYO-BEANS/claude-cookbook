@@ -2,7 +2,7 @@
 // dependencies: run `node scripts/check.mjs` before every merge.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { CHANGELOG_HOSTS, SELF_UPDATING_TOOLS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
+import { CHANGELOG_HOSTS, CONNECTION_CHECKS, SELF_UPDATING_TOOLS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 export { CHANGELOG_HOSTS };
 
@@ -113,7 +113,39 @@ function datesErrors(dates, at) {
   return errors;
 }
 
-export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMANDS, selfUpdating = SELF_UPDATING_TOOLS }) {
+// The rules for a fixed-table argv (version commands and connection checks).
+// argv[0] is a bare command name, `{share}/<relative path>`, `{bin}/<file name>`, or
+// the one launcher shape `cmd.exe /d /c {bin}/<name>.cmd` that starts a shim without
+// a shell. Every other element holds at most one token (`{share}`, `{bin}` or `{lib}`),
+// only at its start and followed by `/`; no element holds `..`. Returns messages.
+const SHELLS = /^(cmd|powershell|pwsh|bash|sh|wscript|cscript)(.exe)?$/i;
+const NAME = "[A-Za-z0-9._-]+";
+export function argvProblems(argv) {
+  const problems = [];
+  const list = Array.isArray(argv) ? argv : [];
+  const cmd = list[0];
+  let start = 1;
+  if (cmd === "cmd.exe") {
+    const shim = list[3];
+    const shaped = list[1] === "/d" && list[2] === "/c" && typeof shim === "string" && new RegExp(`^\{bin\}/${NAME}\.cmd$`).test(shim) && !shim.includes("..");
+    if (shaped) start = 4;
+    else problems.push("argv[0] cmd.exe is allowed only as cmd.exe /d /c {bin}/<name>.cmd");
+  } else {
+    const bare = typeof cmd === "string" && new RegExp(`^${NAME}$`).test(cmd) && !SHELLS.test(cmd);
+    const rel = (token, deep) => typeof cmd === "string" && new RegExp(`^\{${token}\}/${NAME}${deep ? `(/${NAME})*` : ""}$`).test(cmd) && !cmd.split("/").some((seg) => seg === ".." || seg === ".");
+    if (!bare && !rel("share", true) && !rel("bin", false)) problems.push("argv[0] must be a bare command name (not a shell), {share}/ and a relative path without .., or {bin}/ and a file name");
+  }
+  const tokenOk = (a) => {
+    if (typeof a !== "string" || a.includes("..")) return false;
+    const tokens = a.match(/{[^}]*}/g) ?? [];
+    if (tokens.length > 1 || tokens.some((t) => !["{share}", "{bin}", "{lib}"].includes(t))) return false;
+    return tokens.length === 0 || a.startsWith(`${tokens[0]}/`);
+  };
+  if (list.slice(start).some((a) => !tokenOk(a))) problems.push("has an argument with an unknown token or ..");
+  return problems;
+}
+
+export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMANDS, selfUpdating = SELF_UPDATING_TOOLS, checks = CONNECTION_CHECKS }) {
   const skill = skillText.replace(/\r/g, "");
   let catalog;
   try {
@@ -178,14 +210,16 @@ export function checkCookbook({ catalogText, skillText, commands = VERSION_COMMA
     if (!allParts.has(key)) errors.push(`version commands: ${key} names no part in catalog.json`);
     else if (!commandParts.has(key)) errors.push(`version commands: ${key} names a part whose installed kind is not command`);
   }
-  for (const [key, c] of Object.entries(commands)) {
-    const cmd = Array.isArray(c?.argv) ? c.argv[0] : undefined;
-    const bare = typeof cmd === "string" && /^[A-Za-z0-9._-]+$/.test(cmd);
-    const underShare = typeof cmd === "string" && /^\{share\}\/[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/.test(cmd) && !cmd.split("/").some((seg) => seg === ".." || seg === ".");
-    if (!bare && !underShare) errors.push(`version commands: ${key} argv[0] must be a bare command name or {share}/ and a relative path without ..`);
-    if (Array.isArray(c?.argv) && c.argv.slice(1).some((a) => typeof a !== "string" || /\{(?!share\})[^}]*\}/.test(a) || a.includes("..")))
-      errors.push(`version commands: ${key} has an argument with an unknown token or ..`);
+  for (const [key, c] of Object.entries(commands)) for (const e of argvProblems(c?.argv)) errors.push(`version commands: ${key} ${e}`);
+  // The fixed connection-check table: keys name tools, argv follows the same rules,
+  // ok is a RegExp, and at most one check is paid.
+  for (const [key, c] of Object.entries(checks)) {
+    if (!ids.has(key)) errors.push(`connection checks: ${key} names no tool in catalog.json`);
+    for (const e of argvProblems(c?.argv)) errors.push(`connection checks: ${key} ${e}`);
+    if (!(c?.ok instanceof RegExp)) errors.push(`connection checks: ${key} ok must be a RegExp`);
+    if ("paid" in (c ?? {}) && c.paid !== true) errors.push(`connection checks: ${key} paid must be true when present`);
   }
+  if (Object.values(checks).filter((c) => c?.paid === true).length > 1) errors.push("connection checks: at most one check may be paid");
   for (const key of commandParts) if (!Object.hasOwn(commands, key)) errors.push(`version commands: ${key} has no version command`);
   const names = catalog.tools.map((t) => String(t?.name ?? "").toLowerCase()).filter(Boolean);
   const table = skill.split(/^## /m).find((s) => s.startsWith("Choosing quickly")) ?? "";
