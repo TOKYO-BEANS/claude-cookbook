@@ -67,6 +67,8 @@ function day(today, state, { installed = {}, latest = {}, unlisted = [], unreada
   });
 }
 const nothing = { items: [], unreadable: [] };
+const NONE_HELD = { couldNotCheck: 0, stillBehind: 0, unlisted: 0, missing: 0 };
+const held = (counts) => ({ ...NONE_HELD, ...counts });
 
 test("first run: baseline, reports only what is already behind, unlisted, missing", () => {
   const { result, state } = day("2026-11-13", null, {
@@ -83,6 +85,7 @@ test("first run: baseline, reports only what is already behind, unlisted, missin
   assert.deepEqual(result.unlisted, [stray]);
   assert.deepEqual(result.couldNotCheck, []);
   assert.deepEqual([result.broken, result.unchecked, result.dates], [[], [], []]);
+  assert.deepEqual(result.suppressed, NONE_HELD);
   assert.equal(result.weekly, null);
   assert.equal(result.quiet, false);
   // The baseline: what was seen is remembered, nothing is marked reported.
@@ -150,14 +153,19 @@ test("still behind: one line on the first run on or after Monday", () => {
   const fri = day("2026-11-13", null);
   const sat = day("2026-11-14", fri.state, newer);
   assert.equal(sat.result.changes.length, 3);
+  assert.deepEqual(sat.result.suppressed, NONE_HELD); // reported in full today, not held back
   const sun = day("2026-11-15", sat.state, newer);
   assert.deepEqual(sun.result.stillBehind, []);
+  assert.deepEqual(sun.result.suppressed, held({ stillBehind: 1 }));
+  assert.equal(sun.result.quiet, true); // held back is not news
   const mon = day("2026-11-16", sun.state, newer);
   // Only the installed part: a watching tool and a hosted page are never behind.
   assert.deepEqual(mon.result.stillBehind, [{ key: "browse/cli", installed: "0.11.3", latest: "0.11.4", since: "2026-11-14" }]);
   assert.deepEqual(mon.result.changes, []);
+  assert.deepEqual(mon.result.suppressed, NONE_HELD);
   const tue = day("2026-11-17", mon.state, newer);
   assert.deepEqual(tue.result.stillBehind, []);
+  assert.deepEqual(tue.result.suppressed, held({ stillBehind: 1 }));
   // No run on the Monday: the Tuesday run shows it.
   const tueOnly = day("2026-11-17", sun.state, newer);
   assert.deepEqual(tueOnly.result.stillBehind.map((s) => s.key), ["browse/cli"]);
@@ -207,13 +215,17 @@ test("unlisted and missing: the first day, then Mondays", () => {
   const other = { kind: "skill", name: "other" };
   const fri = day("2026-11-13", null, { installed: gone, unlisted: [stray] });
   assert.deepEqual([fri.result.missing, fri.result.unlisted], [[{ key: "alpha/plugin" }], [stray]]);
+  assert.deepEqual(fri.result.suppressed, NONE_HELD);
   const sat = day("2026-11-14", fri.state, { installed: gone, unlisted: [stray, other] });
   assert.deepEqual([sat.result.missing, sat.result.unlisted], [[], [other]]); // only the new one
+  assert.deepEqual(sat.result.suppressed, held({ unlisted: 1, missing: 1 }));
   const sun = day("2026-11-15", sat.state, { installed: gone, unlisted: [stray, other] });
   assert.deepEqual([sun.result.missing, sun.result.unlisted], [[], []]);
+  assert.deepEqual(sun.result.suppressed, held({ unlisted: 2, missing: 1 }));
   const mon = day("2026-11-16", sun.state, { installed: gone, unlisted: [other, stray] });
   assert.deepEqual(mon.result.missing, [{ key: "alpha/plugin" }]);
   assert.deepEqual(mon.result.unlisted, [stray, other]);
+  assert.deepEqual(mon.result.suppressed, NONE_HELD);
   const tue = day("2026-11-17", mon.state, { installed: gone, unlisted: [stray, other] });
   assert.deepEqual([tue.result.missing, tue.result.unlisted], [[], []]);
   // A source that could not be read leaves what is remembered alone.
@@ -234,10 +246,12 @@ test("could not check: the first day, then weekly, and state.latest is untouched
   assert.deepEqual(sat.result.couldNotCheck, [{ key: "browse/cli", message: "Provider returned HTTP 503", since: "2026-11-14" }]);
   assert.equal(sat.result.quiet, false);
   assert.deepEqual(sat.state.parts["browse/cli"], { ...fri.state.parts["browse/cli"], feedErrorSince: "2026-11-14", feedErrorShown: "2026-11-14" });
+  assert.deepEqual(sat.result.suppressed, NONE_HELD);
   let s = sat.state;
   for (const d of ["2026-11-15", "2026-11-16", "2026-11-20"]) {
     const r = day(d, s, down);
     assert.deepEqual(r.result.couldNotCheck, [], d);
+    assert.deepEqual(r.result.suppressed, held({ couldNotCheck: 1 }), d); // held back, and counted
     s = r.state;
   }
   const week = day("2026-11-21", s, down);
@@ -441,6 +455,36 @@ test("the first run after a week off still shows the Monday sections", () => {
   assert.deepEqual([thu.result.stillBehind, thu.result.missing, thu.result.unlisted, thu.result.weekly], [[], [], [], null]);
 });
 
+test("a change carries commit refs when the comparison had them; versions stay in from and to", () => {
+  const fri = day("2026-11-13", null);
+  // A marketplace plugin: versions for people, the installed and newest commits for the release text.
+  const sat = day("2026-11-14", fri.state, {
+    latest: { "alpha/plugin": ok({ version: "1.3.0", commit: SHA("f") }), "skilly/skill": ok({ commit: SHA("d") }) },
+  });
+  const alpha = sat.result.changes.find((c) => c.key === "alpha/plugin");
+  assert.deepEqual([alpha.from, alpha.to, alpha.fromRef, alpha.toRef], ["1.2.0", "1.3.0", SHA("a"), SHA("f")]);
+  // A commit feed with nothing recorded: from the last commit seen to the new one.
+  const skill = sat.result.changes.find((c) => c.key === "skilly/skill");
+  assert.deepEqual([skill.from, skill.to, skill.fromRef, skill.toRef], [SHA("c"), SHA("d"), SHA("c"), SHA("d")]);
+  // A commit recorded after an update is the one compared from.
+  // It also wins over the commit read on the PC, which can be a local commit or a marketplace head.
+  const recorded = structuredClone(fri.state);
+  recorded.parts["skilly/skill"].installedCommit = SHA("9");
+  recorded.parts["alpha/plugin"].installedCommit = SHA("8");
+  const withRecord = day("2026-11-14", recorded, {
+    latest: { "skilly/skill": ok({ commit: SHA("d") }), "alpha/plugin": ok({ version: "1.3.0", commit: SHA("f") }) },
+  });
+  assert.deepEqual(
+    withRecord.result.changes.map((c) => [c.key, c.from, c.fromRef, c.toRef]),
+    [["alpha/plugin", "1.2.0", SHA("8"), SHA("f")], ["skilly/skill", SHA("9"), SHA("9"), SHA("d")]],
+  );
+  // No commits in the comparison: no refs at all.
+  const browse = day("2026-11-14", fri.state, { latest: { "browse/cli": ok({ version: "0.11.4" }) } }).result.changes[0];
+  assert.ok(!("fromRef" in browse) && !("toRef" in browse));
+  const watch = day("2026-11-14", fri.state, { latest: { "watch/watch": ok({ version: "1.1.0" }) } }).result.changes[0];
+  assert.ok(!("fromRef" in watch) && !("toRef" in watch));
+});
+
 test("order: risky changes first, then by tool name", () => {
   const fri = day("2026-11-13", null);
   const sat = day("2026-11-14", fri.state, {
@@ -482,8 +526,13 @@ test("quiet is true only when every list is empty", () => {
   };
   assert.equal(isQuiet(empty), true);
   assert.equal(isQuiet({ ...empty, weekly: { runs: 7, changes: 2 } }), true); // the week count rides on the quiet line
-  for (const k of ["changes", "stillBehind", "broken", "unchecked", "dates", "couldNotCheck", "unlisted", "missing"])
+  // A service with no check is a standing fact, not news; held-back counts are not news either.
+  assert.equal(isQuiet({ ...empty, unchecked: ["TypeSafe / Jev", "Graphify"] }), true);
+  assert.equal(isQuiet({ ...empty, suppressed: { couldNotCheck: 2, stillBehind: 1, unlisted: 3, missing: 1 } }), true);
+  for (const k of ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing"]) {
     assert.equal(isQuiet({ ...empty, [k]: [{}] }), false, k);
+    assert.equal(isQuiet({ ...empty, unchecked: ["Graphify"], [k]: [{}] }), false, k);
+  }
   const fri = day("2026-11-13", null);
   assert.equal(fri.result.quiet, true);
   const sat = day("2026-11-14", fri.state, { latest: { "graph/mcp": ok({ hash: "h2" }) } });

@@ -19,6 +19,11 @@
 //   failed, one line with the count, on every such run.
 // - The first run records a baseline and reports only what is already behind,
 //   unlisted, missing or could not be checked.
+// - What a rule holds back because it is not its day is counted in
+//   `result.suppressed`, so a quiet day can still say what it did not show.
+// - A day is quiet when no list but `unchecked` has an entry.
+// A new release on a marketplace or commit feed carries `fromRef` and `toRef`
+// (commit ids) beside the human-readable `from` and `to`, when they are known.
 // Broken connections, unchecked services and dates are filled in later (connect.mjs).
 import { randomBytes } from "node:crypto";
 import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
@@ -30,7 +35,10 @@ import { SELF_UPDATING_TOOLS } from "./tables.mjs";
 export const READ_LIMIT = 10; // changes whose release text is read in one run
 const RESHOW_DAYS = 7; // a lasting "could not check" is shown again after this many days
 const DAY_MS = 86_400_000;
-const LISTS = ["changes", "stillBehind", "broken", "unchecked", "dates", "couldNotCheck", "unlisted", "missing"];
+// The lists that make a day not quiet. `unchecked` is not one: a service with no
+// check is a standing fact, not news. `suppressed` counts and `weekly` are not either.
+const NEWS = ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing"];
+const COMMIT = /^[0-9a-f]{40}$/;
 const PART_FIELDS = ["installed", "latest", "reported", "behindSince", "feedErrorSince", "feedErrorShown", "installedCommit"];
 const INSTALLED_STATES = ["read", "not-found", "unreadable", "hosted", "none"];
 
@@ -86,8 +94,8 @@ export function isRisky(from, to, text) {
   return /\b(?:breaking|deprecated|removed)\b/i.test(String(text ?? ""));
 }
 
-/** True when the result has nothing to print in any list. The week count does not count. */
-export const isQuiet = (result) => LISTS.every((k) => (result?.[k] ?? []).length === 0);
+/** True when no list but `unchecked` has an entry. The week count and `suppressed` do not count. */
+export const isQuiet = (result) => NEWS.every((k) => (result?.[k] ?? []).length === 0);
 
 // ---- state ---------------------------------------------------------------------
 
@@ -203,8 +211,20 @@ function fromOf(inst, lat, ps) {
   return ps.latest;
 }
 
-const changeOf = (tool, part, key, kind, from, to, lat) => ({
-  key, tool: tool.id, part: part.name, kind, from, to, installedKind: part.installed?.kind ?? null,
+// The commits a new release is compared between, for the release text of
+// marketplace and commit feeds: from the recorded installed commit, the installed
+// commit, or (a commit feed) the last commit seen; to the newest commit. Only
+// 40-character commit ids; a ref that is not known is left out.
+function refsOf(inst, lat, ps) {
+  const toRef = COMMIT.test(String(lat.commit)) ? lat.commit : null;
+  if (!toRef) return {};
+  const seen = str(lat.version) ? null : ps.latest; // a commit feed remembers commits as seen
+  const fromRef = [ps.installedCommit, inst.state === "read" ? inst.commit : null, seen].find((c) => COMMIT.test(String(c)));
+  return fromRef ? { fromRef, toRef } : { toRef };
+}
+
+const changeOf = (tool, part, key, kind, from, to, lat, refs = {}) => ({
+  key, tool: tool.id, part: part.name, kind, from, to, ...refs, installedKind: part.installed?.kind ?? null,
   risky: isRisky(from, to, ""), source: typeof lat.source === "string" ? lat.source : "",
   textFile: null, answers: null, notRead: null,
 });
@@ -232,6 +252,8 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   const tools = Array.isArray(catalog?.tools) ? catalog.tools.filter(isObject) : [];
   const next = { version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: today, lastMonday: monday, week: null };
   const changes = [], stillBehind = [], couldNotCheck = [], missing = [], allFailedParts = [];
+  // Entries a rule held back today because it is not their day, so a quiet day can say so.
+  const suppressed = { couldNotCheck: 0, stillBehind: 0, unlisted: 0, missing: 0 };
 
   const entries = tools.flatMap((t) => (Array.isArray(t.parts) ? t.parts.filter(isObject) : []).map((p) => {
     const key = `${t.id}/${p.name}`;
@@ -249,6 +271,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     if (inst.state === "not-found" && t.lifecycle !== "watching") {
       next.missing[key] = firstMissing ?? today;
       if (!firstMissing || mondaySections) missing.push({ key });
+      else suppressed.missing += 1;
       continue;
     }
 
@@ -264,7 +287,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
       } else if (ps.feedErrorShown === null || daysBetween(ps.feedErrorShown, today) >= RESHOW_DAYS) {
         ps.feedErrorShown = today;
         couldNotCheck.push({ key, message, since: ps.feedErrorSince });
-      }
+      } else suppressed.couldNotCheck += 1;
       continue;
     }
     ps.feedErrorSince = null;
@@ -283,7 +306,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     let reportedNew = false;
     const isNew = !baseline && lv !== null && lv !== ps.latest && newer(lv, ps.latest) && lv !== ps.reported;
     if (isNew && !self && behind !== false) {
-      changes.push(changeOf(t, p, key, "new-release", fromOf(inst, lat, ps), lv, lat));
+      changes.push(changeOf(t, p, key, "new-release", fromOf(inst, lat, ps), lv, lat, refsOf(inst, lat, ps)));
       ps.reported = lv;
       reportedNew = true;
     }
@@ -293,8 +316,11 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
       if (behind === true || (behind === null && reportedNew)) ps.behindSince ??= today;
       else if (behind === false) ps.behindSince = null;
     } else ps.behindSince = null;
-    if (ps.behindSince !== null && lv !== null && !reportedNew && (mondaySections || baseline))
-      stillBehind.push({ key, installed: str(lat.version) ? inst.version : (ps.installedCommit ?? iv), latest: lv, since: ps.behindSince });
+    if (ps.behindSince !== null && lv !== null && !reportedNew) {
+      if (mondaySections || baseline)
+        stillBehind.push({ key, installed: str(lat.version) ? inst.version : (ps.installedCommit ?? iv), latest: lv, since: ps.behindSince });
+      else suppressed.stillBehind += 1;
+    }
 
     ps.installed = iv;
     if (lv !== null) ps.latest = lv;
@@ -317,6 +343,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     const first = Object.hasOwn(prev.unlisted, id) ? prev.unlisted[id] : null;
     next.unlisted[id] = first ?? today;
     if (!first || mondaySections) shownUnlisted.push({ kind: it.kind, name: it.name });
+    else suppressed.unlisted += 1;
   }
   if (Array.isArray(unlisted?.unreadable) && unlisted.unreadable.length)
     for (const [id, first] of Object.entries(prev.unlisted)) if (!Object.hasOwn(next.unlisted, id)) next.unlisted[id] = first;
@@ -348,6 +375,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     couldNotCheck: [...couldNotCheck.slice(0, firstCouldNot), ...couldNotCheck.slice(firstCouldNot).sort(byKey)],
     unlisted: shownUnlisted.sort((a, b) => cmpText(`${a.kind}:${a.name}`, `${b.kind}:${b.name}`)),
     missing: missing.sort(byKey),
+    suppressed,
     weekly,
   };
   result.quiet = isQuiet(result);
