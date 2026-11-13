@@ -901,3 +901,91 @@ test("recipeSection: the Cookbook section the recipe names, up to the next headi
   assert.equal(recipeSection(text, "Missing"), "");
   assert.equal(recipeSection(text, null), "");
 });
+
+// ---- fix round 1 (Task 8): pages under context-mode's 4,096-byte cut -------------------
+
+import { PAGE_BYTES, labelOf, reportPages } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
+
+const utf8 = (s) => Buffer.byteLength(s, "utf8");
+const bodyOf = (page) => page.slice(page.indexOf("\n") + 1);
+const FILE = "C:/state/runs/2026-11-23/report.md";
+
+test("reportPages: a report that fits is printed as before, the path and then the text", () => {
+  const text = "Updates, 23 Nov: 1 broken\n\nBroken\n- X: down\n";
+  assert.deepEqual(reportPages(FILE, text), [`${FILE}\n${text}`]);
+  assert.ok(PAGE_BYTES < 4096, "a page stays under context-mode's 4,096-byte replace trigger");
+});
+
+test("reportPages: a long report is cut at line ends into pages of at most PAGE_BYTES bytes, each saying which page it is", () => {
+  const lines = ["Updates, 23 Nov: 40 changes", ""];
+  for (let i = 0; i < 40; i++) lines.push(`Tool ${i} 1.0.${i} -> 1.0.${i + 1}, pinned copy`, "- Changed: ünïcödé text, långer than plain ASCII, so bytes and characters differ.", "- Link: https://www.npmjs.com/package/x", "");
+  const text = `${lines.join("\n")}\n`;
+  const pages = reportPages(FILE, text);
+  assert.ok(pages.length >= 2);
+  pages.forEach((p, i) => {
+    assert.ok(utf8(p) <= PAGE_BYTES, `page ${i + 1} is ${utf8(p)} bytes`);
+    assert.equal(p.split("\n")[0], i === 0 ? `Page 1 of ${pages.length}: ${FILE}` : `Page ${i + 1} of ${pages.length}`);
+  });
+  assert.equal(pages.map(bodyOf).join(""), text, "the pages hold the whole report, in order, nothing added");
+});
+
+test("reportPages: a line longer than a page is cut at character boundaries, never inside a character", () => {
+  const long = `${"é".repeat(2500)}😀${"x".repeat(10)}`;
+  const pages = reportPages(FILE, `Updates\n${long}\n`);
+  const pieces = pages.map(bodyOf).join("").split("\n").filter(Boolean).slice(1);
+  assert.ok(pages.every((p) => utf8(p) <= PAGE_BYTES && p.isWellFormed()));
+  assert.equal(pieces.join(""), long);
+});
+
+test("labelOf: a part named after the package it tracks reads 'tool / package'; other single parts read as the tool", () => {
+  const ab = { id: "agent-browser", name: "agent-browser", parts: [{ name: "playwright-core", installed: { kind: "pinned", folder: "site-login", package: "playwright-core" } }] };
+  assert.equal(labelOf({ tool: ab, part: ab.parts[0] }), "agent-browser / playwright-core");
+  const fc = { id: "firecrawl", name: "Firecrawl", parts: [{ name: "cli", installed: { kind: "pinned", folder: "firecrawl-cli", package: "firecrawl-cli" } }] };
+  assert.equal(labelOf({ tool: fc, part: fc.parts[0] }), "Firecrawl");
+  const two = { id: "browserbase", name: "Browserbase", parts: [{ name: "cli", installed: { kind: "pinned", folder: "b", package: "browse" } }, { name: "service", installed: { kind: "hosted" } }] };
+  assert.equal(labelOf({ tool: two, part: two.parts[0] }), "Browserbase cli");
+});
+
+test("a long report: run prints page 1 with the page count, `page <n>` prints the rest from today's report.md, and nothing else is accepted", async (t) => {
+  const state = tmp(t);
+  const ids = Array.from({ length: 30 }, (_, i) => `t${String(i + 1).padStart(2, "0")}`);
+  const cat = {
+    version: 1, ignored: [],
+    tools: ids.map((id) => tool(id, `Tool ${id}`, [{ name: "cli", installed: { kind: "none" }, feed: { kind: "github", repository: `o/${id}` } }])),
+  };
+  const gh = (v) => Object.fromEntries(ids.map((id) => [`repos/o/${id}/releases/latest`, { tag_name: `v${v}`, draft: false, prerelease: false }]));
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], { ...fakes(), gh: fakeGh(gh("1.0.0")) }, cat)).code, 0);
+  const r = await cli(["run", ...at(state, "2026-11-14", "--no-read")], { ...fakes(), gh: fakeGh(gh("1.1.0")) }, cat);
+  assert.equal(r.code, 0, r.err);
+  const file = join(state, "runs", "2026-11-14", "report.md");
+  const text = readFileSync(file, "utf8");
+  assert.ok(utf8(text) > PAGE_BYTES);
+  const first = /^Page 1 of (\d+): (.+)\n/.exec(r.out);
+  assert.ok(first, r.out.slice(0, 120));
+  const n = Number(first[1]);
+  assert.equal(first[2], file);
+  assert.ok(utf8(r.out) <= PAGE_BYTES);
+  const pages = [r.out];
+  for (let k = 2; k <= n; k++) {
+    const p = await cli(["page", String(k), ...at(state, "2026-11-14")], {}, cat);
+    assert.equal(p.code, 0, p.err);
+    assert.ok(utf8(p.out) <= PAGE_BYTES);
+    assert.ok(p.out.startsWith(`Page ${k} of ${n}\n`));
+    pages.push(p.out);
+  }
+  assert.equal(pages.map(bodyOf).join(""), text);
+  // page 1 again equals what run printed; --no-read is accepted and changes nothing.
+  assert.equal((await cli(["page", "1", ...at(state, "2026-11-14", "--no-read")], {}, cat)).out, r.out);
+  // Out of range, not a small whole number, or with --out: a usage error, nothing printed.
+  for (const bad of [String(n + 1), "0", "01", "x", "100", "-1"]) {
+    const b = await cli(["page", bad, ...at(state, "2026-11-14")], {}, cat);
+    assert.equal(b.code, 2, `page ${bad}`);
+    assert.equal(b.out, "");
+  }
+  assert.equal((await cli(["page", "2", ...at(state, "2026-11-14"), "--out", state], {}, cat)).code, 2);
+  assert.equal((await cli(["page"], {}, cat)).code, 2);
+  // No report for that day: an error, not an empty page.
+  const none = await cli(["page", "1", ...at(state, "2026-11-15")], {}, cat);
+  assert.equal(none.code, 1);
+  assert.match(none.err, /no report\.md for 2026-11-15/);
+});

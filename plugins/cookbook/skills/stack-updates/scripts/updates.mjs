@@ -5,6 +5,7 @@
 //   inventory | compare | connect | read | report [--out <dir>]
 //                                    one stage on one run folder
 //   record <part key> <commit>       after an update: the commit now installed
+//   page <n>                         page n of today's report.md (see below)
 //
 // Options: --home <dir> (the profile to read, for tests), --state <dir> (state and
 // runs somewhere other than ~/.local/share/stack-updates, for a trial run that must
@@ -25,7 +26,9 @@
 // The paid connection check runs at most once per real local day (paid-check.json).
 //
 // On a quiet day it prints exactly one line; otherwise the path of report.md and its
-// text. Exit code 0, or 1 when the script itself failed, 2 for a usage error.
+// text, or, when that is longer than PAGE_BYTES, page 1 headed "Page 1 of N: <path>";
+// `page 2` to `page N` print the rest. Exit code 0, or 1 when the script itself
+// failed, 2 for a usage error.
 //
 // Safety: nothing is installed, updated or committed. Release text is written to
 // texts/ and passed to one thing only, readChange's request with no tools; every
@@ -65,7 +68,7 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const VERSION = /^\d+(?:\.\d+)+$/;
 const DAY_MS = 86_400_000;
 const STAGES = ["inventory", "compare", "connect", "read", "report"];
-const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit>; options --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
+const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | page <n>; options --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
 
 class UsageError extends Error {}
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -226,8 +229,89 @@ function partsOf(catalog) {
 }
 
 // How a part is named in the report: the tool's name, plus the part's when the tool has several.
-const labelOf = ({ tool, part }) =>
-  (Array.isArray(tool.parts) && tool.parts.length > 1 ? `${tool.name ?? tool.id} ${part.name}` : String(tool.name ?? tool.id));
+// A tool with several parts reads "<tool> <part>"; a single part named after the package
+// it tracks, which is not the tool itself (agent-browser's playwright-core), reads
+// "<tool> / <package>"; any other single part reads as the tool.
+export const labelOf = ({ tool, part }) => {
+  const name = String(tool.name ?? tool.id);
+  if (Array.isArray(tool.parts) && tool.parts.length > 1) return `${name} ${part.name}`;
+  const pkg = part?.installed?.package;
+  return typeof pkg === "string" && pkg === part.name && pkg !== tool.id && pkg !== tool.name ? `${name} / ${pkg}` : name;
+};
+
+// ---- pages: what one call prints stays under context-mode's cut ---------------------
+
+// The owner's sessions run the context-mode plugin, whose PostToolUse hook replaces
+// any tool output over 4,096 bytes (REPLACE_TRIGGER_BYTES, context-mode 2.1.0
+// README "Run, then replace" and hook.mjs) with a few chunks and a search pointer.
+// So `run` and `page` never print more than PAGE_BYTES: a report that does not fit
+// is printed in pages, page 1 by `run` and the others by `page <n>`.
+export const PAGE_BYTES = 3_500;
+export const MAX_PAGES = 99;
+const utf8Bytes = (s) => Buffer.byteLength(s, "utf8");
+
+// One line in pieces of at most `limit` UTF-8 bytes, cut between characters.
+function cutLine(line, limit) {
+  if (utf8Bytes(line) <= limit) return [line];
+  const pieces = [];
+  let piece = "";
+  for (const ch of line) {
+    if (piece && utf8Bytes(piece) + utf8Bytes(ch) > limit) {
+      pieces.push(piece);
+      piece = "";
+    }
+    piece += ch;
+  }
+  if (piece) pieces.push(piece);
+  return pieces;
+}
+
+/**
+ * What `run` and `page` print for a report: `[<file>\n<text>]` when that fits in
+ * PAGE_BYTES, as before; otherwise pages cut at line ends, the first headed
+ * "Page 1 of N: <file>" and the others "Page k of N", each at most PAGE_BYTES.
+ * The page bodies joined in order are the report.
+ */
+export function reportPages(file, text) {
+  const whole = `${file}\n${text}`;
+  if (utf8Bytes(whole) <= PAGE_BYTES) return [whole];
+  const firstHead = utf8Bytes(`Page ${MAX_PAGES} of ${MAX_PAGES}: ${file}\n`);
+  const head = utf8Bytes(`Page ${MAX_PAGES} of ${MAX_PAGES}\n`);
+  const lines = (text.endsWith("\n") ? text.slice(0, -1) : text).split("\n");
+  const bodies = [];
+  let page = [], size = 0;
+  for (const raw of lines) {
+    for (const line of cutLine(raw, PAGE_BYTES - firstHead - 1)) {
+      const add = utf8Bytes(line) + 1; // the line and its line end
+      if (page.length && size + add > PAGE_BYTES - (bodies.length === 0 ? firstHead : head)) {
+        bodies.push(page);
+        page = [];
+        size = 0;
+      }
+      page.push(line);
+      size += add;
+    }
+  }
+  if (page.length) bodies.push(page);
+  if (bodies.length > MAX_PAGES) throw new Error(`the report needs more than ${MAX_PAGES} pages`);
+  return bodies.map((b, i) => `${i === 0 ? `Page 1 of ${bodies.length}: ${file}` : `Page ${i + 1} of ${bodies.length}`}\n${b.join("\n")}\n`);
+}
+
+// `page <n>`: page n of today's report.md in the state folder. It reads that one file,
+// never texts/ and never a folder named on the command line.
+function pageOf(ctx, n) {
+  const file = join(ctx.stateDir, "runs", ctx.today, "report.md");
+  let text;
+  try {
+    text = readFileSync(file, "utf8");
+  } catch (e) {
+    if (e?.code === "ENOENT") throw new Error(`no report.md for ${ctx.today} in the state folder: run the check first`);
+    throw e;
+  }
+  const pages = reportPages(file, text);
+  if (n > pages.length) throw new UsageError(`the report for ${ctx.today} has ${pages.length} page${pages.length === 1 ? "" : "s"}`);
+  return pages[n - 1];
+}
 
 /**
  * The section of the Cookbook skill whose heading is `heading` (any level), up to the
@@ -545,7 +629,7 @@ async function stageReport(ctx) {
     }
   }
   saveState(ctx.home, next, { folder: ctx.stateDir });
-  return { printed: result.quiet ? `${quietLine(result)}\n` : `${runFile(ctx, "report.md")}\n${text}` };
+  return { printed: result.quiet ? `${quietLine(result)}\n` : reportPages(runFile(ctx, "report.md"), text)[0] };
 }
 
 async function record(ctx, key, commit) {
@@ -575,7 +659,10 @@ function parseArgs(argv) {
   }
   const [command, ...rest] = opts.positional;
   if (command === undefined) throw new UsageError("no command");
-  if (command === "record" ? rest.length !== 2 : !(command === "run" || STAGES.includes(command)) || rest.length) {
+  if (command === "page") {
+    if (rest.length !== 1 || !/^[1-9][0-9]?$/.test(rest[0])) throw new UsageError(`page needs one page number from 1 to ${MAX_PAGES}`);
+    if (opts.out !== undefined) throw new UsageError("page reads today's run folder in the state folder; it takes no --out");
+  } else if (command === "record" ? rest.length !== 2 : !(command === "run" || STAGES.includes(command)) || rest.length) {
     throw new UsageError(command === "record" ? "record needs a part key and a commit" : `unknown command ${String(command).slice(0, 40)}`);
   }
   if (opts.today !== undefined && !isDay(opts.today)) throw new UsageError("--today must be a YYYY-MM-DD date");
@@ -620,6 +707,10 @@ export async function main(argv, deps = {}) {
     };
     if (command === "record") {
       stdout((await record(ctx, rest[0], rest[1])).printed);
+      return 0;
+    }
+    if (command === "page") {
+      stdout(pageOf(ctx, Number(rest[0])));
       return 0;
     }
     if (opts.today !== undefined) {
