@@ -19,8 +19,7 @@ export const SELF_UPDATING_TOOLS = Object.freeze([
 // version, keyed by part key "<tool id>/<part name>". argv[0] is a bare command
 // name that must be a real executable on PATH (no .cmd or .bat shim: it is run
 // without a shell), or `{share}/<relative path>` for a binary under ~/.local/share.
-// `{share}` is the only substitution here (CONNECTION_CHECKS below also has `{bin}`
-// and `{lib}`), allowed only in these tables, never in the catalog. When the capture is a 40-character hex id it is a commit, not a version. `pattern` is matched against stdout; group 1 is the version.
+// `{share}`, `{bin}` (~/.local/bin) and `{lib}` (this plugin's scripts/lib) are the only substitutions, allowed only in the tables of this file, never in the catalog. When the capture is a 40-character hex id it is a commit, not a version. `pattern` is matched against stdout; group 1 is the version.
 // Each pattern was written against the real output on the owner's PC on
 // 13 November 2026. A part whose command cannot run here has no entry.
 export const VERSION_COMMANDS = Object.freeze({
@@ -58,13 +57,13 @@ export const VERSION_COMMANDS = Object.freeze({
 // for every hosted part that names a server.
 const shim = (name, ...args) => ["cmd.exe", "/d", "/c", `{bin}/${name}.cmd`, ...args];
 export const CONNECTION_CHECKS = Object.freeze({
-  github: { argv: ["gh", "api", "user", "--jq", ".login"], ok: /^[A-Za-z0-9][A-Za-z0-9-]*\s*$/m },
-  depot: { argv: ["depot", "org", "list"], ok: /^Organization ID,Name/m },
+  github: { argv: ["gh", "api", "user", "--jq", ".login"], ok: /^(?!(?:null|error|none|undefined|true|false)\s*$)[A-Za-z0-9][A-Za-z0-9-]{0,38}\s*$/im },
+  depot: { argv: ["depot", "org", "list"], ok: /^Organization ID,Name\r?\n[^\r\n,]+,[^\r\n]+/m },
   firecrawl: { argv: shim("firecrawl", "--status"), ok: /Credits: [\d,]+ \/ [\d,]+/ },
   boat: { argv: shim("boat", "limits"), ok: /"billingStatus":"[a-z_]+"/ },
   browserbase: { argv: shim("browse", "cloud", "projects", "list"), ok: /"concurrency":\s*\d+/ },
   // UNPROVEN ok pattern: the CLI had no session on 13 November 2026, so it never saw a signed-in answer.
-  "proton-pass-cli": { argv: shim("pass-cli", "info"), ok: /^[A-Za-z][A-Za-z ]*:\s*\S/m },
+  "proton-pass-cli": { argv: shim("pass-cli", "info"), ok: /(?<![\s\S])(?![\s\S]*(?:error|usage|no session|authenticated client))[\s\S]*?^[A-Za-z][A-Za-z ]*:[ \t]*\S/im },
   "google-workspace-cli": { argv: shim("google", "status"), ok: /^(?!.*"works":\s*false).*"ok":\s*true/s },
   cloudflare: { argv: ["node", "{bin}/with-key.mjs", "cloudflare-wrangler", "CLOUDFLARE_API_TOKEN", "node", "{lib}/cloudflare-verify.mjs"], ok: /^active\s*$/m },
   parallel: { argv: shim("parallel-cli", "search", "status", "--json", "--max-results", "1", "--excerpt-max-chars-total", "200"), ok: /"status":\s*"ok"/, paid: true },

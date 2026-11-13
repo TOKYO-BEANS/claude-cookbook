@@ -19,7 +19,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join, normalize } from "node:path";
+import { dirname, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
 import { VERSION_COMMANDS } from "./tables.mjs";
 import { ghFile } from "./feeds.mjs";
 
@@ -165,6 +166,7 @@ export const expandShare = (argv, home) => argv.map((a) => (a.includes("{share}"
 // The connection checks add two tokens: `{bin}` is <home>/.local/bin and `{lib}` is
 // the plugin's scripts/lib folder (passed in by the caller). Same rule: fixed
 // tables only, never the catalog.
+const LIB = dirname(fileURLToPath(import.meta.url));
 export const expandTokens = (argv, home, lib) =>
   expandShare(argv, home).map((a) => (/{(bin|lib)}/.test(a) ? normalize(a.replaceAll("{bin}", join(home, ".local", "bin")).replaceAll("{lib}", lib ?? "{lib}")) : a));
 
@@ -204,7 +206,7 @@ async function readCommand(key, run, home) {
   if (!entry) return unreadable(`no version command is listed for ${key}`);
   let result;
   try {
-    result = await run(expandShare(entry.argv, home), { timeoutMs: COMMAND_TIMEOUT_MS, home });
+    result = await run(expandTokens(entry.argv, home, LIB), { timeoutMs: COMMAND_TIMEOUT_MS, home });
   } catch (e) {
     return unreadable(`${entry.argv[0]} could not run: ${cause(e)}`);
   }

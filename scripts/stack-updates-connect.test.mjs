@@ -133,7 +133,7 @@ test("claude mcp list: each hosted part's server is matched against its Connecte
     tool("parallel", "Parallel", "active", hosted("parallel-search")),
     tool("graphify", "Graphify", "active", hosted("graphify")),
     tool("firecrawl", "Firecrawl", "active", hosted("firecrawl")),
-    tool("adobe-for-creativity", "Adobe for creativity", "trial", hosted("adobe-for-creativity")),
+    tool("adobe-for-creativity", "Adobe for creativity", "trial", hosted("Adobe")),
     tool("openseo", "OpenSEO", "active", hosted("openseo")),
   );
   const calls = [];
@@ -256,4 +256,109 @@ test("the real table: each ok pattern matches the line a working service prints"
   }
   assert.ok(!CONNECTION_CHECKS["google-workspace-cli"].ok.test('{"ok":true,"accounts":[{"works":false}]}'));
   assert.ok(!CONNECTION_CHECKS.parallel.ok.test('{"status":"error"}'));
+});
+
+test("claude mcp list fails but the tool's own check passed: working, not unchecked", async () => {
+  const withServer = tool("svc", "Svc", "active", [{ name: "mcp", installed: { kind: "hosted", server: "svc" } }]);
+  const noCheck = tool("graphify", "Graphify", "active", [{ name: "mcp", installed: { kind: "hosted", server: "graphify" } }]);
+  const run = async (argv) => (argv[0] === "claude" ? { code: null, stdout: "", stderr: "timed out after 30 s", timedOut: true } : okRun());
+  const r = await runChecks(catalogOf(withServer, noCheck), { run, home, now: NOW, checks });
+  assert.deepEqual(r.working, ["Svc"]);
+  assert.deepEqual(r.unchecked, ["Graphify"]);
+  assert.deepEqual(r.broken.map((b) => b.service), ["claude mcp list"]);
+  const bad = await runChecks(catalogOf(withServer), { run: async (argv) => (argv[0] === "claude" ? { code: 1, stdout: "", stderr: "boom" } : { code: 1, stdout: "", stderr: "not signed in" }), home, now: NOW, checks });
+  assert.deepEqual(bad.broken.map((b) => b.service).sort(), ["Svc", "claude mcp list"]);
+});
+
+const hex32 = "0123456789abcdef0123456789abcdef";
+test("scrub: key names with a prefix, separators =, : and whitespace, known prefixes, long mixed runs, e-mail", () => {
+  const gone = (text, ...parts) => { const out = scrub(text); for (const p of parts) assert.ok(!out.includes(p), `${p} left in: ${out}`); return out; };
+  gone(`FIRECRAWL_API_KEY=fc-${hex32}`, hex32);
+  gone(`BROWSERBASE_API_KEY=bb_live_abcdefghij0123456789ABCDEFGH`, "abcdefghij0123456789");
+  gone(`Invalid API key fc-${hex32}`, hex32);
+  gone(`bad token: ghp_abcdefghijklmnopqrstuvwxyz0123456789`, "abcdefghijklmnop");
+  gone(`github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz`, "abcdefghijklmnop");
+  gone(`key sk-proj1234567890abcdefghijkl failed`, "1234567890abcdef");
+  gone(`secret ABCDEFGHIJKLMNOPQRST1234 expired`, "ABCDEFGHIJKLMNOPQRST");
+  gone(`id a1b2c3d4e5f6a7b8c9d0e1f2a3b4 seen`, "a1b2c3d4e5f6");
+  assert.equal(scrub("mail me@example.com or Ann.Lee+x@mail.example.org now"), "mail <email> or <email> now");
+  // Ordinary text stays readable.
+  assert.equal(scrub("Error: This operation requires an authenticated client"), "Error: This operation requires an authenticated client");
+  assert.equal(scrub("token expired, please sign in again"), "token expired, please sign in again");
+  assert.equal(scrub("this-is-a-long-hyphenated-words-only-run"), "this-is-a-long-hyphenated-words-only-run");
+});
+
+test("scrub: the cut at 4,000 characters cannot leave part of a secret", () => {
+  const secret = "ABCDEFGHIJ0123456789abcdefghij0123456789";
+  assert.equal(secret.length, 40);
+  const out = scrub(`${" ".repeat(3_975)}token=${secret}`);
+  for (let i = 0; i + 6 <= secret.length; i++) assert.ok(!out.includes(secret.slice(i, i + 6)), out);
+  assert.ok(out.length <= 200);
+});
+
+test("a cmd.exe path holding a shell character or a space does not run", async () => {
+  const odd = join(home, "my home & more");
+  mkdirSync(odd, { recursive: true });
+  const calls = [];
+  const table = { svc: { argv: ["cmd.exe", "/d", "/c", "{bin}/svc.cmd", "--status"], ok: checks.svc.ok } };
+  const r = await runChecks(catalogOf(tool("svc", "Svc")), { run: async (a) => { calls.push(a); return okRun(); }, home: odd, now: NOW, checks: table });
+  assert.equal(calls.length, 0);
+  assert.deepEqual(r.broken, [{ service: "Svc", error: "unsafe path for cmd.exe" }]);
+  const fine = await runChecks(catalogOf(tool("svc", "Svc")), { run: async (a) => { calls.push(a); return okRun(); }, home, now: NOW, checks: table });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(fine.working, ["Svc"]);
+});
+
+test("an MCP line matches a part by its server name, not by the tool's name", async () => {
+  const listing = "claude.ai Adobe: https://adobe-creativity.adobe.io/mcp - ✔ Connected\n";
+  const run = async () => ({ code: 0, stdout: listing, stderr: "" });
+  const hosted = (server) => [{ name: "connector", installed: { kind: "hosted", server } }];
+  const r = await runChecks(catalogOf(tool("adobe-firefly", "Adobe Firefly", "trial", hosted("firefly-boards")), tool("adobe", "Adobe for creativity", "trial", hosted("Adobe"))), { run, home, now: NOW, checks: {} });
+  assert.deepEqual(r.working, ["Adobe for creativity"]);
+  assert.deepEqual(r.broken.map((b) => b.service), ["Adobe Firefly"]);
+  assert.match(r.broken[0].error, /not listed/);
+});
+
+test("runChecks needs the home folder", async () => {
+  await assert.rejects(() => runChecks(catalogOf(tool("svc", "Svc")), { run: okRun, now: NOW, checks }), /needs the home folder/);
+});
+
+test("Jev: a timestamp more than 5 minutes ahead is not an answer", async () => {
+  writeJevLog([entry("2026-11-13T06:00:00Z", "routed"), entry("2026-11-14T07:10:00Z", "routed")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "the older real answer still counts");
+  writeJevLog(entry("2026-11-14T07:10:00Z", "routed") + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"]);
+  writeJevLog(entry("2026-11-14T07:03:00Z", "routed") + "\n");
+  assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "3 minutes ahead is clock drift");
+});
+
+test("the real table: no ok pattern matches an error line, a help text or a not-signed-in line", () => {
+  const negatives = [
+    "Error: not signed in\n",
+    "error\n",
+    "null\n",
+    "Usage: tool [OPTIONS] <COMMAND>\n\nCommands:\n  info  Show information\n  login  Log in\n\nOptions:\n  -h, --help  Print help\n",
+    "You are not signed in. Run login first.\n",
+    "Error: This operation requires an authenticated client\n",
+    "Command is not logout there is no session\n",
+    "Not authenticated\n",
+    '{"error":"unauthorized","message":"not signed in"}',
+    '{"status":"error"}',
+    "Organization ID,Name\n",
+    "[]",
+    '{"ok":false,"accounts":[]}',
+  ];
+  for (const [id, c] of Object.entries(CONNECTION_CHECKS)) {
+    for (const text of negatives) assert.ok(!c.ok.test(text), `${id} pattern matched ${JSON.stringify(text)}`);
+  }
+  // Proton Pass: its own error and usage lines never match, whatever else is printed.
+  const pass = CONNECTION_CHECKS["proton-pass-cli"].ok;
+  assert.ok(!pass.test("Release track: stable\nError: This operation requires an authenticated client\n"));
+  assert.ok(!pass.test("Usage: pass-cli.exe info [OPTIONS]\nOptions:\n"));
+  assert.ok(pass.test("Username: someone\nRelease track: stable\n"), "positive side is unproven: an assumed signed-in shape");
+});
+
+test("the real table: Cloudflare's pattern needs the word active alone on a line", () => {
+  const cf = CONNECTION_CHECKS.cloudflare.ok;
+  assert.ok(!cf.test("inactive\n") && !cf.test("not active\n") && !cf.test("HTTP 401\n"));
 });

@@ -142,6 +142,7 @@ export function argvProblems(argv) {
     return tokens.length === 0 || a.startsWith(`${tokens[0]}/`);
   };
   if (list.slice(start).some((a) => !tokenOk(a))) problems.push("has an argument with an unknown token or ..");
+  if (start === 4 && list.slice(4).some((a) => typeof a === "string" && /[{}]/.test(a))) problems.push("has a token after the shim: its arguments are constants");
   return problems;
 }
 

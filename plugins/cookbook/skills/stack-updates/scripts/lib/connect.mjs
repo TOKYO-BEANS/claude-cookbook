@@ -25,6 +25,7 @@ const LIB = dirname(fileURLToPath(import.meta.url));
 export const JEV_LOG = join(".claude", "vendor", "compaction", "state", "jev-turn-router-decisions.jsonl");
 export const JEV_TOOL_ID = "jev";
 const JEV_MAX_AGE_MS = 48 * 3_600_000;
+const JEV_MAX_FUTURE_MS = 5 * 60_000;
 const JEV_LOG_LINES = 200;
 const JEV_LOG_BYTES = 262_144;
 // The outcomes of the log that record an answer from Jev. Seen on 13 November 2026:
@@ -36,19 +37,30 @@ export const JEV_ANSWER_OUTCOMES = Object.freeze(["routed"]);
 
 // ---- error text ------------------------------------------------------------
 
-// Removes anything a key or a token could hide in before the text is cut, so half
-// a token cannot survive the cut: whole Authorization lines, `Bearer <value>`,
-// `key=`, `token=`, `secret=` and `password=` values of 20 or more characters
-// (also as JSON), and any run of 40 or more key characters.
+// Removes anything a key, a token or an address could hide in. The order matters:
+// scrub the first 4,000 characters (a trailing run cut by that limit is dropped, so
+// half a secret cannot slip through), then collapse whitespace, then cut to 200.
+// Removed: colour codes, e-mail addresses ("<email>"), whole Authorization lines,
+// "Bearer <value>", the value after an identifier ending in key, token, secret,
+// password, passwd or api_key (separator =, : or whitespace), values with a known
+// prefix (fc-, bb_, ghp_, gho_, github_pat_, sk-, pk-), and any run of 24 or more
+// [A-Za-z0-9_-] holding both a letter and a digit.
+const KEY_NAME = "\\b((?:[A-Za-z0-9]+[_-])*(?:api[_-]?key|key|token|secret|password|passwd))";
+const AFTER_SEPARATOR = new RegExp(`${KEY_NAME}(["']?\\s*[:=]\\s*["']?)[A-Za-z0-9._~+/=-]{20,}`, "gi");
+const AFTER_SPACE = new RegExp(`${KEY_NAME}(["']?\\s+["']?)(?=[A-Za-z0-9._~+/=-]*\\d)[A-Za-z0-9._~+/=-]{20,}`, "gi");
 export function scrub(text) {
-  return String(text ?? "")
-    .slice(0, 4_000)
+  const raw = String(text ?? "");
+  let t = raw.slice(0, 4_000);
+  if (raw.length > 4_000) t = t.replace(/\S+$/, "");
+  return t
     .replace(/\x1b\[[0-9;]*m/g, "")
-    .replace(/[[0-9;]*m/g, "")
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<email>")
     .replace(/^.*authorization.*$/gim, "[redacted]")
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]{20,}/gi, "Bearer [redacted]")
-    .replace(/\b(api[_-]?key|key|token|secret|password|passwd)(["']?\s*[:=]\s*["']?)[A-Za-z0-9._~+/=-]{20,}/gi, "$1$2[redacted]")
-    .replace(/[A-Za-z0-9_-]{40,}/g, "[redacted]")
+    .replace(AFTER_SEPARATOR, "$1$2[redacted]")
+    .replace(AFTER_SPACE, "$1$2[redacted]")
+    .replace(/\b(?:fc-|bb_|ghp_|gho_|github_pat_|sk-|pk-)[A-Za-z0-9_-]{16,}/g, "[redacted]")
+    .replace(/[A-Za-z0-9_-]{24,}/g, (run) => (/[A-Za-z]/.test(run) && /\d/.test(run) ? "[redacted]" : run))
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -59,8 +71,12 @@ const cause = (e) => String(e?.message ?? e);
 
 async function runOne(entry, { run, home }) {
   let res;
+  const argv = expandTokens(entry.argv, home, LIB);
+  // cmd.exe reads its command line with its own rules: a path with one of these
+  // characters could be taken for more than a path, so the command does not run.
+  if (argv[0] === "cmd.exe" && argv.slice(1).some((a) => /[%&|<>^()!"\s]/.test(a))) return { error: "unsafe path for cmd.exe" };
   try {
-    res = await run(expandTokens(entry.argv, home, LIB), { timeoutMs: CHECK_TIMEOUT_MS, maxBytes: OUTPUT_LIMIT, home });
+    res = await run(argv, { timeoutMs: CHECK_TIMEOUT_MS, maxBytes: OUTPUT_LIMIT, home });
   } catch (e) {
     return { error: clip(cause(e)) || "the command could not run" };
   }
@@ -86,14 +102,13 @@ function parseMcpList(text) {
   return out;
 }
 
-// `plugin:<plugin>:<server>`, `claude.ai <Connector>` or a plain server name.
-function matches(entry, server, toolName) {
+// A line matches a hosted part by the part's server name: the names are equal, or the
+// name left after "claude.ai " or a "plugin:<plugin>:" prefix equals it. The tool's
+// own name plays no part.
+function matches(entry, server) {
   const want = norm(server);
-  if (norm(entry.name) === want || norm(entry.name.split(":").pop()) === want) return true;
-  const connector = /^claude\.ai (.+)$/.exec(entry.name);
-  if (!connector) return false;
-  const c = norm(connector[1]);
-  return c === want || norm(toolName) === c || norm(toolName).startsWith(`${c}-`);
+  const tail = entry.name.replace(/^claude\.ai /, "").split(":").pop();
+  return norm(entry.name) === want || norm(tail) === want;
 }
 const isConnected = (status) => /\bConnected\s*$/i.test(status) && !/failed|needs auth/i.test(status);
 
@@ -123,6 +138,7 @@ async function jevAnswered(home, now) {
       if (!JEV_ANSWER_OUTCOMES.includes(o?.outcome)) continue;
       const at = Date.parse(o.ts);
       if (!Number.isFinite(at)) continue;
+      if (at - now > JEV_MAX_FUTURE_MS) continue; // a clock error is not an answer
       return now - at <= JEV_MAX_AGE_MS;
     }
     return false;
@@ -138,6 +154,7 @@ async function jevAnswered(home, now) {
 // `-> { broken: { service, error }[], unchecked: string[], working: string[] }`.
 // `checks` is injectable for tests; the real run uses CONNECTION_CHECKS.
 export async function runChecks(catalog, { run = defaultRun, home, now = new Date(), checks = CONNECTION_CHECKS } = {}) {
+  if (typeof home !== "string" || !home) throw new Error("runChecks needs the home folder: pass { home }");
   const at = new Date(now).getTime();
   const tools = (Array.isArray(catalog?.tools) ? catalog.tools : []).filter((t) => t?.lifecycle === "active" || t?.lifecycle === "trial");
   const broken = [], unchecked = [], working = [];
@@ -171,10 +188,16 @@ export async function runChecks(catalog, { run = defaultRun, home, now = new Dat
     }
     const servers = serversOf(tool);
     if (servers.length) {
-      if (mcp?.error) { if (!errors.length) unchecked.push(tool.name); else broken.push({ service: tool.name, error: clip(errors.join("; ")) }); continue; }
+      if (mcp?.error) {
+        // The single "claude mcp list" entry reports the failed listing; the tool's own check still counts.
+        if (errors.length) broken.push({ service: tool.name, error: clip(errors.join("; ")) });
+        else if (entry) working.push(tool.name);
+        else unchecked.push(tool.name);
+        continue;
+      }
       proved = true;
       for (const server of servers) {
-        const found = (mcp?.entries ?? []).filter((e) => matches(e, server, tool.name));
+        const found = (mcp?.entries ?? []).filter((e) => matches(e, server));
         if (!found.length) errors.push(`${server}: not listed by claude mcp list`);
         else if (!found.some((e) => isConnected(e.status))) errors.push(`${server}: ${found[0].status}`);
       }

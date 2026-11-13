@@ -121,7 +121,7 @@ test("self-updating tools: each id names a tool in the catalog", () => {
   assert.ok(errors({ selfUpdating: [...SELF_UPDATING_TOOLS, "ghost"] }).some((e) => /self-updating tools: ghost names no tool/.test(e)));
 });
 
-test("version commands: argv[0] is a bare name or {share}/ without .., and {share} is the only token", () => {
+test("version commands: argv[0] is a bare name or {share}/ without .., and {share}, {bin} and {lib} are the only tokens", () => {
   const all = Object.fromEntries(catalog.tools.flatMap((t) => t.parts.filter((p) => p.installed.kind === "command").map((p) => [`${t.id}/${p.name}`, { argv: ["git", "--version"], pattern: /(\d+)/ }])));
   const withArgv = (argv) => errors({ commands: { ...all, "git/cli": { argv, pattern: /(\d+)/ } } });
   assert.deepEqual(withArgv(["{share}/boat/boat.exe", "--version"]), []);
@@ -169,4 +169,10 @@ test("connection checks: argv follows the table rules and ok is a RegExp", () =>
   assert.ok(errors({ checks: { github: { argv: ["gh", "{home}/x"], ok: /x/ } } }).some((e) => /unknown token/.test(e)));
   assert.ok(errors({ checks: { github: { argv: ["gh"], ok: "x" } } }).some((e) => /ok must be a RegExp/.test(e)));
   assert.ok(errors({ checks: { github: { argv: ["gh"], ok: /x/, paid: "yes" } } }).some((e) => /paid must be true/.test(e)));
+});
+
+test("connection checks: no token after the cmd.exe shim", () => {
+  assert.deepEqual(errors({ checks: { github: { argv: ["cmd.exe", "/d", "/c", "{bin}/boat.cmd", "limits"], ok: /x/ } } }), []);
+  assert.ok(errors({ checks: { github: { argv: ["cmd.exe", "/d", "/c", "{bin}/boat.cmd", "{share}/x"], ok: /x/ } } }).some((e) => /token after the shim/.test(e)));
+  assert.ok(errors({ checks: { github: { argv: ["cmd.exe", "/d", "/c", "{bin}/boat.cmd", "{lib}/x"], ok: /x/ } } }).some((e) => /token after the shim/.test(e)));
 });
