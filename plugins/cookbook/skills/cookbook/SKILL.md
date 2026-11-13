@@ -649,14 +649,16 @@ and gets a short-lived access token whenever it is used. Added on 13 November 20
   account and the list on Google's consent page and click Allow. The owner's yes is needed before
   each consent; a consent replaces the account's earlier grant, so name every scope it should keep.
   `google logout <account>` revokes a grant at Google and forgets it.
-- **The grants expire after seven days for now.** The project's sign-in screen is in Google's
-  "Testing" state, where a grant lasts seven days. Until that changes, `google status` showing
-  `works` as an error means: run `google login` again for that account and click the consent (both
-  accounts are signed in in the built-in browser, so the owner is not needed for the click, only
-  for the yes). Google only allows "In production", which has no such limit, when the sign-in screen
-  names a public home page and privacy policy on a domain the owner controls.
+- **The grants do not expire on a schedule.** The sign-in screen is "In production" (published on
+  13 November 2026), so a grant lasts until it is revoked or unused for six months. Google allows that
+  state only while the sign-in screen names a public home page and privacy policy: they are
+  `https://nofix.dev/` and `https://nofix.dev/privacy`, served by the Worker `nofix-site`
+  (`~/.local/share/google-auth/site`, `deploy.mjs` there). Keep both pages up. The app is not
+  verified by Google, which is allowed for private use by fewer than 100 people; the consent page
+  says so and warns that it "may stop working soon". If `google status` shows `works` as an error,
+  run `google login` again for that account and click the consent.
 - **On this PC:** the Google Cloud project is `claude-tools-514616` in the owner's Google account
-  (sign-in screen "Claude tools", External, test users: the owner and Camilla; Drive, Sheets, Docs,
+  (sign-in screen "Claude tools", External, In production; Drive, Sheets, Docs,
   Calendar, Search Console, Analytics Data and Analytics Admin APIs switched on). The client secret
   is the DPAPI key `google-oauth-client`, each grant the DPAPI key `google-<account>`. The code is
   `~/.local/share/google-auth` (`npm test` runs 8 tests against a stand-in for Google; not in a
