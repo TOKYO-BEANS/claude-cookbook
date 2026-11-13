@@ -103,22 +103,7 @@ export const isQuiet = (result) => NEWS.every((k) => (result?.[k] ?? []).length 
 // ---- state ---------------------------------------------------------------------
 
 const emptyPart = () => Object.fromEntries(PART_FIELDS.map((k) => [k, null]));
-const emptyState = () => ({ version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: null, lastMonday: null, week: { runs: 0, changes: 0 }, paidCheck: null });
-
-// The last paid connection check: its day and each paid service's outcome (an error
-// text or null), so a second run that day reuses it instead of paying again.
-// `compare` carries it over unchanged; updates.mjs sets it. Anything else is null.
-const SERVICE_ID = /^[A-Za-z0-9._-]{1,80}$/;
-const okError = (e) => e === null || (typeof e === "string" && e.length <= 200);
-function paidCheckOf(v) {
-  if (!isObject(v) || !validDay(v.on) || !isObject(v.results)) return null;
-  const results = Object.fromEntries(
-    Object.entries(v.results)
-      .filter(([id, r]) => SERVICE_ID.test(id) && isObject(r) && okError(r.error))
-      .map(([id, r]) => [id, { error: r.error }]),
-  );
-  return { on: v.on, results };
-}
+const emptyState = () => ({ version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: null, lastMonday: null, week: { runs: 0, changes: 0 } });
 
 // A version 1 state with every field checked, or null when it is not one.
 // Object.fromEntries keeps a "__proto__" key an ordinary property.
@@ -140,7 +125,6 @@ function normalizeState(raw) {
   return {
     version: 1, parts, unlisted: firstSeen(raw.unlisted), missing: firstSeen(raw.missing),
     lastRun: day(raw.lastRun), lastMonday: day(raw.lastMonday), week: { runs: count(week.runs), changes: count(week.changes) },
-    paidCheck: paidCheckOf(raw.paidCheck),
   };
 }
 
@@ -294,7 +278,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   const mondaySections = firstRun || newWeek;
   const selfUpdating = new Set(SELF_UPDATING_TOOLS);
   const tools = Array.isArray(catalog?.tools) ? catalog.tools.filter(isObject) : [];
-  const next = { version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: today, lastMonday: monday, week: null, paidCheck: prev.paidCheck };
+  const next = { version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: today, lastMonday: monday, week: null };
   const changes = [], stillBehind = [], couldNotCheck = [], missing = [], allFailedParts = [];
   // Entries a rule held back today because it is not their day, so a quiet day can say so.
   const suppressed = { couldNotCheck: 0, stillBehind: 0, unlisted: 0, missing: 0 };

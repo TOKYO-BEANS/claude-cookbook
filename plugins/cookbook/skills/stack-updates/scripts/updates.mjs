@@ -9,15 +9,20 @@
 // Options: --home <dir> (the profile to read, for tests), --state <dir> (state and
 // runs somewhere other than ~/.local/share/stack-updates, for a trial run that must
 // not create the real baseline), --out <dir> (the run folder, default
-// <state>/runs/<today>), --today YYYY-MM-DD (default: this PC's local date),
-// --no-read (no release notes are fetched or read).
+// <state>/runs/<today>), --today YYYY-MM-DD (only with --state, never earlier than
+// the last run; default: this PC's local date), --no-read (no release notes are
+// fetched or read).
 //
 // The run folder holds inventory.json, latest.json, result.json, next-state.json
 // (the state this run keeps once it has reported), report.md and
-// texts/<part key with / as ->.txt. The state is loaded at the start and saved only
-// after result.json and report.md are written: a run that fails before that saves
-// nothing, so the next run reports again. Run folders older than 30 days are removed
-// at the start of `run`.
+// texts/<part key with / as ->.txt. result.json lists the stages that ran. The state
+// is loaded at the start and saved only by `report`, after result.json and report.md
+// are written, and only for today's folder once compare and connect ran; it is merged
+// with the state on disk at that moment (a later run is never overwritten, a commit
+// recorded meanwhile is kept). A run that fails before that saves nothing, so the
+// next run reports again. Run folders older than 30 days are removed at the start of
+// `run`. `run` and every stage hold run.lock in the state folder: one run at a time.
+// The paid connection check runs at most once per real local day (paid-check.json).
 //
 // On a quiet day it prints exactly one line; otherwise the path of report.md and its
 // text. Exit code 0, or 1 when the script itself failed, 2 for a usage error.
@@ -28,13 +33,16 @@
 // read, stored or printed: tools that need a key run through their shims.
 // Every stage that touches the disk, the network or a process gets `{ home, fetcher,
 // gh, run }` from `main`, so tests pass a fixture profile and fakes.
-import { existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import {
+  closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, rmdirSync, statSync, unlinkSync, writeFileSync, writeSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { READ_LIMIT, compare, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
 import { dueDates, runChecks } from "./lib/connect.mjs";
-import { RESPONSE_LIMIT, readLatest, releaseText } from "./lib/feeds.mjs";
+import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
 import { defaultRun, findUnlisted, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
 import { quietLine, renderReport } from "./lib/report.mjs";
@@ -45,6 +53,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const CATALOG_PATH = join(HERE, "..", "..", "..", "catalog.json");
 export const COOKBOOK_SKILL_PATH = join(HERE, "..", "..", "cookbook", "SKILL.md");
 export const KEEP_DAYS = 30; // run folders older than this are removed
+export const LOCK_FILE = "run.lock";
+export const LOCK_MAX_AGE_MS = 30 * 60_000; // an older lock was left by a run that died
+export const PAID_MARKER = "paid-check.json";
 const FEED_WORKERS = 6; // feeds read at the same time
 const GH_TIMEOUT_MS = 30_000;
 const ERROR_LIMIT = 200;
@@ -54,12 +65,13 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const VERSION = /^\d+(?:\.\d+)+$/;
 const DAY_MS = 86_400_000;
 const STAGES = ["inventory", "compare", "connect", "read", "report"];
-const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit>; options --home <dir>, --state <dir>, --today YYYY-MM-DD";
+const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit>; options --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
 
 class UsageError extends Error {}
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const cmpText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const firstLine = (e) => String(e?.message ?? e).split("\n")[0].slice(0, 300);
+const own = (o, k) => (isObject(o) && Object.hasOwn(o, k) ? o[k] : undefined);
 
 // ---- dates ---------------------------------------------------------------------
 
@@ -72,6 +84,68 @@ const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.pa
 /** This PC's local date as YYYY-MM-DD. */
 export const localDate = (d = new Date()) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+// ---- one run at a time -------------------------------------------------------------
+
+// Milliseconds since a lock's start time (its file time when that cannot be read). A
+// start in the future, or a lock that is already gone, counts as old.
+function lockAge(path) {
+  let started = Number.NaN;
+  try {
+    started = Date.parse(JSON.parse(readFileSync(path, "utf8")).started);
+  } catch {
+    // not readable yet or not JSON: the file time decides
+  }
+  if (!Number.isFinite(started)) {
+    try {
+      started = statSync(path).mtimeMs;
+    } catch {
+      return Number.POSITIVE_INFINITY;
+    }
+  }
+  const age = Date.now() - started;
+  return age < 0 ? Number.POSITIVE_INFINITY : age;
+}
+
+/**
+ * Takes `<stateDir>/run.lock`, created exclusively and holding this process's pid
+ * and start time. A lock younger than 30 minutes means another run is going: this
+ * one stops. An older lock is replaced. Returns the function that removes the lock
+ * again, and only while it is still this run's.
+ */
+export function takeLock(stateDir) {
+  mkdirSync(stateDir, { recursive: true });
+  const path = join(stateDir, LOCK_FILE);
+  const token = JSON.stringify({ pid: process.pid, started: new Date().toISOString(), id: randomBytes(8).toString("hex") });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let fd;
+    try {
+      fd = openSync(path, "wx");
+    } catch (e) {
+      if (e?.code !== "EEXIST") throw e;
+      if (lockAge(path) < LOCK_MAX_AGE_MS) break;
+      try {
+        unlinkSync(path);
+      } catch {
+        // already removed by its owner or another run
+      }
+      continue;
+    }
+    try {
+      writeSync(fd, token);
+    } finally {
+      closeSync(fd);
+    }
+    return () => {
+      try {
+        if (readFileSync(path, "utf8") === token) unlinkSync(path);
+      } catch {
+        // already gone
+      }
+    };
+  }
+  throw new Error(`another run is in progress (${LOCK_FILE} in ${stateDir})`);
+}
 
 // ---- run folders -----------------------------------------------------------------
 
@@ -127,6 +201,18 @@ function readJson(ctx, name) {
   }
   return JSON.parse(text);
 }
+// result.json of today's run; a folder from another day is refused.
+function readResult(ctx) {
+  const result = readJson(ctx, "result.json");
+  if (!isObject(result) || result.date !== ctx.today) {
+    throw new Error(`result.json in ${ctx.out} is for ${String(result?.date).slice(0, 20)}, not ${ctx.today}: run the stages for ${ctx.today} first; nothing was saved`);
+  }
+  return result;
+}
+// Records that a stage finished (once, at the end).
+const addStage = (result, name) => {
+  result.stages = [...(Array.isArray(result.stages) ? result.stages : []).filter((s) => s !== name), name];
+};
 
 // ---- the catalog -------------------------------------------------------------------
 
@@ -198,6 +284,66 @@ function loadStateInfo(ctx) {
   return { state, fresh, existed };
 }
 
+// The state on disk now. Refuses when it already holds a run later than `next`;
+// null when there is no readable state.
+function storedNow(ctx, next) {
+  const { state, fresh } = loadStateInfo(ctx);
+  if (fresh) return null;
+  if (state.lastRun !== null && state.lastRun > next.lastRun) {
+    throw new Error(`state.json already holds a later run (${state.lastRun}); this run is for ${next.lastRun}: nothing was saved`);
+  }
+  return state;
+}
+
+// ---- the paid check: at most once per real local day --------------------------------
+
+// paid-check.json in the state folder: `{ on: <real local date>, results: { <tool id>:
+// { service, outcome: "working" } | { service, outcome: "broken", error } } }`. It is
+// written right after each paid call and keyed by the PC's real date, never --today.
+const markerPath = (ctx) => join(ctx.stateDir, PAID_MARKER);
+function readPaidMarker(ctx) {
+  let m;
+  try {
+    m = JSON.parse(readFileSync(markerPath(ctx), "utf8"));
+  } catch {
+    return null;
+  }
+  return isObject(m) && m.on === ctx.realDay && isObject(m.results) ? m.results : null;
+}
+function writePaidMarker(ctx, results) {
+  mkdirSync(ctx.stateDir, { recursive: true });
+  writeFileSync(markerPath(ctx), `${JSON.stringify({ on: ctx.realDay, results }, null, 2)}\n`);
+}
+// A stored outcome as `{ error: string | null }`, or null when none is stored.
+function storedOutcome(entry) {
+  if (!isObject(entry)) return null;
+  if (entry.outcome === "working") return { error: null };
+  if (entry.outcome === "broken") return { error: (typeof entry.error === "string" && entry.error ? entry.error : "no error text").slice(0, ERROR_LIMIT) };
+  return null;
+}
+
+// A paid check's outcome folded into the free results for its service: an error is
+// broken (added to a server error, if any); a pass counts as working unless a server
+// failed; with no stored outcome the service is unchecked (unless a server failed).
+function mergePaid(checks, name, outcome) {
+  const drop = (listName) => { checks[listName] = checks[listName].filter((n) => n !== name); };
+  const isBroken = checks.broken.some((x) => x.service === name);
+  if (outcome === null) {
+    if (isBroken) return;
+    drop("working");
+    if (!checks.unchecked.includes(name)) checks.unchecked.push(name);
+  } else if (typeof outcome.error === "string") {
+    const b = checks.broken.find((x) => x.service === name);
+    if (b) b.error = `${outcome.error}; ${b.error}`.slice(0, ERROR_LIMIT);
+    else checks.broken.push({ service: name, error: outcome.error.slice(0, ERROR_LIMIT) });
+    drop("working");
+    drop("unchecked");
+  } else if (!isBroken) {
+    if (!checks.working.includes(name)) checks.working.push(name);
+    drop("unchecked");
+  }
+}
+
 // ---- stages ------------------------------------------------------------------------
 
 async function pool(items, workers, fn) {
@@ -218,6 +364,9 @@ async function stageInventory(ctx) {
 
 async function stageCompare(ctx, loaded = loadStateInfo(ctx)) {
   const inventory = readJson(ctx, "inventory.json");
+  if (!isObject(inventory) || inventory.date !== ctx.today) {
+    throw new Error(`inventory.json in ${ctx.out} is for ${String(inventory?.date).slice(0, 20)}, not ${ctx.today}: run inventory first`);
+  }
   const latest = {};
   await pool(ctx.entries, FEED_WORKERS, async (e) => {
     latest[e.key] = await readLatest(e.part.feed, { fetcher: ctx.fetcher, gh: ctx.gh });
@@ -241,62 +390,44 @@ async function stageCompare(ctx, loaded = loadStateInfo(ctx)) {
   result.working = [];
   result.paidChecks = [];
   result.reads = null;
+  result.stages = ["inventory", "compare"];
   writeJson(ctx, "next-state.json", state);
   return { file: writeJson(ctx, "result.json", result) };
 }
 
-// A paid check's outcome folded into the free results for its service: an error is
-// broken (added to a server error, if any); a pass counts as working unless a server
-// failed; with no stored outcome the service is left out rather than unchecked.
-function mergePaid(checks, name, outcome) {
-  const drop = (listName) => { checks[listName] = checks[listName].filter((n) => n !== name); };
-  if (outcome === null) return drop("unchecked");
-  if (typeof outcome.error === "string") {
-    const b = checks.broken.find((x) => x.service === name);
-    if (b) b.error = `${outcome.error}; ${b.error}`.slice(0, ERROR_LIMIT);
-    else checks.broken.push({ service: name, error: outcome.error.slice(0, ERROR_LIMIT) });
-    drop("working");
-    drop("unchecked");
-  } else if (!checks.broken.some((x) => x.service === name)) {
-    if (!checks.working.includes(name)) checks.working.push(name);
-    drop("unchecked");
-  }
-}
-
 async function stageConnect(ctx) {
-  const result = readJson(ctx, "result.json");
-  const next = readJson(ctx, "next-state.json");
+  const result = readResult(ctx);
   const deps = { run: ctx.run, home: ctx.home, now: ctx.now };
   const free = Object.fromEntries(Object.entries(CONNECTION_CHECKS).filter(([, c]) => !c.paid));
   const checks = await runChecks(ctx.catalog, { ...deps, checks: free });
-  // The paid check runs once a day: a second run that day reuses its outcome.
-  const paidToday = isObject(next.paidCheck) && next.paidCheck.on === ctx.today;
-  const stored = paidToday && isObject(next.paidCheck.results) ? next.paidCheck.results : {};
+  // The paid check: at most once per real local day; later runs that day reuse its outcome.
+  const marker = readPaidMarker(ctx);
   const ran = {}, paidNames = [];
   const tools = (Array.isArray(ctx.catalog?.tools) ? ctx.catalog.tools : []).filter((t) => isObject(t) && (t.lifecycle === "active" || t.lifecycle === "trial"));
   for (const [id, entry] of Object.entries(CONNECTION_CHECKS).filter(([, c]) => c.paid)) {
     const tool = tools.find((t) => t.id === id);
     if (!tool) continue;
     let outcome;
-    if (paidToday) {
-      outcome = Object.hasOwn(stored, id) ? stored[id] : null;
+    if (marker) {
+      outcome = storedOutcome(own(marker, id));
     } else {
       // The tool alone, with no parts, so only its table entry runs.
       const one = await runChecks({ tools: [{ id, name: tool.name, lifecycle: tool.lifecycle, parts: [] }] }, { ...deps, checks: { [id]: entry } });
-      outcome = { error: one.broken[0]?.error ?? null };
-      ran[id] = outcome;
+      const error = one.broken[0]?.error ?? null;
+      ran[id] = error === null ? { service: tool.name, outcome: "working" } : { service: tool.name, outcome: "broken", error };
+      writePaidMarker(ctx, ran); // right after the paid call, before anything else can fail
+      outcome = { error };
       paidNames.push(tool.name);
     }
     mergePaid(checks, tool.name, outcome);
   }
-  if (!paidToday) next.paidCheck = { on: ctx.today, results: ran };
   result.broken = checks.broken;
   result.unchecked = checks.unchecked;
   result.working = checks.working;
   result.dates = dueDates(ctx.catalog, ctx.today);
   result.paidChecks = paidNames;
   result.quiet = isQuiet(result);
-  writeJson(ctx, "next-state.json", next);
+  addStage(result, "connect");
   return { file: writeJson(ctx, "result.json", result) };
 }
 
@@ -313,66 +444,107 @@ function skillText(ctx) {
   return ctx.skillText;
 }
 
+// A change's release notes: from its feed, else (when the feed gave none) from the
+// tool's GitHub repository. `{ text }`, or `{ text: "", error }` when a source that
+// was tried failed and no text was found.
+async function notesFor(ctx, c) {
+  const e = ctx.byKey.get(c.key);
+  const deps = { fetcher: ctx.fetcher, gh: ctx.gh };
+  const notes = await releaseNotes(e?.part.feed, c.fromRef ?? c.from, c.toRef ?? c.to, deps);
+  if (notes.text.trim()) return notes;
+  const repo = e?.tool.repository;
+  if (!REPO.test(String(repo)) || (e.part.feed?.kind === "github" && e.part.feed.repository === repo)) return notes;
+  const fallback = await releaseNotes({ kind: "github", repository: repo }, c.from, c.to, deps);
+  if (fallback.text.trim()) return fallback;
+  const error = notes.error ?? fallback.error;
+  return error ? { text: "", error } : { text: "" };
+}
+
 async function stageRead(ctx) {
-  const result = readJson(ctx, "result.json");
+  const result = readResult(ctx);
   const changes = Array.isArray(result.changes) ? result.changes : [];
   if (ctx.noRead) {
     for (const c of changes) if (!isObject(c.answers)) c.notRead = "read skipped";
+    addStage(result, "read");
     return { file: writeJson(ctx, "result.json", result) };
   }
-  // Fetch every change's notes first: they decide the order (risky first).
+  // Fetch the notes of every change not yet answered first: they decide the order (risky first).
   const texts = new Map();
   for (const c of changes) {
-    const e = ctx.byKey.get(c.key);
-    const deps = { fetcher: ctx.fetcher, gh: ctx.gh };
-    let text = await releaseText(e?.part.feed, c.fromRef ?? c.from, c.toRef ?? c.to, deps);
-    const repo = e?.tool.repository;
-    if (!text.trim() && REPO.test(String(repo)) && !(e.part.feed?.kind === "github" && e.part.feed.repository === repo)) {
-      text = await releaseText({ kind: "github", repository: repo }, c.from, c.to, deps);
-    }
+    if (isObject(c.answers)) continue; // read before (the stage run again): kept as it is
+    const notes = await notesFor(ctx, c);
     c.textFile = null;
-    if (text.trim()) {
+    c.notesError = null;
+    if (notes.text.trim()) {
       const file = `texts/${textFileName(c.key)}`;
       mkdirSync(join(ctx.out, "texts"), { recursive: true });
-      writeFileSync(join(ctx.out, file), text);
+      writeFileSync(join(ctx.out, file), notes.text);
       c.textFile = file;
-      texts.set(c, text);
+      texts.set(c, notes.text);
+    } else if (notes.error) {
+      c.notesError = String(notes.error).slice(0, 180);
     }
-    c.risky = isRisky(c.from, c.to, texts.get(c) ?? "");
+    c.risky = isRisky(c.from, c.to, notes.text);
   }
   const nameOf = (c) => String(ctx.toolById.get(c.tool)?.name ?? c.tool).toLowerCase();
   changes.sort((a, b) => Number(b.risky) - Number(a.risky) || cmpText(nameOf(a), nameOf(b)) || cmpText(String(a.part), String(b.part)));
-  const reads = { count: 0, input: 0, output: 0, missingUsage: 0 };
+  // Reads made in this run folder so far: a second read stage adds to them.
+  const prev = isObject(result.reads) ? result.reads : {};
+  const n = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);
+  const reads = { count: n(prev.count), failed: n(prev.failed), input: n(prev.input), output: n(prev.output), missingUsage: n(prev.missingUsage) };
   for (let i = 0; i < changes.length; i++) {
     const c = changes[i];
+    if (isObject(c.answers)) continue;
     if (!texts.has(c)) {
-      Object.assign(c, { answers: null, notRead: "no release notes published" });
+      c.answers = null;
+      c.notRead = c.notesError ? `release notes could not be fetched (${c.notesError})` : "no release notes published";
       continue;
     }
-    if (reads.count >= READ_LIMIT) {
+    if (reads.count + reads.failed >= READ_LIMIT) {
       Object.assign(c, { answers: null, notRead: "cap" });
       continue;
     }
     const tool = ctx.toolById.get(c.tool) ?? { id: c.tool };
     const recipe = typeof tool.recipe === "string" ? recipeSection(skillText(ctx), tool.recipe) : "";
     const done = await readChange(c, tool, recipe, texts.get(c), { run: ctx.run, home: ctx.home });
-    reads.count += 1;
-    if (isObject(done.readUsage)) {
-      reads.input += done.readUsage.input;
-      reads.output += done.readUsage.output;
-    } else reads.missingUsage += 1;
+    if (isObject(done.answers)) {
+      reads.count += 1;
+      if (isObject(done.readUsage)) {
+        reads.input += n(done.readUsage.input);
+        reads.output += n(done.readUsage.output);
+      } else reads.missingUsage += 1;
+    } else reads.failed += 1;
     changes[i] = done;
   }
   result.changes = changes;
   result.reads = reads;
+  addStage(result, "read");
   return { file: writeJson(ctx, "result.json", result) };
 }
 
 async function stageReport(ctx) {
-  const result = readJson(ctx, "result.json");
+  const result = readResult(ctx);
+  const next = readJson(ctx, "next-state.json");
+  const stages = Array.isArray(result.stages) ? result.stages : [];
+  const missing = ["compare", "connect"].filter((s) => !stages.includes(s));
+  if (missing.length) throw new Error(`the ${missing.join(" and ")} stage has not run in ${ctx.out}: nothing was saved`);
+  if (!isObject(next) || next.lastRun !== ctx.today) throw new Error(`next-state.json in ${ctx.out} is not for ${ctx.today}: nothing was saved`);
+  storedNow(ctx, next); // refuse before writing anything when a later run already saved
+  result.quiet = isQuiet(result); // from the lists, never a stored value
   const text = renderReport(result);
   writeFileSync(runFile(ctx, "report.md"), text);
-  saveState(ctx.home, readJson(ctx, "next-state.json"), { folder: ctx.stateDir });
+  addStage(result, "report");
+  writeJson(ctx, "result.json", result);
+  // Read the state again just before saving: a commit recorded while this run was
+  // going differs from the one the run started with (next's) and wins.
+  const stored = storedNow(ctx, next);
+  if (stored) {
+    for (const [key, part] of Object.entries(isObject(next.parts) ? next.parts : {})) {
+      const recorded = isObject(own(stored.parts, key)) ? stored.parts[key].installedCommit : null;
+      if (recorded !== null && isObject(part) && recorded !== part.installedCommit) part.installedCommit = recorded;
+    }
+  }
+  saveState(ctx.home, next, { folder: ctx.stateDir });
   return { printed: result.quiet ? `${quietLine(result)}\n` : `${runFile(ctx, "report.md")}\n${text}` };
 }
 
@@ -407,13 +579,15 @@ function parseArgs(argv) {
     throw new UsageError(command === "record" ? "record needs a part key and a commit" : `unknown command ${String(command).slice(0, 40)}`);
   }
   if (opts.today !== undefined && !isDay(opts.today)) throw new UsageError("--today must be a YYYY-MM-DD date");
+  if (opts.today !== undefined && opts.state === undefined) throw new UsageError("--today needs --state, so a made-up date never touches the real state");
   return { command, rest, opts };
 }
 
 /**
  * `main(argv, deps?) -> exit code`. `deps` (all optional, for tests): `home`,
  * `fetcher`, `gh` (`(args) -> { code, stdout, stderr }`), `run` (inventory.mjs's
- * shape), `now`, `catalog`, `skillText`, `stdout`, `stderr` (write functions).
+ * shape), `now` (the real clock: the local date and the paid check's day), `catalog`,
+ * `skillText`, `stdout`, `stderr` (write functions).
  */
 export async function main(argv, deps = {}) {
   const stdout = deps.stdout ?? ((s) => process.stdout.write(s));
@@ -430,11 +604,12 @@ export async function main(argv, deps = {}) {
     const home = opts.home ? resolve(opts.home) : (deps.home ?? homedir());
     const stateDir = opts.state ? resolve(opts.state) : join(home, ".local", "share", "stack-updates");
     const now = deps.now ?? new Date();
-    const today = opts.today ?? localDate(now);
+    const realDay = localDate(now);
+    const today = opts.today ?? realDay;
     const catalog = deps.catalog ?? JSON.parse(readFileSync(CATALOG_PATH, "utf8"));
     const entries = partsOf(catalog);
     const ctx = {
-      catalog, entries, home, stateDir, today, now, noRead: opts.noRead,
+      catalog, entries, home, stateDir, today, realDay, now, noRead: opts.noRead,
       byKey: new Map(entries.map((e) => [e.key, e])),
       toolById: new Map((Array.isArray(catalog?.tools) ? catalog.tools : []).filter(isObject).map((t) => [t.id, t])),
       out: opts.out ? resolve(opts.out) : join(stateDir, "runs", today),
@@ -443,24 +618,38 @@ export async function main(argv, deps = {}) {
       run: deps.run ?? defaultRun,
       skillText: deps.skillText,
     };
-    let done;
-    switch (command) {
-      case "run": {
-        pruneRuns(stateDir, today);
-        const loaded = loadStateInfo(ctx);
-        await stageInventory(ctx);
-        await stageCompare(ctx, loaded);
-        await stageConnect(ctx);
-        await stageRead(ctx);
-        done = await stageReport(ctx);
-        break;
+    if (command === "record") {
+      stdout((await record(ctx, rest[0], rest[1])).printed);
+      return 0;
+    }
+    if (opts.today !== undefined) {
+      const { state, fresh } = loadState(home, { folder: stateDir });
+      if (!fresh && state.lastRun !== null && opts.today < state.lastRun) {
+        throw new UsageError(`--today ${opts.today} is earlier than the last run (${state.lastRun})`);
       }
-      case "inventory": done = await stageInventory(ctx); break;
-      case "compare": done = await stageCompare(ctx); break;
-      case "connect": done = await stageConnect(ctx); break;
-      case "read": done = await stageRead(ctx); break;
-      case "report": done = await stageReport(ctx); break;
-      case "record": done = await record(ctx, rest[0], rest[1]); break;
+    }
+    const release = takeLock(stateDir);
+    let done;
+    try {
+      switch (command) {
+        case "run": {
+          pruneRuns(stateDir, today);
+          const loaded = loadStateInfo(ctx);
+          await stageInventory(ctx);
+          await stageCompare(ctx, loaded);
+          await stageConnect(ctx);
+          await stageRead(ctx);
+          done = await stageReport(ctx);
+          break;
+        }
+        case "inventory": done = await stageInventory(ctx); break;
+        case "compare": done = await stageCompare(ctx); break;
+        case "connect": done = await stageConnect(ctx); break;
+        case "read": done = await stageRead(ctx); break;
+        case "report": done = await stageReport(ctx); break;
+      }
+    } finally {
+      release();
     }
     stdout(done.printed ?? `${done.file}\n`);
     return 0;

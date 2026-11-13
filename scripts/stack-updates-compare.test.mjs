@@ -646,27 +646,6 @@ test("isRisky", () => {
   assert.equal(isRisky(null, "2.0.0", undefined), false);
 });
 
-test("the last paid check is kept through a run and a save; a bad shape is dropped", (t) => {
-  const home = mkdtempSync(join(tmpdir(), "stack-updates-state-"));
-  t.after(() => rmSync(home, { recursive: true, force: true }));
-  const first = day("2026-11-13", null).state;
-  assert.equal(first.paidCheck, null);
-  const paidCheck = { on: "2026-11-13", results: { parallel: { error: null }, other: { error: "exit 1, no error text" } } };
-  const next = day("2026-11-13", { ...first, paidCheck }).state;
-  assert.deepEqual(next.paidCheck, paidCheck);
-  saveState(home, next);
-  assert.deepEqual(loadState(home).state.paidCheck, paidCheck);
-  for (const bad of [5, "2026-11-13", { on: "13 Nov", results: {} }, { on: "2026-11-13" }, { on: "2026-02-30", results: {} }, { on: "2026-11-13", results: [] }]) {
-    assert.equal(day("2026-11-14", { ...first, paidCheck: bad }).state.paidCheck, null, JSON.stringify(bad));
-  }
-  // A bad entry inside good results is dropped and the rest kept.
-  const mixed = day("2026-11-14", {
-    ...first,
-    paidCheck: { on: "2026-11-13", results: { parallel: { error: null }, "../x": { error: null }, long: { error: "x".repeat(201) }, odd: { error: 5 }, gone: null } },
-  }).state;
-  assert.deepEqual(mixed.paidCheck, { on: "2026-11-13", results: { parallel: { error: null } } });
-});
-
 test("loadState and saveState take another folder for a trial run", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "stack-updates-folder-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

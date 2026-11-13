@@ -10,6 +10,7 @@
 // link and never inside a code fence (the report has none). A release link is
 // printed only when `safeLink` accepts it, otherwise "no link".
 import { ALL_FEEDS, READ_LIMIT } from "./compare.mjs";
+import { INVISIBLE } from "./read.mjs";
 import { CHANGELOG_HOSTS } from "./tables.mjs";
 
 const TEXT_LIMIT = 400; // code points of one outside string in the report
@@ -34,16 +35,21 @@ const own = (o, k) => (isObject(o) && Object.hasOwn(o, k) ? o[k] : undefined);
 
 /**
  * One untrusted string as inert Markdown on one line: control characters and line
- * breaks become spaces; backslash, backtick, asterisk, underscore, tilde, brackets,
- * angle brackets and pipe are escaped; http(s):// becomes hxxp(s)://, "www." and the
- * "@" of an address are bracketed, so nothing renders as a link; a leading #, - or +
- * is escaped (a leading > already is). At most 400 code points. "" for a non-string.
+ * breaks become spaces; invisible characters (read.mjs's INVISIBLE: format
+ * characters such as bidi overrides and zero-width spaces, private-use and
+ * unassigned code points) are removed and a lone surrogate becomes U+FFFD;
+ * backslash, backtick, asterisk, underscore, tilde, brackets, angle brackets and pipe
+ * are escaped; every "://" (any scheme, any letter case) becomes "[://]", and
+ * "www." and the "@" of an address are bracketed, so nothing renders as a link; a
+ * leading #, - or + is escaped (a leading > already is). At most 400 code points.
+ * "" for a non-string.
  */
 export function inert(value, max = TEXT_LIMIT) {
   if (typeof value !== "string" && typeof value !== "number") return "";
-  let s = cutPoints(String(value).replace(CONTROL, " ").replace(/\s+/g, " ").trim(), max);
+  const clean = String(value).toWellFormed().replace(CONTROL, " ").replace(INVISIBLE, "");
+  let s = cutPoints(clean.replace(/\s+/g, " ").trim(), max);
   s = s.replace(/[\\`*_~[\]<>|]/g, "\\$&");
-  s = s.replace(/(h)tt(ps?):\/\//gi, "$1xx$2://");
+  s = s.replace(/:\/\//g, "\\[://\\]");
   s = s.replace(/(www)\./gi, "$1\\[.\\]");
   s = s.replace(/([A-Za-z0-9._%+-])@(?=[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/g, "$1\\[@\\]");
   if (/^[#+-]/.test(s)) s = `\\${s}`;
@@ -118,7 +124,8 @@ const section = (title, lines) => (lines.length ? [`${title}\n${lines.join("\n")
 
 function stillBehindLine(s, result) {
   const days = isDay(s.since) && isDay(result.date) ? daysBetween(s.since, result.date) : null;
-  const since = days === 0 ? "since today" : `since ${shortDate(s.since)}${days > 0 ? ` (${plural(days, "day")})` : ""}`;
+  const counted = Number.isSafeInteger(days) && days > 0 ? ` (${plural(days, "day")})` : "";
+  const since = days === 0 ? "since today" : `since ${shortDate(s.since)}${counted}`;
   return `- ${nameOf(result, s.key)}: ${shown(s.installed)} -> ${shown(s.latest)}, behind ${since}`;
 }
 
@@ -141,24 +148,30 @@ function couldNotCheckLines(result) {
   for (const s of list(result.unreadableSources)) lines.push(`- ${inert(s) || "a source could not be read"}`);
   return lines;
 }
-const couldNotCheckCount = (result) =>
-  list(result.couldNotCheck).filter(isObject).reduce((n, e) => n + (e.key === ALL_FEEDS ? count(e.count) || 1 : 1), 0);
+// What could not be read: parts (the line for every feed counts each feed), the
+// inventory sources, and changes whose release notes could not be fetched.
+const notesFailed = (c) => isObject(c) && typeof c.notesError === "string" && c.notesError !== "";
+const couldNotReadCount = (result) =>
+  list(result.couldNotCheck).filter(isObject).reduce((n, e) => n + (e.key === ALL_FEEDS ? count(e.count) || 1 : 1), 0) +
+  list(result.unreadableSources).length +
+  list(result.changes).filter(notesFailed).length;
 
 function warningLine(d) {
-  const when = d.days === 0 ? "today" : d.days === 1 ? "tomorrow" : `in ${d.days} days`;
-  return `Warning: ${inert(d.label) || "a dated fact"} (${shortDate(d.on)}, ${when}).`;
+  const days = d.days;
+  const when = days === 0 ? "today" : days === 1 ? "tomorrow" : Number.isSafeInteger(days) && days > 1 ? `in ${days} days` : "";
+  return `Warning: ${inert(d.label) || "a dated fact"} (${shortDate(d.on)}${when ? `, ${when}` : ""}).`;
 }
 
 function headerItems(result) {
   const n = {
     changes: list(result.changes).length, behind: list(result.stillBehind).length, broken: list(result.broken).length,
-    unread: couldNotCheckCount(result), unlisted: list(result.unlisted).length, missing: list(result.missing).length, dates: list(result.dates).length,
+    unread: couldNotReadCount(result), unlisted: list(result.unlisted).length, missing: list(result.missing).length, dates: list(result.dates).length,
   };
   return [
     n.changes && plural(n.changes, "change"),
     n.behind && `${n.behind} still behind`,
     n.broken && `${n.broken} broken`,
-    n.unread && `${n.unread} could not be checked`,
+    n.unread && `${n.unread} could not be read`,
     n.unlisted && `${n.unlisted} not in the Cookbook`,
     n.missing && `${n.missing} missing`,
     n.dates && plural(n.dates, "warning"),
@@ -188,10 +201,11 @@ function weekSentence(result) {
 function costLine(result) {
   const r = isObject(result.reads) ? result.reads : null;
   const bits = [];
-  if (r && count(r.count)) {
-    const missing = count(r.missingUsage);
-    bits.push(`${plural(count(r.count), "release note")} read on the Claude plan: ${fmt(r.input)} input and ${fmt(r.output)} output tokens${missing ? ` (${missing} without a token count)` : ""}`);
-  }
+  // Only reads that returned answers count as read; a failed read is named apart.
+  const read = count(r?.count), failed = count(r?.failed), missing = count(r?.missingUsage);
+  const tokens = read ? `${fmt(r.input)} input and ${fmt(r.output)} output tokens${missing ? ` (${missing} without a token count)` : ""}` : "";
+  if (failed) bits.push(`release notes on the Claude plan: ${read} read, ${failed} failed${tokens ? `; ${tokens}` : ""}`);
+  else if (read) bits.push(`${plural(read, "release note")} read on the Claude plan: ${tokens}`);
   const paid = list(result.paidChecks).filter((s) => typeof s === "string").map((s) => inert(s));
   if (paid.length === 1) bits.push(`one paid ${paid[0]} check`);
   else if (paid.length > 1) bits.push(`${paid.length} paid checks (${paid.join(", ")})`);

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { RESPONSE_LIMIT, TEXT_LIMIT, readLatest, releaseText } from "../plugins/cookbook/skills/stack-updates/scripts/lib/feeds.mjs";
+import { RESPONSE_LIMIT, TEXT_LIMIT, readLatest, releaseNotes, releaseText } from "../plugins/cookbook/skills/stack-updates/scripts/lib/feeds.mjs";
 import { CHANGELOG_HOSTS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const fx = (name) => readFileSync(new URL(`./fixtures/stack-updates/feeds/${name}`, import.meta.url), "utf8");
@@ -226,4 +226,23 @@ test("release text is returned as data: nothing in it is acted on", async () => 
   assert.match(text, /evil\.example/);
   assert.deepEqual(d.gh.calls, [["api", "repos/o/r/releases?per_page=30"]]);
   assert.equal(d.fetcher.calls.length, 0);
+});
+
+test("releaseNotes: a read that failed carries its reason; a feed with no notes has none", async () => {
+  // Failed reads: gh refused, an answer of the wrong shape, a feed that is not one.
+  const failed = await releaseNotes({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps());
+  assert.deepEqual(failed, { text: "", error: "gh api failed: gh: Not Found (HTTP 404)" });
+  const shape = await releaseNotes({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps({ gh: { "api repos/o/r/releases?per_page=30": "{}" } }));
+  assert.deepEqual(shape, { text: "", error: "Unexpected releases answer" });
+  const commits = await releaseNotes({ kind: "commit", repository: "o/r" }, null, null, deps({ gh: { "api repos/o/r/commits?per_page=30": "{}" } }));
+  assert.deepEqual(commits, { text: "", error: "Unexpected commits answer" });
+  assert.equal((await releaseNotes(null, "1.0.0", "2.0.0", deps())).error, "The part has no feed");
+  // No notes, and nothing failed: kinds that publish none here, and a range with no release in it.
+  for (const f of [{ kind: "none" }, { kind: "npm", package: "x" }, { kind: "nodeDist" }]) {
+    assert.deepEqual(await releaseNotes(f, "1.0.0", "2.0.0", deps()), { text: "" });
+  }
+  const empty = await releaseNotes({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps({ gh: { "api repos/o/r/releases?per_page=30": "[]" } }));
+  assert.deepEqual(empty, { text: "" });
+  // releaseText is its text.
+  assert.equal(await releaseText({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps()), "");
 });

@@ -104,7 +104,7 @@ test("sections appear only when they have content, in the order Changes, Still b
   const at = marks.map((m) => text.indexOf(m));
   assert.ok(at.every((i) => i > 0), JSON.stringify(at));
   assert.deepEqual([...at].sort((a, b) => a - b), at);
-  assert.match(text, /^Updates, 14 Nov: 1 change, 1 still behind, 1 broken, 1 could not be checked, 1 not in the Cookbook, 1 missing, 2 warnings\n/);
+  assert.match(text, /^Updates, 14 Nov: 1 change, 1 still behind, 1 broken, 1 could not be read, 1 not in the Cookbook, 1 missing, 2 warnings\n/);
   for (const line of [
     "- Firecrawl cli: 1.29.0 -> 1.31.0, behind since 3 Nov (11 days)",
     "- GitHub: exit 1, no error text",
@@ -184,9 +184,9 @@ test("answers are printed as text: backticks and angle brackets are escaped", ()
   const text = renderReport(base({ changes: [change({ answers })] }));
   const line = (prefix) => text.split("\n").find((l) => l.startsWith(prefix));
   assert.equal(line("- Changed: "),
-    "- Changed: Run \\`rm -rf /\\` \\<script\\>alert(1)\\</script\\> \\*\\*now\\*\\* \\[click\\](hxxps://evil.example/x) \\| a \\|");
+    "- Changed: Run \\`rm -rf /\\` \\<script\\>alert(1)\\</script\\> \\*\\*now\\*\\* \\[click\\](https\\[://\\]evil.example/x) \\| a \\|");
   assert.equal(line("- Affects us: "),
-    "- Affects us: \\# Heading? see hxxps://evil.example and www\\[.\\]evil.example, mail ops\\[@\\]evil.example");
+    "- Affects us: \\# Heading? see https\\[://\\]evil.example and www\\[.\\]evil.example, mail ops\\[@\\]evil.example");
   assert.equal(line("- Worth adopting: "), "- Worth adopting: \\> quote \\_under\\_ \\~\\~gone\\~\\~ \\\\ back");
   assert.ok(!text.includes("```"));
   // Every other outside string too: versions, error texts, names of unlisted things.
@@ -200,7 +200,7 @@ test("answers are printed as text: backticks and angle brackets are escaped", ()
     "1.0.0\\<b\\> -> \\`2\\`",
     "- X: \\<img src=x onerror=alert(1)\\>",
     "- \\*bold\\* (skill)",
-    "- a/b: HTTP 500 \\[see\\](hxxp://x.test) (since 14 Nov)",
+    "- a/b: HTTP 500 \\[see\\](http\\[://\\]x.test) (since 14 Nov)",
   ]) assert.ok(other.includes(piece), piece);
   // inert: one line, and a leading heading, list or quote marker is escaped.
   assert.equal(inert("line one\nline two\u2028three"), "line one line two three");
@@ -208,6 +208,41 @@ test("answers are printed as text: backticks and angle brackets are escaped", ()
   assert.equal(inert("+ item"), "\\+ item");
   assert.equal(inert("## h"), "\\## h");
   assert.equal(inert(undefined), "");
+});
+
+test("every URL scheme is defanged and invisible characters are removed, in answers, versions, error texts and unlisted names", () => {
+  // Built with String.fromCodePoint so no raw invisible character sits in this file.
+  const RLO = String.fromCodePoint(0x202e), ZWSP = String.fromCodePoint(0x200b), PRIVATE = String.fromCodePoint(0xe000);
+  assert.equal(inert("ftp://evil.example/x"), "ftp\\[://\\]evil.example/x");
+  assert.equal(inert("file://host/share/run.exe"), "file\\[://\\]host/share/run.exe");
+  assert.equal(inert("FTP://x and HTTPS://y and git+ssh://z"), "FTP\\[://\\]x and HTTPS\\[://\\]y and git+ssh\\[://\\]z");
+  assert.equal(inert(`1.2${ZWSP}.3${RLO}exe.txt${PRIVATE}`), "1.2.3exe.txt");
+  assert.equal(inert(`a${String.fromCodePoint(0xd800)}b`), `a${String.fromCodePoint(0xfffd)}b`); // a lone surrogate
+  const text = renderReport(base({
+    changes: [change({ from: `0.11.3${RLO}`, to: `0.11.4${ZWSP}`, answers: { changed: "see ftp://evil.example/x", affects: `file://host/share/run.exe${RLO}`, adopt: "FTP://x" } })],
+    broken: [{ service: "X", error: `failed${ZWSP}: see ftp://evil.example${RLO}` }],
+    unlisted: [{ kind: "bin", name: `odd${RLO}exe.cmd` }],
+  }));
+  for (const bad of [RLO, ZWSP, "ftp://", "file://", "FTP://"]) assert.ok(!text.includes(bad), JSON.stringify(bad));
+  for (const piece of [
+    "\nBrowserbase cli 0.11.3 -> 0.11.4, pinned copy\n",
+    "\n- Changed: see ftp\\[://\\]evil.example/x\n",
+    "\n- Affects us: file\\[://\\]host/share/run.exe\n",
+    "\n- Worth adopting: FTP\\[://\\]x\n",
+    "\n- X: failed: see ftp\\[://\\]evil.example\n",
+    "\n- oddexe.cmd (bin)\n",
+  ]) assert.ok(text.includes(piece), piece);
+});
+
+test("a count of days is printed only when it is a whole number", () => {
+  const text = renderReport(base({
+    date: "not a day",
+    stillBehind: [{ key: "a/b", installed: "1.0.0", latest: "1.1.0", since: "2026-11-03" }],
+    dates: [{ label: "x", on: "2026-11-16", days: Number.NaN }, { label: "y", on: "2026-11-17", days: 2.5 }, { label: "z", on: "2026-11-18", days: 1e300 }],
+  }));
+  assert.ok(text.includes("\n- a/b: 1.0.0 -> 1.1.0, behind since 3 Nov\n"), text);
+  for (const w of ["Warning: x (16 Nov).", "Warning: y (17 Nov).", "Warning: z (18 Nov)."]) assert.ok(text.includes(`\n${w}\n`), w);
+  assert.ok(!/NaN|Infinity|e\+/.test(text));
 });
 
 test("a release link is printed only on github.com, www.npmjs.com, nodejs.org or a changelog host; otherwise 'no link'", () => {
@@ -234,22 +269,33 @@ test("could not check: more than 3 entries with one message print as one line; a
     unreadableSources: ["claude mcp list: timed out"],
   }));
   assert.ok(text.includes("\nCould not check\n- 4 parts: gh api failed: HTTP 401\n- e/cli: fetch failed (since 13 Nov)\n- claude mcp list: timed out\n"), text);
-  assert.match(text, /^Updates, 14 Nov: 5 could not be checked\n/);
+  // The header counts the parts, the unreadable inventory sources and the notes that could not be fetched.
+  assert.match(text, /^Updates, 14 Nov: 6 could not be read\n/);
   const three = renderReport(base({ couldNotCheck: many.slice(0, 3) }));
   assert.equal((three.match(/gh api failed/g) ?? []).length, 3);
   const all = renderReport(base({ couldNotCheck: [{ key: ALL_FEEDS, message: "all 25 feeds failed: fetch failed", since: "2026-11-14", count: 25 }] }));
-  assert.ok(all.startsWith("Updates, 14 Nov: 25 could not be checked\n"));
+  assert.ok(all.startsWith("Updates, 14 Nov: 25 could not be read\n"));
+  const sources = renderReport(base({ broken: [{ service: "X", error: "y" }], unreadableSources: ["claude mcp list: timed out"] }));
+  assert.ok(sources.startsWith("Updates, 14 Nov: 1 broken, 1 could not be read\n"), sources);
+  const notes = renderReport(base({ changes: [change({ answers: null, notesError: "gh api failed: HTTP 502", notRead: "release notes could not be fetched (gh api failed: HTTP 502)" })] }));
+  assert.ok(notes.startsWith("Updates, 14 Nov: 1 change, 1 could not be read\n"), notes);
+  assert.ok(notes.includes("\n- Not read: release notes could not be fetched (gh api failed: HTTP 502).\n"));
   assert.ok(all.includes("\nCould not check\n- all 25 feeds failed: fetch failed\n"));
 });
 
 test("the report ends with the run's cost when a release note was read or the paid check ran", () => {
-  const read = renderReport(base({ changes: [change()], reads: { count: 3, input: 4300, output: 610, missingUsage: 0 }, paidChecks: ["Parallel"] }));
+  const read = renderReport(base({ changes: [change()], reads: { count: 3, failed: 0, input: 4300, output: 610, missingUsage: 0 }, paidChecks: ["Parallel"] }));
   assert.ok(read.endsWith("\n\n3 release notes read on the Claude plan: 4,300 input and 610 output tokens; one paid Parallel check.\n"), read);
-  const one = renderReport(base({ changes: [change()], reads: { count: 1, input: 10, output: 2, missingUsage: 1 } }));
+  const one = renderReport(base({ changes: [change()], reads: { count: 1, failed: 0, input: 10, output: 2, missingUsage: 1 } }));
   assert.ok(one.endsWith("\n\n1 release note read on the Claude plan: 10 input and 2 output tokens (1 without a token count).\n"), one);
+  // Only reads that returned answers count as read; failed ones are named apart.
+  const failed = renderReport(base({ changes: [change()], reads: { count: 2, failed: 1, input: 2648, output: 390, missingUsage: 0 } }));
+  assert.ok(failed.endsWith("\n\nRelease notes on the Claude plan: 2 read, 1 failed; 2,648 input and 390 output tokens.\n"), failed);
+  const allFailed = renderReport(base({ changes: [change()], reads: { count: 0, failed: 2, input: 0, output: 0, missingUsage: 0 } }));
+  assert.ok(allFailed.endsWith("\n\nRelease notes on the Claude plan: 0 read, 2 failed.\n"), allFailed);
   const paid = renderReport(base({ broken: [{ service: "X", error: "y" }], paidChecks: ["Parallel"] }));
   assert.ok(paid.endsWith("\n\nOne paid Parallel check.\n"), paid);
-  assert.ok(!/Claude plan|paid/.test(renderReport(base({ changes: [change()], reads: { count: 0, input: 0, output: 0, missingUsage: 0 } }))));
+  assert.ok(!/Claude plan|paid/.test(renderReport(base({ changes: [change()], reads: { count: 0, failed: 0, input: 0, output: 0, missingUsage: 0 } }))));
 });
 
 test("the full report says a first run, a reset state, what was held back and the week", () => {
@@ -342,9 +388,12 @@ const fakes = ({ npm = "1.31.0", gh = {}, paidOk = true } = {}) => ({
   gh: fakeGh({ ...GH_BASE, ...gh }),
   run: fakeRun({ paidOk }),
 });
+// The real clock of a simulated day is 07:00 local time on its --today, unless a test passes `now`.
 async function cli(args, deps, catalog = CAT) {
   let out = "", err = "";
-  const code = await main(args, { ...(catalog ? { catalog } : {}), stdout: (s) => { out += s; }, stderr: (s) => { err += s; }, ...deps });
+  const day = args[args.indexOf("--today") + 1];
+  const now = deps.now ?? (args.includes("--today") && /^\d{4}-\d{2}-\d{2}$/.test(day ?? "") ? new Date(`${day}T07:00:00`) : undefined);
+  const code = await main(args, { ...(catalog ? { catalog } : {}), stdout: (s) => { out += s; }, stderr: (s) => { err += s; }, ...deps, ...(now ? { now } : {}) });
   return { code, out, err };
 }
 const tmp = (t) => {
@@ -378,9 +427,11 @@ test("run end to end on the fixture home with fake fetcher and run: writes the f
   const result1 = readJson(join(folder, "result.json"));
   assert.deepEqual([...result1.working].sort(), ["Firecrawl", "GitHub", "Parallel", "boat"]);
   assert.deepEqual(result1.paidChecks, ["Parallel"]);
+  assert.deepEqual(result1.stages, ["inventory", "compare", "connect", "read", "report"]);
   const saved = readJson(join(state, "state.json"));
   assert.equal(saved.lastRun, "2026-11-13");
-  assert.deepEqual(saved.paidCheck, { on: "2026-11-13", results: { parallel: { error: null } } });
+  assert.deepEqual(readJson(join(state, "paid-check.json")), { on: "2026-11-13", results: { parallel: { service: "Parallel", outcome: "working" } } });
+  assert.deepEqual(readdirSync(state).sort(), ["paid-check.json", "runs", "state.json"]); // the lock is gone
   assert.equal(day1.run.count(/parallel-cli/), 1);
   // No request reads anything on a day without changes.
   assert.equal(day1.run.count(/^claude -p/), 0);
@@ -439,7 +490,7 @@ test("a change day: release notes go to texts/ and only to the request with no t
   assert.deepEqual(result.changes.map((c) => c.textFile), ["texts/superpowers-plugin.txt", "texts/firecrawl-cli.txt", null]);
   assert.deepEqual(result.changes[0].answers, RISKY_ANSWER);
   assert.equal(result.changes[2].notRead, "no release notes published");
-  assert.deepEqual(result.reads, { count: 2, input: 2648, output: 390, missingUsage: 0 });
+  assert.deepEqual(result.reads, { count: 2, failed: 0, input: 2648, output: 390, missingUsage: 0 });
   assert.match(readFileSync(join(folder, "texts", "firecrawl-cli.txt"), "utf8"), /FIRECRAWL-NOTES: adds --json[\s\S]*FIRECRAWL-NOTES: faster maps/);
   assert.match(readFileSync(join(folder, "texts", "superpowers-plugin.txt"), "utf8"), /SUPERPOWERS-NOTES/);
   // The notes reach the two requests with no tools and nothing else: not result.json, not a command line.
@@ -464,6 +515,17 @@ test("a change day: release notes go to texts/ and only to the request with no t
   assert.ok(report.includes("\n- Link: https://github.com/obra/superpowers/releases/tag/v7.1.0\n"));
   assert.ok(report.includes("\nWidget 2.0.0 -> 2.1.0, not installed\n- No release notes published.\n- Link: https://www.npmjs.com/package/widget-cli/v/2.1.0\n"));
   assert.ok(report.endsWith("\n\n2 release notes read on the Claude plan: 2,648 input and 390 output tokens; one paid Parallel check.\n"), report);
+
+  // The read stage again on the same folder: the changes already answered are kept, nothing is read twice.
+  const before = readJson(join(folder, "result.json"));
+  const again = fakes();
+  const rerun = await cli(["read", ...at(state, "2026-11-14", "--out", folder)], again, cat);
+  assert.equal(rerun.code, 0, rerun.err);
+  assert.equal(again.run.count(/^claude -p/), 0);
+  assert.equal(again.gh.calls.filter((a) => /releases\?per_page/.test(a[1])).length, 0);
+  const after = readJson(join(folder, "result.json"));
+  assert.deepEqual(after.changes.map((c) => c.answers), before.changes.map((c) => c.answers));
+  assert.deepEqual(after.reads, before.reads);
 });
 
 test("a self-updated tool: 'already installed', no update line, and the link names the installed version, not the newest", async (t) => {
@@ -523,25 +585,33 @@ test("more than 10 changes: 10 are read and the rest say 'not read today'", asyn
   assert.ok(r.out.includes("\nTool t11 1.0.0 -> 1.1.0, not installed\n- Not read today: more than 10 changes.\n"));
 });
 
-test("the paid check runs once a day: a failed result is reused, and with none stored the service is left out", async (t) => {
+test("the paid check runs at most once per real local day, whatever --today says; a skipped one with no stored outcome is unchecked", async (t) => {
   const state = tmp(t);
   const first = fakes({ paidOk: false });
   assert.equal((await cli(["run", ...at(state, "2026-11-13")], first)).code, 0);
   assert.equal(first.run.count(/parallel-cli/), 1);
-  const saved = readJson(join(state, "state.json"));
-  assert.deepEqual(saved.paidCheck, { on: "2026-11-13", results: { parallel: { error: "402 payment required" } } });
-  const again = fakes();
-  const r = await cli(["run", ...at(state, "2026-11-13")], again);
+  const marker = join(state, "paid-check.json");
+  assert.deepEqual(readJson(marker), { on: "2026-11-13", results: { parallel: { service: "Parallel", outcome: "broken", error: "402 payment required" } } });
+  // A later --today on the same real day: the stored outcome is reused, not paid again.
+  const again = { ...fakes(), now: new Date("2026-11-13T09:00:00") };
+  const r = await cli(["run", ...at(state, "2026-11-14")], again);
+  assert.equal(r.code, 0, r.err);
   assert.equal(again.run.count(/parallel-cli/), 0);
   assert.ok(r.out.includes("\nBroken\n- Parallel: 402 payment required\n"));
   assert.ok(!r.out.includes("paid Parallel check"));
-  // A paid check that ran today but kept no result: Parallel is neither working, broken nor unchecked.
-  writeFileSync(join(state, "state.json"), JSON.stringify({ ...saved, paidCheck: { on: "2026-11-13", results: {} } }));
-  const third = fakes();
-  await cli(["run", ...at(state, "2026-11-13")], third);
+  // A marker for today with no outcome for the service: Parallel is unchecked, never dropped.
+  writeFileSync(marker, JSON.stringify({ on: "2026-11-13", results: {} }));
+  const third = { ...fakes(), now: new Date("2026-11-13T10:00:00") };
+  assert.equal((await cli(["run", ...at(state, "2026-11-15")], third)).code, 0);
   assert.equal(third.run.count(/parallel-cli/), 0);
-  const result = readJson(join(state, "runs", "2026-11-13", "result.json"));
-  for (const list of [result.working, result.unchecked, result.broken.map((b) => b.service)]) assert.ok(!list.includes("Parallel"));
+  const result = readJson(join(state, "runs", "2026-11-15", "result.json"));
+  assert.ok(result.unchecked.includes("Parallel"), JSON.stringify(result.unchecked));
+  assert.ok(!result.working.includes("Parallel") && !result.broken.some((b) => b.service === "Parallel"));
+  // The next real day it runs again, once.
+  const fourth = fakes();
+  assert.equal((await cli(["run", ...at(state, "2026-11-16")], fourth)).code, 0);
+  assert.equal(fourth.run.count(/parallel-cli/), 1);
+  assert.deepEqual(readJson(marker), { on: "2026-11-16", results: { parallel: { service: "Parallel", outcome: "working" } } });
 });
 
 test("a state file that cannot be read: the report says it was reset and this run is a new baseline", async (t) => {
@@ -564,11 +634,15 @@ test("a run that fails before report.md is written saves no state, so the next r
   assert.match(bad.err, /^updates\.mjs: /);
   assert.ok(existsSync(join(folder, "result.json")));
   assert.ok(!existsSync(join(state, "state.json")));
+  assert.ok(!existsSync(join(state, "run.lock"))); // removed even though the run failed
+  assert.ok(existsSync(join(state, "paid-check.json"))); // written right after the paid call
   rmSync(join(folder, "report.md"), { recursive: true });
-  const good = await cli(["run", ...at(state, "2026-11-13")], fakes());
+  const retry = fakes();
+  const good = await cli(["run", ...at(state, "2026-11-13")], retry);
   assert.equal(good.code, 0, good.err);
   assert.ok(good.out.includes("\nFirst run: "));
   assert.ok(existsSync(join(state, "state.json")));
+  assert.equal(retry.run.count(/parallel-cli/), 0); // the failed run's paid call is not paid again
 });
 
 test("run folders older than 30 days are removed; today's is kept", async (t) => {
@@ -601,11 +675,16 @@ test("run folders older than 30 days are removed; today's is kept", async (t) =>
   assert.ok(existsSync(join(runs, "2026-10-14")));
 });
 
+// A skill copy followed by its commits: where it stands is known only from a recorded commit.
+const C1 = "a".repeat(40), C2 = "b".repeat(40);
+const SKILL_CAT = { version: 1, ignored: [], tools: [tool("x", "X skill", [{ name: "skill", installed: { kind: "skill", folder: "x" }, feed: { kind: "commit", repository: "o/x" } }])] };
+const head = (sha) => ({
+  ...fakes(),
+  gh: fakeGh({ "repos/o/x/commits?per_page=1": [{ sha }], [`repos/o/x/commits?sha=${sha}&per_page=30`]: [{ sha, commit: { message: "Update x", committer: { date: "2026-11-14T00:00:00Z" } } }] }),
+});
+
 test("record stores the commit and the next compare is not behind", async (t) => {
-  // A skill copy followed by its commits: where it stands is known only from a recorded commit.
-  const C1 = "a".repeat(40), C2 = "b".repeat(40);
-  const cat = { version: 1, ignored: [], tools: [tool("x", "X skill", [{ name: "skill", installed: { kind: "skill", folder: "x" }, feed: { kind: "commit", repository: "o/x" } }])] };
-  const head = (sha) => ({ ...fakes(), gh: fakeGh({ "repos/o/x/commits?per_page=1": [{ sha }], [`repos/o/x/commits?sha=${sha}&per_page=30`]: [{ sha, commit: { message: "Update x", committer: { date: "2026-11-14T00:00:00Z" } } }] }) });
+  const cat = SKILL_CAT;
   const state = tmp(t);
   assert.equal((await cli(["run", ...at(state, "2026-11-13")], head(C1), cat)).code, 0);
   const sat = await cli(["run", ...at(state, "2026-11-14", "--no-read")], head(C2), cat);
@@ -636,6 +715,134 @@ test("record stores the commit and the next compare is not behind", async (t) =>
   const broken = await cli(["record", "x/skill", C2, "--home", HOME, "--state", empty], {}, cat);
   assert.equal(broken.code, 1);
   assert.equal(readFileSync(join(empty, "state.json"), "utf8"), "{");
+});
+
+test("report refuses a run folder from an earlier day and one whose connect stage has not run; nothing is saved", async (t) => {
+  const state = tmp(t);
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], fakes())).code, 0);
+  assert.equal((await cli(["run", ...at(state, "2026-11-14")], fakes())).code, 0);
+  const before = readFileSync(join(state, "state.json"), "utf8");
+  const old = await cli(["report", ...at(state, "2026-11-14", "--out", join(state, "runs", "2026-11-13"))], fakes());
+  assert.equal(old.code, 1);
+  assert.match(old.err, /^updates\.mjs: .*2026-11-13/);
+  assert.equal(old.out, "");
+  assert.equal(readFileSync(join(state, "state.json"), "utf8"), before);
+
+  const fresh = tmp(t);
+  const out = join(fresh, "manual");
+  for (const stage of ["inventory", "compare"]) assert.equal((await cli([stage, ...at(fresh, "2026-11-13", "--out", out)], fakes())).code, 0);
+  const early = await cli(["report", ...at(fresh, "2026-11-13", "--out", out)], fakes());
+  assert.equal(early.code, 1);
+  assert.match(early.err, /connect/);
+  assert.ok(!existsSync(join(fresh, "state.json")));
+  assert.ok(!existsSync(join(out, "report.md")));
+  // A stored `quiet` is never trusted: report works it out from the lists.
+  assert.equal((await cli(["connect", ...at(fresh, "2026-11-13", "--out", out)], fakes())).code, 0);
+  const result = readJson(join(out, "result.json"));
+  writeFileSync(join(out, "result.json"), JSON.stringify({ ...result, quiet: true }));
+  const r = await cli(["report", ...at(fresh, "2026-11-13", "--out", out)], fakes());
+  assert.equal(r.code, 0, r.err);
+  assert.match(r.out.split("\n")[1], /^Updates, 13 Nov: /);
+});
+
+test("report never saves over a later run's state", async (t) => {
+  // No --today here: the day is the (fake) real clock's, as on the scheduled run.
+  const state = tmp(t);
+  const out = join(state, "manual");
+  const on = (day) => ({ ...fakes(), now: new Date(`${day}T07:00:00`) });
+  const args = (...more) => ["--home", HOME, "--state", state, ...more];
+  for (const stage of ["inventory", "compare", "connect"]) assert.equal((await cli([stage, ...args("--out", out)], on("2026-11-13"))).code, 0);
+  assert.equal((await cli(["run", ...args()], on("2026-11-14"))).code, 0);
+  const before = readFileSync(join(state, "state.json"), "utf8");
+  const late = await cli(["report", ...args("--out", out)], on("2026-11-13"));
+  assert.equal(late.code, 1);
+  assert.match(late.err, /later run \(2026-11-14\)/);
+  assert.equal(readFileSync(join(state, "state.json"), "utf8"), before);
+  assert.ok(!existsSync(join(out, "report.md")));
+});
+
+test("a record made between the start of a run and its report survives the report", async (t) => {
+  const state = tmp(t);
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], head(C1), SKILL_CAT)).code, 0);
+  const out = join(state, "manual");
+  for (const stage of ["inventory", "compare", "connect", "read"]) {
+    assert.equal((await cli([stage, ...at(state, "2026-11-14", "--out", out)], head(C2), SKILL_CAT)).code, 0, stage);
+  }
+  assert.equal((await cli(["record", "x/skill", C2, "--home", HOME, "--state", state], {}, SKILL_CAT)).code, 0);
+  const r = await cli(["report", ...at(state, "2026-11-14", "--out", out)], head(C2), SKILL_CAT);
+  assert.equal(r.code, 0, r.err);
+  const saved = readJson(join(state, "state.json"));
+  assert.equal(saved.lastRun, "2026-11-14");
+  assert.equal(saved.parts["x/skill"].installedCommit, C2);
+});
+
+test("release notes that could not be fetched say so; only a feed that answered with none says 'No release notes published.'; a major version stays first", async (t) => {
+  const state = tmp(t);
+  const cat = {
+    version: 1, ignored: [],
+    tools: [
+      tool("alpha", "Alpha", [{ name: "cli", installed: { kind: "none" }, feed: { kind: "github", repository: "o/alpha" } }]),
+      tool("beta", "Beta", [{ name: "cli", installed: { kind: "none" }, feed: { kind: "npm", package: "beta-cli" } }], { repository: "o/beta" }),
+      tool("zeta", "Zeta", [{ name: "cli", installed: { kind: "none" }, feed: { kind: "github", repository: "o/zeta" } }]),
+    ],
+  };
+  const latest = (a, z) => ({
+    "repos/o/alpha/releases/latest": { tag_name: `v${a}`, draft: false, prerelease: false },
+    "repos/o/zeta/releases/latest": { tag_name: `v${z}`, draft: false, prerelease: false },
+  });
+  const day = (a, b, z, more = {}) => ({ ...fakes(), gh: fakeGh({ ...latest(a, z), ...more }), fetcher: fakeFetch({ "https://registry.npmjs.org/beta-cli/latest": { version: b } }) });
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], day("1.0.0", "1.0.0", "1.0.0"), cat)).code, 0);
+  // Alpha's releases answer with none in range; Beta (npm) falls back to its repository, which fails;
+  // Zeta, a major version, has no releases endpoint at all.
+  const d = day("1.1.0", "1.1.0", "2.0.0", { "repos/o/alpha/releases?per_page=30": [] });
+  const r = await cli(["run", ...at(state, "2026-11-14")], d, cat);
+  assert.equal(r.code, 0, r.err);
+  assert.equal(d.run.count(/^claude -p/), 0);
+  const result = readJson(join(state, "runs", "2026-11-14", "result.json"));
+  assert.deepEqual(result.changes.map((c) => [c.key, c.risky, c.notRead]), [
+    ["zeta/cli", true, "release notes could not be fetched (gh api failed: HTTP 404: Not Found)"],
+    ["alpha/cli", false, "no release notes published"],
+    ["beta/cli", false, "release notes could not be fetched (gh api failed: HTTP 404: Not Found)"],
+  ]);
+  assert.match(r.out, /\nUpdates, 14 Nov: 3 changes, 2 could not be read\n/);
+  assert.ok(r.out.includes("\nZeta 1.0.0 -> 2.0.0, not installed, may need a change (major version or breaking notes)\n- Not read: release notes could not be fetched (gh api failed: HTTP 404: Not Found).\n"), r.out);
+  assert.ok(r.out.includes("\nAlpha 1.0.0 -> 1.1.0, not installed\n- No release notes published.\n"));
+  assert.ok(r.out.includes("\nBeta 1.0.0 -> 1.1.0, not installed\n- Not read: release notes could not be fetched (gh api failed: HTTP 404: Not Found).\n"));
+});
+
+test("one run at a time: a lock younger than 30 minutes stops a run and every stage; an older one is replaced", async (t) => {
+  const state = tmp(t);
+  const lock = join(state, "run.lock");
+  const held = JSON.stringify({ pid: 99999, started: new Date(Date.now() - 5 * 60_000).toISOString() });
+  writeFileSync(lock, held);
+  const busy = await cli(["run", ...at(state, "2026-11-13")], fakes());
+  assert.equal(busy.code, 1);
+  assert.match(busy.err, /another run is in progress/);
+  for (const stage of ["inventory", "compare", "connect", "read", "report"]) {
+    const r = await cli([stage, ...at(state, "2026-11-13")], fakes());
+    assert.equal(r.code, 1, stage);
+    assert.match(r.err, /another run is in progress/);
+  }
+  assert.equal(readFileSync(lock, "utf8"), held); // another run's lock is left alone
+  assert.deepEqual(readdirSync(state), ["run.lock"]);
+  writeFileSync(lock, JSON.stringify({ pid: 99999, started: new Date(Date.now() - 31 * 60_000).toISOString() }));
+  const r = await cli(["run", ...at(state, "2026-11-13")], fakes());
+  assert.equal(r.code, 0, r.err);
+  assert.ok(!existsSync(lock));
+});
+
+test("--today needs --state, and may not be earlier than the last run", async (t) => {
+  const noState = await cli(["run", "--home", HOME, "--today", "2026-11-13"], fakes());
+  assert.equal(noState.code, 2);
+  assert.match(noState.err, /--today needs --state/);
+  const state = tmp(t);
+  assert.equal((await cli(["run", ...at(state, "2026-11-14")], fakes())).code, 0);
+  const before = readFileSync(join(state, "state.json"), "utf8");
+  const back = await cli(["run", ...at(state, "2026-11-13")], fakes());
+  assert.equal(back.code, 2);
+  assert.match(back.err, /earlier than the last run \(2026-11-14\)/);
+  assert.equal(readFileSync(join(state, "state.json"), "utf8"), before);
+  assert.ok(!existsSync(join(state, "runs", "2026-11-13")));
 });
 
 test("usage errors exit 2 and change nothing", async (t) => {

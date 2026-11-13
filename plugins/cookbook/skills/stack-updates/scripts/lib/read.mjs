@@ -154,7 +154,7 @@ const LINE_BREAK = /[\n\r\u000B\u000C\u0085\u2028\u2029]/;
 // Invisible characters: controls, format characters (bidi marks and overrides,
 // zero-width characters, the soft hyphen, U+061C, the tag characters), private-use
 // and unassigned code points.
-const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}]/gu;
+export const INVISIBLE = /[\p{Cc}\p{Cf}\p{Co}\p{Cn}]/gu;
 
 function cleanAnswer(v) {
   if (typeof v !== "string" || !v.isWellFormed() || LINE_BREAK.test(v)) return null;
