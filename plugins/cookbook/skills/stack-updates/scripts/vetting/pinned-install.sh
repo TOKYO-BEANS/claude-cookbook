@@ -12,7 +12,7 @@ SHARE="${VETTING_SHARE:-${HOME:-/c/Users/bruger}/.local/share}"
 D="$SHARE/$FOLDER"
 if [ "$VER" = "--back" ]; then
   [ -f "$D/.previous/package-lock.json" ] || { echo "nothing to put back"; exit 2; }
-  cp "$D/.previous/package.json" "$D/.previous/package-lock.json" "$D/"
+  cp "$D/.previous/package.json" "$D/.previous/package-lock.json" "$D/" || { echo "the old files could not be put back"; exit 1; }
 else
   V="$SHARE/vetting/$FOLDER-$VER"
   [ -f "$V/lock/package-lock.json" ] || { echo "no vetted lockfile in $V/lock"; exit 2; }
@@ -23,7 +23,7 @@ else
     cp "$D/package.json" "$D/package-lock.json" "$D/.previous/" || exit 1
   fi
   : > "$D/.previous/pending"
-  cp "$V/lock/package.json" "$V/lock/package-lock.json" "$D/"
+  cp "$V/lock/package.json" "$V/lock/package-lock.json" "$D/" || { echo "the vetted files could not be copied in: nothing was installed"; exit 1; }
 fi
 cd "$D" || exit 1
 npm ci --ignore-scripts --no-audit --no-fund > "$D/.previous/last-install.log" 2>&1; code=$?

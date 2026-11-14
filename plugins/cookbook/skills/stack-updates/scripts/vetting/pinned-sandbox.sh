@@ -27,6 +27,11 @@ tr -cd '\11\12\40-\176' < "$V/out/sandbox.log" | grep -E '^(SANDBOX|  )' | cut -
 tail -1 "$V/out/sandbox.log" | tr -cd '\11\12\40-\176' | cut -c1-160
 # Only boat's own last line counts: the lines above it hold text from outside code.
 tail -1 "$V/out/sandbox.log" | grep -q 'deleted' || echo "SANDBOX: the sandbox may still exist: run 'boat list' and delete it"
+# A run in which DNS was not watched cannot show which hosts were asked: not a quiet run.
+if grep -q "^SANDBOX dns capture failed" "$V/out/sandbox.log"; then
+  echo "SANDBOX: no result (DNS was not watched); see $V/out/sandbox.log"
+  exit 1
+fi
 if [ "$code" -ne 0 ] || ! grep -q '^SANDBOX start output' "$V/out/sandbox.log"; then
   echo "SANDBOX: no result (exit $code); see $V/out/sandbox.log"
   exit 1

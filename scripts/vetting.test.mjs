@@ -471,3 +471,28 @@ test("only boat's own last line says the sandbox was deleted", { skip }, () => {
   const log = finished.replace("some-cli 1.0.0 ", "deleted ").replace(/exit 0 .* deleted\n$/, "exit 0\n");
   assert.match(step({ log }).out, /the sandbox may still exist/);
 });
+
+test("a run in which DNS was not watched is no result", { skip }, () => {
+  const log = finished.replace(
+    "SANDBOX processes left running: 0\n",
+    "SANDBOX dns capture failed: tcpdump: permission denied\nSANDBOX processes left running: 0\n",
+  );
+  const r = step({ log });
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /SANDBOX: no result \(DNS was not watched\)/);
+});
+
+test("an install whose vetted files cannot be copied in does not report an install", { skip }, () => {
+  const root = shareWith({
+    "share/tool/package.json": lock("1.0.0"),
+    "share/tool/package-lock.json": lock("1.0.0"),
+    // The vetted folder lacks its package.json.
+    "share/vetting/tool-2.0.0/lock/package-lock.json": lock("2.0.0"),
+  });
+  stub(root, "npm", ['echo "npm ran" >> "$STUB_ROOT/calls.txt"']);
+  const r = runIn(root, "pinned-install.sh", ["tool", "2.0.0"]);
+  assert.equal(r.status, 1, r.out);
+  assert.match(r.out, /nothing was installed/);
+  assert.ok(!existsSync(path.join(root, "calls.txt")), "npm ran on files that were not the vetted ones");
+  assert.ok(!r.out.includes("npm ci exit 0"));
+});
