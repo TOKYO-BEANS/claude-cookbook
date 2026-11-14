@@ -485,7 +485,7 @@ async function stageCompare(ctx, loaded = loadStateInfo(ctx)) {
   // What the report needs and the catalog alone knows.
   // Installs verified since the last report: told once, in this report.
   result.applied = readApplied(ctx).filter((a) => a.reported !== true)
-    .map((a) => ({ key: a.key, from: a.from ?? null, to: a.to ?? null, ok: a.ok === true, day: a.day ?? null, why: a.why ?? null, basis: a.basis ?? null }));
+    .map((a) => ({ key: a.key, from: a.from ?? null, to: a.to ?? null, ok: a.ok === true, day: a.day ?? null, why: a.why ?? null, basis: a.basis ?? null, id: typeof a.id === "string" ? a.id : null }));
   const keys = new Set([...result.changes, ...result.stillBehind, ...result.couldNotCheck, ...result.missing, ...result.applied].map((x) => x.key));
   result.names = Object.fromEntries(ctx.entries.filter((e) => keys.has(e.key)).map((e) => [e.key, labelOf(e)]));
   for (const c of result.changes) {
@@ -780,9 +780,13 @@ function markTold(ctx, day) {
   }
   const applied = isObject(result) && Array.isArray(result.applied) ? result.applied.filter(isObject) : [];
   if (!applied.length) return;
-  const told = new Set(applied.map((a) => `${a.key}|${a.to}|${a.day}`));
+  // By each entry's own id: two attempts at one version on one day are two entries, and
+  // only the one a report showed is told. (An entry from before ids is matched by its facts.)
+  const ids = new Set(applied.map((a) => a.id).filter((v) => typeof v === "string" && v));
+  const old = new Set(applied.filter((a) => typeof a.id !== "string" || !a.id).map((a) => `${a.key}|${a.to}|${a.day}`));
+  const wasTold = (a) => (typeof a.id === "string" && a.id ? ids.has(a.id) : old.has(`${a.key}|${a.to ?? null}|${a.day ?? null}`));
   try {
-    writeApplied(ctx, readApplied(ctx).map((a) => (told.has(`${a.key}|${a.to ?? null}|${a.day ?? null}`) ? { ...a, reported: true } : a)));
+    writeApplied(ctx, readApplied(ctx).map((a) => (wasTold(a) ? { ...a, reported: true } : a)));
   } catch {
     // told again in the next report
   }
@@ -837,7 +841,7 @@ async function verify(ctx, key) {
     }
   }
   const ok = why === null;
-  writeApplied(ctx, [...readApplied(ctx), { day: ctx.today, key, from: ps.installed ?? null, to: want, ok, why, basis, reported: false }]);
+  writeApplied(ctx, [...readApplied(ctx), { id: randomBytes(6).toString("hex"), day: ctx.today, key, from: ps.installed ?? null, to: want, ok, why, basis, reported: false }]);
   state.parts[key] = { ...ps, applyFailed: ok ? null : want, ...(ok ? { behindSince: null, ...(isCommit ? {} : { installed: have }) } : {}) };
   saveState(ctx.home, state, { folder: ctx.stateDir });
   if (!ok) {

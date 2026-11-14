@@ -888,6 +888,19 @@ test("routine updates: a list older than a day counts for nothing, and an instal
   assert.equal(readJson(join(state, "applied.json")).entries[0].reported, true);
 });
 
+test("an install is marked told by its own id: a second attempt at the same version on the same day stays untold", async (t) => {
+  const state = tmp(t);
+  assert.equal((await cli(["run", ...at(state, "2026-11-13"), "--unattended"], fakes())).code, 0);
+  const folder = join(state, "runs", "2026-11-13");
+  const entry = (id) => ({ id, day: "2026-11-13", key: "firecrawl/cli", from: "1.29.0", to: "1.31.0", ok: false, why: "version", basis: "routine", reported: false });
+  // The report of the 13th shows the first attempt; the second was recorded after that report was written.
+  writeFileSync(join(state, "applied.json"), JSON.stringify({ entries: [entry("aaa111"), entry("bbb222")] }));
+  const result = readJson(join(folder, "result.json"));
+  writeFileSync(join(folder, "result.json"), JSON.stringify({ ...result, applied: [entry("aaa111")] }));
+  assert.equal((await cli(["page", "1", ...at(state, "2026-11-13")], {})).code, 0);
+  assert.deepEqual(readJson(join(state, "applied.json")).entries.map((a) => [a.id, a.reported]), [["aaa111", true], ["bbb222", false]]);
+});
+
 test("a trial folder (--state) reuses the real state folder's paid check of the day and pays nothing", async (t) => {
   const home = tmp(t), state = tmp(t);
   cpSync(HOME, home, { recursive: true });
