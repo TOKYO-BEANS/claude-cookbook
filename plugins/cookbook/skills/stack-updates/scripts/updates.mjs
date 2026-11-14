@@ -52,7 +52,7 @@ import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
 import { defaultRun, findUnlisted, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
 import { quietLine, renderReport } from "./lib/report.mjs";
-import { markSeen } from "./lib/notice.mjs";
+import { markSeen, readSeen } from "./lib/notice.mjs";
 import { CONNECTION_CHECKS } from "./lib/tables.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -685,6 +685,22 @@ async function record(ctx, key, commit) {
   return { printed: `Recorded ${commit.slice(0, 7)} as the installed commit of ${labelOf(e)} (${key}).\n` };
 }
 
+// True when today's run folder in the state folder holds a finished report (the state
+// was saved for today) that is not quiet and that nobody has been shown.
+function unseenReport(ctx) {
+  const folder = join(ctx.stateDir, "runs", ctx.today);
+  if (ctx.out !== folder) return false;
+  let result;
+  try {
+    result = JSON.parse(readFileSync(join(folder, "result.json"), "utf8"));
+  } catch {
+    return false;
+  }
+  if (!isObject(result) || result.quiet !== false || !existsSync(join(folder, "report.md"))) return false;
+  const { state, fresh } = loadState(ctx.home, { folder: ctx.stateDir });
+  return !fresh && state.lastRun === ctx.today && !readSeen(ctx.stateDir).includes(ctx.today);
+}
+
 // ---- the command line -------------------------------------------------------------------
 
 function parseArgs(argv) {
@@ -763,6 +779,15 @@ export async function main(argv, deps = {}) {
       if (!fresh && state.lastRun !== null && opts.today < state.lastRun) {
         throw new UsageError(`--today ${opts.today} is earlier than the last run (${state.lastRun})`);
       }
+    }
+    // A report nobody has seen is never written over: a second run on the same day
+    // would replace it with one that has nothing new, since the state already moved.
+    if (unseenReport(ctx)) {
+      if (ctx.unattended) {
+        stdout(`The report of ${today} has not been shown yet; the check was not run again.\n`);
+        return 0;
+      }
+      throw new Error(`the report of ${today} has not been shown yet: print it with "page 1" (that marks it seen), then run again`);
     }
     const release = takeLock(stateDir);
     let done;

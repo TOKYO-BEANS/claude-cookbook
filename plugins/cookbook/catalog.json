@@ -91,6 +91,7 @@
     { "name": "pysemgrep.exe", "reason": "Semgrep's own helper binary, installed with semgrep.exe" },
     { "name": "shopify", "reason": "the shim for the Shopify CLI tool (shopify-cli), pinned in ~/.local/share" },
     { "name": "parallel-cli", "reason": "the shim for the Parallel CLI tool (parallel), pinned in ~/.local/share" },
-    { "name": "jev-claude", "reason": "the launcher shim of the Jev router tool (jev-router)" }
+    { "name": "jev-claude", "reason": "the launcher shim of the Jev router tool (jev-router)" },
+    { "name": "stack-updates-daily.mjs", "reason": "the update check's own launcher for the Windows task, a copy of the stack-updates skill's daily.mjs" }
   ]
 }

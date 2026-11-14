@@ -25,6 +25,8 @@ the check on demand and for acting on what it found.
 - When the note names a report: print it with the command it gives (`page 1 <date>`, then
   `page 2 <date>` up to N when the first line says `Page 1 of N`) and give the owner the text as it
   is, before other work. Printing marks that report seen. An unattended session ignores the note.
+- A report nobody has seen is never written over: until it is printed, a second run that day stops
+  and says to print it with `page 1` first (the task's own second run just ends without running).
 - To set it up or repair it (the owner's yes is needed to create the task): copy
   `scripts/daily.mjs` to `~/.local/bin/stack-updates-daily.mjs`, then register a task that runs
   `C:\Windows\System32\conhost.exe --headless "C:\Program Files\nodejs\node.exe" "C:\Users\<user>\.local\bin\stack-updates-daily.mjs"`

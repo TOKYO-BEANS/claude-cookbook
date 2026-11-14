@@ -643,6 +643,33 @@ test("a watched run marks its report seen; --unattended leaves it unseen until a
   assert.equal((await cli(["report", ...at(state, "2026-11-14"), "--unattended"], fakes())).code, 2);
 });
 
+test("a report nobody has seen is never written over by a second run on the same day", async (t) => {
+  const state = tmp(t);
+  assert.equal((await cli(["run", ...at(state, "2026-11-13"), "--unattended"], fakes())).code, 0);
+  const report = join(state, "runs", "2026-11-13", "report.md");
+  const first = readFileSync(report, "utf8");
+  // A watched run and every stage stop and say how to see the report first.
+  for (const command of ["run", "inventory", "compare", "connect", "read", "report"]) {
+    const f = fakes();
+    const r = await cli([command, ...at(state, "2026-11-13")], f);
+    assert.equal(r.code, 1, command);
+    assert.match(r.err, /the report of 2026-11-13 has not been shown yet: print it with "page 1"/);
+    assert.equal(f.run.count(/./), 0, `${command} ran nothing`);
+  }
+  // The Windows task run again the same day: nothing runs, and it is not a failure.
+  const again = fakes();
+  const u = await cli(["run", ...at(state, "2026-11-13"), "--unattended"], again);
+  assert.equal(u.code, 0, u.err);
+  assert.equal(u.out, "The report of 2026-11-13 has not been shown yet; the check was not run again.\n");
+  assert.equal(again.run.count(/./), 0);
+  assert.equal(readFileSync(report, "utf8"), first);
+  // Once it is printed, a run goes through; a trial folder given with --out is never held back.
+  assert.equal((await cli(["run", ...at(state, "2026-11-13"), "--out", tmp(t), "--no-read"], fakes())).code, 0);
+  assert.equal(readFileSync(report, "utf8"), first);
+  assert.equal((await cli(["page", "1", ...at(state, "2026-11-13")], {})).code, 0);
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], fakes())).code, 0);
+});
+
 test("a trial folder (--state) reuses the real state folder's paid check of the day and pays nothing", async (t) => {
   const home = tmp(t), state = tmp(t);
   cpSync(HOME, home, { recursive: true });

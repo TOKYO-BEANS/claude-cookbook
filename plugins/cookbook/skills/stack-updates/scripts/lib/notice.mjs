@@ -18,8 +18,10 @@ const SEEN_KEPT = 40;
 const MAX_LISTED = 3;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-// report.md's first line, as report.mjs writes it: a date and counts, nothing else.
-const HEAD = /^Updates, \d{1,2} [A-Z][a-z]{2}(?: \d{4})?: [a-z0-9 ,]{1,160}$/;
+// report.md's first line, exactly as report.mjs's header writes it: a date, then
+// counts with their fixed words. Any other first line is not used.
+const ITEM = String.raw`\d{1,5} (?:changes?|still behind|broken|could not be read|not in the Cookbook|missing|warnings?)`;
+const HEAD = new RegExp(String.raw`^Updates, \d{1,2} [A-Z][a-z]{2}(?: \d{4})?: (?:nothing new|${ITEM}(?:, ${ITEM}){0,6})$`);
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const isDay = (v) => typeof v === "string" && DAY.test(v) && Number.isFinite(Date.parse(`${v}T00:00:00Z`));
 const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
