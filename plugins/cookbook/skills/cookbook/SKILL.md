@@ -632,14 +632,18 @@ The owner added boat (boat.dev) on 12 November 2026: full Ubuntu virtual machine
     stored secrets out. A run without the probe shows only the command's own output: report it
     as "ran without a probe", never as a quiet run.
   The probe prints `SANDBOX` lines: the install scripts that ran, the DNS names asked for during
-  the install and during the start, remote addresses not on port 443, the programs started, files
+  the install and during the start (with the question type when it is not an address lookup),
+  DNS servers asked other than the system's own, remote addresses not on port 443, the programs started, files
   written outside the project, and processes left running. Expected: the npm registry, and the
   download host a package's own install script is known to use (GitHub release assets for the
   Parallel CLI). Anything else is a surprise: another host, a file outside the project (a tool's
   own cache or config folder aside), a process left running, a program such as `curl` or `ssh`,
   an install or start that did not exit 0, or "the install did not end in time" (something it
   started kept running; the probe waits 10 minutes, `PROBE_INSTALL_TIMEOUT` seconds otherwise).
-  A left-over process is found by its parents, never by its name.
+  A left-over process is found by its parents, never by its name. A DNS question of another
+  type than an address lookup, or one sent to another server than the system's, is a surprise
+  too. `pinned-vet.sh` exits 0 only with a sandbox result and a report from each scanner: a
+  scanner that wrote none prints "no report" and the run exits 3.
   A surprise, or "no result" (a run that did not start or did not finish: boat is missing or
   refuses, the command timed out, the probe's last line is absent), stops the install
   until the owner has seen it, a routine update included. Two exemptions, each said in

