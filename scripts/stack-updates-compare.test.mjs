@@ -96,7 +96,11 @@ test("first run: baseline, reports only what is already behind, unlisted, missin
   assert.deepEqual(state.parts["browse/cli"], {
     installed: "0.11.3", latest: "0.11.4", reported: null, behindSince: "2026-11-13",
     feedErrorSince: null, feedErrorShown: null, installedCommit: null, feed: feedFingerprint({ kind: "npm", package: "browse" }),
+    latestSince: "2026-11-13", notes: null, applyFailed: null,
   });
+  // Every behind part is listed for the routine-update rules, on any day of the week.
+  assert.deepEqual(result.behind.find((b) => b.key === "browse/cli"),
+    { key: "browse/cli", installed: "0.11.3", latest: "0.11.4", since: "2026-11-13", latestSince: "2026-11-13", applyFailed: null });
   assert.equal(state.parts[CC].installed, "2.1.0");
   assert.equal(state.parts[CC].latest, "2.1.5");
   assert.equal(state.parts[CC].behindSince, null);
@@ -723,4 +727,32 @@ test("an unlisted name over 200 characters is cut to 200, not dropped", () => {
   const { result, state } = day("2026-11-13", null, { unlisted: [long] });
   assert.deepEqual(result.unlisted, [{ kind: "skill", name: "x".repeat(200) }]);
   assert.deepEqual(Object.keys(state.unlisted), [`skill:${"x".repeat(200)}`]);
+});
+
+test("the day a newest release was first seen: set once, restarted by a newer one, never taken from an older fact", () => {
+  const at = (v) => ({ latest: { "browse/cli": ok({ version: v }) } });
+  const first = day("2026-11-13", null, at("0.11.4")).state;
+  assert.equal(first.parts["browse/cli"].latestSince, "2026-11-13");
+  // The same release the next day keeps its day; a newer one restarts it and forgets the old notes check.
+  first.parts["browse/cli"].notes = "0.11.4 clean";
+  const second = day("2026-11-14", first, at("0.11.4")).state;
+  assert.equal(second.parts["browse/cli"].latestSince, "2026-11-13");
+  assert.equal(second.parts["browse/cli"].notes, "0.11.4 clean");
+  const third = day("2026-11-15", second, at("0.11.5")).state;
+  assert.equal(third.parts["browse/cli"].latestSince, "2026-11-15");
+  assert.equal(third.parts["browse/cli"].notes, null);
+  // A state written before the field existed: the wait starts on the first run that tracks
+  // it, even when the part has been behind (on an older release) for much longer.
+  const old = structuredClone(second);
+  for (const p of Object.values(old.parts)) { delete p.latestSince; delete p.notes; delete p.applyFailed; }
+  old.parts["browse/cli"].behindSince = "2026-10-01";
+  const migrated = day("2026-11-16", old, at("0.11.4"));
+  assert.equal(migrated.state.parts["browse/cli"].latestSince, "2026-11-16");
+  assert.equal(migrated.state.parts["browse/cli"].behindSince, "2026-10-01");
+  assert.equal(migrated.result.behind.find((b) => b.key === "browse/cli").latestSince, "2026-11-16");
+  // A failed install is remembered across a reset of the part.
+  const failed = structuredClone(second);
+  failed.parts["browse/cli"].applyFailed = "0.11.4";
+  failed.parts["browse/cli"].feed = "another-feed";
+  assert.equal(day("2026-11-16", failed, at("0.11.4")).state.parts["browse/cli"].applyFailed, "0.11.4");
 });

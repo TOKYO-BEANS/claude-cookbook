@@ -419,7 +419,10 @@ test("run end to end on the fixture home with fake fetcher and run: writes the f
   assert.equal(one.out, `${join(folder, "report.md")}\n${report}`);
   assert.match(report, new RegExp(`^Updates, 13 Nov: 1 still behind, ${UNLISTED} not in the Cookbook, 1 warning\\n`));
   assert.ok(report.includes("\nFirst run: "));
-  assert.ok(report.includes("\n- Firecrawl: 1.29.0 -> 1.31.0, behind since today\n"));
+  // Its notes could not be fetched (the fake answers 404): it is not routine, and it says why it waits.
+  assert.equal(report.split("\n").find((l) => l.startsWith("- Firecrawl: ")),
+    "- Firecrawl: 1.29.0 -> 1.31.0, behind since today; waits: its notes could not be checked yet");
+  assert.equal(readJson(join(state, "state.json")).parts["firecrawl/cli"].notes, null, "a check that failed is not stored: it is made again");
   assert.ok(report.includes("\nWarning: boat trial ends, then USD 20 a month (20 Nov, in 7 days).\n"));
   assert.ok(report.endsWith("\n\nOne paid Parallel check.\n"));
   const inventory = readJson(join(folder, "inventory.json"));
@@ -668,6 +671,221 @@ test("a report nobody has seen is never written over by a second run on the same
   assert.equal(readFileSync(report, "utf8"), first);
   assert.equal((await cli(["page", "1", ...at(state, "2026-11-13")], {})).code, 0);
   assert.equal((await cli(["run", ...at(state, "2026-11-13")], fakes())).code, 0);
+});
+
+test("routine updates: a release waits three days, is then ready to install, and `verify` decides whether an install counts", async (t) => {
+  const home = tmp(t), state = tmp(t);
+  cpSync(HOME, home, { recursive: true });
+  const lock = join(home, ".local", "share", "firecrawl-cli", "package-lock.json");
+  const setInstalled = (v) => writeFileSync(lock, JSON.stringify({ lockfileVersion: 3, packages: { "": { name: "firecrawl-cli-pin" }, "node_modules/firecrawl-cli": { version: v } } }));
+  const notes = { "repos/firecrawl/cli/releases?per_page=30": [{ tag_name: "v1.31.0", draft: false, prerelease: false, published_at: "2026-11-12T00:00:00Z", body: "Adds a --json flag." }] };
+  const on = (day, ...more) => ["--home", home, "--state", state, "--today", day, ...more];
+  const result = (day) => readJson(join(state, "runs", day, "result.json"));
+  const report = (day) => readFileSync(join(state, "runs", day, "report.md"), "utf8");
+  const fetched = (f) => f.gh.calls.filter((a) => /firecrawl\/cli\/releases\?per_page/.test(a[1])).length;
+
+  // Friday the 13th: first seen. Its notes are fetched once for the word check and are clean.
+  const d13 = fakes({ gh: notes });
+  assert.equal((await cli(["run", ...on("2026-11-13")], d13)).code, 0);
+  assert.equal(fetched(d13), 1);
+  assert.equal(d13.run.count(/^claude -p/), 0, "no model reads the notes for this check");
+  assert.deepEqual(result("2026-11-13").apply, { routine: [], waiting: [{ key: "firecrawl/cli", from: "1.29.0", to: "1.31.0", kind: "pinned", until: "2026-11-16" }], ask: [] });
+  assert.ok(report("2026-11-13").includes("\n- Firecrawl: 1.29.0 -> 1.31.0, behind since today; installs without asking from 16 Nov\n"));
+  assert.ok(!existsSync(join(state, "runs", "2026-11-13", "texts")), "the fetched notes are not kept");
+  assert.equal(readJson(join(state, "state.json")).parts["firecrawl/cli"].notes, "1.31.0 clean");
+
+  // Saturday: still waiting, a quiet day, and the stored check is reused.
+  const d14 = fakes({ gh: notes });
+  const quiet = await cli(["run", ...on("2026-11-14")], d14);
+  assert.equal(quiet.code, 0, quiet.err);
+  assert.equal(result("2026-11-14").quiet, true);
+  assert.equal(fetched(d14), 0);
+
+  // Monday the 16th: three days seen. It is ready, and that alone makes the day not quiet.
+  const d16 = await cli(["run", ...on("2026-11-16", "--unattended")], fakes({ gh: notes }));
+  assert.equal(d16.code, 0, d16.err);
+  assert.deepEqual(result("2026-11-16").apply.routine, [{ key: "firecrawl/cli", from: "1.29.0", to: "1.31.0", kind: "pinned" }]);
+  assert.equal(result("2026-11-16").quiet, false);
+  assert.match(report("2026-11-16"), /^Updates, 16 Nov: 1 ready to install, 1 still behind\b/);
+  assert.ok(report("2026-11-16").includes("\nReady to install (routine: no yes needed)\n- Firecrawl: 1.29.0 -> 1.31.0 (pinned copy)\n"));
+  assert.ok(report("2026-11-16").includes("behind since 13 Nov (3 days); ready to install\n"));
+
+  // verify before anything was installed: the script reads the version itself and says no.
+  const early = await cli(["verify", "firecrawl/cli", ...on("2026-11-16")], fakes());
+  assert.equal(early.code, 1);
+  assert.match(early.err, /Firecrawl is not at 1\.31\.0 \(it reads 1\.29\.0\): recorded as a failed install/);
+  assert.equal(readJson(join(state, "state.json")).parts["firecrawl/cli"].applyFailed, "1.31.0");
+  assert.equal((await cli(["page", "1", ...on("2026-11-16")], {})).code, 0); // the owner has seen the 16th
+
+  // Tuesday: the failure is told once, and that version now needs a yes.
+  assert.equal((await cli(["run", ...on("2026-11-17")], fakes({ gh: notes }))).code, 0);
+  assert.match(report("2026-11-17"), /^Updates, 17 Nov: 1 failed to install\b/);
+  assert.ok(report("2026-11-17").includes("\nInstall failed\n- Firecrawl: 1.29.0 -> 1.31.0 (16 Nov, routine): exactly that version is not what is installed; it now needs your yes\n"));
+  assert.deepEqual(result("2026-11-17").apply.ask, [{ key: "firecrawl/cli", from: "1.29.0", to: "1.31.0", kind: "pinned", reason: "an earlier install of this version failed" }]);
+  assert.deepEqual(readJson(join(state, "applied.json")).entries.map((a) => [a.ok, a.reported]), [[false, true]]);
+
+  // That version failed once, so it is no longer routine: without the owner's yes, verify
+  // refuses to count anything and records nothing.
+  setInstalled("1.31.0");
+  const entries = () => readJson(join(state, "applied.json")).entries.length;
+  const before = entries();
+  const unasked = await cli(["verify", "firecrawl/cli", ...on("2026-11-17")], fakes());
+  assert.equal(unasked.code, 2);
+  assert.match(unasked.err, /Firecrawl 1\.31\.0 is not a routine update in the newest run: it needs the owner's yes, and then verify with --owner-yes <that version>/);
+  assert.equal(entries(), before);
+  assert.equal((await cli(["run", ...on("2026-11-17"), "--owner-yes", "1.31.0"], fakes())).code, 2, "--owner-yes goes with verify only");
+  // The owner's yes names one version: none, or another one, counts for nothing.
+  assert.equal((await cli(["verify", "firecrawl/cli", "--owner-yes", ...on("2026-11-17")], fakes())).code, 2);
+  const other = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.30.0", ...on("2026-11-17")], fakes());
+  assert.equal(other.code, 2);
+  assert.match(other.err, /--owner-yes names 1\.30\.0, but the newest release of Firecrawl is 1\.31\.0: the owner's yes was for another version/);
+  assert.equal(entries(), before);
+
+  // With the owner's yes: the new version is there but its service does not answer. Not an install.
+  const dead = fakes();
+  const down = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], { ...dead, run: async (argv, opts) => (argv.join(" ").includes("firecrawl.cmd") ? { code: 1, stdout: "", stderr: "401" } : dead.run(argv, opts)) });
+  assert.equal(down.code, 1);
+  assert.match(down.err, /Firecrawl is at 1\.31\.0, but its connection check failed: recorded as a failed install/);
+
+  // A newer version than the one that was judged is not that install: never counted.
+  setInstalled("1.32.0");
+  const newer = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], fakes());
+  assert.equal(newer.code, 1);
+  assert.match(newer.err, /Firecrawl is not at 1\.31\.0 \(it reads 1\.32\.0\): recorded as a failed install/);
+
+  // Exactly that version, with the service answering: it counts, and the next report says so, once.
+  setInstalled("1.31.0");
+  const good = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], fakes());
+  assert.equal(good.code, 0, good.err);
+  assert.equal(good.out, "Installed: Firecrawl 1.29.0 -> 1.31.0; recorded for the next report.\n");
+  const after = readJson(join(state, "state.json")).parts["firecrawl/cli"];
+  assert.deepEqual([after.installed, after.behindSince, after.applyFailed], ["1.31.0", null, null]);
+  const again = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], fakes());
+  assert.equal(again.code, 1);
+  assert.match(again.err, /is not recorded as behind/);
+  assert.equal((await cli(["run", ...on("2026-11-18")], fakes({ gh: notes }))).code, 0);
+  const told = report("2026-11-18");
+  assert.match(told, /^Updates, 18 Nov: 1 installed, 2 failed to install\b/);
+  assert.ok(told.includes("\nInstalled since the last report\n- Firecrawl: 1.29.0 -> 1.31.0 (17 Nov, with your yes)\n"));
+  assert.ok(told.includes("\n- Firecrawl: 1.29.0 -> 1.31.0 (17 Nov, with your yes): its connection check failed; it now needs your yes\n"));
+  assert.ok(told.includes("\n- Firecrawl: 1.29.0 -> 1.31.0 (17 Nov, with your yes): exactly that version is not what is installed; it now needs your yes\n"));
+  assert.deepEqual(result("2026-11-18").apply, { routine: [], waiting: [], ask: [] });
+  assert.equal((await cli(["run", ...on("2026-11-19")], fakes({ gh: notes }))).code, 0);
+  assert.deepEqual(result("2026-11-19").applied, [], "an install is told once");
+
+  // Usage: one part key, a known one, and no run folder.
+  assert.equal((await cli(["verify", ...on("2026-11-19")], fakes())).code, 2);
+  assert.equal((await cli(["verify", "no/such", ...on("2026-11-19")], fakes())).code, 2);
+  assert.equal((await cli(["verify", "firecrawl/cli", "--out", tmp(t), ...on("2026-11-19")], fakes())).code, 2);
+});
+
+test("routine updates: notes that say breaking need a yes; --no-read fetches nothing and decides on the version alone", async (t) => {
+  const risky = { "repos/firecrawl/cli/releases?per_page=30": [{ tag_name: "v1.31.0", draft: false, prerelease: false, body: "BREAKING: the old login flow is removed." }] };
+  const state = tmp(t);
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], fakes({ gh: risky }))).code, 0);
+  assert.deepEqual(readJson(join(state, "runs", "2026-11-13", "result.json")).apply.ask,
+    [{ key: "firecrawl/cli", from: "1.29.0", to: "1.31.0", kind: "pinned", reason: "its notes say something breaks, is deprecated or is removed" }]);
+  const report = readFileSync(join(state, "runs", "2026-11-13", "report.md"), "utf8");
+  assert.ok(!/BREAKING|login flow/.test(report), "the notes themselves never reach the report through this check");
+  // --no-read: nothing is fetched, so nothing is checked, so nothing is routine. Even a patch
+  // release only waits, however long it has been seen, and no made-up check is stored.
+  const offline = tmp(t);
+  for (const day of ["2026-11-13", "2026-11-17"]) {
+    const f = fakes({ npm: "1.29.1", gh: risky });
+    assert.equal((await cli(["run", ...at(offline, day), "--no-read"], f)).code, 0);
+    assert.equal(f.gh.calls.filter((a) => /releases\?per_page/.test(a[1])).length, 0);
+    const apply = readJson(join(offline, "runs", day, "result.json")).apply;
+    assert.deepEqual(apply.routine, []);
+    assert.deepEqual(apply.waiting.map((w) => [w.key, w.reason]), [["firecrawl/cli", "its notes could not be checked yet"]]);
+    assert.equal(readJson(join(offline, "state.json")).parts["firecrawl/cli"].notes, null);
+  }
+  // The next run with reading on finds what the notes of that patch release say.
+  assert.equal((await cli(["run", ...at(offline, "2026-11-18")], fakes({ npm: "1.29.1", gh: { "repos/firecrawl/cli/releases?per_page=30": [{ tag_name: "v1.29.1", draft: false, prerelease: false, body: "The --old flag is removed." }] } }))).code, 0);
+  assert.deepEqual(readJson(join(offline, "runs", "2026-11-18", "result.json")).apply.ask.map((a) => a.reason), ["its notes say something breaks, is deprecated or is removed"]);
+});
+
+test("routine updates: the notes are read again on the run that would install, so notes published during the wait still count", async (t) => {
+  const state = tmp(t);
+  const releases = (list) => ({ "repos/firecrawl/cli/releases?per_page=30": list });
+  const fetched = (f) => f.gh.calls.filter((a) => /firecrawl\/cli\/releases\?per_page/.test(a[1])).length;
+  const apply = (day) => readJson(join(state, "runs", day, "result.json")).apply;
+  // Day one: the patch release is on npm, its GitHub release is not written yet. "No notes" is stored.
+  const d13 = fakes({ npm: "1.29.1", gh: releases([]) });
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], d13)).code, 0);
+  assert.equal(readJson(join(state, "state.json")).parts["firecrawl/cli"].notes, "1.29.1 none");
+  assert.deepEqual(apply("2026-11-13").waiting.map((w) => w.until), ["2026-11-16"]);
+  // Day four: it would be routine on the stored check. The notes are read again, and now they warn.
+  const d16 = fakes({ npm: "1.29.1", gh: releases([{ tag_name: "v1.29.1", draft: false, prerelease: false, body: "The --legacy flag is removed." }]) });
+  assert.equal((await cli(["run", ...at(state, "2026-11-16")], d16)).code, 0);
+  assert.equal(fetched(d16), 1);
+  assert.deepEqual(apply("2026-11-16").routine, []);
+  assert.deepEqual(apply("2026-11-16").ask.map((a) => a.reason), ["its notes say something breaks, is deprecated or is removed"]);
+  // The same with a fetch that fails on that day, or with --no-read: it waits, it is never routine on an old check.
+  for (const [more, gh] of [[[], {}], [["--no-read"], releases([])]]) {
+    const other = tmp(t);
+    assert.equal((await cli(["run", ...at(other, "2026-11-13")], fakes({ npm: "1.29.1", gh: releases([]) }))).code, 0);
+    assert.equal((await cli(["run", ...at(other, "2026-11-16"), ...more], fakes({ npm: "1.29.1", gh }))).code, 0);
+    const a = readJson(join(other, "runs", "2026-11-16", "result.json")).apply;
+    assert.deepEqual([a.routine.length, a.waiting.map((w) => w.reason)], [0, ["its notes could not be checked yet"]], more.join(" ") || "fetch failed");
+  }
+  // And when the notes are still clean on that day, it is routine.
+  const fine = tmp(t);
+  assert.equal((await cli(["run", ...at(fine, "2026-11-13")], fakes({ npm: "1.29.1", gh: releases([]) }))).code, 0);
+  assert.equal((await cli(["run", ...at(fine, "2026-11-16")], fakes({ npm: "1.29.1", gh: releases([]) }))).code, 0);
+  assert.deepEqual(readJson(join(fine, "runs", "2026-11-16", "result.json")).apply.routine.map((r) => r.to), ["1.29.1"]);
+});
+
+test("the word check of notes: clean only for whole, real release notes with no warning word", async () => {
+  const { verdictOf } = await import("../plugins/cookbook/skills/stack-updates/scripts/updates.mjs");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "Fixes a typo.", whole: true }), "clean");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "The old flag is deprecated.", whole: true }), "risky");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "BREAKING change", whole: false }), "risky", "a warning in a cut text still counts");
+  // Cut, or possibly not reaching back to the installed version: never clean.
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "Fixes a typo.", whole: false }), "partial");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "Fixes a typo." }), "partial", "no word that it is whole");
+  // Wider than the report's own flag: any usual wording of a break counts here.
+  for (const text of ["Removes the --foo flag.", "Drops support for Node 18.", "This deprecates the old login.", "No longer reads the old file.", "See the migration guide."]) {
+    assert.equal(verdictOf("1.0.0", "1.0.1", { text, whole: true }), "risky", text);
+  }
+  // Commit subject lines are not release notes.
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "2026-11-10 Fix a typo", whole: true, subjects: true }), "none");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "2026-11-10 Remove the removed flag", whole: true, subjects: true }), "risky");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: ["2026-11-10 Remove an unused import", "2026-11-09 Migrate tests to node:test"].join("\n"), whole: true, subjects: true }), "none",
+    "commit subjects are checked for the three plain words only");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "2026-11-10 BREAKING: new config format", whole: true, subjects: true }), "risky");
+  // Read, and there are none; not read at all.
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "" }), "none");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "  \n", whole: true }), "none");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "", error: "gh api failed" }), null);
+  for (const bad of [null, undefined, "text", 5]) assert.equal(verdictOf("1.0.0", "1.0.1", bad), null);
+});
+
+test("routine updates: a list older than a day counts for nothing, and an install is told until its report is seen", async (t) => {
+  const home = tmp(t), state = tmp(t);
+  cpSync(HOME, home, { recursive: true });
+  const lock = join(home, ".local", "share", "firecrawl-cli", "package-lock.json");
+  const notes = { "repos/firecrawl/cli/releases?per_page=30": [{ tag_name: "v1.31.0", draft: false, prerelease: false, body: "Adds a --json flag." }] };
+  const on = (day, ...more) => ["--home", home, "--state", state, "--today", day, ...more];
+  for (const day of ["2026-11-13", "2026-11-16"]) assert.equal((await cli(["run", ...on(day), "--unattended"], fakes({ gh: notes }))).code, 0);
+  assert.equal(readJson(join(state, "runs", "2026-11-16", "result.json")).apply.routine.length, 1);
+  writeFileSync(lock, JSON.stringify({ lockfileVersion: 3, packages: { "": { name: "firecrawl-cli-pin" }, "node_modules/firecrawl-cli": { version: "1.31.0" } } }));
+  // Two days after that run its list is out of date: the check has to run again first.
+  const stale = await cli(["verify", "firecrawl/cli", ...on("2026-11-18")], fakes());
+  assert.equal(stale.code, 2);
+  assert.match(stale.err, /is not a routine update in the newest run/);
+  assert.ok(!existsSync(join(state, "applied.json")));
+  // The day after the run it still counts.
+  const next = await cli(["verify", "firecrawl/cli", ...on("2026-11-17")], fakes());
+  assert.equal(next.code, 0, next.err);
+  assert.deepEqual(readJson(join(state, "applied.json")).entries.map((a) => [a.ok, a.basis, a.reported]), [[true, "routine", false]]);
+  // An unattended run tells it in its report, but nobody has seen that report yet.
+  assert.equal((await cli(["run", ...on("2026-11-18"), "--unattended"], fakes({ gh: notes }))).code, 0);
+  const report = readFileSync(join(state, "runs", "2026-11-18", "report.md"), "utf8");
+  assert.ok(report.includes("\nInstalled since the last report\n- Firecrawl: 1.29.0 -> 1.31.0 (17 Nov, routine)\n"));
+  assert.equal(readJson(join(state, "applied.json")).entries[0].reported, false);
+  // Printing the report is what marks it told.
+  assert.equal((await cli(["page", "1", ...on("2026-11-18")], {})).code, 0);
+  assert.equal(readJson(join(state, "applied.json")).entries[0].reported, true);
 });
 
 test("a trial folder (--state) reuses the real state folder's paid check of the day and pays nothing", async (t) => {

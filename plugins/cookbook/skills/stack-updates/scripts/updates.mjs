@@ -5,6 +5,12 @@
 //   inventory | compare | connect | read | report [--out <dir>]
 //                                    one stage on one run folder
 //   record <part key> <commit>       after an update: the commit now installed
+//   verify <part key> [--owner-yes <version>]
+//                                    after an install: was this version marked routine (or
+//                                    did the owner agree to exactly it: --owner-yes), is
+//                                    the part at exactly that release, and does its service
+//                                    answer; the outcome is kept for the next report
+//                                    (applied.json)
 //   page <n> [<date>]                page n of report.md of today's run, or of the run of
 //                                    <date> (see below); it marks that report seen
 //
@@ -46,14 +52,15 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { READ_LIMIT, compare, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
+import { NOTES, decide, decideAll, warnsOf } from "./lib/apply.mjs";
+import { READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
 import { dueDates, runChecks } from "./lib/connect.mjs";
 import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
 import { defaultRun, findUnlisted, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
 import { quietLine, renderReport } from "./lib/report.mjs";
 import { markSeen, readSeen } from "./lib/notice.mjs";
-import { CONNECTION_CHECKS } from "./lib/tables.mjs";
+import { CONNECTION_CHECKS, SELF_UPDATING_TOOLS } from "./lib/tables.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // The catalog and the Cookbook skill of the plugin version this script belongs to.
@@ -72,7 +79,7 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const VERSION = /^\d+(?:\.\d+)+$/;
 const DAY_MS = 86_400_000;
 const STAGES = ["inventory", "compare", "connect", "read", "report"];
-const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | page <n> [<date>]; options --unattended (with run: nobody reads the output), --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
+const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | verify <part key> [--owner-yes <version>] | page <n> [<date>]; options --unattended (with run: nobody reads the output), --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
 
 class UsageError extends Error {}
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -319,6 +326,7 @@ function pageOf(ctx, n, day = ctx.today) {
   const pages = reportPages(file, text);
   if (n > pages.length) throw new UsageError(`the report for ${day} has ${pages.length} page${pages.length === 1 ? "" : "s"}`);
   markSeen(ctx.stateDir, day);
+  markTold(ctx, day);
   return pages[n - 1];
 }
 
@@ -475,7 +483,10 @@ async function stageCompare(ctx, loaded = loadStateInfo(ctx)) {
     catalog: ctx.catalog, installed: inventory.installed, latest, unlisted: inventory.unlisted, state: loaded.state, today: ctx.today,
   });
   // What the report needs and the catalog alone knows.
-  const keys = new Set([...result.changes, ...result.stillBehind, ...result.couldNotCheck, ...result.missing].map((x) => x.key));
+  // Installs verified since the last report: told once, in this report.
+  result.applied = readApplied(ctx).filter((a) => a.reported !== true)
+    .map((a) => ({ key: a.key, from: a.from ?? null, to: a.to ?? null, ok: a.ok === true, day: a.day ?? null, why: a.why ?? null, basis: a.basis ?? null }));
+  const keys = new Set([...result.changes, ...result.stillBehind, ...result.couldNotCheck, ...result.missing, ...result.applied].map((x) => x.key));
   result.names = Object.fromEntries(ctx.entries.filter((e) => keys.has(e.key)).map((e) => [e.key, labelOf(e)]));
   for (const c of result.changes) {
     const e = ctx.byKey.get(c.key);
@@ -584,14 +595,17 @@ async function stageRead(ctx) {
   const changes = Array.isArray(result.changes) ? result.changes : [];
   if (ctx.noRead) {
     for (const c of changes) if (!isObject(c.answers)) c.notRead = "read skipped";
+    await decideUpdates(ctx, result);
     addStage(result, "read");
     return { file: writeJson(ctx, "result.json", result) };
   }
   // Fetch the notes of every change not yet answered first: they decide the order (risky first).
   const texts = new Map();
+  const checkedNow = new Map(); // "<part key>|<to>" -> the word check of notes fetched in this run
   for (const c of changes) {
     if (isObject(c.answers)) continue; // read before (the stage run again): kept as it is
     const notes = await notesFor(ctx, c);
+    checkedNow.set(`${c.key}|${c.to}`, verdictOf(c.from, c.to, notes));
     c.textFile = null;
     c.notesError = null;
     if (notes.text.trim()) {
@@ -637,9 +651,210 @@ async function stageRead(ctx) {
   }
   result.changes = changes;
   result.reads = reads;
+  await decideUpdates(ctx, result, checkedNow);
   addStage(result, "read");
   return { file: writeJson(ctx, "result.json", result) };
 }
+
+// ---- routine updates: which behind parts a session may install without asking ----------
+
+const SELF_UPDATING = new Set(SELF_UPDATING_TOOLS);
+const factsOf = (ctx, key) => {
+  const e = ctx.byKey.get(key);
+  if (!e) return null;
+  const inst = isObject(e.part.installed) ? e.part.installed : {};
+  // A plugin of the local marketplace is ported by hand from its upstream.
+  const localPort = inst.kind === "plugin" && typeof inst.id === "string" && inst.id.endsWith("@claude-local");
+  return { kind: inst.kind, lifecycle: e.tool.lifecycle, selfUpdating: SELF_UPDATING.has(e.tool.id), localPort };
+};
+
+/**
+ * Sets `result.apply` (`{ routine, waiting, ask }`, lib/apply.mjs) for every behind part.
+ * The word check of a part's release notes comes from today's read, else from the
+ * state (`notes`, kept per newest version in next-state.json), else the notes are
+ * fetched here for that check alone: the text is tested and dropped, never stored,
+ * printed or given to a model. With --no-read nothing is fetched.
+ */
+async function decideUpdates(ctx, result, checkedNow = new Map()) {
+  const next = readJson(ctx, "next-state.json");
+  const parts = isObject(next?.parts) ? next.parts : {};
+  const behind = Array.isArray(result.behind) ? result.behind.filter(isObject) : [];
+  const verdicts = new Map();
+  for (const b of behind) {
+    const facts = factsOf(ctx, b.key);
+    if (!facts) continue;
+    const ps = isObject(own(parts, b.key)) ? parts[b.key] : null;
+    // A stored check counts only for exactly this newest version.
+    const stored = typeof ps?.notes === "string" && ps.notes.startsWith(`${b.latest} `) ? ps.notes.slice(String(b.latest).length + 1) : null;
+    let notes = NOTES.includes(stored) ? stored : null;
+    // Notes this run really fetched for this very release (the read stage's map).
+    const now = checkedNow.get(`${b.key}|${b.latest}`);
+    let fresh = NOTES.includes(now);
+    if (fresh) notes = now;
+    const fetchNow = async () => {
+      fresh = true;
+      return verdictOf(b.installed, b.latest, await notesFor(ctx, { key: b.key, from: b.installed, to: b.latest }));
+    };
+    // Fetch only when the notes can still decide: everything else already needs a yes.
+    if (notes === null && !ctx.noRead && ["routine", "waiting"].includes(decide(b, { ...facts, notes: "clean", today: ctx.today }).decision)) {
+      notes = await fetchNow();
+    }
+    // A stored check may be days old: notes are often published or edited after a release
+    // first appears. The run that would make the part routine reads them again, and
+    // without a check made in this run nothing is routine.
+    if (!fresh && decide(b, { ...facts, notes, today: ctx.today }).decision === "routine") {
+      notes = ctx.noRead ? null : await fetchNow();
+      if (notes === null && ps) ps.notes = null;
+    }
+    if (notes !== null && ps) ps.notes = `${b.latest} ${notes}`;
+    verdicts.set(b.key, notes);
+  }
+  // Installs already attempted today count against today's limit.
+  const used = readApplied(ctx).filter((a) => a.day === ctx.today).length;
+  result.apply = decideAll(behind, (key) => {
+    const facts = factsOf(ctx, key);
+    return facts ? { ...facts, notes: verdicts.get(key) ?? null } : null;
+  }, ctx.today, { used });
+  const keys = [...result.apply.routine, ...result.apply.waiting, ...result.apply.ask].map((x) => x.key);
+  result.names = { ...(isObject(result.names) ? result.names : {}), ...Object.fromEntries(keys.map((k) => [k, labelOf(ctx.byKey.get(k))])) };
+  if (isObject(next)) writeJson(ctx, "next-state.json", next);
+}
+
+/**
+ * The word check of one release's notes, from what `notesFor` returned: "risky",
+ * "clean", "none", "partial", or null when the notes could not be fetched (the check
+ * is then made again on the next run). The text is tested here and goes nowhere else.
+ * Notes that were cut, or that may not reach back to the installed version, are never
+ * "clean"; commit subject lines are not release notes and count as "none".
+ */
+export function verdictOf(from, to, notes) {
+  if (!isObject(notes)) return null;
+  const text = typeof notes.text === "string" ? notes.text : "";
+  if (!text.trim()) return notes.error ? null : "none";
+  // Real notes get the wide word list. Commit subject lines get only the report's own
+  // three words: "Remove an unused import" is how commits are written, not a warning.
+  if (isRisky(from, to, text) || (notes.subjects !== true && warnsOf(text))) return "risky";
+  if (notes.whole !== true) return "partial";
+  return notes.subjects === true ? "none" : "clean";
+}
+
+// applied.json in the state folder: what `verify` found after each install, newest last.
+const APPLIED_FILE = "applied.json";
+function readApplied(ctx) {
+  try {
+    const a = JSON.parse(readFileSync(join(ctx.stateDir, APPLIED_FILE), "utf8"));
+    return isObject(a) && Array.isArray(a.entries) ? a.entries.filter((x) => isObject(x) && typeof x.key === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function writeApplied(ctx, entries) {
+  mkdirSync(ctx.stateDir, { recursive: true });
+  writeFileSync(join(ctx.stateDir, APPLIED_FILE), `${JSON.stringify({ entries: entries.slice(-100) }, null, 1)}\n`);
+}
+
+// True when the newest run, of today or yesterday, marked exactly this version of the
+// part routine. An older list is out of date: the check has to run again first.
+function routineIn(ctx, lastRun, key, version) {
+  if (!isDay(lastRun) || lastRun > ctx.today) return false;
+  const age = Math.round((Date.parse(`${ctx.today}T00:00:00Z`) - Date.parse(`${lastRun}T00:00:00Z`)) / 86_400_000);
+  if (age > 1) return false;
+  let result;
+  try {
+    result = JSON.parse(readFileSync(join(ctx.stateDir, "runs", lastRun, "result.json"), "utf8"));
+  } catch {
+    return false;
+  }
+  const routine = isObject(result) && isObject(result.apply) && Array.isArray(result.apply.routine) ? result.apply.routine : [];
+  return routine.some((r) => isObject(r) && r.key === key && r.to === version);
+}
+
+// Marks the installs that the report of `day` tells about as told, once that report
+// has been shown to somebody. Until then every report repeats them.
+function markTold(ctx, day) {
+  let result;
+  try {
+    result = JSON.parse(readFileSync(join(ctx.stateDir, "runs", day, "result.json"), "utf8"));
+  } catch {
+    return;
+  }
+  const applied = isObject(result) && Array.isArray(result.applied) ? result.applied.filter(isObject) : [];
+  if (!applied.length) return;
+  const told = new Set(applied.map((a) => `${a.key}|${a.to}|${a.day}`));
+  try {
+    writeApplied(ctx, readApplied(ctx).map((a) => (told.has(`${a.key}|${a.to ?? null}|${a.day ?? null}`) ? { ...a, reported: true } : a)));
+  } catch {
+    // told again in the next report
+  }
+}
+
+/**
+ * `verify <part key> [--owner-yes <version>]`, after an install. It counts an install only when
+ * - the part's newest release was marked routine by the newest run (today's or
+ *   yesterday's) and no install of it failed before, or --owner-yes names that very
+ *   version as the one the owner agreed to;
+ * - the script's own read of the disk shows exactly that release, not an older and not
+ *   a newer one (a newer one was never judged by the rules);
+ * - the tool's free connection check, when it has one, passes.
+ * The outcome goes to applied.json for the next report. A failure makes that version
+ * need the owner's yes.
+ */
+async function verify(ctx, key) {
+  const e = ctx.byKey.get(key);
+  if (!e) throw new UsageError(`no catalog part has the key ${String(key).slice(0, 120)}`);
+  const { state, fresh } = loadStateInfo(ctx);
+  const ps = fresh ? null : own(state.parts, key);
+  if (!isObject(ps) || typeof ps.latest !== "string") throw new Error(`nothing is recorded for ${key}: run the check first`);
+  const label = labelOf(e);
+  if (ps.behindSince === null) throw new Error(`${label} (${key}) is not recorded as behind: nothing to verify`);
+  const want = ps.latest;
+  const routine = ps.applyFailed !== want && routineIn(ctx, state.lastRun, key, want);
+  if (!routine && !ctx.ownerYes) {
+    throw new UsageError(`${label} ${shortVersion(want)} is not a routine update in the newest run: it needs the owner's yes, and then verify with --owner-yes <that version>`);
+  }
+  // The owner's yes is for one version: a release that appeared since is not covered by it.
+  if (ctx.ownerYes && !namesVersion(ctx.ownerYes, want)) {
+    throw new UsageError(`--owner-yes names ${String(ctx.ownerYes).slice(0, 40)}, but the newest release of ${label} is ${shortVersion(want)}: the owner's yes was for another version`);
+  }
+  const basis = ctx.ownerYes ? "owner" : "routine";
+  const isCommit = COMMIT.test(want);
+  const inst = await readInstalled(e.part.installed, key, { home: ctx.home, run: ctx.run, gh: ctx.gh });
+  const text = (v) => (typeof v === "string" && v ? v : null);
+  // What the script reads from disk. A commit that only `record` knows (a skill copy, a
+  // local port) is the session's word: it is accepted for an update the owner agreed to,
+  // never for a routine one.
+  const onDisk = inst?.state !== "read" ? null : isCommit ? text(inst.commit) : text(inst.version);
+  const recorded = onDisk === null && isCommit && inst?.state === "read" && basis === "owner" ? text(ps.installedCommit) : null;
+  const have = onDisk ?? recorded;
+  let why = null;
+  if (have === null || (isCommit ? have !== want : compareVersions(have, want) !== 0)) why = "version";
+  if (why === null) {
+    const entry = own(CONNECTION_CHECKS, e.tool.id);
+    if (isObject(entry) && entry.paid !== true) {
+      const one = await runChecks({ tools: [{ id: e.tool.id, name: e.tool.name, lifecycle: e.tool.lifecycle, parts: [] }] },
+        { run: ctx.run, home: ctx.home, now: ctx.now, checks: { [e.tool.id]: entry } });
+      if (one.broken.length) why = "check";
+    }
+  }
+  const ok = why === null;
+  writeApplied(ctx, [...readApplied(ctx), { day: ctx.today, key, from: ps.installed ?? null, to: want, ok, why, basis, reported: false }]);
+  state.parts[key] = { ...ps, applyFailed: ok ? null : want, ...(ok ? { behindSince: null, ...(isCommit ? {} : { installed: have }) } : {}) };
+  saveState(ctx.home, state, { folder: ctx.stateDir });
+  if (!ok) {
+    throw new Error(why === "check"
+      ? `${label} is at ${shortVersion(want)}, but its connection check failed: recorded as a failed install`
+      : `${label} is not at ${shortVersion(want)} (it reads ${have === null ? "no version" : shortVersion(have)}): recorded as a failed install`);
+  }
+  const how = recorded !== null ? " (the commit as recorded; a copy cannot be read from disk)" : "";
+  return { printed: `Installed: ${label} ${ps.installed === null ? "" : `${shortVersion(ps.installed)} -> `}${shortVersion(want)}${how}; recorded for the next report.\n` };
+}
+// True when what was typed after --owner-yes is this version: the same text (a leading
+// "v" aside), or at least 7 characters from the start of a commit id.
+const namesVersion = (typed, version) => {
+  const t = String(typed).replace(/^v/, ""), v = String(version).replace(/^v/, "");
+  return COMMIT.test(v) ? /^[0-9a-f]{7,40}$/.test(t) && v.startsWith(t) : t === v;
+};
+const shortVersion = (v) => (COMMIT.test(String(v)) ? String(v).slice(0, 7) : String(v).slice(0, 40));
 
 async function stageReport(ctx) {
   const result = readResult(ctx);
@@ -666,12 +881,18 @@ async function stageReport(ctx) {
     for (const [key, part] of Object.entries(isObject(next.parts) ? next.parts : {})) {
       const recorded = isObject(own(stored.parts, key)) ? stored.parts[key].installedCommit : null;
       if (recorded !== null && isObject(part) && recorded !== part.installedCommit) part.installedCommit = recorded;
+      // A `verify` made meanwhile decides whether this version's install failed.
+      const sp = own(stored.parts, key);
+      if (isObject(sp) && isObject(part)) part.applyFailed = typeof sp.applyFailed === "string" ? sp.applyFailed : null;
     }
   }
   saveState(ctx.home, next, { folder: ctx.stateDir });
   // Somebody reads what a run prints unless it is --unattended (the Windows task):
   // then the report waits, and the session-start notice announces it.
-  if (!result.quiet && !ctx.unattended && pageable) markSeen(ctx.stateDir, ctx.today);
+  if (!result.quiet && !ctx.unattended && pageable) {
+    markSeen(ctx.stateDir, ctx.today);
+    markTold(ctx, ctx.today);
+  }
   return { printed };
 }
 
@@ -705,11 +926,16 @@ function unseenReport(ctx) {
 // ---- the command line -------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const opts = { positional: [], noRead: false, unattended: false };
+  const opts = { positional: [], noRead: false, unattended: false, ownerYes: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--no-read") opts.noRead = true;
     else if (a === "--unattended") opts.unattended = true;
+    else if (a === "--owner-yes") {
+      const v = argv[++i];
+      if (typeof v !== "string" || v === "" || v.startsWith("--")) throw new UsageError("--owner-yes needs the version the owner agreed to");
+      opts.ownerYes = v;
+    }
     else if (["--out", "--home", "--state", "--today"].includes(a)) {
       const v = argv[++i];
       if (typeof v !== "string" || v === "" || v.startsWith("--")) throw new UsageError(`${a} needs a value`);
@@ -723,10 +949,14 @@ function parseArgs(argv) {
     if (rest.length < 1 || rest.length > 2 || !/^[1-9][0-9]?$/.test(rest[0])) throw new UsageError(`page needs one page number from 1 to ${MAX_PAGES}, and at most the date of a run`);
     if (rest[1] !== undefined && !isDay(rest[1])) throw new UsageError("page's date must be a YYYY-MM-DD date");
     if (opts.out !== undefined) throw new UsageError("page reads today's run folder in the state folder; it takes no --out");
+  } else if (command === "verify") {
+    if (rest.length !== 1) throw new UsageError("verify needs one part key");
+    if (opts.out !== undefined) throw new UsageError("verify reads the state folder; it takes no --out");
   } else if (command === "record" ? rest.length !== 2 : !(command === "run" || STAGES.includes(command)) || rest.length) {
     throw new UsageError(command === "record" ? "record needs a part key and a commit" : `unknown command ${String(command).slice(0, 40)}`);
   }
   if (opts.unattended && command !== "run") throw new UsageError("--unattended goes with run");
+  if (opts.ownerYes && command !== "verify") throw new UsageError("--owner-yes goes with verify");
   if (opts.today !== undefined && !isDay(opts.today)) throw new UsageError("--today must be a YYYY-MM-DD date");
   if (opts.today !== undefined && opts.state === undefined) throw new UsageError("--today needs --state, so a made-up date never touches the real state");
   return { command, rest, opts };
@@ -758,7 +988,7 @@ export async function main(argv, deps = {}) {
     const catalog = deps.catalog ?? JSON.parse(readFileSync(CATALOG_PATH, "utf8"));
     const entries = partsOf(catalog);
     const ctx = {
-      catalog, entries, home, stateDir, today, realDay, now, noRead: opts.noRead, unattended: opts.unattended,
+      catalog, entries, home, stateDir, today, realDay, now, noRead: opts.noRead, unattended: opts.unattended, ownerYes: opts.ownerYes,
       byKey: new Map(entries.map((e) => [e.key, e])),
       toolById: new Map((Array.isArray(catalog?.tools) ? catalog.tools : []).filter(isObject).map((t) => [t.id, t])),
       out: opts.out ? resolve(opts.out) : join(stateDir, "runs", today),
@@ -769,6 +999,15 @@ export async function main(argv, deps = {}) {
     };
     if (command === "record") {
       stdout((await record(ctx, rest[0], rest[1])).printed);
+      return 0;
+    }
+    if (command === "verify") {
+      const free = takeLock(stateDir); // never while a run is reading the same state
+      try {
+        stdout((await verify(ctx, rest[0])).printed);
+      } finally {
+        free();
+      }
       return 0;
     }
     if (command === "page") {

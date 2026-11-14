@@ -241,6 +241,33 @@ test("release text is returned as data: nothing in it is acted on", async () => 
   assert.equal(d.fetcher.calls.length, 0);
 });
 
+test("releaseNotes says when the text is not the whole story: cut to the limit, a full page of releases, or commit subjects", async () => {
+  const rel = (n, body) => ({ tag_name: `v1.${n}.0`, draft: false, prerelease: false, published_at: "2026-11-01T00:00:00Z", body });
+  const read = (list) => releaseNotes({ kind: "github", repository: "o/r" }, "1.0.0", "1.40.0", deps({ gh: { "api repos/o/r/releases?per_page=30": JSON.stringify(list) } }));
+  const short = await read([rel(2, "Adds a flag."), rel(1, "Fixes a typo.")]);
+  assert.equal(short.whole, true);
+  assert.equal(short.subjects, undefined);
+  // Six long releases: the oldest, with the warning, falls off the end of the kept text.
+  const long = await read([6, 5, 4, 3, 2].map((n) => rel(n, "x".repeat(2800))).concat(rel(1, "BREAKING: the old flow is removed.")));
+  assert.equal(long.text.length, TEXT_LIMIT);
+  assert.ok(!long.text.includes("BREAKING"));
+  assert.equal(long.whole, false, "a cut text is never the whole notes");
+  // A full page of 30 releases (v1.40.0 down to v1.11.0) may not reach back to the installed 1.0.0.
+  const page = Array.from({ length: 30 }, (_, i) => rel(40 - i, "ok"));
+  assert.equal((await read(page)).whole, false);
+  // The same page does reach back to 1.20.0: every release after it is on the page.
+  const near = await releaseNotes({ kind: "github", repository: "o/r" }, "1.20.0", "1.40.0", deps({ gh: { "api repos/o/r/releases?per_page=30": JSON.stringify(page) } }));
+  assert.equal(near.whole, true);
+  // With no readable installed version, a full page is never the whole story.
+  const blind = await releaseNotes({ kind: "github", repository: "o/r" }, "unknown", "1.40.0", deps({ gh: { "api repos/o/r/releases?per_page=30": JSON.stringify(page) } }));
+  assert.equal(blind.whole, false);
+  // Commit subject lines are marked: they are not release notes.
+  const commits = [{ sha: "a".repeat(40), commit: { message: "Fix a typo\n\nbody", committer: { date: "2026-11-10T00:00:00Z" } } }];
+  const subjects = await releaseNotes({ kind: "commit", repository: "o/r" }, null, null, deps({ gh: { "api repos/o/r/commits?per_page=30": JSON.stringify(commits) } }));
+  assert.equal(subjects.subjects, true);
+  assert.match(subjects.text, /Fix a typo/);
+});
+
 test("releaseNotes: a read that failed carries its reason; a feed with no notes has none", async () => {
   // Failed reads: gh refused, an answer of the wrong shape, a feed that is not one.
   const failed = await releaseNotes({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps());
@@ -255,7 +282,7 @@ test("releaseNotes: a read that failed carries its reason; a feed with no notes 
     assert.deepEqual(await releaseNotes(f, "1.0.0", "2.0.0", deps()), { text: "" });
   }
   const empty = await releaseNotes({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps({ gh: { "api repos/o/r/releases?per_page=30": "[]" } }));
-  assert.deepEqual(empty, { text: "" });
+  assert.deepEqual(empty, { text: "", whole: true });
   // releaseText is its text.
   assert.equal(await releaseText({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps()), "");
 });

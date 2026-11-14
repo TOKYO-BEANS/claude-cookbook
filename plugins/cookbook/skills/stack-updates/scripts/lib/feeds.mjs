@@ -294,10 +294,17 @@ export async function readLatest(feed, { fetcher, gh, hosts } = {}) {
 const lowerBound = (v) => stable(v) ?? (/^v?(\d+\.\d+\.\d+)\.[0-9A-Za-z.]+$/.exec(typeof v === "string" ? v : "")?.[1] ?? null);
 
 // Releases newer than `from` up to and including `to`, newest first.
-async function releasesText(repo, parse, from, to, { gh }) {
+// `info.full` is set when the page of 30 was full and shows no release at or below
+// `from`: releases in the range may then be missing from it.
+async function releasesText(repo, parse, from, to, { gh }, info = {}) {
   const list = await ghJson(gh, `repos/${repo}/releases?per_page=30`);
   if (!Array.isArray(list)) throw new Error("Unexpected releases answer");
   const lo = lowerBound(from), hi = stable(to);
+  const reachesBack = Boolean(lo) && list.some((r) => {
+    const v = isObject(r) && typeof r.tag_name === "string" ? parse(r.tag_name) : null;
+    return Boolean(v) && compare(v, lo) <= 0;
+  });
+  info.full = list.length >= 30 && !reachesBack;
   const picked = list
     .filter((r) => isObject(r) && r.draft !== true && r.prerelease !== true && typeof r.tag_name === "string")
     .map((r) => ({ r, version: parse(r.tag_name) }))
@@ -325,29 +332,35 @@ async function commitsText(repo, path, from, to, { gh }) {
 
 /**
  * The release notes between two versions, newest first, at most TEXT_LIMIT
- * characters: `{ text }`, with `text: ""` when the kind publishes none here (none,
- * npm, nodeDist) or none fall in the range; `{ text: "", error }` with a short reason
- * when the notes could not be read. Never throws.
+ * characters: `{ text, whole }`, with `text: ""` when the kind publishes none here
+ * (none, npm, nodeDist) or none fall in the range; `{ text: "", error }` with a short
+ * reason when the notes could not be read. `whole` is false when the text was cut to
+ * the limit or the release list may not reach back to `from`; `subjects: true` marks
+ * commit subject lines, which are not release notes. Never throws.
  */
+const notesOf = (raw, { full = false, subjects = false } = {}) => ({
+  text: cap(raw), whole: String(raw).length <= TEXT_LIMIT && full !== true, ...(subjects ? { subjects: true } : {}),
+});
 export async function releaseNotes(feed, from, to, { fetcher, gh, hosts } = {}) {
   try {
     if (!isObject(feed)) return { text: "", error: "The part has no feed" };
     const deps = { fetcher, gh, hosts };
+    const info = {};
     switch (feed.kind) {
       case "github":
-        return { text: cap(await releasesText(needRepo(feed.repository), semverTag, from, to, deps)) };
+        return notesOf(await releasesText(needRepo(feed.repository), semverTag, from, to, deps, info), info);
       case "gitForWindows":
-        return { text: cap(await releasesText("git-for-windows/git", windowsTag, from, to, deps)) };
+        return notesOf(await releasesText("git-for-windows/git", windowsTag, from, to, deps, info), info);
       case "commit":
-        return { text: cap(await commitsText(needRepo(feed.repository), needPath(feed.path), from, to, deps)) };
+        return notesOf(await commitsText(needRepo(feed.repository), needPath(feed.path), from, to, deps), { subjects: true });
       case "marketplace": {
         const { repo, dir } = await marketplaceLocation(feed, deps);
-        return { text: cap(await commitsText(repo, dir, from, to, deps)) };
+        return notesOf(await commitsText(repo, dir, from, to, deps), { subjects: true });
       }
       case "changelog":
-        return { text: cap((await changelogPage(feed, deps)).text) };
+        return notesOf((await changelogPage(feed, deps)).text);
       case "jevModels":
-        return { text: cap((await jevSection(deps)).trim()) };
+        return notesOf((await jevSection(deps)).trim());
       default:
         return { text: "" }; // none, npm and nodeDist publish no notes here
     }
