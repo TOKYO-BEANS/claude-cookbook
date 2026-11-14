@@ -15,7 +15,12 @@ if [ "$VER" = "--back" ]; then
   cp "$D/.previous/package.json" "$D/.previous/package-lock.json" "$D/" || { echo "the old files could not be put back"; exit 1; }
 else
   V="$SHARE/vetting/$FOLDER-$VER"
-  [ -f "$V/lock/package-lock.json" ] || { echo "no vetted lockfile in $V/lock"; exit 2; }
+  # Both files are checked before anything is touched: a copy that fails halfway would
+  # leave the new lockfile beside the old package.json.
+  if [ ! -f "$V/lock/package.json" ] || [ ! -f "$V/lock/package-lock.json" ]; then
+    echo "no vetted package.json and package-lock.json in $V/lock: nothing was installed"
+    exit 2
+  fi
   mkdir -p "$D/.previous"
   if [ -e "$D/.previous/pending" ]; then
     echo "an earlier install did not finish: the backup of the last good version is kept"
@@ -23,7 +28,14 @@ else
     cp "$D/package.json" "$D/package-lock.json" "$D/.previous/" || exit 1
   fi
   : > "$D/.previous/pending"
-  cp "$V/lock/package.json" "$V/lock/package-lock.json" "$D/" || { echo "the vetted files could not be copied in: nothing was installed"; exit 1; }
+  if ! cp "$V/lock/package.json" "$V/lock/package-lock.json" "$D/"; then
+    if ! cp "$D/.previous/package.json" "$D/.previous/package-lock.json" "$D/"; then
+      echo "the vetted files could not be copied in, and the old files could not be put back: run pinned-install.sh $FOLDER --back"
+      exit 1
+    fi
+    echo "the vetted files could not be copied in: the old files were put back and nothing was installed"
+    exit 1
+  fi
 fi
 cd "$D" || exit 1
 npm ci --ignore-scripts --no-audit --no-fund > "$D/.previous/last-install.log" 2>&1; code=$?

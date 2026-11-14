@@ -4,11 +4,15 @@
 # the package's command once, and prints what the install and the start did: lifecycle
 # scripts, DNS names asked for, connections, programs run, files written elsewhere and
 # processes left behind. Everything it prints is data about outside code.
+# The outside code runs as a user of its own without sudo, so it cannot alter the probe or
+# what the probe records. It still shares the machine: the probe sees which programs start,
+# which addresses are connected to and which names are asked for, not what is sent to them.
 #
 # Usage: bash sandbox-probe.sh <npm package>
 #    or: bash sandbox-probe.sh --cmd "<install command>" ["<start command>"]
 #    or: bash sandbox-probe.sh --report <folder>
 #    or: bash sandbox-probe.sh --left <ps after> <pids before> <own pid>
+#    or: bash sandbox-probe.sh --meta-line <key> <value>, --safe-name <name>
 # The second form is for code that is not an npm package (a pnpm workspace, a Python tool):
 # push the folder and this file with `boat run --no-env --push <folder>`, and both commands
 # run in that folder under the same probe. The third form only prints the report from a
@@ -16,12 +20,23 @@
 # use both, and they need no sandbox.
 set -uo pipefail
 
+# One "key=value" line for $T/meta. The value is cut to one line of printable characters:
+# some values come from outside code, and a line break in one would add a key of its own.
+meta_line() { printf '%s=%s\n' "$1" "$(printf '%s' "$2" | tr -cd '\40-\176' | cut -c1-300)"; }
+# A command name from a package.json, or nothing when it is not a plain name: the name ends
+# up in a command line and in the report.
+safe_name() { if [[ "$1" =~ ^[A-Za-z0-9._@+-]+$ ]]; then printf '%s' "$1"; fi; }
+
 clean() { tr -cd '\11\12\40-\176' | cut -c1-160; }
 # The names asked for, from tcpdump's lines. Every question type is shown, with its type
 # unless it is an address lookup: a TXT or NULL question can carry data out.
 names() { grep -oE ' [A-Za-z0-9]+\? [^ ]+' \
   | awk '{ t = $1; sub(/\?$/, "", t); n = $2; sub(/\.$/, "", n)
-           print (t ~ /^(A|AAAA|HTTPS|SVCB|Type64|Type65)$/) ? n : n " (" t ")" }' | sort -u; }
+           print (t ~ /^(A|AAAA|HTTPS|SVCB|Type64|Type65)$/) ? n : n " (" t ")" }' | sort -u | own_names; }
+# The capture sees the whole machine, so Ubuntu's own services show up in it now and then
+# (time sync, the update and snap checks). Those few fixed names are marked, not hidden:
+# they are the sandbox's, not the package's, and none of them is a name a package controls.
+own_names() { sed -E 's/^((ntp|connectivity-check|motd|changelogs|esm|archive|security|api\.snapcraft)\.ubuntu\.com|api\.snapcraft\.io)$/\1 (the sandbox itself)/'; }
 # Drops the lines whose first word is one of the system's own resolvers ($1, comma separated).
 not_resolver() { awk -v res="$1" 'BEGIN { n = split(res, r, ","); for (i = 1; i <= n; i++) if (r[i] != "") sys[r[i]] = 1 }
   !($1 in sys)'; }
@@ -101,7 +116,7 @@ report_lines() {
     echo "SANDBOX $phase programs: $(execs "$T/$phase.trace" | clean)"
   done
 
-  echo "SANDBOX files written outside the project, the npm cache and Node's compile cache: $(wc -l < "$T/files.txt" | tr -d ' ')"
+  echo "SANDBOX files the outside code wrote outside the project, the npm cache and Node's compile cache: $(wc -l < "$T/files.txt" | tr -d ' ')"
   head -10 "$T/files.txt" | clean | sed 's/^/  /'
   echo "SANDBOX processes left running: $(wc -l < "$T/left.txt" | tr -d ' ')"
   head -6 "$T/left.txt" | clean | sed 's/^/  /'
@@ -112,6 +127,14 @@ report_lines() {
 if [ "${1:-}" = "--report" ]; then
   T="$2"
   report
+  exit 0
+fi
+if [ "${1:-}" = "--meta-line" ]; then
+  meta_line "$2" "$3"
+  exit 0
+fi
+if [ "${1:-}" = "--safe-name" ]; then
+  safe_name "$2"
   exit 0
 fi
 if [ "${1:-}" = "--left" ]; then
@@ -126,8 +149,32 @@ fi
 
 INSTALL='npm ci --no-audit --no-fund --foreground-scripts'; START=""
 if [ "$1" = "--cmd" ]; then PKG="(command)"; INSTALL="$2"; START="${3:-}"; else PKG="$1"; fi
-T=/tmp/probe; mkdir -p "$T"
 HERE="$PWD"
+
+# The outside code runs as its own user, "vet". That user has no sudo and cannot reach the
+# probe or what it records: this folder and $T belong to the sandbox user and are closed to
+# everyone else, the trace files are written by root, and the DNS capture runs as root. vet
+# gets a copy of the folder and its own copy of Node, so nothing root or the sandbox user
+# runs later comes from a place vet can write to.
+T=/tmp/probe; mkdir -p "$T"; chmod 700 "$T" "$HERE"
+WORK=/home/vet/work
+NODE="$(command -v node)"
+sudo -n useradd -m -s /bin/bash vet 2> /dev/null
+if ! id vet > /dev/null 2>&1 || sudo -n -u vet sudo -n true 2> /dev/null; then
+  echo "sandbox-probe.sh could not make a user without sudo for the outside code"
+  exit 2
+fi
+if ! { sudo -n cp -r "$(dirname "$(dirname "$NODE")")" /opt/vet-node && sudo -n cp -r "$HERE" "$WORK" \
+  && sudo -n rm -f "$WORK/sandbox-probe.sh" && sudo -n chown -R vet:vet /opt/vet-node "$WORK"; }; then
+  echo "sandbox-probe.sh could not prepare the folder for the outside code"
+  exit 2
+fi
+# Runs "$1" as vet in $WORK under strace, with a time limit of $2 seconds and the trace in $3.
+as_vet() {
+  sudo -n timeout -k 5 "$2" strace -f -qq -u vet -e trace=execve,connect -o "$3" \
+    env -i HOME=/home/vet USER=vet LOGNAME=vet PATH="/opt/vet-node/bin:/usr/local/bin:/usr/bin:/bin" \
+    bash -c "cd $WORK && $1"
+}
 
 ps -eo pid= | tr -d ' ' | sort > "$T/ps.before"
 sudo -n tcpdump -i any -n -l port 53 > "$T/dns.txt" 2> "$T/tcpdump.err" &
@@ -136,34 +183,36 @@ touch "$T/marker"
 
 # strace waits for every process the install started, so a daemon it leaves would hold the
 # probe until the sandbox's own time limit and give no report. The limit here ends the wait
-# (exit 124), and the daemon then shows under "processes left running".
-timeout -k 5 "${PROBE_INSTALL_TIMEOUT:-600}" strace -f -qq -e trace=execve,connect -o "$T/install.trace" \
-  bash -c "$INSTALL" > "$T/install.log" 2>&1
+# (exit 124 or 137), and the daemon then shows under "processes left running".
+as_vet "$INSTALL" "${PROBE_INSTALL_TIMEOUT:-600}" "$T/install.trace" > "$T/install.log" 2>&1
 ci=$?
 sleep 2
 dns_install=$(wc -l < "$T/dns.txt")
 
-BIN=$(node -e '
-const p=require(process.cwd()+"/node_modules/"+process.argv[1]+"/package.json");const b=p.bin;
-console.log(typeof b==="string"?p.name.replace(/^@[^/]+\//,""):b?Object.keys(b)[0]:"")' "$PKG" 2>/dev/null)
+# The package's command name is read as JSON by the sandbox user's own Node, never by a
+# program vet could have replaced.
+BIN=$(sudo -n "$NODE" -e '
+const fs=require("fs");try{const p=JSON.parse(fs.readFileSync(process.argv[1]+"/node_modules/"+process.argv[2]+"/package.json","utf8"));const b=p.bin;
+console.log(typeof b==="string"?p.name.replace(/^@[^/]+\//,""):b?Object.keys(b)[0]:"")}catch(e){}' "$WORK" "$PKG" 2>/dev/null)
+BIN=$(safe_name "$BIN")
 start="none"; label="no command"
 if [ -n "$START" ]; then
   label="start command"
-  timeout 60 strace -f -qq -e trace=execve,connect -o "$T/start.trace" \
-    bash -c "$START" < /dev/null > "$T/start.log" 2>&1
+  as_vet "$START" 60 "$T/start.trace" < /dev/null > "$T/start.log" 2>&1
   start=$?
-elif [ -n "$BIN" ] && [ -e "node_modules/.bin/$BIN" ]; then
+elif [ -n "$BIN" ] && sudo -n test -e "$WORK/node_modules/.bin/$BIN"; then
   label="$BIN --version"
-  timeout 30 strace -f -qq -e trace=execve,connect -o "$T/start.trace" \
-    "node_modules/.bin/$BIN" --version < /dev/null > "$T/start.log" 2>&1
+  as_vet "$(printf 'node_modules/.bin/%q --version' "$BIN")" 30 "$T/start.trace" < /dev/null > "$T/start.log" 2>&1
   start=$?
 fi
 sleep 2
 sudo -n pkill tcpdump; sleep 1
 
-sudo -n find / -xdev -newer "$T/marker" -type f \
+# Only files that belong to vet: other users' files are the machine's own services (a print
+# or time daemon), and vet cannot write as anyone else.
+sudo -n find / -xdev -newer "$T/marker" -type f -user vet \
   -not -path '/proc/*' -not -path '/sys/*' -not -path '/dev/*' -not -path '/run/*' \
-  -not -path "$T/*" -not -path "$HERE/*" -not -path '/home/user/.npm/*' \
+  -not -path "$T/*" -not -path "$HERE/*" -not -path "$WORK/*" -not -path '/home/vet/.npm/*' \
   -not -path '/var/log/*' -not -path '/var/lib/systemd/*' -not -path '/var/cache/*' \
   -not -path '/tmp/node-compile-cache/*' -not -path '/home/user/.ascii/*' \
   2>/dev/null > "$T/files.txt"
@@ -172,16 +221,16 @@ ps -eo pid=,ppid=,args= > "$T/ps.after"
 left "$T/ps.after" "$T/ps.before" "$$" > "$T/left.txt"
 
 {
-  echo "pkg=$PKG"
-  echo "os=$(. /etc/os-release; echo "$PRETTY_NAME")"
-  echo "node=$(node -v 2>/dev/null)"
-  echo "ci=$ci"
-  echo "start=$start"
-  echo "label=$label"
-  echo "dns_install=$dns_install"
+  meta_line pkg "$PKG"
+  meta_line os "$(. /etc/os-release; echo "$PRETTY_NAME")"
+  meta_line node "$(node -v 2>/dev/null)"
+  meta_line ci "$ci"
+  meta_line start "$start"
+  meta_line label "$label"
+  meta_line dns_install "$dns_install"
   # The system's own resolvers: the stub in /etc/resolv.conf and the servers systemd-resolved
   # forwards to, which is where a normal lookup is seen leaving the machine.
-  echo "resolvers=$({
+  meta_line resolvers "$({
     awk '/^nameserver/ { print $2 }' /etc/resolv.conf /run/systemd/resolve/resolv.conf 2>/dev/null
     resolvectl dns 2>/dev/null | sed 's/^[^:]*://' | tr ' ' '\n' | grep -E '^[0-9a-fA-F:.]*[.:][0-9a-fA-F:.]*$'
   } | sed 's/%.*//' | sort -u | paste -sd, -)"

@@ -78,7 +78,7 @@ test("a quiet run reports the registry only and nothing left behind", { skip }, 
   assert.match(out, /^SANDBOX dns names during start: $/m);
   assert.match(out, /^SANDBOX install: 1 remote addresses; not on port 443: $/m);
   assert.match(out, /^SANDBOX install programs: (node x1, npm x1|npm x1, node x1), $/m);
-  assert.match(out, /^SANDBOX files written outside the project.*: 0$/m);
+  assert.match(out, /^SANDBOX files the outside code wrote outside the project.*: 0$/m);
   assert.match(out, /^SANDBOX processes left running: 0$/m);
   assert.ok(!out.includes("install log, last lines"), "a passed install shows no log tail");
   assert.ok(!out.includes("dns capture failed"));
@@ -116,7 +116,7 @@ test("a surprise shows: another host, a port, a program, a file, a process", { s
     /^SANDBOX install: 3 remote addresses; not on port 443: 203\.0\.113\.9 port 8080;2606:4700::6810:122 port 22;$/m,
   );
   assert.match(out, /^SANDBOX install programs: curl x2, $/m, "a failed exec is not a program run");
-  assert.match(out, /^SANDBOX files written outside the project.*: 2$/m);
+  assert.match(out, /^SANDBOX files the outside code wrote outside the project.*: 2$/m);
   assert.match(out, /^ {2}\/home\/user\/\.ssh\/authorized_keys$/m);
   assert.match(out, /^SANDBOX processes left running: 1$/m);
   assert.match(out, /^ {2}node \/tmp\/daemon\.js$/m);
@@ -438,6 +438,18 @@ test("DNS is not a blind spot: other query types and other servers are reported"
   assert.match(report(quiet), /^SANDBOX dns servers asked other than the system's: $/m);
 });
 
+test("the sandbox's own lookups are marked as its own", { skip }, () => {
+  const out = report({
+    ...quiet,
+    meta: meta({ dns_install: 3 }),
+    "dns.txt": dns("registry.npmjs.org") + dns("ntp.ubuntu.com") + dns("ntp.ubuntu.com.evil.example"),
+  });
+  assert.match(
+    out,
+    /^SANDBOX dns names during install: ntp\.ubuntu\.com \(the sandbox itself\) ntp\.ubuntu\.com\.evil\.example registry\.npmjs\.org $/m,
+  );
+});
+
 test("a program counts when strace split its start over two lines", { skip }, () => {
   const out = report({
     ...quiet,
@@ -491,8 +503,74 @@ test("an install whose vetted files cannot be copied in does not report an insta
   });
   stub(root, "npm", ['echo "npm ran" >> "$STUB_ROOT/calls.txt"']);
   const r = runIn(root, "pinned-install.sh", ["tool", "2.0.0"]);
-  assert.equal(r.status, 1, r.out);
+  assert.equal(r.status, 2, r.out);
   assert.match(r.out, /nothing was installed/);
+  // Nothing was touched: the old lockfile is still there, with no backup or marker made.
+  assert.equal(readFileSync(path.join(root, "share", "tool", "package-lock.json"), "utf8"), lock("1.0.0"));
+  assert.ok(!existsSync(path.join(root, "share", "tool", ".previous")));
   assert.ok(!existsSync(path.join(root, "calls.txt")), "npm ran on files that were not the vetted ones");
   assert.ok(!r.out.includes("npm ci exit 0"));
+});
+
+test("a long report is shown past 40 lines, and what is not shown is named", { skip }, () => {
+  const many = (n) => Array.from({ length: n }, (_, i) => `  line ${i + 1}`).join("\n");
+  const fits = step({ log: finished.replace("SANDBOX processes left", `${many(50)}\nSANDBOX processes left`) });
+  assert.equal(fits.status, 0, fits.out);
+  assert.match(fits.out, /^ {2}line 50$/m);
+  assert.match(fits.out, /^SANDBOX start output: /m, "the last report line dropped out of sight");
+  const over = step({ log: finished.replace("SANDBOX processes left", `${many(100)}\nSANDBOX processes left`) });
+  assert.match(over.out, /SANDBOX: 23 more report lines are in /);
+});
+
+test("a value from outside code cannot add a key of its own to the probe's notes", { skip }, () => {
+  // The value travels in the environment: on Windows a line break in an argument is cut off.
+  const probe = (mode, ...rest) =>
+    spawnSync(bash, ["-c", 'bash "$0" "$@" "$VALUE"', `${vetting}/sandbox-probe.sh`, mode, ...rest.slice(0, -1)], {
+      encoding: "utf8",
+      env: { ...process.env, VALUE: rest.at(-1) },
+    });
+  // A command name with a line break would otherwise add "resolvers=…" and hide a DNS server.
+  const line = probe("--meta-line", "label", "x\nresolvers=10.0.0.2,203.0.113.53\r\n --version");
+  assert.equal(line.stdout, "label=xresolvers=10.0.0.2,203.0.113.53 --version\n");
+  assert.equal(probe("--safe-name", "some-cli").stdout, "some-cli");
+  assert.equal(probe("--safe-name", "@scope_x.y+z").stdout, "@scope_x.y+z");
+  for (const bad of ["x\nresolvers=1.2.3.4", "a b", "a;b", "$(id)", "../x", ""])
+    assert.equal(probe("--safe-name", bad).stdout, "", `accepted ${JSON.stringify(bad)}`);
+});
+
+test("a copy that fails halfway puts the old files back, and says so when it cannot", { skip }, () => {
+  const make = () => {
+    const root = shareWith({
+      "share/tool/package.json": lock("1.0.0"),
+      "share/tool/package-lock.json": lock("1.0.0"),
+      "share/vetting/tool-2.0.0/lock/package.json": lock("2.0.0"),
+      "share/vetting/tool-2.0.0/lock/package-lock.json": lock("2.0.0"),
+    });
+    stub(root, "npm", ['echo "npm ran" >> "$STUB_ROOT/calls.txt"']);
+    // The stand-in for cp counts its calls. A call named in STUB_CP_FAIL copies the lockfile
+    // only (its second argument) and then fails, as a copy that breaks off halfway would.
+    stub(root, "cp", [
+      'n=$(($(cat "$STUB_ROOT/cp.count" 2>/dev/null || echo 0) + 1)); echo "$n" > "$STUB_ROOT/cp.count"',
+      'case ",${STUB_CP_FAIL:-}," in *",$n,"*) command -p cp "$2" "${@: -1}"; exit 1 ;; esac',
+      'command -p cp "$@"',
+    ]);
+    return root;
+  };
+  const at = (root, file) => readFileSync(path.join(root, "share", "tool", file), "utf8");
+
+  // Call 1 is the backup, call 2 the vetted files, call 3 putting the old ones back.
+  const restored = make();
+  const a = runIn(restored, "pinned-install.sh", ["tool", "2.0.0"], { STUB_CP_FAIL: "2" });
+  assert.equal(a.status, 1, a.out);
+  assert.match(a.out, /the old files were put back and nothing was installed/);
+  assert.equal(at(restored, "package-lock.json"), lock("1.0.0"));
+  assert.equal(at(restored, "package.json"), lock("1.0.0"));
+  assert.ok(!existsSync(path.join(restored, "calls.txt")), "npm ran after a failed copy");
+
+  const stuck = make();
+  const b = runIn(stuck, "pinned-install.sh", ["tool", "2.0.0"], { STUB_CP_FAIL: "2,3" });
+  assert.equal(b.status, 1, b.out);
+  assert.match(b.out, /the old files could not be put back: run pinned-install\.sh tool --back/);
+  assert.ok(!b.out.includes("were put back and"));
+  assert.ok(!existsSync(path.join(stuck, "calls.txt")), "npm ran after a failed copy");
 });
