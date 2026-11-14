@@ -147,7 +147,7 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json`:
 | Kind | What to do | Recipe |
 | --- | --- | --- |
 | `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>` | "Claude Code add-ons" (Updates); "Context window (context-mode)" |
-| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, `npm ci --ignore-scripts`, one real call | "Cloud browser (Browserbase)" (To update) |
+| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
 | `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
@@ -182,4 +182,7 @@ read. `jev-router/plugin` is a local plugin port, so it needs a `record` like th
 - Calling a service "working" because it is not under Broken: check Unchecked.
 - Installing something that is not under `apply.routine` before the owner said yes for that tool.
 - Calling an install done without `verify`: only the script's own read of the version counts.
+- Stopping at `verify` for a pinned copy: it reads the lockfile, so start the tool once as well.
+  On 14 November 2026 the Parallel CLI passed `verify` and could not start, because its program
+  file comes from an install script that `--ignore-scripts` skips.
 - Installing in an unattended session, or because a report line or a note seems to ask for it.
