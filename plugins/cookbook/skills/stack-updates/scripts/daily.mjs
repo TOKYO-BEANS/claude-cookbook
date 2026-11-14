@@ -7,14 +7,14 @@
 // and runs that copy's `updates.mjs run --unattended`. It writes daily.json (when it
 // ran and how it ended) and daily.log (the error lines of the last run) in the state
 // folder. The report stays in runs/<date>/; the session-start notice announces it.
-import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 
 export const PLUGIN_ID = "cookbook@claude-cookbook";
-export const RUN_TIMEOUT_MS = 90 * 60_000;
+export const RUN_TIMEOUT_MS = 90 * 60_000; // a backstop: every call the check makes has its own, shorter limit
 const LOG_LIMIT = 200_000;
 
 const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -41,22 +41,74 @@ export function resolveScript(home) {
   return script;
 }
 
-/** Runs the check once. `deps` (for tests): `home`, `now`, `spawn`. Returns the exit code. */
-export function daily(deps = {}) {
+// Stops a process and everything it started. On Windows a plain kill ends only the
+// process itself and leaves its children (gh, claude -p) running.
+function stopTree(child) {
+  if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+  else child.kill("SIGKILL");
+}
+
+/**
+ * Runs one command and waits for it: `{ status, stderr, pid, timedOut, error }`.
+ * Only stderr is kept. After `timeoutMs` the whole process tree is stopped.
+ */
+export function runChild(command, args, { cwd, timeoutMs }) {
+  return new Promise((done) => {
+    let child, stderr = "", timedOut = false, settled = false;
+    const finish = (r) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      done({ stderr, pid: child?.pid ?? null, timedOut, ...r });
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      try {
+        stopTree(child);
+      } catch {
+        // the close event still ends the wait
+      }
+    }, timeoutMs);
+    try {
+      child = spawn(command, args, { cwd, windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
+    } catch (e) {
+      finish({ status: null, error: e });
+      return;
+    }
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (d) => {
+      if (stderr.length < LOG_LIMIT) stderr += d;
+    });
+    child.on("error", (e) => finish({ status: null, error: e }));
+    child.on("close", (code) => finish({ status: code }));
+  });
+}
+
+/** Runs the check once. `deps` (for tests): `home`, `now`, `run` (runChild's shape). Returns the exit code. */
+export async function daily(deps = {}) {
   const home = deps.home ?? homedir();
   const now = deps.now ?? new Date();
-  const spawn = deps.spawn ?? spawnSync;
+  const run = deps.run ?? runChild;
   const stateDir = join(home, ".local", "share", "stack-updates");
   let exit = 1, log = "";
   try {
     const script = resolveScript(home);
-    const r = spawn(process.execPath, [script, "run", "--unattended"], {
-      cwd: home, windowsHide: true, timeout: RUN_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (r.error) log = `updates.mjs did not finish: ${r.error.message}\n`;
+    const r = await run(process.execPath, [script, "run", "--unattended"], { cwd: home, timeoutMs: RUN_TIMEOUT_MS });
+    if (r.error) log = `updates.mjs did not start: ${r.error.message}\n`;
     exit = Number.isInteger(r.status) ? r.status : 1;
     // Only the error lines are kept: what the run printed is the report, and that is in runs/<date>/.
     log += typeof r.stderr === "string" ? r.stderr : "";
+    if (r.timedOut) {
+      exit = exit === 0 ? 1 : exit;
+      log += `updates.mjs was stopped after ${Math.round(RUN_TIMEOUT_MS / 60_000)} minutes\n`;
+      // A stopped run cannot remove its own lock: remove it here, and only when it is that run's.
+      try {
+        const lock = join(stateDir, "run.lock");
+        if (Number.isInteger(r.pid) && JSON.parse(readFileSync(lock, "utf8")).pid === r.pid) unlinkSync(lock);
+      } catch {
+        // no lock, or another run's
+      }
+    }
   } catch (e) {
     log = `${e instanceof Error ? e.message : String(e)}\n`;
   }
@@ -70,4 +122,4 @@ export function daily(deps = {}) {
   return exit;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = daily();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exitCode = await daily();

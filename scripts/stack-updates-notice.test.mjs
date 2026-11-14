@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { markSeen, noticeText, readSeen } from "../plugins/cookbook/skills/stack-updates/scripts/lib/notice.mjs";
-import { PLUGIN_ID, daily, resolveScript } from "../plugins/cookbook/skills/stack-updates/scripts/daily.mjs";
+import { PLUGIN_ID, RUN_TIMEOUT_MS, daily, resolveScript, runChild } from "../plugins/cookbook/skills/stack-updates/scripts/daily.mjs";
 
 const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/stack-updates-notice.mjs", import.meta.url));
 const HOOKS_JSON = fileURLToPath(new URL("../plugins/cookbook/hooks/hooks.json", import.meta.url));
@@ -165,48 +165,48 @@ const install = (home, installPath) => {
   writeFileSync(join(base, "installed_plugins.json"), JSON.stringify({ plugins: { [PLUGIN_ID]: [{ scope: "project", installPath: "C:/elsewhere" }, { scope: "user", installPath }] } }));
 };
 
-test("launcher: runs the installed plugin's updates.mjs with run --unattended and records how it ended", (t) => {
+test("launcher: runs the installed plugin's updates.mjs with run --unattended and records how it ended", async (t) => {
   const home = tmp(t);
   const folder = join(home, ".claude", "plugins", "cache", "claude-cookbook", "cookbook", "0.26.0");
   plugin(folder);
   install(home, folder);
   assert.equal(resolveScript(home).replaceAll("\\", "/").endsWith("/cookbook/0.26.0/skills/stack-updates/scripts/updates.mjs"), true);
   const calls = [];
-  const spawn = (cmd, args, opts) => { calls.push({ cmd, args, opts }); return { status: 0, stdout: "the report text\n", stderr: "" }; };
-  assert.equal(daily({ home, now: new Date("2026-11-14T07:00:00"), spawn }), 0);
+  const run = (cmd, args, opts) => { calls.push({ cmd, args, opts }); return { status: 0, stdout: "the report text\n", stderr: "" }; };
+  assert.equal(await daily({ home, now: new Date("2026-11-14T07:00:00"), run }), 0);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].cmd, process.execPath);
   assert.deepEqual(calls[0].args.slice(1), ["run", "--unattended"]);
-  assert.equal(calls[0].opts.cwd, home);
+  assert.deepEqual(calls[0].opts, { cwd: home, timeoutMs: RUN_TIMEOUT_MS });
   const state = join(home, ".local", "share", "stack-updates");
   const rec = JSON.parse(readFileSync(join(state, "daily.json"), "utf8"));
   assert.equal(rec.day, "2026-11-14");
   assert.equal(rec.exit, 0);
   assert.equal(readFileSync(join(state, "daily.log"), "utf8"), "", "what the run printed is not kept: the report is in runs/");
   // A failed run: its exit code and its error lines.
-  assert.equal(daily({ home, now: new Date("2026-11-15T07:00:00"), spawn: () => ({ status: 1, stdout: "", stderr: "updates.mjs: another run is in progress\n" }) }), 1);
+  assert.equal(await daily({ home, now: new Date("2026-11-15T07:00:00"), run: () => ({ status: 1, stdout: "", stderr: "updates.mjs: another run is in progress\n" }) }), 1);
   assert.equal(JSON.parse(readFileSync(join(state, "daily.json"), "utf8")).exit, 1);
   assert.match(readFileSync(join(state, "daily.log"), "utf8"), /another run is in progress/);
 });
 
-test("launcher: a plugin folder outside ~/.claude/plugins, or no plugin, starts nothing", (t) => {
+test("launcher: a plugin folder outside ~/.claude/plugins, or no plugin, starts nothing", async (t) => {
   const home = tmp(t), outside = tmp(t);
   plugin(outside);
   install(home, outside);
   assert.throws(() => resolveScript(home), /the folder of .* is outside/);
   let started = 0;
-  assert.equal(daily({ home, spawn: () => { started++; return { status: 0 }; } }), 1);
+  assert.equal(await daily({ home, run: () => { started++; return { status: 0 }; } }), 1);
   assert.equal(started, 0);
   const state = join(home, ".local", "share", "stack-updates");
   assert.match(readFileSync(join(state, "daily.log"), "utf8"), /is outside/);
   assert.equal(JSON.parse(readFileSync(join(state, "daily.json"), "utf8")).exit, 1);
   const bare = tmp(t);
-  assert.equal(daily({ home: bare, spawn: () => { started++; return { status: 0 }; } }), 1);
+  assert.equal(await daily({ home: bare, run: () => { started++; return { status: 0 }; } }), 1);
   assert.equal(started, 0);
   assert.ok(existsSync(join(bare, ".local", "share", "stack-updates", "daily.json")));
 });
 
-test("launcher: a link inside the plugin folder that leads outside ~/.claude/plugins is refused; a plugin without the script starts nothing", (t) => {
+test("launcher: a link inside the plugin folder that leads outside ~/.claude/plugins is refused; a plugin without the script starts nothing", async (t) => {
   const home = tmp(t), outside = tmp(t);
   const folder = join(home, ".claude", "plugins", "cache", "claude-cookbook", "cookbook", "0.26.0");
   mkdirSync(folder, { recursive: true });
@@ -216,6 +216,42 @@ test("launcher: a link inside the plugin folder that leads outside ~/.claude/plu
   symlinkSync(join(outside, "skills"), join(folder, "skills"), "junction");
   assert.throws(() => resolveScript(home), /the update check of .* is outside/);
   let started = 0;
-  assert.equal(daily({ home, spawn: () => { started++; return { status: 0 }; } }), 1);
+  assert.equal(await daily({ home, run: () => { started++; return { status: 0 }; } }), 1);
   assert.equal(started, 0);
+});
+
+test("launcher: a run stopped at the time limit is a failure, and its own lock is removed, never another run's", async (t) => {
+  const home = tmp(t);
+  const folder = join(home, ".claude", "plugins", "cache", "claude-cookbook", "cookbook", "0.26.0");
+  plugin(folder);
+  install(home, folder);
+  const state = join(home, ".local", "share", "stack-updates");
+  mkdirSync(state, { recursive: true });
+  const lock = join(state, "run.lock");
+  writeFileSync(lock, JSON.stringify({ pid: 4242, started: new Date().toISOString() }));
+  assert.equal(await daily({ home, run: async () => ({ status: null, stderr: "", pid: 4242, timedOut: true }) }), 1);
+  assert.ok(!existsSync(lock), "the stopped run's lock is gone");
+  assert.match(readFileSync(join(state, "daily.log"), "utf8"), /updates\.mjs was stopped after 90 minutes/);
+  assert.equal(JSON.parse(readFileSync(join(state, "daily.json"), "utf8")).exit, 1);
+  writeFileSync(lock, JSON.stringify({ pid: 7, started: new Date().toISOString() }));
+  assert.equal(await daily({ home, run: async () => ({ status: null, stderr: "", pid: 4242, timedOut: true }) }), 1);
+  assert.ok(existsSync(lock), "another run's lock is left alone");
+});
+
+test("runChild: keeps only stderr, and at the time limit stops the process and what it started", async () => {
+  const ok = await runChild(process.execPath, ["-e", "console.log('report text'); console.error('an error line'); process.exitCode = 3"], { cwd: tmpdir(), timeoutMs: 20_000 });
+  assert.equal(ok.status, 3);
+  assert.equal(ok.timedOut, false);
+  assert.equal(ok.stderr.trim(), "an error line");
+  // A child that starts its own child and then hangs: both are gone after the limit.
+  const code = "const c=require('child_process').spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'ignore'});console.error('grandchild '+c.pid);setTimeout(()=>{},60000)";
+  const hung = await runChild(process.execPath, ["-e", code], { cwd: tmpdir(), timeoutMs: 1500 });
+  assert.equal(hung.timedOut, true);
+  const grandchild = Number(/grandchild ([0-9]+)/.exec(hung.stderr)?.[1]);
+  assert.ok(Number.isInteger(grandchild) && grandchild > 0, hung.stderr);
+  const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+  await new Promise((r) => setTimeout(r, 500));
+  assert.equal(alive(hung.pid), false);
+  if (process.platform === "win32") assert.equal(alive(grandchild), false, "the tree was stopped, not only the child");
+  else if (alive(grandchild)) process.kill(grandchild, "SIGKILL");
 });
