@@ -509,3 +509,56 @@ test("a long report is shown past 40 lines, and what is not shown is named", { s
   const over = step({ log: finished.replace("SANDBOX processes left", `${many(100)}\nSANDBOX processes left`) });
   assert.match(over.out, /SANDBOX: 23 more report lines are in /);
 });
+
+test("a value from outside code cannot add a key of its own to the probe's notes", { skip }, () => {
+  // The value travels in the environment: on Windows a line break in an argument is cut off.
+  const probe = (mode, ...rest) =>
+    spawnSync(bash, ["-c", 'bash "$0" "$@" "$VALUE"', `${vetting}/sandbox-probe.sh`, mode, ...rest.slice(0, -1)], {
+      encoding: "utf8",
+      env: { ...process.env, VALUE: rest.at(-1) },
+    });
+  // A command name with a line break would otherwise add "resolvers=…" and hide a DNS server.
+  const line = probe("--meta-line", "label", "x\nresolvers=10.0.0.2,203.0.113.53\r\n --version");
+  assert.equal(line.stdout, "label=xresolvers=10.0.0.2,203.0.113.53 --version\n");
+  assert.equal(probe("--safe-name", "some-cli").stdout, "some-cli");
+  assert.equal(probe("--safe-name", "@scope_x.y+z").stdout, "@scope_x.y+z");
+  for (const bad of ["x\nresolvers=1.2.3.4", "a b", "a;b", "$(id)", "../x", ""])
+    assert.equal(probe("--safe-name", bad).stdout, "", `accepted ${JSON.stringify(bad)}`);
+});
+
+test("a copy that fails halfway puts the old files back, and says so when it cannot", { skip }, () => {
+  const make = () => {
+    const root = shareWith({
+      "share/tool/package.json": lock("1.0.0"),
+      "share/tool/package-lock.json": lock("1.0.0"),
+      "share/vetting/tool-2.0.0/lock/package.json": lock("2.0.0"),
+      "share/vetting/tool-2.0.0/lock/package-lock.json": lock("2.0.0"),
+    });
+    stub(root, "npm", ['echo "npm ran" >> "$STUB_ROOT/calls.txt"']);
+    // The stand-in for cp counts its calls. A call named in STUB_CP_FAIL copies the lockfile
+    // only (its second argument) and then fails, as a copy that breaks off halfway would.
+    stub(root, "cp", [
+      'n=$(($(cat "$STUB_ROOT/cp.count" 2>/dev/null || echo 0) + 1)); echo "$n" > "$STUB_ROOT/cp.count"',
+      'case ",${STUB_CP_FAIL:-}," in *",$n,"*) command -p cp "$2" "${@: -1}"; exit 1 ;; esac',
+      'command -p cp "$@"',
+    ]);
+    return root;
+  };
+  const at = (root, file) => readFileSync(path.join(root, "share", "tool", file), "utf8");
+
+  // Call 1 is the backup, call 2 the vetted files, call 3 putting the old ones back.
+  const restored = make();
+  const a = runIn(restored, "pinned-install.sh", ["tool", "2.0.0"], { STUB_CP_FAIL: "2" });
+  assert.equal(a.status, 1, a.out);
+  assert.match(a.out, /the old files were put back and nothing was installed/);
+  assert.equal(at(restored, "package-lock.json"), lock("1.0.0"));
+  assert.equal(at(restored, "package.json"), lock("1.0.0"));
+  assert.ok(!existsSync(path.join(restored, "calls.txt")), "npm ran after a failed copy");
+
+  const stuck = make();
+  const b = runIn(stuck, "pinned-install.sh", ["tool", "2.0.0"], { STUB_CP_FAIL: "2,3" });
+  assert.equal(b.status, 1, b.out);
+  assert.match(b.out, /the old files could not be put back: run pinned-install\.sh tool --back/);
+  assert.ok(!b.out.includes("were put back and"));
+  assert.ok(!existsSync(path.join(stuck, "calls.txt")), "npm ran after a failed copy");
+});

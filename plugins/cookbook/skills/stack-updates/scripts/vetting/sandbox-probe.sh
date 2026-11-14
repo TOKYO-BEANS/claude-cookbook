@@ -12,12 +12,20 @@
 #    or: bash sandbox-probe.sh --cmd "<install command>" ["<start command>"]
 #    or: bash sandbox-probe.sh --report <folder>
 #    or: bash sandbox-probe.sh --left <ps after> <pids before> <own pid>
+#    or: bash sandbox-probe.sh --meta-line <key> <value>, --safe-name <name>
 # The second form is for code that is not an npm package (a pnpm workspace, a Python tool):
 # push the folder and this file with `boat run --no-env --push <folder>`, and both commands
 # run in that folder under the same probe. The third form only prints the report from a
 # folder of captured files, and the fourth only lists the left-over processes; the tests
 # use both, and they need no sandbox.
 set -uo pipefail
+
+# One "key=value" line for $T/meta. The value is cut to one line of printable characters:
+# some values come from outside code, and a line break in one would add a key of its own.
+meta_line() { printf '%s=%s\n' "$1" "$(printf '%s' "$2" | tr -cd '\40-\176' | cut -c1-300)"; }
+# A command name from a package.json, or nothing when it is not a plain name: the name ends
+# up in a command line and in the report.
+safe_name() { if [[ "$1" =~ ^[A-Za-z0-9._@+-]+$ ]]; then printf '%s' "$1"; fi; }
 
 clean() { tr -cd '\11\12\40-\176' | cut -c1-160; }
 # The names asked for, from tcpdump's lines. Every question type is shown, with its type
@@ -117,6 +125,14 @@ if [ "${1:-}" = "--report" ]; then
   report
   exit 0
 fi
+if [ "${1:-}" = "--meta-line" ]; then
+  meta_line "$2" "$3"
+  exit 0
+fi
+if [ "${1:-}" = "--safe-name" ]; then
+  safe_name "$2"
+  exit 0
+fi
 if [ "${1:-}" = "--left" ]; then
   left "$2" "$3" "$4"
   exit $?
@@ -174,6 +190,7 @@ dns_install=$(wc -l < "$T/dns.txt")
 BIN=$(sudo -n "$NODE" -e '
 const fs=require("fs");try{const p=JSON.parse(fs.readFileSync(process.argv[1]+"/node_modules/"+process.argv[2]+"/package.json","utf8"));const b=p.bin;
 console.log(typeof b==="string"?p.name.replace(/^@[^/]+\//,""):b?Object.keys(b)[0]:"")}catch(e){}' "$WORK" "$PKG" 2>/dev/null)
+BIN=$(safe_name "$BIN")
 start="none"; label="no command"
 if [ -n "$START" ]; then
   label="start command"
@@ -198,16 +215,16 @@ ps -eo pid=,ppid=,args= > "$T/ps.after"
 left "$T/ps.after" "$T/ps.before" "$$" > "$T/left.txt"
 
 {
-  echo "pkg=$PKG"
-  echo "os=$(. /etc/os-release; echo "$PRETTY_NAME")"
-  echo "node=$(node -v 2>/dev/null)"
-  echo "ci=$ci"
-  echo "start=$start"
-  echo "label=$label"
-  echo "dns_install=$dns_install"
+  meta_line pkg "$PKG"
+  meta_line os "$(. /etc/os-release; echo "$PRETTY_NAME")"
+  meta_line node "$(node -v 2>/dev/null)"
+  meta_line ci "$ci"
+  meta_line start "$start"
+  meta_line label "$label"
+  meta_line dns_install "$dns_install"
   # The system's own resolvers: the stub in /etc/resolv.conf and the servers systemd-resolved
   # forwards to, which is where a normal lookup is seen leaving the machine.
-  echo "resolvers=$({
+  meta_line resolvers "$({
     awk '/^nameserver/ { print $2 }' /etc/resolv.conf /run/systemd/resolve/resolv.conf 2>/dev/null
     resolvectl dns 2>/dev/null | sed 's/^[^:]*://' | tr ' ' '\n' | grep -E '^[0-9a-fA-F:.]*[.:][0-9a-fA-F:.]*$'
   } | sed 's/%.*//' | sort -u | paste -sd, -)"

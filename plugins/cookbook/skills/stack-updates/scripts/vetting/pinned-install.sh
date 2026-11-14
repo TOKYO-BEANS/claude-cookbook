@@ -29,7 +29,10 @@ else
   fi
   : > "$D/.previous/pending"
   if ! cp "$V/lock/package.json" "$V/lock/package-lock.json" "$D/"; then
-    cp "$D/.previous/package.json" "$D/.previous/package-lock.json" "$D/"
+    if ! cp "$D/.previous/package.json" "$D/.previous/package-lock.json" "$D/"; then
+      echo "the vetted files could not be copied in, and the old files could not be put back: run pinned-install.sh $FOLDER --back"
+      exit 1
+    fi
     echo "the vetted files could not be copied in: the old files were put back and nothing was installed"
     exit 1
   fi
