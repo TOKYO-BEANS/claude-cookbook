@@ -355,7 +355,10 @@ test("the real table: no ok pattern matches an error line, a help text or a not-
   const pass = CONNECTION_CHECKS["proton-pass-cli"].ok;
   assert.ok(!pass.test("Release track: stable\nError: This operation requires an authenticated client\n"));
   assert.ok(!pass.test("Usage: pass-cli.exe info [OPTIONS]\nOptions:\n"));
-  assert.ok(pass.test("Username: someone\nRelease track: stable\n"), "positive side is unproven: an assumed signed-in shape");
+  assert.ok(pass.test("Username: someone\nRelease track: stable\n"));
+  // The real signed-in answer of pass-cli 2.7.0 (14 November 2026): a list of "- Key: value" lines.
+  assert.ok(pass.test("- Release track: stable\n- Personal Access Token: [Agent] claude-pc\n- Session has lock: no\n"));
+  assert.ok(!pass.test("- Release track: stable\nError: This operation requires an authenticated client\n"));
 });
 
 test("the real table: Cloudflare's pattern needs the word active alone on a line", () => {

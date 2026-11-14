@@ -74,8 +74,9 @@ export const CONNECTION_CHECKS = Object.freeze({
   firecrawl: { argv: shim("firecrawl", "--status"), ok: /Credits: [\d,]+ \/ [\d,]+/ },
   boat: { argv: shim("boat", "limits"), ok: /"billingStatus":"[a-z_]+"/ },
   browserbase: { argv: shim("browse", "cloud", "projects", "list"), ok: /"concurrency":\s*\d+/ },
-  // UNPROVEN ok pattern: the CLI had no session on 13 November 2026, so it never saw a signed-in answer.
-  "proton-pass-cli": { argv: shim("pass-cli", "info"), ok: /(?<![\s\S])(?![\s\S]*(?:error|usage|no session|authenticated client))[\s\S]*?^[A-Za-z][A-Za-z ]*:[ \t]*\S/im },
+  // A signed-in CLI answers with "- Key: value" lines, among them "- Personal Access Token:
+  // [Agent] <name>" (seen on 14 November 2026); its error and usage lines never count.
+  "proton-pass-cli": { argv: shim("pass-cli", "info"), ok: /(?<![\s\S])(?![\s\S]*(?:error|usage|no session|authenticated client))[\s\S]*?^(?:- )?[A-Za-z][A-Za-z ]*:[ \t]*\S/im },
   "google-workspace-cli": { argv: shim("google", "status"), ok: /^(?!.*"works":\s*false).*"ok":\s*true/s },
   cloudflare: { argv: ["node", "{bin}/with-key.mjs", "cloudflare-wrangler", "CLOUDFLARE_API_TOKEN", "node", "{lib}/cloudflare-verify.mjs"], ok: /^active\s*$/m },
   parallel: { argv: shim("parallel-cli", "search", "status", "--json", "--max-results", "1", "--excerpt-max-chars-total", "200"), ok: /"status":\s*"ok"/, paid: true },
