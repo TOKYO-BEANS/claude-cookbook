@@ -30,7 +30,7 @@ export const REASONS = Object.freeze({
   partial: "its notes are too long to check in full",
   unchecked: "its notes could not be checked yet",
   major: "major version",
-  risky: "its notes say breaking, deprecated or removed",
+  risky: "its notes say something breaks, is deprecated or is removed",
   noNotes: "no release notes, and more than a patch release",
 });
 // The word check of a release's notes: "clean" (read in full, no warning word), "risky"
@@ -50,17 +50,33 @@ const addDays = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY_MS
 const daysBetween = (a, b) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
 const core = (v) => /^v?(\d+)\.(\d+)\.(\d+)/.exec(typeof v === "string" ? v : "")?.slice(1) ?? null;
 
-/** "major", "minor" or "patch" for two x.y.z versions where `to` is higher; null when they cannot be compared that way. */
+/**
+ * "major", "minor" or "patch" for two x.y.z versions where `to` is higher; null when
+ * they cannot be compared that way. The level is how much may break, so a version
+ * that starts with 0 is read one step up, as its makers mean it: for 0.y.z a change of
+ * y is "major" and a change of z is "minor"; for 0.0.z any change is "major".
+ */
 export function levelOf(from, to) {
   const a = core(from), b = core(to);
   if (!a || !b) return null;
-  for (const [i, level] of ["major", "minor", "patch"].entries()) {
+  const names = ["major", "minor", "patch"];
+  // How many leading numbers of the installed version are 0: each shifts the names up.
+  const shift = compareNumeric(a[0], "0") !== 0 ? 0 : compareNumeric(a[1], "0") !== 0 ? 1 : 2;
+  for (let i = 0; i < 3; i++) {
     const c = compareNumeric(a[i], b[i]);
-    if (c < 0) return level;
+    if (c < 0) return names[Math.max(0, i - shift)];
     if (c > 0) return null; // `to` is lower: not an update
   }
   return null;
 }
+
+// Words in release notes that mean the update may need a change on our side. Wider
+// than the report's own flag (`isRisky`), because here a miss installs something
+// without asking: any form of break, deprecate or remove, dropped or ended support,
+// "no longer", incompatible, and a migration.
+const WARNING = /\b(?:break(?:s|ing|age)?|broke|broken|deprecat\w*|remov\w*|drop(?:s|ped|ping)?\s+(?:\w+\s+){0,2}support|end(?:s|ed|ing)?\s+(?:of\s+)?support|unsupported|no\s+longer|incompatib\w*|migrat\w*)\b/i;
+/** True when release notes carry one of those words. A plain word test on untrusted text; it can only make a decision stricter. */
+export const warnsOf = (text) => WARNING.test(String(text ?? ""));
 
 /**
  * One behind part: `{ decision: "none" | "ask" | "waiting" | "routine", reason?, until? }`.

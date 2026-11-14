@@ -731,7 +731,8 @@ about the dates the catalog records. It installs, updates and commits nothing.
   needs the owner's yes, one tool at a time. The script decides which are routine, by fixed rules
   (`scripts/lib/apply.mjs`): a plugin, a pinned copy or a listed pinned binary (a skill copy and a
   local port always need a yes); a version step that can be read, with no major version; notes
-  read in full with no "breaking", "deprecated" or "removed"; with no notes, a patch release only;
+  read in full with no warning word (break, deprecate, remove, dropped support, "no longer",
+  incompatible, migration); with no notes, a patch release only; a 0.y.z version read one step up;
   seen for 3 days; no failed attempt at that version; at most 5 a day. Whatever cannot be read
   counts against the update. An interactive session installs them by each tool's recipe after
   giving the owner the report, then runs `updates.mjs verify <part>`: the script refuses a part it

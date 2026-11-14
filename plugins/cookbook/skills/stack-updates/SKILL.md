@@ -89,9 +89,11 @@ behind part is routine only when all of these hold:
   Proton Pass CLI). A skill copy and a local port (`@claude-local`) always need a yes: nothing
   on disk says which commit a copy is, so the script cannot check that install;
 - its version step can be read (x.y.z on both sides, or two commit ids) and the first number did
-  not move;
-- its release notes were read in full and do not say "breaking", "deprecated" or "removed" (a word
-  check by the script). Notes too long to read in full need a yes. While the notes cannot be
+  not move. A version that starts with 0 is read one step up: for 0.y.z a change of y counts as a
+  major version, and a change of z as a minor one;
+- its release notes were read in full and carry no warning word: any form of break, deprecate or
+  remove, dropped or ended support, "no longer", incompatible, or a migration (a word check by the
+  script). Notes too long to read in full need a yes. While the notes cannot be
   fetched, the part waits and is checked again the next day;
 - with no notes, it is a patch release. Commit subject lines, which is all a marketplace or a
   commit feed gives, are not release notes;

@@ -50,7 +50,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { NOTES, decide, decideAll } from "./lib/apply.mjs";
+import { NOTES, decide, decideAll, warnsOf } from "./lib/apply.mjs";
 import { READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
 import { dueDates, runChecks } from "./lib/connect.mjs";
 import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
@@ -717,7 +717,9 @@ export function verdictOf(from, to, notes) {
   if (!isObject(notes)) return null;
   const text = typeof notes.text === "string" ? notes.text : "";
   if (!text.trim()) return notes.error ? null : "none";
-  if (isRisky(from, to, text)) return "risky";
+  // Real notes get the wide word list. Commit subject lines get only the report's own
+  // three words: "Remove an unused import" is how commits are written, not a warning.
+  if (isRisky(from, to, text) || (notes.subjects !== true && warnsOf(text))) return "risky";
   if (notes.whole !== true) return "partial";
   return notes.subjects === true ? "none" : "clean";
 }

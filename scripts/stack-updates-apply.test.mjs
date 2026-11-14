@@ -4,7 +4,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { DAILY_LIMIT, NOTES, REASONS, ROUTINE_COMMAND_PARTS, SOAK_DAYS, decide, decideAll, levelOf } from "../plugins/cookbook/skills/stack-updates/scripts/lib/apply.mjs";
+import { DAILY_LIMIT, NOTES, REASONS, ROUTINE_COMMAND_PARTS, SOAK_DAYS, decide, decideAll, levelOf, warnsOf } from "../plugins/cookbook/skills/stack-updates/scripts/lib/apply.mjs";
 
 const TODAY = "2026-11-20";
 const part = (over = {}) => ({ key: "tool/cli", installed: "1.2.3", latest: "1.2.4", latestSince: "2026-11-10", applyFailed: null, ...over });
@@ -20,6 +20,33 @@ test("levelOf: the first number that moved up; null when it cannot be told", () 
   assert.equal(levelOf("1.9.9", "1.10.0"), "minor", "numbers, not text");
   assert.equal(levelOf("2.56.0.windows.2", "2.56.1"), "patch");
   for (const [from, to] of [["1.2.3", "1.2.3"], ["2.0.0", "1.9.9"], [A, B], ["1.2", "1.3"], [null, "1.0.0"], ["1.0.0", undefined]]) assert.equal(levelOf(from, to), null);
+});
+
+test("levelOf: a version that starts with 0 is read one step up, as its makers mean it", () => {
+  assert.equal(levelOf("0.11.3", "0.12.0"), "major", "for 0.y.z the second number is the breaking one");
+  assert.equal(levelOf("0.11.3", "0.11.4"), "minor");
+  assert.equal(levelOf("0.9.9", "1.0.0"), "major");
+  assert.equal(levelOf("0.0.3", "0.0.4"), "major", "for 0.0.z every release may break");
+  assert.equal(levelOf("0.0.3", "0.1.0"), "major");
+  assert.equal(levelOf("0.0.0", "0.0.1"), "major");
+  assert.equal(levelOf("0.12.0", "0.11.9"), null);
+  // So a 0.y step is never routine, and a 0.y.z step needs real notes.
+  assert.deepEqual(decide(part({ installed: "0.10.0", latest: "0.12.0" }), facts()), ask(REASONS.major));
+  assert.deepEqual(decide(part({ installed: "0.11.3", latest: "0.11.4" }), facts({ notes: "none" })), ask(REASONS.noNotes));
+  assert.deepEqual(decide(part({ installed: "0.11.3", latest: "0.11.4" }), facts({ notes: "clean" })), ROUTINE);
+});
+
+test("warnsOf: every usual way release notes say that something may break", () => {
+  for (const text of [
+    "BREAKING: the old flow is gone", "This breaks compatibility", "A breaking change", "Fixed breakage in the parser", "The old API is broken by design",
+    "Removes the --foo flag", "The flag was removed", "Removal of the legacy mode", "removing v1 endpoints",
+    "deprecates X", "X is deprecated", "Deprecation of the old login",
+    "Drops support for Node 18", "dropped Node 18 support", "Dropping Windows 10 support", "Ends support for v1", "End of support for the old plan", "Node 18 is unsupported",
+    "No longer reads ~/.config", "incompatible with v1 state files", "A backwards-incompatible change", "See the migration guide", "You must migrate your config",
+  ]) assert.equal(warnsOf(text), true, text);
+  for (const text of ["Fixes a typo", "Adds a --json flag; faster startup", "remote control added", "breakfast menu", "supports Node 26", "a longer timeout", "", null, undefined]) {
+    assert.equal(warnsOf(text), false, String(text));
+  }
 });
 
 test("routine: a patch or minor release, notes checked, of a kind a session installs and the script can read back, seen long enough", () => {

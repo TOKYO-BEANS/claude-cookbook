@@ -778,7 +778,7 @@ test("routine updates: notes that say breaking need a yes; --no-read fetches not
   const state = tmp(t);
   assert.equal((await cli(["run", ...at(state, "2026-11-13")], fakes({ gh: risky }))).code, 0);
   assert.deepEqual(readJson(join(state, "runs", "2026-11-13", "result.json")).apply.ask,
-    [{ key: "firecrawl/cli", from: "1.29.0", to: "1.31.0", kind: "pinned", reason: "its notes say breaking, deprecated or removed" }]);
+    [{ key: "firecrawl/cli", from: "1.29.0", to: "1.31.0", kind: "pinned", reason: "its notes say something breaks, is deprecated or is removed" }]);
   const report = readFileSync(join(state, "runs", "2026-11-13", "report.md"), "utf8");
   assert.ok(!/BREAKING|login flow/.test(report), "the notes themselves never reach the report through this check");
   // --no-read: nothing is fetched, so nothing is checked, so nothing is routine. Even a patch
@@ -795,7 +795,7 @@ test("routine updates: notes that say breaking need a yes; --no-read fetches not
   }
   // The next run with reading on finds what the notes of that patch release say.
   assert.equal((await cli(["run", ...at(offline, "2026-11-18")], fakes({ npm: "1.29.1", gh: { "repos/firecrawl/cli/releases?per_page=30": [{ tag_name: "v1.29.1", draft: false, prerelease: false, body: "The --old flag is removed." }] } }))).code, 0);
-  assert.deepEqual(readJson(join(offline, "runs", "2026-11-18", "result.json")).apply.ask.map((a) => a.reason), ["its notes say breaking, deprecated or removed"]);
+  assert.deepEqual(readJson(join(offline, "runs", "2026-11-18", "result.json")).apply.ask.map((a) => a.reason), ["its notes say something breaks, is deprecated or is removed"]);
 });
 
 test("the word check of notes: clean only for whole, real release notes with no warning word", async () => {
@@ -806,9 +806,16 @@ test("the word check of notes: clean only for whole, real release notes with no 
   // Cut, or possibly not reaching back to the installed version: never clean.
   assert.equal(verdictOf("1.0.0", "1.0.1", { text: "Fixes a typo.", whole: false }), "partial");
   assert.equal(verdictOf("1.0.0", "1.0.1", { text: "Fixes a typo." }), "partial", "no word that it is whole");
+  // Wider than the report's own flag: any usual wording of a break counts here.
+  for (const text of ["Removes the --foo flag.", "Drops support for Node 18.", "This deprecates the old login.", "No longer reads the old file.", "See the migration guide."]) {
+    assert.equal(verdictOf("1.0.0", "1.0.1", { text, whole: true }), "risky", text);
+  }
   // Commit subject lines are not release notes.
   assert.equal(verdictOf("1.0.0", "1.0.1", { text: "2026-11-10 Fix a typo", whole: true, subjects: true }), "none");
   assert.equal(verdictOf("1.0.0", "1.0.1", { text: "2026-11-10 Remove the removed flag", whole: true, subjects: true }), "risky");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: ["2026-11-10 Remove an unused import", "2026-11-09 Migrate tests to node:test"].join("\n"), whole: true, subjects: true }), "none",
+    "commit subjects are checked for the three plain words only");
+  assert.equal(verdictOf("1.0.0", "1.0.1", { text: "2026-11-10 BREAKING: new config format", whole: true, subjects: true }), "risky");
   // Read, and there are none; not read at all.
   assert.equal(verdictOf("1.0.0", "1.0.1", { text: "" }), "none");
   assert.equal(verdictOf("1.0.0", "1.0.1", { text: "  \n", whole: true }), "none");
