@@ -28,7 +28,8 @@ node <this skill's folder>/scripts/updates.mjs run
 - `--no-read` skips the release notes. `--state <folder>`, and with it `--today YYYY-MM-DD`, runs a
   trial that never touches the real state. `record <tool id>/<part> <commit>` is below.
 - Cost: free requests (the npm registry, `gh api`, plain page reads); one tiny paid Parallel check,
-  at most once per real day; one request with no tools on the Claude plan per changed part
+  at most once per real day in a state folder (a trial folder reuses the real run's check of the
+  day; before that run it makes its own); one request with no tools on the Claude plan per changed part
   (Sonnet, 1,400 to 3,500 input and about 200 output tokens, by the length of the notes), at most
   10 a run. No Firecrawl credits.
 

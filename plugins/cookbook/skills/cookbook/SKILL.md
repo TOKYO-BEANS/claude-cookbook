@@ -716,7 +716,8 @@ about the dates the catalog records. It installs, updates and commits nothing.
   reader is the script's own `claude -p` request on Sonnet with no tools, no MCP servers, no user
   settings and the advisor tool off; the three answers come back as short text fields.
 - **Cost:** free requests (the npm registry, `gh api`, plain page reads); one tiny paid Parallel
-  check, at most once per real day; one request with no tools on the Claude plan per changed part
+  check, at most once per real day in a state folder (a trial folder reuses the real run's check of
+  the day; before that run it makes its own); one request with no tools on the Claude plan per changed part
   (1,400 to 3,500 input and about 200 output tokens, by the length of the notes), at most 10 a run.
   No Firecrawl credits.
 - **Updates need the owner's yes,** one tool at a time, and then follow the recipe for that kind of

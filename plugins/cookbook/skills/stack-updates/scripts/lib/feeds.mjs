@@ -288,11 +288,16 @@ export async function readLatest(feed, { fetcher, gh, hosts } = {}) {
 
 // ---- release text ----------------------------------------------------------
 
+// The installed version as a lower bound: its x.y.z, also under a dotted build or
+// platform suffix ("2.56.0.windows.2" -> "2.56.0"), which does not order. A
+// prerelease ("1.2.3-beta.1") gives null: its own stable release is newer.
+const lowerBound = (v) => stable(v) ?? (/^v?(\d+\.\d+\.\d+)\.[0-9A-Za-z.]+$/.exec(typeof v === "string" ? v : "")?.[1] ?? null);
+
 // Releases newer than `from` up to and including `to`, newest first.
 async function releasesText(repo, parse, from, to, { gh }) {
   const list = await ghJson(gh, `repos/${repo}/releases?per_page=30`);
   if (!Array.isArray(list)) throw new Error("Unexpected releases answer");
-  const lo = stable(from), hi = stable(to);
+  const lo = lowerBound(from), hi = stable(to);
   const picked = list
     .filter((r) => isObject(r) && r.draft !== true && r.prerelease !== true && typeof r.tag_name === "string")
     .map((r) => ({ r, version: parse(r.tag_name) }))

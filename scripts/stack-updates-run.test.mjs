@@ -617,6 +617,26 @@ test("the paid check runs at most once per real local day, whatever --today says
   assert.deepEqual(readJson(marker), { on: "2026-11-16", results: { parallel: { service: "Parallel", outcome: "working" } } });
 });
 
+test("a trial folder (--state) reuses the real state folder's paid check of the day and pays nothing", async (t) => {
+  const home = tmp(t), state = tmp(t);
+  cpSync(HOME, home, { recursive: true });
+  const real = join(home, ".local", "share", "stack-updates");
+  mkdirSync(real, { recursive: true });
+  writeFileSync(join(real, "paid-check.json"), JSON.stringify({ on: "2026-11-13", results: { parallel: { service: "Parallel", outcome: "working" } } }));
+  const f = fakes();
+  const r = await cli(["run", "--home", home, "--state", state, "--today", "2026-11-13"], f);
+  assert.equal(r.code, 0, r.err);
+  assert.equal(f.run.count(/parallel-cli/), 0);
+  assert.ok(!existsSync(join(state, "paid-check.json")), "the trial folder writes no marker of its own");
+  assert.ok(readJson(join(state, "runs", "2026-11-13", "result.json")).working.includes("Parallel"));
+  // The real marker is from another day: the trial pays, into its own folder only.
+  writeFileSync(join(real, "paid-check.json"), JSON.stringify({ on: "2026-11-12", results: { parallel: { service: "Parallel", outcome: "working" } } }));
+  const state2 = tmp(t), g = fakes();
+  assert.equal((await cli(["run", "--home", home, "--state", state2, "--today", "2026-11-13"], g)).code, 0);
+  assert.equal(g.run.count(/parallel-cli/), 1);
+  assert.equal(readJson(join(real, "paid-check.json")).on, "2026-11-12");
+});
+
 test("a state file that cannot be read: the report says it was reset and this run is a new baseline", async (t) => {
   const state = tmp(t);
   writeFileSync(join(state, "state.json"), "{");
@@ -907,7 +927,7 @@ test("recipeSection: the Cookbook section the recipe names, up to the next headi
 
 // ---- fix round 1 (Task 8): pages under context-mode's 4,096-byte cut -------------------
 
-import { PAGE_BYTES, labelOf, reportPages } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
+import { NOT_PAGEABLE, PAGE_BYTES, labelOf, reportPages } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
 
 const utf8 = (s) => Buffer.byteLength(s, "utf8");
 const bodyOf = (page) => page.slice(page.indexOf("\n") + 1);
@@ -930,6 +950,16 @@ test("reportPages: a long report is cut at line ends into pages of at most PAGE_
     assert.equal(p.split("\n")[0], i === 0 ? `Page 1 of ${pages.length}: ${FILE}` : `Page ${i + 1} of ${pages.length}`);
   });
   assert.equal(pages.map(bodyOf).join(""), text, "the pages hold the whole report, in order, nothing added");
+});
+
+test("reportPages: a run folder that `page` never reads (--out) says so on page 1, within the page size", () => {
+  const text = `${Array.from({ length: 200 }, (_, i) => `- line ${i}: some text that fills the page`).join("\n")}\n`;
+  const pages = reportPages(FILE, text, { pageable: false });
+  assert.ok(pages.length >= 2);
+  assert.equal(pages[0].split("\n")[0], `Page 1 of ${pages.length}: ${FILE}${NOT_PAGEABLE}`);
+  assert.ok(pages.every((p) => utf8(p) <= PAGE_BYTES));
+  assert.equal(pages.map(bodyOf).join(""), text);
+  assert.deepEqual(reportPages(FILE, "short\n", { pageable: false }), [`${FILE}\nshort\n`]);
 });
 
 test("reportPages: a line longer than a page is cut at character boundaries, never inside a character", () => {

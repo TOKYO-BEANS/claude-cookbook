@@ -270,12 +270,15 @@ function cutLine(line, limit) {
  * What `run` and `page` print for a report: `[<file>\n<text>]` when that fits in
  * PAGE_BYTES, as before; otherwise pages cut at line ends, the first headed
  * "Page 1 of N: <file>" and the others "Page k of N", each at most PAGE_BYTES.
- * The page bodies joined in order are the report.
+ * The page bodies joined in order are the report. With `pageable: false` (a run
+ * folder given with --out, which `page` never reads) the first head says so.
  */
-export function reportPages(file, text) {
+export const NOT_PAGEABLE = ' (the other pages are in this file only: "page" reads the state folder\'s run)';
+export function reportPages(file, text, { pageable = true } = {}) {
   const whole = `${file}\n${text}`;
   if (utf8Bytes(whole) <= PAGE_BYTES) return [whole];
-  const firstHead = utf8Bytes(`Page ${MAX_PAGES} of ${MAX_PAGES}: ${file}\n`);
+  const note = pageable ? "" : NOT_PAGEABLE;
+  const firstHead = utf8Bytes(`Page ${MAX_PAGES} of ${MAX_PAGES}: ${file}${note}\n`);
   const head = utf8Bytes(`Page ${MAX_PAGES} of ${MAX_PAGES}\n`);
   const lines = (text.endsWith("\n") ? text.slice(0, -1) : text).split("\n");
   const bodies = [];
@@ -294,7 +297,7 @@ export function reportPages(file, text) {
   }
   if (page.length) bodies.push(page);
   if (bodies.length > MAX_PAGES) throw new Error(`the report needs more than ${MAX_PAGES} pages`);
-  return bodies.map((b, i) => `${i === 0 ? `Page 1 of ${bodies.length}: ${file}` : `Page ${i + 1} of ${bodies.length}`}\n${b.join("\n")}\n`);
+  return bodies.map((b, i) => `${i === 0 ? `Page 1 of ${bodies.length}: ${file}${note}` : `Page ${i + 1} of ${bodies.length}`}\n${b.join("\n")}\n`);
 }
 
 // `page <n>`: page n of today's report.md in the state folder. It reads that one file,
@@ -384,15 +387,21 @@ function storedNow(ctx, next) {
 // paid-check.json in the state folder: `{ on: <real local date>, results: { <tool id>:
 // { service, outcome: "working" } | { service, outcome: "broken", error } } }`. It is
 // written right after each paid call and keyed by the PC's real date, never --today.
+// A trial folder (--state) with no marker of its own for the day reuses the real
+// state folder's, read only, so a trial after the day's real run pays nothing.
 const markerPath = (ctx) => join(ctx.stateDir, PAID_MARKER);
-function readPaidMarker(ctx) {
+const realMarkerPath = (ctx) => join(ctx.home, ".local", "share", "stack-updates", PAID_MARKER);
+function markerResults(path, day) {
   let m;
   try {
-    m = JSON.parse(readFileSync(markerPath(ctx), "utf8"));
+    m = JSON.parse(readFileSync(path, "utf8"));
   } catch {
     return null;
   }
-  return isObject(m) && m.on === ctx.realDay && isObject(m.results) ? m.results : null;
+  return isObject(m) && m.on === day && isObject(m.results) ? m.results : null;
+}
+function readPaidMarker(ctx) {
+  return markerResults(markerPath(ctx), ctx.realDay) ?? markerResults(realMarkerPath(ctx), ctx.realDay);
 }
 function writePaidMarker(ctx, results) {
   mkdirSync(ctx.stateDir, { recursive: true });
@@ -641,7 +650,8 @@ async function stageReport(ctx) {
   writeJson(ctx, "result.json", result);
   // What is printed, before the state moves: a report that cannot be paged fails here,
   // so the next run reports it again.
-  const printed = result.quiet ? `${quietLine(result)}\n` : reportPages(runFile(ctx, "report.md"), text)[0];
+  const pageable = ctx.out === join(ctx.stateDir, "runs", ctx.today);
+  const printed = result.quiet ? `${quietLine(result)}\n` : reportPages(runFile(ctx, "report.md"), text, { pageable })[0];
   // Read the state again just before saving: a commit recorded while this run was
   // going differs from the one the run started with (next's) and wins.
   const stored = storedNow(ctx, next);

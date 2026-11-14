@@ -104,8 +104,7 @@ test("changelog: hash of the page text, tags and whitespace removed", async () =
 test("changelog: a host that is not on the allow list is never requested", async () => {
   // The allow list holds only the pages the first real run proved stable (13 November 2026);
   // proton.me left when the Proton Pass CLI moved to its GitHub releases (14 November 2026).
-  assert.deepEqual([...CHANGELOG_HOSTS].sort(), ["www.browserbase.com"]);
-  assert.ok(!CHANGELOG_HOSTS.includes("docs.example.org"));
+  assert.deepEqual([...CHANGELOG_HOSTS].sort(), ["www.browserbase.com"]); // so the test page's host is not on it
   const d = deps({ http: { [PAGE]: fx("changelog-page.html") } });
   assert.equal((await readLatest({ kind: "changelog", url: PAGE }, d)).ok, false);
   assert.equal(d.fetcher.calls.length, 0);
@@ -193,6 +192,17 @@ test("releaseText: github notes between two versions, newest first", async () =>
   assert.match(text, /v2\.103\.2/);
   assert.doesNotMatch(text, /v2\.103\.1/);
   assert.ok(text.indexOf("v2.104.0") < text.indexOf("v2.103.3"));
+});
+test("releaseText: an installed version with a platform suffix still bounds the notes from below", async () => {
+  const rels = ["v2.56.1.windows.1", "v2.56.0.windows.2", "v2.56.0.windows.1", "v2.55.0.windows.1"]
+    .map((tag_name) => ({ tag_name, draft: false, prerelease: false, published_at: "2026-11-01T00:00:00Z", body: `notes of ${tag_name}` }));
+  const d = deps({ gh: { "api repos/git-for-windows/git/releases?per_page=30": JSON.stringify(rels) } });
+  const text = await releaseText({ kind: "gitForWindows" }, "2.56.0.windows.2", "2.56.1", d);
+  assert.match(text, /v2\.56\.1\.windows\.1/);
+  assert.doesNotMatch(text, /v2\.56\.0\.windows|v2\.55\.0/);
+  // A prerelease gives no lower bound: its own stable release is newer than it.
+  const pre = deps({ gh: { "api repos/o/r/releases?per_page=30": JSON.stringify([{ tag_name: "v1.2.3", draft: false, prerelease: false, body: "final" }]) } });
+  assert.match(await releaseText({ kind: "github", repository: "o/r" }, "1.2.3-beta.1", "1.2.3", pre), /v1\.2\.3/);
 });
 test("releaseText: commit subjects with dates, up to the installed commit", async () => {
   const list = JSON.parse(fx("commits-tstack.json"));
