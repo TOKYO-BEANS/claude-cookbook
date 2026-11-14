@@ -615,7 +615,9 @@ The owner added boat (boat.dev) on 12 November 2026: full Ubuntu virtual machine
   A repository's own checks stay on Depot CI. Hosting stays on Cloudflare.
 - **A fixed step of every vetting** (owner, 14 November 2026: in its first two days boat was used
   for nothing, because every use was left to judgement). Outside code is run once in a sandbox
-  before it is installed, after the three scanners:
+  before it is installed, after the three scanners. This holds for every install and update
+  recipe in this file and in the `stack-updates` skill, also where a recipe's own steps do not
+  repeat it (Jev Router, REA, the scanners themselves):
   - an npm package: `~/.local/share/vetting/_tools/pinned-vet.sh <install folder> <package>
     <version>` ends with the sandbox run (`pinned-sandbox.sh`, same arguments, runs it alone). It
     sends the new `package.json` and `package-lock.json` and a probe script, installs with the
