@@ -249,3 +249,33 @@ test("releaseNotes: a read that failed carries its reason; a feed with no notes 
   // releaseText is its text.
   assert.equal(await releaseText({ kind: "github", repository: "o/r" }, "1.0.0", "2.0.0", deps()), "");
 });
+
+// ---- final review fixes --------------------------------------------------------
+
+test("marketplace: only an absent manifest (404) falls back to the entry's version; any other failure is not ok", async () => {
+  const market = JSON.stringify({ name: "m", plugins: [{ name: "p", version: "1.2.0", source: "./plugins/p" }] });
+  const marketFile = JSON.stringify({ type: "file", encoding: "base64", content: Buffer.from(market).toString("base64") });
+  const MANIFEST = "api repos/o/m/contents/plugins/p/.claude-plugin/plugin.json";
+  const ghWith = (manifestAnswer) => async (args) => {
+    const line = args.join(" ");
+    if (line === "api repos/o/m/contents/.claude-plugin/marketplace.json") return { code: 0, stdout: marketFile, stderr: "" };
+    if (line === "api repos/o/m/commits?path=plugins/p&per_page=1") return { code: 0, stdout: JSON.stringify([{ sha: SHA }]), stderr: "" };
+    if (line === MANIFEST) return manifestAnswer;
+    return { code: 1, stdout: "", stderr: "gh: Not Found (HTTP 404)" };
+  };
+  const feed = { kind: "marketplace", repository: "o/m", plugin: "p" };
+  const read = (answer) => readLatest(feed, { fetcher: fakeFetcher(), gh: ghWith(answer) });
+  // gh api's own answer to a path that does not exist.
+  const absent = await read({ code: 1, stdout: '{"message":"Not Found","status":"404"}', stderr: "gh: Not Found (HTTP 404)" });
+  assert.deepEqual(absent, { ok: true, version: "1.2.0", commit: SHA, source: `https://github.com/o/m/commit/${SHA}` });
+  const limited = await read({ code: 1, stdout: "", stderr: "gh: API rate limit exceeded for user ID 1. (HTTP 403)" });
+  assert.equal(limited.ok, false);
+  assert.match(limited.message, /HTTP 403/);
+  const slow = await read({ code: null, stdout: "", stderr: "timed out after 30 s" });
+  assert.equal(slow.ok, false);
+  assert.match(slow.message, /timed out/);
+  assert.equal((await read({ code: 1, stdout: "", stderr: "gh: Server Error (HTTP 502)" })).ok, false);
+  // A manifest that answered but is not JSON (an HTML error page) is a failure too, not a fallback.
+  const html = JSON.stringify({ type: "file", encoding: "base64", content: Buffer.from("<html>busy</html>").toString("base64") });
+  assert.equal((await read({ code: 0, stdout: html, stderr: "" })).ok, false);
+});

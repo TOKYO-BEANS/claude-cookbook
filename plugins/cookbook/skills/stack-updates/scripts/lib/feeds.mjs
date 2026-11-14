@@ -86,10 +86,16 @@ async function httpText(fetcher, url, accept) {
 }
 const httpJson = async (fetcher, url) => JSON.parse(await httpText(fetcher, url, "application/json"));
 
-// `gh api <endpoint>`; the endpoint is built only from validated parts.
+// `gh api <endpoint>`; the endpoint is built only from validated parts. A failure
+// whose message says HTTP 404 (gh prints "gh: Not Found (HTTP 404)") carries
+// `notFound: true`; every other failure (a rate limit, a timeout, a 5xx) does not.
 async function ghJson(gh, endpoint) {
   const { code, stdout, stderr } = await gh(["api", endpoint]);
-  if (code !== 0) throw new Error(`gh api failed: ${String(stderr ?? "").trim().split("\n")[0].slice(0, 150) || `exit ${code}`}`);
+  if (code !== 0) {
+    const e = new Error(`gh api failed: ${String(stderr ?? "").trim().split("\n")[0].slice(0, 150) || `exit ${code}`}`);
+    if (/\bHTTP 404\b/.test(String(stderr ?? ""))) e.notFound = true;
+    throw e;
+  }
   if (typeof stdout !== "string" || Buffer.byteLength(stdout) > RESPONSE_LIMIT) throw new Error("Response exceeded the size limit");
   return JSON.parse(stdout);
 }
@@ -177,8 +183,10 @@ async function marketplaceLatest(feed, { gh }) {
   let version = null;
   try {
     version = stable(JSON.parse(await ghFile(gh, repo, `${dir ? `${dir}/` : ""}.claude-plugin/plugin.json`, ref))?.version);
-  } catch {
-    // No readable manifest: fall back to the marketplace entry's own version.
+  } catch (e) {
+    // Only a plugin with no manifest falls back to the marketplace entry's own version;
+    // a manifest that could not be read leaves the part "could not check".
+    if (e?.notFound !== true) throw e;
   }
   version ??= stable(entry.version);
   if (!version) throw new Error("No stable plugin version was found");
