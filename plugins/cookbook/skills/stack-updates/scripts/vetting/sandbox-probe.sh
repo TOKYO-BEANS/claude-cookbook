@@ -4,6 +4,9 @@
 # the package's command once, and prints what the install and the start did: lifecycle
 # scripts, DNS names asked for, connections, programs run, files written elsewhere and
 # processes left behind. Everything it prints is data about outside code.
+# The outside code runs as a user of its own without sudo, so it cannot alter the probe or
+# what the probe records. It still shares the machine: the probe sees which programs start,
+# which addresses are connected to and which names are asked for, not what is sent to them.
 #
 # Usage: bash sandbox-probe.sh <npm package>
 #    or: bash sandbox-probe.sh --cmd "<install command>" ["<start command>"]
@@ -126,8 +129,32 @@ fi
 
 INSTALL='npm ci --no-audit --no-fund --foreground-scripts'; START=""
 if [ "$1" = "--cmd" ]; then PKG="(command)"; INSTALL="$2"; START="${3:-}"; else PKG="$1"; fi
-T=/tmp/probe; mkdir -p "$T"
 HERE="$PWD"
+
+# The outside code runs as its own user, "vet". That user has no sudo and cannot reach the
+# probe or what it records: this folder and $T belong to the sandbox user and are closed to
+# everyone else, the trace files are written by root, and the DNS capture runs as root. vet
+# gets a copy of the folder and its own copy of Node, so nothing root or the sandbox user
+# runs later comes from a place vet can write to.
+T=/tmp/probe; mkdir -p "$T"; chmod 700 "$T" "$HERE"
+WORK=/home/vet/work
+NODE="$(command -v node)"
+sudo -n useradd -m -s /bin/bash vet 2> /dev/null
+if ! id vet > /dev/null 2>&1 || sudo -n -u vet sudo -n true 2> /dev/null; then
+  echo "sandbox-probe.sh could not make a user without sudo for the outside code"
+  exit 2
+fi
+if ! { sudo -n cp -r "$(dirname "$(dirname "$NODE")")" /opt/vet-node && sudo -n cp -r "$HERE" "$WORK" \
+  && sudo -n rm -f "$WORK/sandbox-probe.sh" && sudo -n chown -R vet:vet /opt/vet-node "$WORK"; }; then
+  echo "sandbox-probe.sh could not prepare the folder for the outside code"
+  exit 2
+fi
+# Runs "$1" as vet in $WORK under strace, with a time limit of $2 seconds and the trace in $3.
+as_vet() {
+  sudo -n timeout -k 5 "$2" strace -f -qq -u vet -e trace=execve,connect -o "$3" \
+    env -i HOME=/home/vet USER=vet LOGNAME=vet PATH="/opt/vet-node/bin:/usr/local/bin:/usr/bin:/bin" \
+    bash -c "cd $WORK && $1"
+}
 
 ps -eo pid= | tr -d ' ' | sort > "$T/ps.before"
 sudo -n tcpdump -i any -n -l port 53 > "$T/dns.txt" 2> "$T/tcpdump.err" &
@@ -136,26 +163,25 @@ touch "$T/marker"
 
 # strace waits for every process the install started, so a daemon it leaves would hold the
 # probe until the sandbox's own time limit and give no report. The limit here ends the wait
-# (exit 124), and the daemon then shows under "processes left running".
-timeout -k 5 "${PROBE_INSTALL_TIMEOUT:-600}" strace -f -qq -e trace=execve,connect -o "$T/install.trace" \
-  bash -c "$INSTALL" > "$T/install.log" 2>&1
+# (exit 124 or 137), and the daemon then shows under "processes left running".
+as_vet "$INSTALL" "${PROBE_INSTALL_TIMEOUT:-600}" "$T/install.trace" > "$T/install.log" 2>&1
 ci=$?
 sleep 2
 dns_install=$(wc -l < "$T/dns.txt")
 
-BIN=$(node -e '
-const p=require(process.cwd()+"/node_modules/"+process.argv[1]+"/package.json");const b=p.bin;
-console.log(typeof b==="string"?p.name.replace(/^@[^/]+\//,""):b?Object.keys(b)[0]:"")' "$PKG" 2>/dev/null)
+# The package's command name is read as JSON by the sandbox user's own Node, never by a
+# program vet could have replaced.
+BIN=$(sudo -n "$NODE" -e '
+const fs=require("fs");try{const p=JSON.parse(fs.readFileSync(process.argv[1]+"/node_modules/"+process.argv[2]+"/package.json","utf8"));const b=p.bin;
+console.log(typeof b==="string"?p.name.replace(/^@[^/]+\//,""):b?Object.keys(b)[0]:"")}catch(e){}' "$WORK" "$PKG" 2>/dev/null)
 start="none"; label="no command"
 if [ -n "$START" ]; then
   label="start command"
-  timeout 60 strace -f -qq -e trace=execve,connect -o "$T/start.trace" \
-    bash -c "$START" < /dev/null > "$T/start.log" 2>&1
+  as_vet "$START" 60 "$T/start.trace" < /dev/null > "$T/start.log" 2>&1
   start=$?
-elif [ -n "$BIN" ] && [ -e "node_modules/.bin/$BIN" ]; then
+elif [ -n "$BIN" ] && sudo -n test -e "$WORK/node_modules/.bin/$BIN"; then
   label="$BIN --version"
-  timeout 30 strace -f -qq -e trace=execve,connect -o "$T/start.trace" \
-    "node_modules/.bin/$BIN" --version < /dev/null > "$T/start.log" 2>&1
+  as_vet "$(printf 'node_modules/.bin/%q --version' "$BIN")" 30 "$T/start.trace" < /dev/null > "$T/start.log" 2>&1
   start=$?
 fi
 sleep 2
@@ -163,7 +189,7 @@ sudo -n pkill tcpdump; sleep 1
 
 sudo -n find / -xdev -newer "$T/marker" -type f \
   -not -path '/proc/*' -not -path '/sys/*' -not -path '/dev/*' -not -path '/run/*' \
-  -not -path "$T/*" -not -path "$HERE/*" -not -path '/home/user/.npm/*' \
+  -not -path "$T/*" -not -path "$HERE/*" -not -path "$WORK/*" -not -path '/home/vet/.npm/*' \
   -not -path '/var/log/*' -not -path '/var/lib/systemd/*' -not -path '/var/cache/*' \
   -not -path '/tmp/node-compile-cache/*' -not -path '/home/user/.ascii/*' \
   2>/dev/null > "$T/files.txt"

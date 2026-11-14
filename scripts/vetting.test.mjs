@@ -491,8 +491,21 @@ test("an install whose vetted files cannot be copied in does not report an insta
   });
   stub(root, "npm", ['echo "npm ran" >> "$STUB_ROOT/calls.txt"']);
   const r = runIn(root, "pinned-install.sh", ["tool", "2.0.0"]);
-  assert.equal(r.status, 1, r.out);
+  assert.equal(r.status, 2, r.out);
   assert.match(r.out, /nothing was installed/);
+  // Nothing was touched: the old lockfile is still there, with no backup or marker made.
+  assert.equal(readFileSync(path.join(root, "share", "tool", "package-lock.json"), "utf8"), lock("1.0.0"));
+  assert.ok(!existsSync(path.join(root, "share", "tool", ".previous")));
   assert.ok(!existsSync(path.join(root, "calls.txt")), "npm ran on files that were not the vetted ones");
   assert.ok(!r.out.includes("npm ci exit 0"));
+});
+
+test("a long report is shown past 40 lines, and what is not shown is named", { skip }, () => {
+  const many = (n) => Array.from({ length: n }, (_, i) => `  line ${i + 1}`).join("\n");
+  const fits = step({ log: finished.replace("SANDBOX processes left", `${many(50)}\nSANDBOX processes left`) });
+  assert.equal(fits.status, 0, fits.out);
+  assert.match(fits.out, /^ {2}line 50$/m);
+  assert.match(fits.out, /^SANDBOX start output: /m, "the last report line dropped out of sight");
+  const over = step({ log: finished.replace("SANDBOX processes left", `${many(100)}\nSANDBOX processes left`) });
+  assert.match(over.out, /SANDBOX: 23 more report lines are in /);
 });

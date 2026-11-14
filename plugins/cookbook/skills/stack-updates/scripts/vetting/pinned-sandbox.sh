@@ -23,7 +23,12 @@ cd "$V" || exit 1
 boat run --type small --no-env --timeout 900 --push sandbox \
   -- bash sandbox-probe.sh "$PKG" > "$V/out/sandbox.log" 2>&1
 code=$?
-tr -cd '\11\12\40-\176' < "$V/out/sandbox.log" | grep -E '^(SANDBOX|  )' | cut -c1-200 | head -40
+# The probe bounds its own report (about 45 lines at most); past 80 the rest is named, so
+# the last lines never drop out of sight unnoticed.
+shown=$(tr -cd '\11\12\40-\176' < "$V/out/sandbox.log" | grep -E '^(SANDBOX|  )' | cut -c1-200)
+echo "$shown" | head -80
+lines=$(echo "$shown" | wc -l)
+[ "$lines" -le 80 ] || echo "SANDBOX: $((lines - 80)) more report lines are in $V/out/sandbox.log"
 tail -1 "$V/out/sandbox.log" | tr -cd '\11\12\40-\176' | cut -c1-160
 # Only boat's own last line counts: the lines above it hold text from outside code.
 tail -1 "$V/out/sandbox.log" | grep -q 'deleted' || echo "SANDBOX: the sandbox may still exist: run 'boat list' and delete it"
