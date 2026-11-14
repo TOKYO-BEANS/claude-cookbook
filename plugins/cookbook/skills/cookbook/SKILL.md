@@ -729,13 +729,16 @@ about the dates the catalog records. It installs, updates and commits nothing.
   No Firecrawl credits.
 - **Routine updates are installed without asking** (owner, 14 November 2026); every other update
   needs the owner's yes, one tool at a time. The script decides which are routine, by fixed rules
-  (`scripts/lib/apply.mjs`): a plugin, a pinned copy, a skill copy or a listed pinned binary; no
-  major version; no "breaking", "deprecated" or "removed" in its notes; with no notes, a patch
-  release only; seen for 3 days; no failed attempt at that version; at most 5 a day. An
-  interactive session installs them by each tool's recipe after giving the owner the report, then
-  runs `updates.mjs verify <part>`: only the script's own read of the version and the service's
-  check make an install count. The 07:00 task and unattended sessions install nothing, and a
-  release note never decides an update. The skill has the steps.
+  (`scripts/lib/apply.mjs`): a plugin, a pinned copy or a listed pinned binary (a skill copy and a
+  local port always need a yes); a version step that can be read, with no major version; notes
+  read in full with no "breaking", "deprecated" or "removed"; with no notes, a patch release only;
+  seen for 3 days; no failed attempt at that version; at most 5 a day. Whatever cannot be read
+  counts against the update. An interactive session installs them by each tool's recipe after
+  giving the owner the report, then runs `updates.mjs verify <part>`: the script refuses a part it
+  did not list, and counts an install only when its own read of the disk shows exactly the listed
+  version and the service's check passes. An update made on the owner's yes is verified with
+  `--owner-yes`. The 07:00 task and unattended sessions install nothing, and a release note never
+  decides an update. The skill has the steps.
 - **The catalog side:** each tool's `parts` name how the installed version is read (`installed`)
   and where releases appear (`feed`). An npm feed carries no release notes: they come from the
   part's `notes` (a GitHub repository whose releases carry its versions), else the tool's

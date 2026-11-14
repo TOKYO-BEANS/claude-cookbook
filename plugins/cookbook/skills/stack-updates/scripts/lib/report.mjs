@@ -139,14 +139,17 @@ function waitsFor(key, result) {
   const ask = find("ask");
   if (ask) return `; needs your yes: ${inert(ask.reason) || "no reason recorded"}`;
   const waiting = find("waiting");
+  if (waiting?.reason) return `; waits: ${inert(waiting.reason)}`;
   if (waiting) return isDay(waiting.until) ? `; installs without asking from ${shortDate(waiting.until)}` : "; installs without asking soon";
   return "";
 }
 
-const WHY_FAILED = { version: "the new version is not there", check: "its connection check failed" };
+const WHY_FAILED = { version: "exactly that version is not what is installed", check: "its connection check failed" };
+const BASIS_WORDS = { routine: "routine", owner: "with your yes" };
 const appliedLine = (a, result) => {
   const from = a.from === null || a.from === undefined ? "" : `${shown(a.from)} -> `;
-  const on = isDay(a.day) ? ` (${shortDate(a.day)})` : "";
+  const facts = [isDay(a.day) ? shortDate(a.day) : null, own(BASIS_WORDS, a.basis) ?? null].filter(Boolean);
+  const on = facts.length ? ` (${facts.join(", ")})` : "";
   const why = a.ok === true ? "" : `: ${own(WHY_FAILED, a.why) ?? "the install was not confirmed"}; it now needs your yes`;
   return `- ${nameOf(result, a.key)}: ${from}${shown(a.to)}${on}${why}`;
 };

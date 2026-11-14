@@ -17,18 +17,26 @@ export const DAILY_LIMIT = 5; // routine installs offered in one day
 // release and compares it with the published checksum. Every other `command` part
 // needs an admin prompt or an elevated shell outside Claude's container.
 export const ROUTINE_COMMAND_PARTS = Object.freeze(["boat/cli", "proton-pass-cli/cli"]);
-const SESSION_KINDS = ["plugin", "pinned", "skill", "command"];
+const SESSION_KINDS = ["plugin", "pinned", "command"];
+const COMMIT = /^[0-9a-f]{40}$/;
 const NEVER_KINDS = ["project", "hosted", "none"];
 
 export const REASONS = Object.freeze({
   failed: "an earlier install of this version failed",
   outside: "it is installed outside a session (an admin prompt or an elevated shell)",
   localPort: "it is a local port with its own steps",
+  skill: "a skill copy cannot be checked by the script after an install",
+  unreadable: "its version change cannot be read",
+  partial: "its notes are too long to check in full",
+  unchecked: "its notes could not be checked yet",
   major: "major version",
   risky: "its notes say breaking, deprecated or removed",
   noNotes: "no release notes, and more than a patch release",
 });
-export const NOTES = Object.freeze(["clean", "risky", "none"]);
+// The word check of a release's notes: "clean" (read in full, no warning word), "risky"
+// (a warning word), "none" (read, and there are none), "partial" (only part could be
+// read). Anything else means the check has not been made.
+export const NOTES = Object.freeze(["clean", "risky", "none", "partial"]);
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 86_400_000;
@@ -57,19 +65,30 @@ export function levelOf(from, to) {
 /**
  * One behind part: `{ decision: "none" | "ask" | "waiting" | "routine", reason?, until? }`.
  * `behind`: `{ key, installed, latest, latestSince, applyFailed }`.
- * `facts`: `{ kind, lifecycle, selfUpdating, localPort, notes, today }`; `notes` is
- * "clean", "risky", "none" or null (not known, which counts as "none").
+ * `facts`: `{ kind, lifecycle, selfUpdating, localPort, notes, today }`; `notes` is one
+ * of NOTES, or null when the word check has not been made (a fetch that failed, a run
+ * with --no-read): then the part waits, it is never routine.
+ * Whatever cannot be read (a version that is not x.y.z, a day that is no day) counts
+ * against the update, never for it.
  */
 export function decide(behind, { kind, lifecycle, selfUpdating = false, localPort = false, notes = null, today } = {}) {
-  if (!isObject(behind) || NEVER_KINDS.includes(kind) || !SESSION_KINDS.includes(kind) || lifecycle === "watching" || selfUpdating) return { decision: "none" };
-  if (typeof behind.applyFailed === "string" && behind.applyFailed === behind.latest) return { decision: "ask", reason: REASONS.failed };
-  if (kind === "command" && !ROUTINE_COMMAND_PARTS.includes(behind.key)) return { decision: "ask", reason: REASONS.outside };
-  if (localPort) return { decision: "ask", reason: REASONS.localPort }; // a plugin ported by hand: never a plain update
+  const known = [...SESSION_KINDS, "skill"];
+  if (!isObject(behind) || NEVER_KINDS.includes(kind) || !known.includes(kind) || lifecycle === "watching" || selfUpdating) return { decision: "none" };
+  const ask = (reason) => ({ decision: "ask", reason });
+  if (typeof behind.applyFailed === "string" && behind.applyFailed === behind.latest) return ask(REASONS.failed);
+  if (kind === "skill") return ask(REASONS.skill); // nothing on disk says which commit a copy is
+  if (kind === "command" && !ROUTINE_COMMAND_PARTS.includes(behind.key)) return ask(REASONS.outside);
+  if (localPort) return ask(REASONS.localPort); // a plugin ported by hand: never a plain update
   const level = levelOf(behind.installed, behind.latest);
-  if (level === "major") return { decision: "ask", reason: REASONS.major };
-  if (notes === "risky") return { decision: "ask", reason: REASONS.risky };
-  if (notes !== "clean" && level !== "patch") return { decision: "ask", reason: REASONS.noNotes };
+  if (level === "major") return ask(REASONS.major);
+  // No x.y.z step to read: only two different commit ids are an update that can be judged.
+  const commits = COMMIT.test(String(behind.installed)) && COMMIT.test(String(behind.latest)) && behind.installed !== behind.latest;
+  if (level === null && !commits) return ask(REASONS.unreadable);
+  if (notes === "risky") return ask(REASONS.risky);
+  if (notes === "partial") return ask(REASONS.partial);
   if (!isDay(today)) return { decision: "waiting", until: null };
+  if (notes !== "clean" && notes !== "none") return { decision: "waiting", until: addDays(today, 1), reason: REASONS.unchecked };
+  if (notes === "none" && level !== "patch") return ask(REASONS.noNotes);
   const since = isDay(behind.latestSince) && behind.latestSince <= today ? behind.latestSince : today;
   if (daysBetween(since, today) < SOAK_DAYS) return { decision: "waiting", until: addDays(since, SOAK_DAYS) };
   return { decision: "routine" };
@@ -77,11 +96,14 @@ export function decide(behind, { kind, lifecycle, selfUpdating = false, localPor
 
 /**
  * Every behind part sorted into `{ routine, waiting, ask }`, each entry
- * `{ key, from, to, kind }` plus `reason` (ask) or `until` (waiting). `factsOf(key)`
+ * `{ key, from, to, kind }` plus `reason` (ask) or `until` (waiting, with a `reason`
+ * when it waits for something other than its days). `factsOf(key)`
  * gives `decide`'s facts for a part. At most DAILY_LIMIT are routine, the longest
- * seen first; the rest wait until tomorrow.
+ * seen first; the rest wait until tomorrow. `used` is how many installs were already
+ * attempted today: they count against the same limit.
  */
-export function decideAll(behind, factsOf, today) {
+export function decideAll(behind, factsOf, today, { used = 0 } = {}) {
+  const limit = Math.max(0, DAILY_LIMIT - (Number.isSafeInteger(used) && used > 0 ? used : 0));
   const out = { routine: [], waiting: [], ask: [] };
   const ready = [];
   for (const b of Array.isArray(behind) ? behind : []) {
@@ -91,12 +113,12 @@ export function decideAll(behind, factsOf, today) {
     const d = decide(b, { ...facts, today });
     const entry = { key: b.key, from: b.installed ?? null, to: b.latest ?? null, kind: facts.kind };
     if (d.decision === "ask") out.ask.push({ ...entry, reason: d.reason });
-    else if (d.decision === "waiting") out.waiting.push({ ...entry, until: d.until });
+    else if (d.decision === "waiting") out.waiting.push({ ...entry, until: d.until, ...(d.reason ? { reason: d.reason } : {}) });
     else if (d.decision === "routine") ready.push({ entry, since: isDay(b.latestSince) ? b.latestSince : today });
   }
   ready.sort((a, b) => (a.since < b.since ? -1 : a.since > b.since ? 1 : a.entry.key < b.entry.key ? -1 : 1));
   for (const [i, r] of ready.entries()) {
-    if (i < DAILY_LIMIT) out.routine.push(r.entry);
+    if (i < limit) out.routine.push(r.entry);
     else out.waiting.push({ ...r.entry, until: isDay(today) ? addDays(today, 1) : null });
   }
   return out;

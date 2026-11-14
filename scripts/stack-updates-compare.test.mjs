@@ -728,3 +728,31 @@ test("an unlisted name over 200 characters is cut to 200, not dropped", () => {
   assert.deepEqual(result.unlisted, [{ kind: "skill", name: "x".repeat(200) }]);
   assert.deepEqual(Object.keys(state.unlisted), [`skill:${"x".repeat(200)}`]);
 });
+
+test("the day a newest release was first seen: set once, restarted by a newer one, never taken from an older fact", () => {
+  const at = (v) => ({ latest: { "browse/cli": ok({ version: v }) } });
+  const first = day("2026-11-13", null, at("0.11.4")).state;
+  assert.equal(first.parts["browse/cli"].latestSince, "2026-11-13");
+  // The same release the next day keeps its day; a newer one restarts it and forgets the old notes check.
+  first.parts["browse/cli"].notes = "0.11.4 clean";
+  const second = day("2026-11-14", first, at("0.11.4")).state;
+  assert.equal(second.parts["browse/cli"].latestSince, "2026-11-13");
+  assert.equal(second.parts["browse/cli"].notes, "0.11.4 clean");
+  const third = day("2026-11-15", second, at("0.11.5")).state;
+  assert.equal(third.parts["browse/cli"].latestSince, "2026-11-15");
+  assert.equal(third.parts["browse/cli"].notes, null);
+  // A state written before the field existed: the wait starts on the first run that tracks
+  // it, even when the part has been behind (on an older release) for much longer.
+  const old = structuredClone(second);
+  for (const p of Object.values(old.parts)) { delete p.latestSince; delete p.notes; delete p.applyFailed; }
+  old.parts["browse/cli"].behindSince = "2026-10-01";
+  const migrated = day("2026-11-16", old, at("0.11.4"));
+  assert.equal(migrated.state.parts["browse/cli"].latestSince, "2026-11-16");
+  assert.equal(migrated.state.parts["browse/cli"].behindSince, "2026-10-01");
+  assert.equal(migrated.result.behind.find((b) => b.key === "browse/cli").latestSince, "2026-11-16");
+  // A failed install is remembered across a reset of the part.
+  const failed = structuredClone(second);
+  failed.parts["browse/cli"].applyFailed = "0.11.4";
+  failed.parts["browse/cli"].feed = "another-feed";
+  assert.equal(day("2026-11-16", failed, at("0.11.4")).state.parts["browse/cli"].applyFailed, "0.11.4");
+});

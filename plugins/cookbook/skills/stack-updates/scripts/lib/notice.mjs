@@ -22,7 +22,6 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 // counts with their fixed words. Any other first line is not used.
 const ITEM = String.raw`\d{1,5} (?:changes?|installed|failed to install|ready to install|still behind|broken|could not be read|not in the Cookbook|missing|warnings?)`;
 const HEAD = new RegExp(String.raw`^Updates, \d{1,2} [A-Z][a-z]{2}(?: \d{4})?: (?:nothing new|${ITEM}(?:, ${ITEM}){0,9})$`);
-const READY = /\b\d{1,5} ready to install\b/;
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const isDay = (v) => {
   if (typeof v !== "string" || !DAY.test(v)) return false;
@@ -104,7 +103,10 @@ export function noticeText({ stateDir, today, script }) {
     const heads = listed.map((r) => headOf(stateDir, r.day));
     const lines = listed.map((r, i) => `- ${heads[i]} -> node "${script}" page 1 ${r.day}`);
     // Routine updates of the newest report only: an older report's list is out of date.
-    const ready = READY.test(heads[heads.length - 1])
+    // The count comes from the list the script wrote in result.json, never from a line of text.
+    const newest = listed[listed.length - 1].result;
+    const routine = isObject(newest.apply) && Array.isArray(newest.apply.routine) ? newest.apply.routine.filter(isObject).length : 0;
+    const ready = routine > 0
       ? " The newest report lists updates that are ready to install: after the owner has the report, install them by the stack-updates skill's \"Routine updates\" steps, without asking, and tell the owner what was installed."
       : "";
     parts.push(

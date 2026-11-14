@@ -332,7 +332,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     // this feed could not have produced): a new baseline; a recorded commit stays.
     const feedId = feedFingerprint(p.feed);
     if (ps.feed !== null ? ps.feed !== feedId : ps.latest !== null && !fitsFeed(p.feed, ps.latest))
-      ps = { ...emptyPart(), installedCommit: ps.installedCommit };
+      ps = { ...emptyPart(), installedCommit: ps.installedCommit, applyFailed: ps.applyFailed }; // a failed install stays failed
     ps.feed = feedId;
     next.parts[key] = ps;
     const firstMissing = Object.hasOwn(prev.missing, key) ? prev.missing[key] : null;
@@ -413,7 +413,9 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     if (lv !== null) {
       // A newer release restarts its waiting days and forgets the old notes check.
       if (lv !== ps.latest) Object.assign(ps, { latestSince: today, notes: null });
-      else ps.latestSince ??= ps.behindSince ?? today;
+      // A state from before this field starts the wait today: `behindSince` may be older
+      // than the day this newest release was first seen.
+      else ps.latestSince ??= today;
       ps.latest = lv;
     }
     // Every part known to be behind, every day: what apply.mjs decides about.
