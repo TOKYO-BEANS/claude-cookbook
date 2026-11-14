@@ -617,9 +617,13 @@ The owner added boat (boat.dev) on 12 November 2026: full Ubuntu virtual machine
   for nothing, because every use was left to judgement). Outside code is run once in a sandbox
   before it is installed, after the three scanners. This holds for every install and update
   recipe in this file and in the `stack-updates` skill, also where a recipe's own steps do not
-  repeat it (Jev Router, REA, the scanners themselves):
-  - an npm package: `~/.local/share/vetting/_tools/pinned-vet.sh <install folder> <package>
-    <version>` ends with the sandbox run (`pinned-sandbox.sh`, same arguments, runs it alone). It
+  repeat it (Jev Router, REA). The scripts are in the `stack-updates` skill's
+  `scripts/vetting` folder, with tests in the repository's `scripts/vetting.test.mjs`; the
+  files of the same names in `~/.local/share/vetting/_tools` only start the installed
+  plugin's copy:
+  - an npm package: `bash <stack-updates skill folder>/scripts/vetting/pinned-vet.sh <install
+    folder> <package> <version>` ends with the sandbox run (`pinned-sandbox.sh`, same arguments,
+    runs it alone). It
     sends the new `package.json` and `package-lock.json` and a probe script, installs with the
     install scripts on, and starts the package's command once with `--version`;
   - anything else that runs on Linux: copy `sandbox-probe.sh` from that folder into the code's
@@ -628,12 +632,20 @@ The owner added boat (boat.dev) on 12 November 2026: full Ubuntu virtual machine
     stored secrets out. A run without the probe shows only the command's own output: report it
     as "ran without a probe", never as a quiet run.
   The probe prints `SANDBOX` lines: the install scripts that ran, the DNS names asked for during
-  the install and during the start, remote addresses not on port 443, the programs started, files
+  the install and during the start (with the question type when it is not an address lookup),
+  DNS servers asked other than the system's own, remote addresses not on port 443, the programs started, files
   written outside the project, and processes left running. Expected: the npm registry, and the
   download host a package's own install script is known to use (GitHub release assets for the
   Parallel CLI). Anything else is a surprise: another host, a file outside the project (a tool's
-  own cache or config folder aside), a process left running, a program such as `curl` or `ssh`.
-  A surprise, or "no result" (a run that was started and did not finish), stops the install
+  own cache or config folder aside), a process left running, a program such as `curl` or `ssh`,
+  an install or start that did not exit 0, or "the install did not end in time" (something it
+  started kept running; the probe waits 10 minutes, `PROBE_INSTALL_TIMEOUT` seconds otherwise).
+  A left-over process is found by its parents, never by its name. A DNS question of another
+  type than an address lookup, or one sent to another server than the system's, is a surprise
+  too. `pinned-vet.sh` exits 0 only with a sandbox result and a report from each scanner: a
+  scanner that wrote none prints "no report" and the run exits 3.
+  A surprise, or "no result" (a run that did not start or did not finish: boat is missing or
+  refuses, the command timed out, the probe's last line is absent), stops the install
   until the owner has seen it, a routine update included. Two exemptions, each said in
   the report to the owner and neither holding a routine update on its own:
   - the Windows binary installed here (boat, the Proton Pass CLI, gws): the sandbox is Linux, and
@@ -660,8 +672,12 @@ The owner added boat (boat.dev) on 12 November 2026: full Ubuntu virtual machine
   before a batch, and never quote prices from memory.
 - **The plan is the owner's:** boat has no free tier. The first plan is a 7-day trial (25 compute
   hours, 2 sandboxes at once, auto-stop of 2 hours or less, no `large`), and then the card is
-  charged, USD 20 a month for the smallest plan. Keeping or cancelling it is the owner's decision;
-  Claude never changes the plan, tops up the wallet or creates API keys.
+  charged, USD 20 a month for the smallest plan. Keeping or cancelling it is the owner's decision
+  (14 November 2026: the owner plans to keep it);
+  Claude never changes the plan, tops up the wallet or creates API keys. Without a plan the
+  sandbox step answers "no result" and every pinned npm update waits for the owner: if boat
+  is ever cancelled, take the step out of the vetting scripts and these recipes in the same
+  change.
 - **What may go in:** public and outside code. Private repository content, customer data and any
   credential need the owner's yes for that task; a sandbox that needs a model key gets it through
   boat's AI credentials proxy, never as a plain variable. Nothing from a sandbox is trusted on the
@@ -688,7 +704,8 @@ The owner added boat (boat.dev) on 12 November 2026: full Ubuntu virtual machine
   `release-assets.githubusercontent.com` beside the npm registry, and started `unzip`; nothing
   was left running. `browse` 0.11.4 (15 seconds, USD 0.0001): esbuild's postinstall ran, only
   the npm registry was asked for, and the start wrote its own update-check file. Both sandboxes
-  were deleted and `boat list --all` was empty afterwards.
+  were deleted and `boat list --all` was empty afterwards. The repository copy of the scripts
+  ran the `browse` lockfile again the same day with the same result (26 seconds).
 
 ### Sign-ins (Proton Pass and agent-browser)
 The owner added both on 12 and 13 November 2026, as a trial, so that Claude can sign in to a site
