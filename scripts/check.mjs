@@ -6,11 +6,9 @@ import { CHANGELOG_HOSTS, CONNECTION_CHECKS, SELF_UPDATING_TOOLS, VERSION_COMMAN
 
 export { CHANGELOG_HOSTS };
 
-// The plugin's other skill and prompt bodies, checked for the dollar-sign rule like
-// the cookbook skill (a scheduled task's prompt gets arguments too).
+// The plugin's other skill bodies, checked for the dollar-sign rule like the cookbook skill.
 export const OTHER_TEXTS = Object.freeze([
   "plugins/cookbook/skills/stack-updates/SKILL.md",
-  "plugins/cookbook/skills/stack-updates/daily-prompt.md",
 ]);
 const dollarErrors = (name, text) =>
   text.replace(/\r/g, "").split("\n").flatMap((line, i) => (/\$\d/.test(line) ? [`${name} line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`] : []));
@@ -51,7 +49,11 @@ const httpsUrl = (v) => {
   }
 };
 const isObject = (v) => v && typeof v === "object" && !Array.isArray(v);
-const validDay = (v) => typeof v === "string" && DAY.test(v) && new Date(`${v}T00:00:00Z`).toISOString().slice(0, 10) === v;
+const validDay = (v) => {
+  if (typeof v !== "string" || !DAY.test(v)) return false;
+  const t = Date.parse(`${v}T00:00:00Z`); // an impossible date ("2026-13-45") is not a number
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === v;
+};
 
 function installedErrors(inst, at) {
   if (!isObject(inst)) return [`${at}: installed must be an object`];

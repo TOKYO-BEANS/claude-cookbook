@@ -1,6 +1,6 @@
 # claude-cookbook
 
-Two skills for Claude Code. **cookbook**: which tool, skill or workflow to use for which task, how to use it without the usual mistakes, and `catalog.json`, the list of tools in the stack. **stack-updates**: the daily update check, which compares every tool in the catalog with its newest release and reports what changed, what is broken and which dates are close; it changes nothing.
+Two skills for Claude Code. **cookbook**: which tool, skill or workflow to use for which task, how to use it without the usual mistakes, and `catalog.json`, the list of tools in the stack. **stack-updates**: the daily update check, which compares every tool in the catalog with its newest release and reports what changed, what is broken and which dates are close; it changes nothing. A Windows task runs it each morning with no model session, and the plugin's one SessionStart hook tells a new session when a report is waiting.
 
 ## Install in Claude Code
 

@@ -434,7 +434,7 @@ test("run end to end on the fixture home with fake fetcher and run: writes the f
   const saved = readJson(join(state, "state.json"));
   assert.equal(saved.lastRun, "2026-11-13");
   assert.deepEqual(readJson(join(state, "paid-check.json")), { on: "2026-11-13", results: { parallel: { service: "Parallel", outcome: "working" } } });
-  assert.deepEqual(readdirSync(state).sort(), ["paid-check.json", "runs", "state.json"]); // the lock is gone
+  assert.deepEqual(readdirSync(state).sort(), ["paid-check.json", "runs", "seen.json", "state.json"]); // the lock is gone; a watched report is seen
   assert.equal(day1.run.count(/parallel-cli/), 1);
   // No request reads anything on a day without changes.
   assert.equal(day1.run.count(/^claude -p/), 0);
@@ -615,6 +615,32 @@ test("the paid check runs at most once per real local day, whatever --today says
   assert.equal((await cli(["run", ...at(state, "2026-11-16")], fourth)).code, 0);
   assert.equal(fourth.run.count(/parallel-cli/), 1);
   assert.deepEqual(readJson(marker), { on: "2026-11-16", results: { parallel: { service: "Parallel", outcome: "working" } } });
+});
+
+test("a watched run marks its report seen; --unattended leaves it unseen until a page is printed; page takes the date of a run", async (t) => {
+  // The first run of a state reports what is already behind: not a quiet day.
+  const watched = tmp(t);
+  const w = await cli(["run", ...at(watched, "2026-11-13")], fakes());
+  assert.equal(w.code, 0, w.err);
+  assert.equal(readJson(join(watched, "runs", "2026-11-13", "result.json")).quiet, false);
+  assert.deepEqual(readJson(join(watched, "seen.json")), { seen: ["2026-11-13"] });
+
+  const state = tmp(t);
+  const u = await cli(["run", ...at(state, "2026-11-13"), "--unattended"], fakes());
+  assert.equal(u.code, 0, u.err);
+  assert.ok(!existsSync(join(state, "seen.json")));
+  // The next day, the report of the 13th is printed by its date, and only then marked seen.
+  const p = await cli(["page", "1", "2026-11-13", ...at(state, "2026-11-14")], {});
+  assert.equal(p.code, 0, p.err);
+  assert.match(p.out, /^(?:Page 1 of \d+: )?.*report\.md/);
+  assert.match(p.out, /\nUpdates, 13 Nov/);
+  assert.deepEqual(readJson(join(state, "seen.json")), { seen: ["2026-11-13"] });
+  // A day with no run, a malformed date and a stage with --unattended are refused.
+  const none = await cli(["page", "1", "2026-11-12", ...at(state, "2026-11-14")], {});
+  assert.equal(none.code, 1);
+  assert.match(none.err, /no report\.md for 2026-11-12/);
+  assert.equal((await cli(["page", "1", "..\\..\\x", ...at(state, "2026-11-14")], {})).code, 2);
+  assert.equal((await cli(["report", ...at(state, "2026-11-14"), "--unattended"], fakes())).code, 2);
 });
 
 test("a trial folder (--state) reuses the real state folder's paid check of the day and pays nothing", async (t) => {
@@ -833,10 +859,10 @@ test("release notes that could not be fetched say so; only a feed that answered 
   assert.ok(r.out.includes("\nBeta 1.0.0 -> 1.1.0, not installed\n- Not read: release notes could not be fetched (gh api failed: HTTP 404: Not Found).\n"));
 });
 
-test("one run at a time: a lock younger than 30 minutes stops a run and every stage; an older one is replaced", async (t) => {
+test("one run at a time: a lock younger than three hours stops a run and every stage; an older one is replaced", async (t) => {
   const state = tmp(t);
   const lock = join(state, "run.lock");
-  const held = JSON.stringify({ pid: 99999, started: new Date(Date.now() - 5 * 60_000).toISOString() });
+  const held = JSON.stringify({ pid: 99999, started: new Date(Date.now() - 100 * 60_000).toISOString() }); // a long run is still a run
   writeFileSync(lock, held);
   const busy = await cli(["run", ...at(state, "2026-11-13")], fakes());
   assert.equal(busy.code, 1);
@@ -848,7 +874,7 @@ test("one run at a time: a lock younger than 30 minutes stops a run and every st
   }
   assert.equal(readFileSync(lock, "utf8"), held); // another run's lock is left alone
   assert.deepEqual(readdirSync(state), ["run.lock"]);
-  writeFileSync(lock, JSON.stringify({ pid: 99999, started: new Date(Date.now() - 31 * 60_000).toISOString() }));
+  writeFileSync(lock, JSON.stringify({ pid: 99999, started: new Date(Date.now() - 181 * 60_000).toISOString() }));
   const r = await cli(["run", ...at(state, "2026-11-13")], fakes());
   assert.equal(r.code, 0, r.err);
   assert.ok(!existsSync(lock));

@@ -5,14 +5,17 @@
 //   inventory | compare | connect | read | report [--out <dir>]
 //                                    one stage on one run folder
 //   record <part key> <commit>       after an update: the commit now installed
-//   page <n>                         page n of today's report.md (see below)
+//   page <n> [<date>]                page n of report.md of today's run, or of the run of
+//                                    <date> (see below); it marks that report seen
 //
 // Options: --home <dir> (the profile to read, for tests), --state <dir> (state and
 // runs somewhere other than ~/.local/share/stack-updates, for a trial run that must
 // not create the real baseline), --out <dir> (the run folder, default
 // <state>/runs/<today>), --today YYYY-MM-DD (only with --state, never earlier than
 // the last run; default: this PC's local date), --no-read (no release notes are
-// fetched or read).
+// fetched or read), --unattended (with run: nobody reads what it prints, so the report
+// stays unseen until a session prints it; the Windows task's launcher, daily.mjs,
+// passes it).
 //
 // The run folder holds inventory.json, latest.json, result.json, next-state.json
 // (the state this run keeps once it has reported), report.md and
@@ -49,6 +52,7 @@ import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
 import { defaultRun, findUnlisted, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
 import { quietLine, renderReport } from "./lib/report.mjs";
+import { markSeen } from "./lib/notice.mjs";
 import { CONNECTION_CHECKS } from "./lib/tables.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -57,7 +61,7 @@ export const CATALOG_PATH = join(HERE, "..", "..", "..", "catalog.json");
 export const COOKBOOK_SKILL_PATH = join(HERE, "..", "..", "cookbook", "SKILL.md");
 export const KEEP_DAYS = 30; // run folders older than this are removed
 export const LOCK_FILE = "run.lock";
-export const LOCK_MAX_AGE_MS = 30 * 60_000; // an older lock was left by a run that died
+export const LOCK_MAX_AGE_MS = 3 * 60 * 60_000; // an older lock was left by a run that died; no run lasts this long
 export const PAID_MARKER = "paid-check.json";
 const FEED_WORKERS = 6; // feeds read at the same time
 const GH_TIMEOUT_MS = 30_000;
@@ -68,7 +72,7 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const VERSION = /^\d+(?:\.\d+)+$/;
 const DAY_MS = 86_400_000;
 const STAGES = ["inventory", "compare", "connect", "read", "report"];
-const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | page <n>; options --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
+const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | page <n> [<date>]; options --unattended (with run: nobody reads the output), --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
 
 class UsageError extends Error {}
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -112,7 +116,7 @@ function lockAge(path) {
 
 /**
  * Takes `<stateDir>/run.lock`, created exclusively and holding this process's pid
- * and start time. A lock younger than 30 minutes means another run is going: this
+ * and start time. A lock younger than three hours means another run is going: this
  * one stops. An older lock is replaced. Returns the function that removes the lock
  * again, and only while it is still this run's.
  */
@@ -300,19 +304,21 @@ export function reportPages(file, text, { pageable = true } = {}) {
   return bodies.map((b, i) => `${i === 0 ? `Page 1 of ${bodies.length}: ${file}${note}` : `Page ${i + 1} of ${bodies.length}`}\n${b.join("\n")}\n`);
 }
 
-// `page <n>`: page n of today's report.md in the state folder. It reads that one file,
-// never texts/ and never a folder named on the command line.
-function pageOf(ctx, n) {
-  const file = join(ctx.stateDir, "runs", ctx.today, "report.md");
+// `page <n> [<date>]`: page n of report.md of today's run, or of the run of <date>, in
+// the state folder. It reads that one file, never texts/ and never a folder named on
+// the command line. Printing a page marks that day's report seen (lib/notice.mjs).
+function pageOf(ctx, n, day = ctx.today) {
+  const file = join(ctx.stateDir, "runs", day, "report.md");
   let text;
   try {
     text = readFileSync(file, "utf8");
   } catch (e) {
-    if (e?.code === "ENOENT") throw new Error(`no report.md for ${ctx.today} in the state folder: run the check first`);
+    if (e?.code === "ENOENT") throw new Error(`no report.md for ${day} in the state folder: run the check first`);
     throw e;
   }
   const pages = reportPages(file, text);
-  if (n > pages.length) throw new UsageError(`the report for ${ctx.today} has ${pages.length} page${pages.length === 1 ? "" : "s"}`);
+  if (n > pages.length) throw new UsageError(`the report for ${day} has ${pages.length} page${pages.length === 1 ? "" : "s"}`);
+  markSeen(ctx.stateDir, day);
   return pages[n - 1];
 }
 
@@ -662,6 +668,9 @@ async function stageReport(ctx) {
     }
   }
   saveState(ctx.home, next, { folder: ctx.stateDir });
+  // Somebody reads what a run prints unless it is --unattended (the Windows task):
+  // then the report waits, and the session-start notice announces it.
+  if (!result.quiet && !ctx.unattended && pageable) markSeen(ctx.stateDir, ctx.today);
   return { printed };
 }
 
@@ -679,10 +688,11 @@ async function record(ctx, key, commit) {
 // ---- the command line -------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const opts = { positional: [], noRead: false };
+  const opts = { positional: [], noRead: false, unattended: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--no-read") opts.noRead = true;
+    else if (a === "--unattended") opts.unattended = true;
     else if (["--out", "--home", "--state", "--today"].includes(a)) {
       const v = argv[++i];
       if (typeof v !== "string" || v === "" || v.startsWith("--")) throw new UsageError(`${a} needs a value`);
@@ -693,11 +703,13 @@ function parseArgs(argv) {
   const [command, ...rest] = opts.positional;
   if (command === undefined) throw new UsageError("no command");
   if (command === "page") {
-    if (rest.length !== 1 || !/^[1-9][0-9]?$/.test(rest[0])) throw new UsageError(`page needs one page number from 1 to ${MAX_PAGES}`);
+    if (rest.length < 1 || rest.length > 2 || !/^[1-9][0-9]?$/.test(rest[0])) throw new UsageError(`page needs one page number from 1 to ${MAX_PAGES}, and at most the date of a run`);
+    if (rest[1] !== undefined && !isDay(rest[1])) throw new UsageError("page's date must be a YYYY-MM-DD date");
     if (opts.out !== undefined) throw new UsageError("page reads today's run folder in the state folder; it takes no --out");
   } else if (command === "record" ? rest.length !== 2 : !(command === "run" || STAGES.includes(command)) || rest.length) {
     throw new UsageError(command === "record" ? "record needs a part key and a commit" : `unknown command ${String(command).slice(0, 40)}`);
   }
+  if (opts.unattended && command !== "run") throw new UsageError("--unattended goes with run");
   if (opts.today !== undefined && !isDay(opts.today)) throw new UsageError("--today must be a YYYY-MM-DD date");
   if (opts.today !== undefined && opts.state === undefined) throw new UsageError("--today needs --state, so a made-up date never touches the real state");
   return { command, rest, opts };
@@ -729,7 +741,7 @@ export async function main(argv, deps = {}) {
     const catalog = deps.catalog ?? JSON.parse(readFileSync(CATALOG_PATH, "utf8"));
     const entries = partsOf(catalog);
     const ctx = {
-      catalog, entries, home, stateDir, today, realDay, now, noRead: opts.noRead,
+      catalog, entries, home, stateDir, today, realDay, now, noRead: opts.noRead, unattended: opts.unattended,
       byKey: new Map(entries.map((e) => [e.key, e])),
       toolById: new Map((Array.isArray(catalog?.tools) ? catalog.tools : []).filter(isObject).map((t) => [t.id, t])),
       out: opts.out ? resolve(opts.out) : join(stateDir, "runs", today),
@@ -743,7 +755,7 @@ export async function main(argv, deps = {}) {
       return 0;
     }
     if (command === "page") {
-      stdout(pageOf(ctx, Number(rest[0])));
+      stdout(pageOf(ctx, Number(rest[0]), rest[1]));
       return 0;
     }
     if (opts.today !== undefined) {

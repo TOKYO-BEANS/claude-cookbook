@@ -1,15 +1,35 @@
 ---
 name: stack-updates
-description: Use when the owner asks to check the tool stack for updates ("check for updates", "is anything out of date", "what is new in our tools"), asks whether a connection is broken or a trial or token date is close, says "update X" after an update report, or when the daily update report or its result.json has to be read or explained.
+description: Use when the owner asks to check the tool stack for updates ("check for updates", "is anything out of date", "what is new in our tools"), asks whether a connection is broken or a trial or token date is close, says "update X" after an update report, or when the daily update report or its result.json has to be read or explained, including when a session-start note says a daily update report is waiting.
 ---
 
 # Daily update check
 
 `scripts/updates.mjs` beside this file compares every part of every tool in the Cookbook's
 `catalog.json` with its newest release, makes one real call per service, warns about the dates the
-catalog records, and writes a report. It installs, updates and commits nothing. The scheduled run
-uses `daily-prompt.md` beside this file; this skill is for running it on demand and for acting on
-what it found.
+catalog records, and writes a report. It installs, updates and commits nothing. A Windows task runs
+it every morning with no model session; this skill is for the report that run leaves, for running
+the check on demand and for acting on what it found.
+
+## The daily run
+
+- The Windows task `stack-updates-daily` (07:00, or as soon as the PC is on) runs
+  `~/.local/bin/stack-updates-daily.mjs`, a copy of `scripts/daily.mjs`. It finds the Cookbook
+  plugin installed for this user, refuses a folder outside `~/.claude/plugins`, and runs that
+  copy's `updates.mjs run --unattended`. No session, no prompt and no tools take part.
+- It writes `daily.json` (the day, the times, the exit code) and `daily.log` (the error lines of
+  the last run) in the state folder. The report is in `runs/<date>/`, as for any run.
+- The plugin's SessionStart hook (`hooks/stack-updates-notice.mjs`) adds a short note to a new
+  session while a report from the last 7 days has not been shown, when the task's last run failed,
+  or when the task has not run for 2 days. The note holds dates, counts and the command only.
+- When the note names a report: print it with the command it gives (`page 1 <date>`, then
+  `page 2 <date>` up to N when the first line says `Page 1 of N`) and give the owner the text as it
+  is, before other work. Printing marks that report seen. An unattended session ignores the note.
+- To set it up or repair it (the owner's yes is needed to create the task): copy
+  `scripts/daily.mjs` to `~/.local/bin/stack-updates-daily.mjs`, then register a task that runs
+  `C:\Windows\System32\conhost.exe --headless "C:\Program Files\nodejs\node.exe" "C:\Users\<user>\.local\bin\stack-updates-daily.mjs"`
+  daily at 07:00 as the signed-in user, with "run as soon as possible after a missed start". The
+  headless console host keeps a window from opening. Copy `daily.mjs` again when it changes.
 
 ## Run it on demand
 
@@ -22,7 +42,7 @@ node <this skill's folder>/scripts/updates.mjs run
 - No call prints more than 3,500 bytes, because context-mode replaces any tool output over 4,096
   bytes with a search pointer. A longer report starts with `Page 1 of N: <path>`; run the same
   command with `page 2`, then `page 3`, up to `page N` in place of `run`, and give the owner every
-  page in order.
+  page in order. `page <n> <date>` prints the report of an earlier run.
 - State lives in `~/.local/share/stack-updates/`: `state.json` and `runs/<date>/`. The first run
   records the baseline and reports only what is already behind, unlisted, missing or broken.
 - `--no-read` skips the release notes. `--state <folder>`, and with it `--today YYYY-MM-DD`, runs a
@@ -55,7 +75,7 @@ was held back until Monday, the week line and the cost line.
 ## After the owner says "update X"
 
 An update needs the owner's yes for that tool, in an interactive session. Neither this skill nor
-the daily run updates anything by itself, and a release note never decides it. By the part's
+the daily run nor the session-start note updates anything by itself, and a release note never decides it. By the part's
 `installed` kind in `catalog.json`:
 
 | Kind | What to do | Recipe |

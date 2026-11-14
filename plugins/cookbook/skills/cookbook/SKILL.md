@@ -706,9 +706,16 @@ about the dates the catalog records. It installs, updates and commits nothing.
 - **Run it:** say "check for updates", or run `scripts/updates.mjs run` in the skill's folder. A
   quiet day prints one line; otherwise the report. No call prints more than 3,500 bytes, because
   context-mode replaces any tool output over 4,096 bytes with a search pointer: a longer report
-  starts with `Page 1 of N` and `updates.mjs page 2` to `page N` print the rest. The scheduled task
-  `stack-updates-daily` (07:00, Haiku) runs the skill's `daily-prompt.md`; it is created only after
-  the owner's yes.
+  starts with `Page 1 of N` and `updates.mjs page 2` to `page N` print the rest.
+- **Every morning:** the Windows task `stack-updates-daily` (07:00, or as soon as the PC is on)
+  runs the script through `~/.local/bin/stack-updates-daily.mjs`, a copy of the skill's
+  `scripts/daily.mjs`. No session, prompt or tool takes part (owner, 14 November 2026: a desktop
+  scheduled session loaded every plugin, about 300,000 tokens on a quiet day, and held tools while
+  printing text that came from release notes). The plugin's SessionStart hook then adds a short
+  note to a new session while a report is unseen, or when the task failed or stopped: print the
+  report with the command the note gives and hand it to the owner before other work. The note
+  holds dates, counts and the command only; an unattended session ignores it. Creating the task
+  needs the owner's yes; the skill has the steps.
 - **State:** `~/.local/share/stack-updates/` (`state.json`, and `runs/<date>/` with `result.json`
   and `report.md`). The first run records the baseline. A trial passes `--state <folder>`, so the
   real baseline is not created.
@@ -732,7 +739,8 @@ about the dates the catalog records. It installs, updates and commits nothing.
   until it is added to the catalog or to `ignored`.
 - Proven on 13 and 14 November 2026 on a trial state: 79 parts checked in about 45 s, 48 with a
   readable version, none unreadable, 15 already behind; one real read (GitHub CLI 2.104.0: 3,488 input and 238 output tokens, no
-  tools, on the plan); the daily prompt on Haiku made one Bash call and ended with the report.
+  tools, on the plan). A Windows task on this PC sees Node, a signed-in `gh`, `claude`, the DPAPI
+  key store and no API key in its environment (probe task, 14 November 2026).
 
 ### Scripted Claude Code runs (`claude -p`)
 From a local test of 94 headless runs (Claude Code 2.1.314, October 2026). Each rule here was broken
