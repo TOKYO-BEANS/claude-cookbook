@@ -344,11 +344,13 @@ function vetShare() {
     // Left from an earlier vetting of the same version.
     "share/vetting/tool-2.0.0/copy/packages/stale/index.js": "old\n",
     "share/vetting/tool-2.0.0/lock/node_modules/stale/index.js": "old\n",
+    "share/vetting/tool-2.0.0/lock/package-lock.json": "{}\n",
     "boat.log": finished,
   });
   stub(root, "npm", [
     'echo "npm $*" >> "$STUB_ROOT/calls.txt"',
     'if [ "$1" = "install" ]; then',
+    '  [ -e package-lock.json ] && echo "an earlier lockfile was still there" >> "$STUB_ROOT/calls.txt"',
     `  printf '%s' '{"packages":{"":{},"node_modules/some-cli":{"version":"2.0.0","integrity":"sha512-x"}}}' > package-lock.json`,
     '  exit "${STUB_LOCK_EXIT:-0}"',
     "fi",
@@ -361,7 +363,7 @@ function vetShare() {
   const quietScan = 'if [ -n "${STUB_SCAN_SILENT:-}" ]; then exit 127; fi';
   const fileAfter = (flag) =>
     `while [ $# -gt 0 ]; do if [ "$1" = "${flag}" ]; then out="$2"; fi; shift; done`;
-  stub(root, "osv-scanner", [said("osv-scanner"), quietScan, 'echo "found 1 package" >&2', `echo '{"results":[]}'`]);
+  stub(root, "osv-scanner", [said("osv-scanner"), quietScan, '[ -n "${STUB_OSV_EMPTY:-}" ] || echo "found 1 package" >&2', `echo '{"results":[]}'`]);
   stub(root, "gitleaks", [said("gitleaks"), quietScan, fileAfter("--report-path"), 'echo "[]" > "$out"']);
   stub(root, "trivy", [said("trivy"), quietScan, fileAfter("--output"), `echo '{"Results":[]}' > "$out"`]);
   stub(root, "boat", ['echo "boat" >> "$STUB_ROOT/calls.txt"', 'cat "$STUB_ROOT/boat.log"', 'exit "${STUB_BOAT_EXIT:-0}"']);
@@ -377,6 +379,7 @@ test("a vetting run scans what this run unpacked, not an earlier copy", { skip }
   assert.ok(!existsSync(path.join(v, "copy", "packages", "stale")), "the earlier copy was scanned");
   assert.match(r.out, /resolved some-cli@2\.0\.0 \| packages 1 /);
   assert.match(calls(), /osv-scanner\ngitleaks\ntrivy\nboat\n$/);
+  assert.ok(!calls().includes("an earlier lockfile"), "the lockfile was not resolved afresh");
   assert.match(r.out, /^sandbox exit 0$/m);
 });
 
@@ -401,7 +404,7 @@ test("a scanner that wrote no report reads as no report, never as an earlier run
   writeFileSync(path.join(v, "out", "gitleaks.json"), '[{"RuleID":"old","File":"a"},{"RuleID":"old","File":"b"}]');
   writeFileSync(path.join(v, "out", "trivy.json"), '{"Results":[{"Secrets":[{}]}]}');
   const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], { STUB_SCAN_SILENT: "1" });
-  assert.match(r.out, /^OSV: no report$/m);
+  assert.match(r.out, /^OSV: no report /m);
   assert.match(r.out, /^GITLEAKS: no report$/m);
   assert.match(r.out, /^TRIVY: no report$/m);
   assert.ok(!r.out.includes("2 findings"), r.out);
@@ -453,4 +456,18 @@ test("a program counts when strace split its start over two lines", { skip }, ()
   assert.match(line, /node x1/);
   assert.match(line, /ssh x1/, "a start whose result never came is counted, to be safe");
   assert.ok(!line.includes("wget"), "a failed start was counted");
+});
+
+test("an OSV report that read no packages is no report", { skip }, () => {
+  const { root } = vetShare();
+  const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], { STUB_OSV_EMPTY: "1" });
+  assert.match(r.out, /^OSV: no report /m);
+  assert.match(r.out, /^GITLEAKS: 0 findings$/m);
+  assert.equal(r.status, 3, r.out);
+});
+
+test("only boat's own last line says the sandbox was deleted", { skip }, () => {
+  // The package prints the word; boat's own last line does not.
+  const log = finished.replace("some-cli 1.0.0 ", "deleted ").replace(/exit 0 .* deleted\n$/, "exit 0\n");
+  assert.match(step({ log }).out, /the sandbox may still exist/);
 });

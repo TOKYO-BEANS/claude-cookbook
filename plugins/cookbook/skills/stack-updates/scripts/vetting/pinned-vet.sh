@@ -25,6 +25,7 @@ cd "$V/lock" || exit 1
 # What an earlier run of this version left is removed: the scanners read this run only,
 # and a scanner that writes no report must not be read from an earlier one.
 rm -rf "$V/lock/node_modules" "$V/copy/packages"
+rm -f "$V/lock/package-lock.json"
 rm -f "$V/out/osv.json" "$V/out/osv.log" "$V/out/gitleaks.json" "$V/out/gitleaks.log" \
   "$V/out/trivy.json" "$V/out/trivy.log" "$V/out/sandbox.log"
 npm install --package-lock-only --ignore-scripts --no-audit --no-fund > "$V/out/lock.log" 2>&1; code=$?
@@ -51,7 +52,7 @@ const fs=require("fs");const V=process.argv[1]+"/out/";const rd=f=>{try{return J
 let missing=0;const none=n=>{console.log(n+": no report");missing++};
 const o=rd("osv.json");const sev={};const hi=[];let scanned=((()=>{try{return fs.readFileSync(V+"osv.log","utf8")}catch(e){return ""}})().match(/found (\d+) packages?/)||[])[1];
 for(const r of (o&&o.results)||[])for(const p of r.packages||[])for(const g of p.groups||[]){const s=g.max_severity?Number(g.max_severity):null;const b=s===null?"unknown":s>=9?"critical":s>=7?"high":s>=4?"medium":"low";sev[b]=(sev[b]||0)+1;if(b==="critical"||b==="high"||b==="unknown")hi.push(b+" "+p.package.name+"@"+p.package.version+" "+g.ids.slice(0,2).join(","))}
-if(!o)none("OSV");else{console.log("OSV: read",scanned,"packages;",JSON.stringify(sev));hi.slice(0,12).forEach(l=>console.log("  "+l))}
+if(!o||!(Number(scanned)>0)){console.log("OSV: no report (it must say how many packages it read, and read at least one)");missing++}else{console.log("OSV: read",scanned,"packages;",JSON.stringify(sev));hi.slice(0,12).forEach(l=>console.log("  "+l))}
 const g=rd("gitleaks.json");const by={};for(const f of g||[]){const k=f.RuleID+" "+String(f.File).replace(/\\/g,"/").replace(/^.*copy\/packages\//,"");by[k]=(by[k]||0)+1}
 if(!Array.isArray(g))none("GITLEAKS");else{console.log("GITLEAKS:",g.length,"findings");Object.entries(by).slice(0,12).forEach(([k,n])=>console.log("  "+n+" "+k.slice(0,150)))}
 const t=rd("trivy.json");const ts={};let sec=0;const th=[];for(const r of (t&&t.Results)||[]){for(const v of r.Vulnerabilities||[]){ts[v.Severity]=(ts[v.Severity]||0)+1;if(v.Severity==="HIGH"||v.Severity==="CRITICAL")th.push(v.Severity+" "+v.PkgName+"@"+v.InstalledVersion+" "+v.VulnerabilityID)}sec+=(r.Secrets||[]).length}
