@@ -714,7 +714,7 @@ about the dates the catalog records. It installs, updates and commits nothing.
   printing text that came from release notes). The plugin's SessionStart hook then adds a short
   note to a new session while a report is unseen, or when the task failed or stopped: print the
   report with the command the note gives and hand it to the owner before other work. The note
-  holds dates, counts and the command only; an unattended session ignores it. Creating the task
+  holds dates, counts and the command, never report text; an unattended session ignores it. Creating the task
   needs the owner's yes; the skill has the steps.
 - **State:** `~/.local/share/stack-updates/` (`state.json`, and `runs/<date>/` with `result.json`
   and `report.md`). The first run records the baseline. A trial passes `--state <folder>`, so the

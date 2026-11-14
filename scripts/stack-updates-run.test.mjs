@@ -1147,4 +1147,8 @@ test("a report too long to page fails before the state is saved: state.json is u
   assert.equal(r.code, 1);
   assert.match(r.err, /more than 99 pages/);
   assert.equal(readFileSync(join(state, "state.json"), "utf8"), before, "the baseline did not move");
+  // Nothing is left that the session-start note could announce.
+  const folder = join(state, "runs", "2026-11-14");
+  assert.ok(!existsSync(join(folder, "report.md")));
+  assert.ok(!readJson(join(folder, "result.json")).stages.includes("report"));
 });

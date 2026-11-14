@@ -19,7 +19,7 @@ const LOG_LIMIT = 200_000;
 
 const localDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-/** The installed plugin's updates.mjs. Throws when the plugin is missing or its folder is not inside ~/.claude/plugins. */
+/** The installed plugin's updates.mjs. Throws when the plugin is missing, or when its folder or the script itself (through a link) is not inside ~/.claude/plugins. */
 export function resolveScript(home) {
   const base = join(home, ".claude", "plugins");
   const registry = JSON.parse(readFileSync(join(base, "installed_plugins.json"), "utf8"));
@@ -27,10 +27,18 @@ export function resolveScript(home) {
   const entry = Array.isArray(entries) ? entries.find((e) => e && e.scope === "user") : null;
   if (!entry || typeof entry.installPath !== "string" || !entry.installPath) throw new Error(`${PLUGIN_ID} is not installed for this user`);
   const root = realpathSync(base);
+  const inside = (p) => {
+    const rel = relative(root, p);
+    return Boolean(rel) && !rel.startsWith("..") && !isAbsolute(rel);
+  };
   const folder = realpathSync(entry.installPath);
-  const rel = relative(root, folder);
-  if (!rel || rel.startsWith("..") || isAbsolute(rel)) throw new Error(`the folder of ${PLUGIN_ID} is outside ${root}`);
-  return join(folder, "skills", "stack-updates", "scripts", "updates.mjs");
+  if (!inside(folder)) throw new Error(`the folder of ${PLUGIN_ID} is outside ${root}`);
+  // The script and its lib folder, after every link on the way is resolved.
+  const scripts = realpathSync(join(folder, "skills", "stack-updates", "scripts"));
+  const script = realpathSync(join(scripts, "updates.mjs"));
+  const lib = realpathSync(join(scripts, "lib"));
+  if (![scripts, script, lib].every(inside)) throw new Error(`the update check of ${PLUGIN_ID} is outside ${root}`);
+  return script;
 }
 
 /** Runs the check once. `deps` (for tests): `home`, `now`, `spawn`. Returns the exit code. */

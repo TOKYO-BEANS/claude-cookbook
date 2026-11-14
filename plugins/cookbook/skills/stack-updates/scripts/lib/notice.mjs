@@ -7,7 +7,7 @@
 // carries release text, a tool name or an error line, and it reads nothing under
 // `texts/`. Printing a report (`updates.mjs page`, or a `run` somebody watches) marks
 // that day seen in `seen.json`.
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const SEEN_FILE = "seen.json";
@@ -23,7 +23,11 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const ITEM = String.raw`\d{1,5} (?:changes?|still behind|broken|could not be read|not in the Cookbook|missing|warnings?)`;
 const HEAD = new RegExp(String.raw`^Updates, \d{1,2} [A-Z][a-z]{2}(?: \d{4})?: (?:nothing new|${ITEM}(?:, ${ITEM}){0,6})$`);
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
-const isDay = (v) => typeof v === "string" && DAY.test(v) && Number.isFinite(Date.parse(`${v}T00:00:00Z`));
+const isDay = (v) => {
+  if (typeof v !== "string" || !DAY.test(v)) return false;
+  const t = Date.parse(`${v}T00:00:00Z`);
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === v; // "2026-02-31" is no day
+};
 const daysBetween = (from, to) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 
 const readJson = (path) => {
@@ -89,7 +93,10 @@ export function noticeText({ stateDir, today, script }) {
   const seen = new Set(readSeen(stateDir));
   const parts = [];
 
-  const unseen = runs.filter((r) => r.result.quiet === false && !seen.has(r.day) && daysBetween(r.day, today) <= NOTICE_DAYS);
+  // A report exists once the report stage finished and report.md is there: a run that
+  // stopped earlier has a result.json but nothing to print, and is never announced.
+  const finished = (r) => Array.isArray(r.result.stages) && r.result.stages.includes("report") && existsSync(join(stateDir, "runs", r.day, "report.md"));
+  const unseen = runs.filter((r) => r.result.quiet === false && finished(r) && !seen.has(r.day) && daysBetween(r.day, today) <= NOTICE_DAYS);
   if (unseen.length) {
     const listed = unseen.slice(-MAX_LISTED);
     const more = unseen.length - listed.length;
@@ -102,14 +109,15 @@ export function noticeText({ stateDir, today, script }) {
     );
   }
 
-  // Only a PC where the Windows task has run is told that it stopped or failed.
+  // Only a PC where the Windows task has run at least once is told that it stopped or
+  // failed: both are measured from daily.json, which only the task's launcher writes.
   const daily = readJson(join(stateDir, DAILY_FILE));
-  if (isObject(daily)) {
+  if (isObject(daily) && isDay(daily.day) && daily.day <= today) {
     const last = runs.length ? runs[runs.length - 1].day : null;
-    if (Number.isInteger(daily.exit) && daily.exit !== 0 && isDay(daily.day) && daysBetween(daily.day, today) <= NOTICE_DAYS && (!last || last <= daily.day)) {
+    if (Number.isInteger(daily.exit) && daily.exit !== 0 && daysBetween(daily.day, today) <= NOTICE_DAYS && (!last || last <= daily.day)) {
       parts.push(`Daily update check: the scheduled run of ${daily.day} failed (exit ${daily.exit}). Its error lines are in ${join(stateDir, "daily.log")}. Tell the owner in an interactive session.`);
-    } else if (last && daysBetween(last, today) >= STALE_DAYS) {
-      parts.push(`Daily update check: no run since ${last}. The Windows task "stack-updates-daily" may have stopped. Tell the owner in an interactive session.`);
+    } else if (daysBetween(daily.day, today) >= STALE_DAYS) {
+      parts.push(`Daily update check: the Windows task "stack-updates-daily" has not run since ${daily.day}. It may have stopped. Tell the owner in an interactive session.`);
     }
   }
   return parts.join("\n\n");

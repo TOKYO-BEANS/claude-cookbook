@@ -651,13 +651,14 @@ async function stageReport(ctx) {
   storedNow(ctx, next); // refuse before writing anything when a later run already saved
   result.quiet = isQuiet(result); // from the lists, never a stored value
   const text = renderReport(result);
+  // What is printed, before anything is written or the state moves: a report that
+  // cannot be paged fails here, leaves no report.md and no "report" stage behind (so
+  // the session-start note never announces it), and the next run reports it again.
+  const pageable = ctx.out === join(ctx.stateDir, "runs", ctx.today);
+  const printed = result.quiet ? `${quietLine(result)}\n` : reportPages(runFile(ctx, "report.md"), text, { pageable })[0];
   writeFileSync(runFile(ctx, "report.md"), text);
   addStage(result, "report");
   writeJson(ctx, "result.json", result);
-  // What is printed, before the state moves: a report that cannot be paged fails here,
-  // so the next run reports it again.
-  const pageable = ctx.out === join(ctx.stateDir, "runs", ctx.today);
-  const printed = result.quiet ? `${quietLine(result)}\n` : reportPages(runFile(ctx, "report.md"), text, { pageable })[0];
   // Read the state again just before saving: a commit recorded while this run was
   // going differs from the one the run started with (next's) and wins.
   const stored = storedNow(ctx, next);

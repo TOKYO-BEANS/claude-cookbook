@@ -15,13 +15,15 @@ the check on demand and for acting on what it found.
 
 - The Windows task `stack-updates-daily` (07:00, or as soon as the PC is on) runs
   `~/.local/bin/stack-updates-daily.mjs`, a copy of `scripts/daily.mjs`. It finds the Cookbook
-  plugin installed for this user, refuses a folder outside `~/.claude/plugins`, and runs that
+  plugin installed for this user, refuses a folder or a script that leads outside `~/.claude/plugins`, and runs that
   copy's `updates.mjs run --unattended`. No session, no prompt and no tools take part.
 - It writes `daily.json` (the day, the times, the exit code) and `daily.log` (the error lines of
   the last run) in the state folder. The report is in `runs/<date>/`, as for any run.
 - The plugin's SessionStart hook (`hooks/stack-updates-notice.mjs`) adds a short note to a new
   session while a report from the last 7 days has not been shown, when the task's last run failed,
-  or when the task has not run for 2 days. The note holds dates, counts and the command only.
+  or when the task has not run for 2 days (measured from `daily.json`; a task that never ran once
+  says nothing, so check `daily.json` after setting it up). The note holds dates, counts and the
+  command, and for a failed run its exit code and the path of `daily.log`: never report text.
 - When the note names a report: print it with the command it gives (`page 1 <date>`, then
   `page 2 <date>` up to N when the first line says `Page 1 of N`) and give the owner the text as it
   is, before other work. Printing marks that report seen. An unattended session ignores the note.
