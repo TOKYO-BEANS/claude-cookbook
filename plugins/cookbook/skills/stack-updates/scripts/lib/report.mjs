@@ -127,8 +127,30 @@ function stillBehindLine(s, result) {
   const days = isDay(s.since) && isDay(result.date) ? daysBetween(s.since, result.date) : null;
   const counted = Number.isSafeInteger(days) && days > 0 ? ` (${plural(days, "day")})` : "";
   const since = days === 0 ? "since today" : `since ${shortDate(s.since)}${counted}`;
-  return `- ${nameOf(result, s.key)}: ${shown(s.installed)} -> ${shown(s.latest)}, behind ${since}`;
+  return `- ${nameOf(result, s.key)}: ${shown(s.installed)} -> ${shown(s.latest)}, behind ${since}${waitsFor(s.key, result)}`;
 }
+
+// Why a behind part is not installed yet, from the routine-update rules (apply.mjs):
+// the reasons are that module's fixed texts, the date is one this script computed.
+function waitsFor(key, result) {
+  const a = isObject(result.apply) ? result.apply : {};
+  const find = (name) => list(a[name]).filter(isObject).find((x) => x.key === key);
+  if (find("routine")) return "; ready to install";
+  const ask = find("ask");
+  if (ask) return `; needs your yes: ${inert(ask.reason) || "no reason recorded"}`;
+  const waiting = find("waiting");
+  if (waiting) return isDay(waiting.until) ? `; installs without asking from ${shortDate(waiting.until)}` : "; installs without asking soon";
+  return "";
+}
+
+const WHY_FAILED = { version: "the new version is not there", check: "its connection check failed" };
+const appliedLine = (a, result) => {
+  const from = a.from === null || a.from === undefined ? "" : `${shown(a.from)} -> `;
+  const on = isDay(a.day) ? ` (${shortDate(a.day)})` : "";
+  const why = a.ok === true ? "" : `: ${own(WHY_FAILED, a.why) ?? "the install was not confirmed"}; it now needs your yes`;
+  return `- ${nameOf(result, a.key)}: ${from}${shown(a.to)}${on}${why}`;
+};
+const readyLine = (r, result) => `- ${nameOf(result, r.key)}: ${shown(r.from)} -> ${shown(r.to)} (${own(KIND_WORDS, r.kind) ?? "unknown kind"})`;
 
 // Entries sharing one message print as one line when more than 3 do; the line for
 // every feed prints its own message ("all N feeds failed: ..."); then the inventory
@@ -168,8 +190,14 @@ function headerItems(result) {
     changes: list(result.changes).length, behind: list(result.stillBehind).length, broken: list(result.broken).length,
     unread: couldNotReadCount(result), unlisted: list(result.unlisted).length, missing: list(result.missing).length, dates: list(result.dates).length,
   };
+  const applied = list(result.applied).filter(isObject);
+  const installed = applied.filter((a) => a.ok === true).length, failed = applied.length - installed;
+  const ready = list(result.apply?.routine).length;
   return [
     n.changes && plural(n.changes, "change"),
+    installed && `${installed} installed`,
+    failed && `${failed} failed to install`,
+    ready && `${ready} ready to install`,
     n.behind && `${n.behind} still behind`,
     n.broken && `${n.broken} broken`,
     n.unread && `${n.unread} could not be read`,
@@ -253,7 +281,11 @@ export function renderReport(result) {
   if (result.stateReset) blocks.push("The state file could not be read, so it was reset: this run is a new baseline and reports only what is already behind, unlisted, missing or broken.");
   else if (result.firstRun) blocks.push("First run: this run records the baseline and reports only what is already behind, unlisted, missing or broken.");
   for (const c of list(result.changes).filter(isObject)) blocks.push(changeBlock(c, result));
+  const applied = list(result.applied).filter(isObject);
   blocks.push(
+    ...section("Installed since the last report", applied.filter((a) => a.ok === true).map((a) => appliedLine(a, result))),
+    ...section("Install failed", applied.filter((a) => a.ok !== true).map((a) => appliedLine(a, result))),
+    ...section("Ready to install (routine: no yes needed)", list(result.apply?.routine).filter(isObject).map((r) => readyLine(r, result))),
     ...section("Still behind", list(result.stillBehind).filter(isObject).map((s) => stillBehindLine(s, result))),
     ...section("Broken", list(result.broken).filter(isObject).map((b) => `- ${inert(b.service) || "unknown"}: ${inert(b.error) || "no error text"}`)),
     ...section("Could not check", couldNotCheckLines(result)),

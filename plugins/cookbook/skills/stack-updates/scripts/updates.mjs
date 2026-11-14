@@ -5,6 +5,9 @@
 //   inventory | compare | connect | read | report [--out <dir>]
 //                                    one stage on one run folder
 //   record <part key> <commit>       after an update: the commit now installed
+//   verify <part key>                after an install: is the part at its newest release
+//                                    and does its service answer; the outcome is kept for
+//                                    the next report (applied.json)
 //   page <n> [<date>]                page n of report.md of today's run, or of the run of
 //                                    <date> (see below); it marks that report seen
 //
@@ -46,14 +49,15 @@ import {
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { READ_LIMIT, compare, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
+import { NOTES, decide, decideAll } from "./lib/apply.mjs";
+import { READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
 import { dueDates, runChecks } from "./lib/connect.mjs";
 import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
 import { defaultRun, findUnlisted, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
 import { quietLine, renderReport } from "./lib/report.mjs";
 import { markSeen, readSeen } from "./lib/notice.mjs";
-import { CONNECTION_CHECKS } from "./lib/tables.mjs";
+import { CONNECTION_CHECKS, SELF_UPDATING_TOOLS } from "./lib/tables.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 // The catalog and the Cookbook skill of the plugin version this script belongs to.
@@ -72,7 +76,7 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const VERSION = /^\d+(?:\.\d+)+$/;
 const DAY_MS = 86_400_000;
 const STAGES = ["inventory", "compare", "connect", "read", "report"];
-const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | page <n> [<date>]; options --unattended (with run: nobody reads the output), --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
+const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | verify <part key> | page <n> [<date>]; options --unattended (with run: nobody reads the output), --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
 
 class UsageError extends Error {}
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -475,7 +479,10 @@ async function stageCompare(ctx, loaded = loadStateInfo(ctx)) {
     catalog: ctx.catalog, installed: inventory.installed, latest, unlisted: inventory.unlisted, state: loaded.state, today: ctx.today,
   });
   // What the report needs and the catalog alone knows.
-  const keys = new Set([...result.changes, ...result.stillBehind, ...result.couldNotCheck, ...result.missing].map((x) => x.key));
+  // Installs verified since the last report: told once, in this report.
+  result.applied = readApplied(ctx).filter((a) => a.reported !== true)
+    .map((a) => ({ key: a.key, from: a.from ?? null, to: a.to ?? null, ok: a.ok === true, day: a.day ?? null, why: a.why ?? null }));
+  const keys = new Set([...result.changes, ...result.stillBehind, ...result.couldNotCheck, ...result.missing, ...result.applied].map((x) => x.key));
   result.names = Object.fromEntries(ctx.entries.filter((e) => keys.has(e.key)).map((e) => [e.key, labelOf(e)]));
   for (const c of result.changes) {
     const e = ctx.byKey.get(c.key);
@@ -584,6 +591,7 @@ async function stageRead(ctx) {
   const changes = Array.isArray(result.changes) ? result.changes : [];
   if (ctx.noRead) {
     for (const c of changes) if (!isObject(c.answers)) c.notRead = "read skipped";
+    await decideUpdates(ctx, result);
     addStage(result, "read");
     return { file: writeJson(ctx, "result.json", result) };
   }
@@ -637,9 +645,118 @@ async function stageRead(ctx) {
   }
   result.changes = changes;
   result.reads = reads;
+  await decideUpdates(ctx, result);
   addStage(result, "read");
   return { file: writeJson(ctx, "result.json", result) };
 }
+
+// ---- routine updates: which behind parts a session may install without asking ----------
+
+const SELF_UPDATING = new Set(SELF_UPDATING_TOOLS);
+const factsOf = (ctx, key) => {
+  const e = ctx.byKey.get(key);
+  if (!e) return null;
+  const inst = isObject(e.part.installed) ? e.part.installed : {};
+  // A plugin of the local marketplace is ported by hand from its upstream.
+  const localPort = inst.kind === "plugin" && typeof inst.id === "string" && inst.id.endsWith("@claude-local");
+  return { kind: inst.kind, lifecycle: e.tool.lifecycle, selfUpdating: SELF_UPDATING.has(e.tool.id), localPort };
+};
+
+/**
+ * Sets `result.apply` (`{ routine, waiting, ask }`, lib/apply.mjs) for every behind part.
+ * The word check of a part's release notes comes from today's read, else from the
+ * state (`notes`, kept per newest version in next-state.json), else the notes are
+ * fetched here for that check alone: the text is tested and dropped, never stored,
+ * printed or given to a model. With --no-read nothing is fetched.
+ */
+async function decideUpdates(ctx, result) {
+  const next = readJson(ctx, "next-state.json");
+  const parts = isObject(next?.parts) ? next.parts : {};
+  const changes = Array.isArray(result.changes) ? result.changes.filter(isObject) : [];
+  const behind = Array.isArray(result.behind) ? result.behind.filter(isObject) : [];
+  const verdicts = new Map();
+  for (const b of behind) {
+    const facts = factsOf(ctx, b.key);
+    if (!facts) continue;
+    const ps = isObject(own(parts, b.key)) ? parts[b.key] : null;
+    const stored = typeof ps?.notes === "string" && ps.notes.startsWith(`${b.latest} `) ? ps.notes.slice(String(b.latest).length + 1) : null;
+    let notes = NOTES.includes(stored) ? stored : null;
+    const c = changes.find((x) => x.key === b.key && x.to === b.latest && x.textFile !== undefined);
+    if (c) notes = c.textFile ? (c.risky === true ? "risky" : "clean") : c.notesError ? notes : "none";
+    // Fetch only when the notes can still decide: everything else already needs a yes.
+    if (notes === null && !ctx.noRead && ["routine", "waiting"].includes(decide(b, { ...facts, notes: "clean", today: ctx.today }).decision)) {
+      const got = await notesFor(ctx, { key: b.key, from: b.installed, to: b.latest });
+      if (got.text.trim()) notes = isRisky(b.installed, b.latest, got.text) ? "risky" : "clean";
+      else if (!got.error) notes = "none";
+    }
+    if (notes !== null && ps) ps.notes = `${b.latest} ${notes}`;
+    verdicts.set(b.key, notes);
+  }
+  result.apply = decideAll(behind, (key) => {
+    const facts = factsOf(ctx, key);
+    return facts ? { ...facts, notes: verdicts.get(key) ?? null } : null;
+  }, ctx.today);
+  const keys = [...result.apply.routine, ...result.apply.waiting, ...result.apply.ask].map((x) => x.key);
+  result.names = { ...(isObject(result.names) ? result.names : {}), ...Object.fromEntries(keys.map((k) => [k, labelOf(ctx.byKey.get(k))])) };
+  if (isObject(next)) writeJson(ctx, "next-state.json", next);
+}
+
+// applied.json in the state folder: what `verify` found after each install, newest last.
+const APPLIED_FILE = "applied.json";
+function readApplied(ctx) {
+  try {
+    const a = JSON.parse(readFileSync(join(ctx.stateDir, APPLIED_FILE), "utf8"));
+    return isObject(a) && Array.isArray(a.entries) ? a.entries.filter((x) => isObject(x) && typeof x.key === "string") : [];
+  } catch {
+    return [];
+  }
+}
+function writeApplied(ctx, entries) {
+  mkdirSync(ctx.stateDir, { recursive: true });
+  writeFileSync(join(ctx.stateDir, APPLIED_FILE), `${JSON.stringify({ entries: entries.slice(-100) }, null, 1)}\n`);
+}
+
+/**
+ * `verify <part key>`, after an install: reads the installed version itself and, when
+ * the tool has a free connection check, runs it. The install counts only when the part
+ * is at its newest release and the check passes. Either way the outcome goes to
+ * applied.json for the next report; a failure also makes that version need the owner's yes.
+ */
+async function verify(ctx, key) {
+  const e = ctx.byKey.get(key);
+  if (!e) throw new UsageError(`no catalog part has the key ${String(key).slice(0, 120)}`);
+  const { state, fresh } = loadStateInfo(ctx);
+  const ps = fresh ? null : own(state.parts, key);
+  if (!isObject(ps) || typeof ps.latest !== "string") throw new Error(`nothing is recorded for ${key}: run the check first`);
+  if (ps.behindSince === null) throw new Error(`${labelOf(e)} (${key}) is not recorded as behind: nothing to verify`);
+  const want = ps.latest;
+  const isCommit = COMMIT.test(want);
+  const inst = await readInstalled(e.part.installed, key, { home: ctx.home, run: ctx.run, gh: ctx.gh });
+  const text = (v) => (typeof v === "string" && v ? v : null);
+  const have = inst?.state !== "read" ? null : isCommit ? (text(ps.installedCommit) ?? text(inst.commit)) : text(inst.version);
+  let why = null;
+  if (have === null || (isCommit ? have !== want : !((compareVersions(have, want) ?? -1) >= 0))) why = "version";
+  if (why === null) {
+    const entry = own(CONNECTION_CHECKS, e.tool.id);
+    if (isObject(entry) && entry.paid !== true) {
+      const one = await runChecks({ tools: [{ id: e.tool.id, name: e.tool.name, lifecycle: e.tool.lifecycle, parts: [] }] },
+        { run: ctx.run, home: ctx.home, now: ctx.now, checks: { [e.tool.id]: entry } });
+      if (one.broken.length) why = "check";
+    }
+  }
+  const ok = why === null;
+  writeApplied(ctx, [...readApplied(ctx), { day: ctx.today, key, from: ps.installed ?? null, to: want, ok, why, reported: false }]);
+  state.parts[key] = { ...ps, applyFailed: ok ? null : want, ...(ok ? { behindSince: null, ...(isCommit ? {} : { installed: have }) } : {}) };
+  saveState(ctx.home, state, { folder: ctx.stateDir });
+  const label = labelOf(e);
+  if (!ok) {
+    throw new Error(why === "check"
+      ? `${label} is at ${shortVersion(want)}, but its connection check failed: recorded as a failed install`
+      : `${label} is not at ${shortVersion(want)} (it reads ${have === null ? "no version" : shortVersion(have)}): recorded as a failed install`);
+  }
+  return { printed: `Installed: ${label} ${ps.installed === null ? "" : `${shortVersion(ps.installed)} -> `}${shortVersion(want)}; recorded for the next report.\n` };
+}
+const shortVersion = (v) => (COMMIT.test(String(v)) ? String(v).slice(0, 7) : String(v).slice(0, 40));
 
 async function stageReport(ctx) {
   const result = readResult(ctx);
@@ -672,6 +789,11 @@ async function stageReport(ctx) {
   // Somebody reads what a run prints unless it is --unattended (the Windows task):
   // then the report waits, and the session-start notice announces it.
   if (!result.quiet && !ctx.unattended && pageable) markSeen(ctx.stateDir, ctx.today);
+  // The installs this report tells about are told: the next report leaves them out.
+  if (pageable && Array.isArray(result.applied) && result.applied.length) {
+    const told = new Set(result.applied.map((a) => `${a.key}|${a.to}|${a.day}`));
+    writeApplied(ctx, readApplied(ctx).map((a) => (told.has(`${a.key}|${a.to ?? null}|${a.day ?? null}`) ? { ...a, reported: true } : a)));
+  }
   return { printed };
 }
 
@@ -723,6 +845,9 @@ function parseArgs(argv) {
     if (rest.length < 1 || rest.length > 2 || !/^[1-9][0-9]?$/.test(rest[0])) throw new UsageError(`page needs one page number from 1 to ${MAX_PAGES}, and at most the date of a run`);
     if (rest[1] !== undefined && !isDay(rest[1])) throw new UsageError("page's date must be a YYYY-MM-DD date");
     if (opts.out !== undefined) throw new UsageError("page reads today's run folder in the state folder; it takes no --out");
+  } else if (command === "verify") {
+    if (rest.length !== 1) throw new UsageError("verify needs one part key");
+    if (opts.out !== undefined) throw new UsageError("verify reads the state folder; it takes no --out");
   } else if (command === "record" ? rest.length !== 2 : !(command === "run" || STAGES.includes(command)) || rest.length) {
     throw new UsageError(command === "record" ? "record needs a part key and a commit" : `unknown command ${String(command).slice(0, 40)}`);
   }
@@ -769,6 +894,15 @@ export async function main(argv, deps = {}) {
     };
     if (command === "record") {
       stdout((await record(ctx, rest[0], rest[1])).printed);
+      return 0;
+    }
+    if (command === "verify") {
+      const free = takeLock(stateDir); // never while a run is reading the same state
+      try {
+        stdout((await verify(ctx, rest[0])).printed);
+      } finally {
+        free();
+      }
       return 0;
     }
     if (command === "page") {

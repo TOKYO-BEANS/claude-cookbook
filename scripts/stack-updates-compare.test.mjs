@@ -96,7 +96,11 @@ test("first run: baseline, reports only what is already behind, unlisted, missin
   assert.deepEqual(state.parts["browse/cli"], {
     installed: "0.11.3", latest: "0.11.4", reported: null, behindSince: "2026-11-13",
     feedErrorSince: null, feedErrorShown: null, installedCommit: null, feed: feedFingerprint({ kind: "npm", package: "browse" }),
+    latestSince: "2026-11-13", notes: null, applyFailed: null,
   });
+  // Every behind part is listed for the routine-update rules, on any day of the week.
+  assert.deepEqual(result.behind.find((b) => b.key === "browse/cli"),
+    { key: "browse/cli", installed: "0.11.3", latest: "0.11.4", since: "2026-11-13", latestSince: "2026-11-13", applyFailed: null });
   assert.equal(state.parts[CC].installed, "2.1.0");
   assert.equal(state.parts[CC].latest, "2.1.5");
   assert.equal(state.parts[CC].behindSince, null);
