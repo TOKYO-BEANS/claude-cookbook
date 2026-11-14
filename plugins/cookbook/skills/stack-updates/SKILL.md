@@ -113,7 +113,8 @@ Steps, in an interactive session only (an unattended session installs nothing):
    older one, run the check first. When the session can start a background subagent, hand it the
    installs so the owner's own request is not held up.
 3. Install one part at a time, by the row for its kind in the table below, with every step of its
-   recipe (the diff read, the three scans, the sandbox run, `npm ci --ignore-scripts`, the
+   recipe (the diff read, the three scans, the sandbox run or the exemption its row names, `npm ci
+   --ignore-scripts`, the
    checksum). Install
    exactly the version the list names as `to`: a pinned copy's lockfile names that version, and
    before a plugin update check that its marketplace offers exactly that version. A newer one has
@@ -147,12 +148,12 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json`:
 
 | Kind | What to do | Recipe |
 | --- | --- | --- |
-| `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>` | "Claude Code add-ons" (Updates); "Context window (context-mode)" |
+| `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>`. No sandbox run (a plugin starts only inside Claude Code); say so in the report | "Claude Code add-ons" (Updates); "Context window (context-mode)" |
 | `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`~/.local/share/vetting/_tools/pinned-vet.sh` does all of these; read its `SANDBOX` lines as "Cloud sandboxes (boat)" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
-| `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command. No sandbox run: these are Windows binaries and the sandbox is Linux; say so in the report | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
+| `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command. No sandbox run (the Windows binary installed here; the sandbox is Linux); say so in the report | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
-| `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit | "Claude Code add-ons" (Updates) |
+| `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit. No sandbox run; say so in the report | "Claude Code add-ons" (Updates) |
 | `project` | The version pull request Dependabot opens in that repository | "Security in a repository" |
 | The standard's own pins (Semgrep in CI, Safe Chain) | Nothing on this PC. Semgrep's CI pin is not followed here; a Safe Chain release is reported for information only. A pin moves when Stack Atlas bumps the standard, decided there, never because of this report | "Security in a repository" |
 | Jev Router | Its own steps | "Model routing (Jev Router)" |
