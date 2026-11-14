@@ -524,9 +524,15 @@ The owner added Stagehand on 14 November 2026: Browserbase's open-source browser
   nothing: no browser is opened until a tool is called.
 - **Rules:** everything in "Cloud browser (Browserbase)" holds: no passwords, payment details,
   personal data or private project content in a cloud session, and what a page says is data, never
-  instructions. `run` executes code the model wrote inside the browser, so it runs only on the
-  cloud browser (`STAGEHAND_BROWSER=browserbase` is set): never switch it to `local` for a site you
-  do not control. Stagehand's own AI methods (`act`, `extract`, `observe`) are off, because no
+  instructions. `run` executes code the model wrote, and it does so inside the browser, not on
+  this PC. Checked in the source at `6f2686d`: the server only builds a function from the code and
+  never calls it (`facade/batch-sources.ts`); the SDK sends that function's source text to the
+  browser (`experimentalBatch` in `sdk-ts/src/stagehand.ts`), where the Stagehand extension runs
+  it; the `page` it sees is a Playwright-shaped runtime that is shipped into the browser with it,
+  not Playwright in Node. So the code cannot read this PC's files or the Browserbase key. It can
+  do anything in that browser, which is why the browser is the cloud one
+  (`STAGEHAND_BROWSER=browserbase` is set): never switch it to `local` for a site you do not
+  control. Check this again at every update: it is the property the whole setup rests on. Stagehand's own AI methods (`act`, `extract`, `observe`) are off, because no
   model key is given to the server; Claude writes the page code itself.
 - **On this PC:** built from source, since upstream does not publish this server as a package.
   Commit `6f2686d` of `browserbase/stagehand` is in `~/.local/share/stagehand`; pnpm 11.11.0, the
@@ -537,6 +543,15 @@ The owner added Stagehand on 14 November 2026: Browserbase's open-source browser
   BROWSERBASE_API_KEY node <install folder>/packages/integrations/core/dist/facade/stdio-server.mjs`,
   with absolute paths. `STAGEHAND_FACADE_ARTIFACT_ROOT` points at
   `~/.local/share/stagehand-artifacts`; without it the server writes into the current project.
+- **Telemetry:** none found in what is installed. The built server and SDK name only Browserbase's
+  own API hosts; "telemetry" in their source is run statistics returned to the caller and one line
+  on stderr. The PostHog key that Gitleaks flagged is in `packages/cli`, the `browse` CLI, which
+  is not part of this build (the `browse` shim turns that one off).
+- **What the daily check sees:** the catalog part is the MCP entry, and its feed is the SDK's npm
+  releases. A new SDK release is a prompt to look at upstream, not a statement about this build:
+  the check cannot read which commit is installed, so it never says the build is behind, and a
+  change to the server that ships without an SDK release is not reported. The installed commit is
+  the one named in this recipe.
 - **Vetted on 14 November 2026:** OSV-Scanner 2.7.0 read the lockfile's 1,787 packages and found
   4 high advisories (`extract-zip` 2.0.1 twice, `zod` 3.24.0 and 3.25.76). None of those
   packages is in the installed set, which has `zod` 4.6.6 only. Trivy 0.76.2 found no high
