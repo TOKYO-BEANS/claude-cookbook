@@ -1329,6 +1329,7 @@ test("every active or trial part with an npm feed has a repository for its relea
   // "<package>@x.y.z", which no reader here follows (checked 14 November 2026).
   const KNOWN_NONE = {
     "browserbase/cli": "browse is released from browserbase/stagehand, tagged browse@x.y.z",
+    "stagehand/mcp": "@browserbasehq/stagehand is released from browserbase/stagehand, tagged @browserbasehq/stagehand@x.y.z",
     "wrangler/cli": "wrangler is released from cloudflare/workers-sdk, tagged wrangler@x.y.z",
   };
   const parts = real.tools.filter((x) => x.lifecycle === "active" || x.lifecycle === "trial")
