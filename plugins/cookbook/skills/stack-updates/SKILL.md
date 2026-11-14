@@ -149,7 +149,7 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json`:
 | --- | --- | --- |
 | `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>` | "Claude Code add-ons" (Updates); "Context window (context-mode)" |
 | `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`~/.local/share/vetting/_tools/pinned-vet.sh` does all of these; read its `SANDBOX` lines as "Cloud sandboxes (boat)" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
-| `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
+| `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command. No sandbox run: these are Windows binaries and the sandbox is Linux; say so in the report | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
 | `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit | "Claude Code add-ons" (Updates) |
