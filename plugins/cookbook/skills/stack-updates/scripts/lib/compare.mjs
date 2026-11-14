@@ -47,7 +47,11 @@ const DAY_MS = 86_400_000;
 const NEWS = ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing"];
 const COMMIT = /^[0-9a-f]{40}$/;
 const PAGE_HASH = /^[0-9a-f]{64}$/; // feeds.mjs's sha256 of a changelog page
-const PART_FIELDS = ["installed", "latest", "reported", "behindSince", "feedErrorSince", "feedErrorShown", "installedCommit", "feed"];
+// `latestSince` (the day the newest release was first seen), `notes` ("<latest> clean",
+// "... risky" or "... none": the word check of its release notes) and `applyFailed` (a
+// version whose install failed) serve the routine-update rules in apply.mjs.
+const PART_FIELDS = ["installed", "latest", "reported", "behindSince", "feedErrorSince", "feedErrorShown", "installedCommit", "feed",
+  "latestSince", "notes", "applyFailed"];
 // The fields that say which source a feed reads (not `updater` or `reason`).
 const FEED_SOURCE = { npm: ["package", "tag"], github: ["repository"], marketplace: ["repository", "plugin"], commit: ["repository", "path"], changelog: ["url"] };
 const INSTALLED_STATES = ["read", "not-found", "unreadable", "hosted", "none"];
@@ -105,7 +109,9 @@ export function isRisky(from, to, text) {
 }
 
 /** True when no list but `unchecked` has an entry. The week count and `suppressed` do not count. */
-export const isQuiet = (result) => NEWS.every((k) => (result?.[k] ?? []).length === 0);
+export const isQuiet = (result) => NEWS.every((k) => (result?.[k] ?? []).length === 0)
+  // Something a session should install, or an install to tell the owner about, is news too.
+  && (result?.apply?.routine ?? []).length === 0 && (result?.applied ?? []).length === 0;
 
 // ---- state ---------------------------------------------------------------------
 
@@ -125,6 +131,7 @@ function normalizeState(raw) {
         installed: str(p.installed), latest: str(p.latest), reported: str(p.reported),
         behindSince: day(p.behindSince), feedErrorSince: day(p.feedErrorSince), feedErrorShown: day(p.feedErrorShown),
         installedCommit: str(p.installedCommit), feed: str(p.feed),
+        latestSince: day(p.latestSince), notes: str(p.notes), applyFailed: str(p.applyFailed),
       }]),
   );
   const firstSeen = (o) => Object.fromEntries(Object.entries(isObject(o) ? o : {}).filter(([, d]) => validDay(d)));
@@ -308,7 +315,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   const selfUpdating = new Set(SELF_UPDATING_TOOLS);
   const tools = Array.isArray(catalog?.tools) ? catalog.tools.filter(isObject) : [];
   const next = { version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: today, lastMonday: monday, week: null };
-  const changes = [], stillBehind = [], couldNotCheck = [], missing = [], allFailedParts = [];
+  const changes = [], stillBehind = [], couldNotCheck = [], missing = [], allFailedParts = [], behindAll = [];
   // Entries a rule held back today because it is not their day, so a quiet day can say so.
   const suppressed = { couldNotCheck: 0, stillBehind: 0, unlisted: 0, missing: 0 };
 
@@ -325,7 +332,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     // this feed could not have produced): a new baseline; a recorded commit stays.
     const feedId = feedFingerprint(p.feed);
     if (ps.feed !== null ? ps.feed !== feedId : ps.latest !== null && !fitsFeed(p.feed, ps.latest))
-      ps = { ...emptyPart(), installedCommit: ps.installedCommit };
+      ps = { ...emptyPart(), installedCommit: ps.installedCommit, applyFailed: ps.applyFailed }; // a failed install stays failed
     ps.feed = feedId;
     next.parts[key] = ps;
     const firstMissing = Object.hasOwn(prev.missing, key) ? prev.missing[key] : null;
@@ -403,7 +410,21 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     }
 
     ps.installed = iv;
-    if (lv !== null) ps.latest = lv;
+    if (lv !== null) {
+      // A newer release restarts its waiting days and forgets the old notes check.
+      if (lv !== ps.latest) Object.assign(ps, { latestSince: today, notes: null });
+      // A state from before this field starts the wait today: `behindSince` may be older
+      // than the day this newest release was first seen.
+      else ps.latestSince ??= today;
+      ps.latest = lv;
+    }
+    // Every part known to be behind, every day: what apply.mjs decides about.
+    if (ps.behindSince !== null && lv !== null) {
+      behindAll.push({
+        key, installed: str(lat.version) ? inst.version : (ps.installedCommit ?? iv), latest: lv,
+        since: ps.behindSince, latestSince: ps.latestSince, applyFailed: ps.applyFailed,
+      });
+    }
   }
 
   if (allFailedParts.length) {
@@ -452,6 +473,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     quiet: false,
     firstRun,
     changes,
+    behind: behindAll.sort(byKey),
     stillBehind: stillBehind.sort(byKey),
     broken: [],
     unchecked: [],
