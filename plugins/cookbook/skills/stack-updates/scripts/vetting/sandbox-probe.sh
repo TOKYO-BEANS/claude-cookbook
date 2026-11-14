@@ -8,10 +8,12 @@
 # Usage: bash sandbox-probe.sh <npm package>
 #    or: bash sandbox-probe.sh --cmd "<install command>" ["<start command>"]
 #    or: bash sandbox-probe.sh --report <folder>
+#    or: bash sandbox-probe.sh --left <ps after> <pids before> <own pid>
 # The second form is for code that is not an npm package (a pnpm workspace, a Python tool):
 # push the folder and this file with `boat run --no-env --push <folder>`, and both commands
 # run in that folder under the same probe. The third form only prints the report from a
-# folder of captured files; the tests use it, and it needs no sandbox.
+# folder of captured files, and the fourth only lists the left-over processes; the tests
+# use both, and they need no sandbox.
 set -uo pipefail
 
 clean() { tr -cd '\11\12\40-\176' | cut -c1-160; }
@@ -23,6 +25,28 @@ conns() { grep -E 'connect\(.*AF_INET' "$1" 2>/dev/null \
 execs() { grep -E 'execve\(.* = 0$' "$1" 2>/dev/null | grep -oE 'execve\("[^"]+"' \
   | sed 's/execve("//;s/"$//' | sed 's#.*/##' | sort | uniq -c | sort -rn | head -12 \
   | awk '{printf "%s x%s, ", $2, $1}'; }
+
+# Prints the command line of every process that was not there before and is not the probe
+# itself. $1 holds "pid parent command line" lines, $2 the pids from before, $3 the probe's
+# own pid. A process is the probe's when the probe is among its parents, and a kernel
+# thread when its parent is pid 2. A name proves neither: a process chooses its own name.
+left() {
+  [ -r "$1" ] && [ -r "$2" ] || return 2
+  awk -v self="$3" -v before_file="$2" '
+    FILENAME == before_file { before[$1] = 1; next }
+    { pid = $1; parent[pid] = $2; $1 = ""; $2 = ""; sub(/^ +/, ""); args[pid] = $0; order[++n] = pid }
+    END {
+      for (i = 1; i <= n; i++) {
+        p = order[i]; if (p in before) continue
+        own = 0; q = p
+        for (hops = 0; hops < 64 && (q in parent); hops++) {
+          if (q == self || q == 2 || parent[q] == 2) { own = 1; break }
+          q = parent[q]
+        }
+        if (!own) print args[p]
+      }
+    }' "$2" "$1"
+}
 
 # Prints the SANDBOX lines from the files in $T. $T/meta holds one "key=value" per line.
 # Every line is cut to 160 characters and stripped of control characters: the text comes
@@ -39,6 +63,8 @@ report_lines() {
 
   echo "SANDBOX lifecycle scripts run:"
   grep -E '^> ' "$T/install.log" | sort -u | head -10 | clean | sed 's/^/  /'
+  # 124 and 137 are the time limit ending the wait (137 when the tracer had to be killed).
+  case "$ci" in 124 | 137) echo "SANDBOX the install did not end in time: something it started was still running" ;; esac
   [ "$ci" = "0" ] || { echo "SANDBOX install log, last lines:"; tail -5 "$T/install.log" | clean | sed 's/^/  /'; }
 
   echo "SANDBOX dns names during install: $(head -n "$dns_install" "$T/dns.txt" | names | tr '\n' ' ' | clean)"
@@ -65,6 +91,15 @@ if [ "${1:-}" = "--report" ]; then
   report
   exit 0
 fi
+if [ "${1:-}" = "--left" ]; then
+  left "$2" "$3" "$4"
+  exit $?
+fi
+# Everything below installs and runs outside code: only where a boat sandbox's tools are.
+if ! command -v strace > /dev/null || ! command -v tcpdump > /dev/null || ! sudo -n true 2> /dev/null; then
+  echo "sandbox-probe.sh installs and runs outside code. It needs strace, tcpdump and sudo, as a boat sandbox has."
+  exit 2
+fi
 
 INSTALL='npm ci --no-audit --no-fund --foreground-scripts'; START=""
 if [ "$1" = "--cmd" ]; then PKG="(command)"; INSTALL="$2"; START="${3:-}"; else PKG="$1"; fi
@@ -76,7 +111,10 @@ sudo -n tcpdump -i any -n -l port 53 > "$T/dns.txt" 2> "$T/tcpdump.err" &
 sleep 2
 touch "$T/marker"
 
-strace -f -qq -e trace=execve,connect -o "$T/install.trace" \
+# strace waits for every process the install started, so a daemon it leaves would hold the
+# probe until the sandbox's own time limit and give no report. The limit here ends the wait
+# (exit 124), and the daemon then shows under "processes left running".
+timeout -k 5 "${PROBE_INSTALL_TIMEOUT:-600}" strace -f -qq -e trace=execve,connect -o "$T/install.trace" \
   bash -c "$INSTALL" > "$T/install.log" 2>&1
 ci=$?
 sleep 2
@@ -107,9 +145,8 @@ sudo -n find / -xdev -newer "$T/marker" -type f \
   -not -path '/tmp/node-compile-cache/*' -not -path '/home/user/.ascii/*' \
   2>/dev/null > "$T/files.txt"
 
-ps -eo pid=,args= | while read -r pid args; do
-  grep -qx "$pid" "$T/ps.before" || echo "$args"
-done | grep -vE '^(ps |bash sandbox-probe|grep |sed |head |tr |cut |\[)' > "$T/left.txt"
+ps -eo pid=,ppid=,args= > "$T/ps.after"
+left "$T/ps.after" "$T/ps.before" "$$" > "$T/left.txt"
 
 {
   echo "pkg=$PKG"

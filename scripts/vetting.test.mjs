@@ -129,6 +129,10 @@ test("a failed install shows its last log lines and its exit code", { skip }, ()
   });
   assert.match(out, /install exit 1 \| start exit none \(no command\)/);
   assert.match(out, /^SANDBOX install log, last lines:\n {2}npm error code E404$/m);
+  assert.ok(!out.includes("did not end in time"));
+  // 124 and 137 are the time limit: the install started something that kept running.
+  for (const ci of [124, 137])
+    assert.match(report({ ...quiet, meta: meta({ ci }) }), /^SANDBOX the install did not end in time: /m);
 });
 
 test("what the package prints is cut and stripped of control characters", { skip }, () => {
@@ -229,4 +233,155 @@ test("a run that stops early is no result, even with exit code 0", { skip }, () 
   const cut = step({ log: "SANDBOX some-cli | Ubuntu\nexit 0 \u00b7 2s \u00b7 small \u00b7 bx_1 deleted\n", exit: 0 });
   assert.equal(cut.status, 1);
   assert.match(cut.out, /SANDBOX: no result \(exit 0\)/);
+});
+
+test("a left-over process is found by its parents, not by its name", { skip }, () => {
+  const dir = capture({
+    // pid, parent, command line. 100 is the probe; 1 and 2 were there before it started.
+    "ps.after": [
+      "    1     0 /sbin/init",
+      "    2     0 [kthreadd]",
+      "   55     2 [kworker/0:1-events]",
+      "  100    90 bash sandbox-probe.sh some-cli",
+      "  140   100 ps -eo pid=,ppid=,args=",
+      "  150     1 [kworker/0:1]",
+      "  151     1 sed x",
+      "  152   151 node /tmp/child.js",
+      "  160   100 sleep 1",
+      "",
+    ].join("\n"),
+    "ps.before": "1\n2\n90\n100\n",
+  });
+  const r = spawnSync(
+    bash,
+    [`${vetting}/sandbox-probe.sh`, "--left", `${dir}/ps.after`, `${dir}/ps.before`, "100"],
+    { encoding: "utf8" },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  // A process that only looks like a kernel thread, or is named like one of the probe's own
+  // tools, is reported. A real kernel thread (parent 2) and the probe's own children are not.
+  assert.deepEqual(r.stdout.trimEnd().split("\n"), ["[kworker/0:1]", "sed x", "node /tmp/child.js"]);
+  const none = spawnSync(
+    bash,
+    [`${vetting}/sandbox-probe.sh`, "--left", `${dir}/ps.after`, `${dir}/ps.after.pids`, "100"],
+    { encoding: "utf8" },
+  );
+  assert.notEqual(none.status, 0, "a missing list of earlier processes must not read as nothing left");
+});
+
+// pinned-install.sh and pinned-vet.sh, with stand-ins for npm, the scanners and boat.
+function shareWith(files) {
+  const root = mkdtempSync(path.join(tmpdir(), "vet-"));
+  for (const [name, text] of Object.entries(files)) {
+    const file = path.join(root, name);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  }
+  mkdirSync(path.join(root, "stub"), { recursive: true });
+  return root;
+}
+
+function stub(root, name, lines) {
+  const file = path.join(root, "stub", name);
+  writeFileSync(file, ["#!/usr/bin/env bash", ...lines, ""].join("\n"));
+  chmodSync(file, 0o755);
+}
+
+function runIn(root, script, args, env = {}) {
+  // node stays on the path (the scripts use it); the stand-ins come first.
+  const r = spawnSync(
+    bash,
+    [
+      "-c",
+      'N="$(dirname "$(command -v node)")"; export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" PATH="$PWD/stub:$N:/usr/bin:/bin"; exec bash "$@"',
+      "run",
+      `${vetting}/${script}`,
+      ...args,
+    ],
+    { cwd: root, encoding: "utf8", env: { ...process.env, ...env } },
+  );
+  return { status: r.status, out: r.stdout + r.stderr };
+}
+
+const lock = (version) => `${JSON.stringify({ version })}\n`;
+
+test("a second install run never overwrites the backup of the last good version", { skip }, () => {
+  const root = shareWith({
+    "share/tool/package.json": lock("1.0.0"),
+    "share/tool/package-lock.json": lock("1.0.0"),
+    "share/vetting/tool-2.0.0/lock/package.json": lock("2.0.0"),
+    "share/vetting/tool-2.0.0/lock/package-lock.json": lock("2.0.0"),
+    "share/vetting/tool-3.0.0/lock/package.json": lock("3.0.0"),
+    "share/vetting/tool-3.0.0/lock/package-lock.json": lock("3.0.0"),
+  });
+  stub(root, "npm", ['exit "${STUB_NPM_EXIT:-0}"']);
+  const at = (file) => readFileSync(path.join(root, "share", "tool", file), "utf8");
+
+  // The install of 2.0.0 fails, is tried again, and then 3.0.0 is tried: 1.0.0 stays the backup.
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "2.0.0"], { STUB_NPM_EXIT: "1" }).status, 1);
+  assert.equal(at(".previous/package-lock.json"), lock("1.0.0"));
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "2.0.0"], { STUB_NPM_EXIT: "1" }).status, 1);
+  assert.equal(at(".previous/package-lock.json"), lock("1.0.0"), "a retry overwrote the backup");
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "3.0.0"], { STUB_NPM_EXIT: "1" }).status, 1);
+  assert.equal(at(".previous/package-lock.json"), lock("1.0.0"), "another version overwrote the backup");
+
+  const back = runIn(root, "pinned-install.sh", ["tool", "--back"]);
+  assert.equal(back.status, 0, back.out);
+  assert.equal(at("package-lock.json"), lock("1.0.0"));
+
+  // An install that worked becomes the backup of the next one.
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "2.0.0"]).status, 0);
+  assert.equal(at("package-lock.json"), lock("2.0.0"));
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "3.0.0"]).status, 0);
+  assert.equal(at(".previous/package-lock.json"), lock("2.0.0"));
+  assert.equal(at("package-lock.json"), lock("3.0.0"));
+});
+
+function vetShare() {
+  const root = shareWith({
+    "share/tool/package.json": `${JSON.stringify({ dependencies: { "some-cli": "1.0.0" } })}\n`,
+    // Left from an earlier vetting of the same version.
+    "share/vetting/tool-2.0.0/copy/packages/stale/index.js": "old\n",
+    "share/vetting/tool-2.0.0/lock/node_modules/stale/index.js": "old\n",
+    "boat.log": finished,
+  });
+  stub(root, "npm", [
+    'echo "npm $*" >> "$STUB_ROOT/calls.txt"',
+    'if [ "$1" = "install" ]; then',
+    `  printf '%s' '{"packages":{"":{},"node_modules/some-cli":{"version":"2.0.0","integrity":"sha512-x"}}}' > package-lock.json`,
+    '  exit "${STUB_LOCK_EXIT:-0}"',
+    "fi",
+    'if [ "${STUB_CI_EXIT:-0}" != "0" ]; then exit "$STUB_CI_EXIT"; fi',
+    "mkdir -p node_modules/some-cli && echo new > node_modules/some-cli/index.js",
+  ]);
+  for (const scanner of ["osv-scanner", "gitleaks", "trivy"])
+    stub(root, scanner, [`echo "${scanner}" >> "$STUB_ROOT/calls.txt"`]);
+  stub(root, "boat", ['echo "boat" >> "$STUB_ROOT/calls.txt"', 'cat "$STUB_ROOT/boat.log"']);
+  const calls = () => readFileSync(path.join(root, "calls.txt"), "utf8");
+  return { root, calls, v: path.join(root, "share", "vetting", "tool-2.0.0") };
+}
+
+test("a vetting run scans what this run unpacked, not an earlier copy", { skip }, () => {
+  const { root, calls, v } = vetShare();
+  const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"]);
+  assert.equal(r.status, 0, r.out);
+  assert.ok(existsSync(path.join(v, "copy", "packages", "some-cli", "index.js")), r.out);
+  assert.ok(!existsSync(path.join(v, "copy", "packages", "stale")), "the earlier copy was scanned");
+  assert.match(r.out, /resolved some-cli@2\.0\.0 \| packages 1 /);
+  assert.match(calls(), /osv-scanner\ngitleaks\ntrivy\nboat\n$/);
+  assert.match(r.out, /^sandbox exit 0$/m);
+});
+
+test("a vetting run stops when the lockfile or the unpack fails", { skip }, () => {
+  for (const [env, message] of [
+    [{ STUB_CI_EXIT: "1" }, /VETTING: stopped, the packages did not unpack/],
+    [{ STUB_LOCK_EXIT: "1" }, /VETTING: stopped, no lockfile was resolved/],
+  ]) {
+    const { root, calls, v } = vetShare();
+    const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], env);
+    assert.equal(r.status, 1, r.out);
+    assert.match(r.out, message);
+    assert.ok(!/osv-scanner|gitleaks|trivy|boat/.test(calls()), `a scanner ran after a failure:\n${calls()}`);
+    assert.ok(!existsSync(path.join(v, "copy", "packages", "stale")), "the earlier copy was left in place");
+  }
 });

@@ -4,7 +4,7 @@
 # It resolves a lockfile in an empty folder from the install folder's own package.json
 # (same overrides, the new version), unpacks it without running any script, and runs
 # OSV-Scanner, Gitleaks and Trivy. Nothing is executed on this PC and the install is not
-# touched. Last, pinned-sandbox.sh installs the package with its install scripts and starts
+# touched. It stops when the lockfile or the unpack fails. Last, pinned-sandbox.sh installs the package with its install scripts and starts
 # it once in a boat sandbox, and prints what that did.
 set -uo pipefail
 FOLDER="$1"; PKG="$2"; VER="$3"
@@ -22,15 +22,23 @@ if(!where){console.log("the package is not in the install folder package.json");
 console.log("was",pkg+"@"+p[where][pkg],"| overrides",JSON.stringify(p.overrides||{}));
 p[where][pkg]=ver;fs.writeFileSync(dst,JSON.stringify(p,null,2)+"\n");' "$SHARE/$FOLDER/package.json" "$V/lock/package.json" "$PKG" "$VER" || exit 2
 cd "$V/lock" || exit 1
-npm install --package-lock-only --ignore-scripts --no-audit --no-fund > "$V/out/lock.log" 2>&1; echo "lockfile exit $?"
+# What an earlier run of this version unpacked is removed: the scanners read this run only.
+rm -rf "$V/lock/node_modules" "$V/copy/packages"
+npm install --package-lock-only --ignore-scripts --no-audit --no-fund > "$V/out/lock.log" 2>&1; code=$?
+echo "lockfile exit $code"
+[ "$code" -eq 0 ] || { echo "VETTING: stopped, no lockfile was resolved; see $V/out/lock.log"; exit 1; }
 node -e '
 const l=require("./package-lock.json");const p=Object.entries(l.packages).filter(([k])=>k);
 const pkg=process.argv[1];const main=l.packages["node_modules/"+pkg];
 console.log("resolved",pkg+"@"+(main&&main.version),"| packages",p.length,"| with install script:",p.filter(([,v])=>v.hasInstallScript).map(([k])=>k.replace(/^.*node_modules\//,"")).join(", ")||"none");
 console.log("without integrity:",p.filter(([,v])=>!v.integrity&&!v.link).length);' "$PKG"
-npm ci --ignore-scripts --no-audit --no-fund > "$V/out/ci.log" 2>&1; echo "unpack exit $?"
+npm ci --ignore-scripts --no-audit --no-fund > "$V/out/ci.log" 2>&1; code=$?
+echo "unpack exit $code"
+if [ "$code" -ne 0 ] || [ ! -d node_modules ]; then
+  echo "VETTING: stopped, the packages did not unpack; see $V/out/ci.log"; exit 1
+fi
 # Gitleaks skips node_modules paths: scan a copy outside one.
-[ -d "$V/copy/packages" ] || cp -r node_modules "$V/copy/packages"
+cp -r node_modules "$V/copy/packages"
 echo "files $(find "$V/copy/packages" -type f | wc -l), $(du -sm "$V/copy/packages" | cut -f1) MB"
 osv-scanner scan source --no-ignore --config "$V/cfg/osv.toml" -L "$V/lock/package-lock.json" --format json > "$V/out/osv.json" 2> "$V/out/osv.log"; echo "osv exit $?"
 env -u GITLEAKS_CONFIG -u GITLEAKS_CONFIG_TOML gitleaks dir "$V/copy/packages" --config "$V/cfg/gitleaks.toml" --gitleaks-ignore-path "$V/cfg/empty" --report-format json --report-path "$V/out/gitleaks.json" --no-banner --redact > "$V/out/gitleaks.log" 2>&1; echo "gitleaks exit $?"
