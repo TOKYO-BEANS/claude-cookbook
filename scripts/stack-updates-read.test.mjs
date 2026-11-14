@@ -343,3 +343,13 @@ test("readChange: readUsage comes only from this result; an old value never surv
   assert.ok(!("readUsage" in failedRead));
   assert.deepEqual(stale.readUsage, { input: 9, output: 9 }, "the input change is not changed");
 });
+
+test("readEnv: the child never starts Claude Code's own updater, whatever the base environment says", () => {
+  assert.equal(readEnv({}).DISABLE_AUTOUPDATER, "1");
+  for (const base of [{ PATH: "C:/bin", DISABLE_AUTOUPDATER: "0" }, { PATH: "C:/bin", disable_autoupdater: "0" }, { PATH: "C:/bin", Disable_AutoUpdater: "" }]) {
+    const child = runEnv(base, readEnv(base));
+    const keys = Object.keys(child).filter((k) => k.toUpperCase() === "DISABLE_AUTOUPDATER");
+    assert.deepEqual(keys.map((k) => [k, child[k]]), [["DISABLE_AUTOUPDATER", "1"]], JSON.stringify(base));
+  }
+  assert.equal(buildRequest(change, tool, recipe, notes).env.DISABLE_AUTOUPDATER, "1");
+});

@@ -84,8 +84,9 @@ now installed, so the next run compares from it:
 node <this skill's folder>/scripts/updates.mjs record <tool id>/<part> <40-character commit>
 ```
 
-Registry plugins, pinned parts and command parts (`jev-router` included) need nothing: their
-version or commit is read from disk on every run, and a recorded commit would override that read.
+Registry plugins, pinned parts and command parts (`jev-router/pinned` included) need nothing:
+their version or commit is read from disk on every run, and a recorded commit would override that
+read. `jev-router/plugin` is a local plugin port, so it needs a `record` like the others.
 
 ## Common mistakes
 

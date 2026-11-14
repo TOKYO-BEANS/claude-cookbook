@@ -158,21 +158,27 @@ function datesErrors(dates, at) {
 // the one launcher shape `cmd.exe /d /c {bin}/<name>.cmd` that starts a shim without
 // a shell. Every other element holds at most one token (`{share}`, `{bin}` or `{lib}`),
 // only at its start and followed by `/`; no element holds `..`. Returns messages.
+// The patterns are built with String.raw, so every backslash reaches the RegExp (a
+// template literal would turn `\.` into a bare `.`). No element of either table may
+// hold a character cmd.exe gives a meaning to (& | < > ^ % ! ") or whitespace: the
+// shim launcher passes its arguments through cmd.exe.
 const SHELLS = /^(cmd|powershell|pwsh|bash|sh|wscript|cscript)(.exe)?$/i;
-const NAME = "[A-Za-z0-9._-]+";
+const NAME = String.raw`[A-Za-z0-9._-]+`;
+const SHELL_META = /[&|<>^%!"\s]/;
 export function argvProblems(argv) {
   const problems = [];
   const list = Array.isArray(argv) ? argv : [];
   const cmd = list[0];
   let start = 1;
+  if (list.some((a) => typeof a === "string" && SHELL_META.test(a))) problems.push("has a shell metacharacter or whitespace in an element");
   if (cmd === "cmd.exe") {
     const shim = list[3];
-    const shaped = list[1] === "/d" && list[2] === "/c" && typeof shim === "string" && new RegExp(`^\{bin\}/${NAME}\.cmd$`).test(shim) && !shim.includes("..");
+    const shaped = list[1] === "/d" && list[2] === "/c" && typeof shim === "string" && new RegExp(String.raw`^\{bin\}/${NAME}\.cmd$`).test(shim) && !shim.includes("..");
     if (shaped) start = 4;
     else problems.push("argv[0] cmd.exe is allowed only as cmd.exe /d /c {bin}/<name>.cmd");
   } else {
-    const bare = typeof cmd === "string" && new RegExp(`^${NAME}$`).test(cmd) && !SHELLS.test(cmd);
-    const rel = (token, deep) => typeof cmd === "string" && new RegExp(`^\{${token}\}/${NAME}${deep ? `(/${NAME})*` : ""}$`).test(cmd) && !cmd.split("/").some((seg) => seg === ".." || seg === ".");
+    const bare = typeof cmd === "string" && new RegExp(String.raw`^${NAME}$`).test(cmd) && !SHELLS.test(cmd);
+    const rel = (token, deep) => typeof cmd === "string" && new RegExp(String.raw`^\{${token}\}/${NAME}${deep ? String.raw`(/${NAME})*` : ""}$`).test(cmd) && !cmd.split("/").some((seg) => seg === ".." || seg === ".");
     if (!bare && !rel("share", true) && !rel("bin", false)) problems.push("argv[0] must be a bare command name (not a shell), {share}/ and a relative path without .., or {bin}/ and a file name");
   }
   const tokenOk = (a) => {

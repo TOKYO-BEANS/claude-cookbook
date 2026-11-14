@@ -18,7 +18,7 @@
 // (the state this run keeps once it has reported), report.md and
 // texts/<part key with / as ->.txt. result.json lists the stages that ran. The state
 // is loaded at the start and saved only by `report`, after result.json and report.md
-// are written, and only for today's folder once compare and connect ran; it is merged
+// are written and the report is paged, and only for today's folder once compare and connect ran; it is merged
 // with the state on disk at that moment (a later run is never overwritten, a commit
 // recorded meanwhile is kept). A run that fails before that saves nothing, so the
 // next run reports again. Run folders older than 30 days are removed at the start of
@@ -639,6 +639,9 @@ async function stageReport(ctx) {
   writeFileSync(runFile(ctx, "report.md"), text);
   addStage(result, "report");
   writeJson(ctx, "result.json", result);
+  // What is printed, before the state moves: a report that cannot be paged fails here,
+  // so the next run reports it again.
+  const printed = result.quiet ? `${quietLine(result)}\n` : reportPages(runFile(ctx, "report.md"), text)[0];
   // Read the state again just before saving: a commit recorded while this run was
   // going differs from the one the run started with (next's) and wins.
   const stored = storedNow(ctx, next);
@@ -649,7 +652,7 @@ async function stageReport(ctx) {
     }
   }
   saveState(ctx.home, next, { folder: ctx.stateDir });
-  return { printed: result.quiet ? `${quietLine(result)}\n` : reportPages(runFile(ctx, "report.md"), text)[0] };
+  return { printed };
 }
 
 async function record(ctx, key, commit) {

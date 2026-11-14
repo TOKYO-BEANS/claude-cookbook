@@ -278,3 +278,36 @@ test("the pinned Firecrawl and Parallel CLIs update the vetted way", () => {
     assert.ok(updater.length <= 200, id);
   }
 });
+
+test("the stack-updates skill's 'After an update': what it says needs nothing needs no record", () => {
+  const skill = read("plugins/cookbook/skills/stack-updates/SKILL.md").replace(/\r/g, "");
+  const section = skill.split(/^## /m).find((s) => s.startsWith("After an update")) ?? "";
+  const paragraph = section.split(/\n\n/).find((p) => /need nothing/.test(p)) ?? "";
+  const nothing = paragraph.replace(/\n/g, " ").split(/(?<=\.) /).find((s) => /need nothing/.test(s)) ?? "";
+  assert.match(nothing, /^Registry plugins.*need nothing/, "the sentence saying what needs nothing");
+  // A skill copy or a local plugin port has nothing on disk that says its commit: it needs a record.
+  const needsRecord = (p) => p.installed.kind === "skill" || (p.installed.kind === "plugin" && p.installed.id.endsWith("@claude-local"));
+  for (const [, name] of nothing.matchAll(/`([^`]+)`/g)) {
+    const [id, partName] = name.split("/");
+    const t = catalog.tools.find((x) => x.id === id);
+    if (!t) continue; // not a catalog name
+    const parts = partName ? t.parts.filter((p) => p.name === partName) : t.parts;
+    assert.ok(parts.length, name);
+    for (const p of parts) assert.ok(!needsRecord(p), `"${name}" is said to need nothing, but ${t.id}/${p.name} needs a record`);
+  }
+  assert.match(section, /`jev-router\/plugin`[^.]*`record`/);
+});
+
+test("argv patterns: a literal dot before cmd, and no shell metacharacter or whitespace in any element", () => {
+  const all = Object.fromEntries(catalog.tools.flatMap((t) => t.parts.filter((p) => p.installed.kind === "command").map((p) => [`${t.id}/${p.name}`, { argv: ["git", "--version"], pattern: /(\d+)/ }])));
+  const withArgv = (argv) => errors({ commands: { ...all, "git/cli": { argv, pattern: /(\d+)/ } } });
+  assert.ok(withArgv(["cmd.exe", "/d", "/c", "{bin}/a_cmd"]).length > 0, "{bin}/a_cmd is not a .cmd shim");
+  assert.ok(withArgv(["{share}/boat/boat_exe"]).length === 0); // a bare name may hold any of [A-Za-z0-9._-]
+  for (const bad of ["a&b", "a|b", "a<b", "a>b", "a^b", "%PATH%", "a!b", 'a"b', "a b", "a\tb"]) {
+    assert.ok(withArgv(["git", bad]).some((e) => /shell metacharacter or whitespace/.test(e)), bad);
+    assert.ok(errors({ checks: { github: { argv: ["cmd.exe", "/d", "/c", "{bin}/boat.cmd", bad], ok: /x/ } } }).some((e) => /connection checks: github .*shell metacharacter or whitespace/.test(e)), bad);
+  }
+  assert.ok(withArgv(["gi&t", "--version"]).length > 0);
+  // The real tables pass.
+  assert.deepEqual(errors(), []);
+});

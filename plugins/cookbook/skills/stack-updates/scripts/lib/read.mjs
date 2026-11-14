@@ -25,7 +25,8 @@
 // the plan login), and so are the proxy and extra-CA variables; then auto memory
 // and the server-side advisor tool are turned off (without
 // CLAUDE_CODE_DISABLE_ADVISOR_TOOL the request carries an advisor tool that sends
-// the conversation to another model).
+// the conversation to another model), and so is Claude Code's own updater
+// (DISABLE_AUTOUPDATER), so a read never starts an update.
 //
 // Defence in depth when reading the answer: the read fails unless the stream holds
 // exactly one init event and one result event, the init event shows no tools, no
@@ -98,6 +99,7 @@ export function readEnv(base = process.env) {
   }
   env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
   env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL = "1";
+  env.DISABLE_AUTOUPDATER = "1"; // runEnv drops the base's own value in any letter case
   return env;
 }
 

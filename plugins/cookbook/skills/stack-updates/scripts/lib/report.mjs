@@ -38,8 +38,9 @@ const own = (o, k) => (isObject(o) && Object.hasOwn(o, k) ? o[k] : undefined);
  * breaks become spaces; invisible characters (read.mjs's INVISIBLE: format
  * characters such as bidi overrides and zero-width spaces, private-use and
  * unassigned code points) are removed and a lone surrogate becomes U+FFFD;
- * backslash, backtick, asterisk, underscore, tilde, brackets, angle brackets and pipe
- * are escaped; every "://" (any scheme, any letter case) becomes "[://]", and
+ * backslash, backtick, asterisk, underscore, tilde, brackets, angle brackets, pipe and
+ * ampersand are escaped (so "https&#58;//" or "www&#46;" never decodes into a link);
+ * every "://" (any scheme, any letter case) becomes "[://]", and
  * "www." and the "@" of an address are bracketed, so nothing renders as a link; a
  * leading #, - or + is escaped (a leading > already is). At most 400 code points.
  * "" for a non-string.
@@ -48,7 +49,7 @@ export function inert(value, max = TEXT_LIMIT) {
   if (typeof value !== "string" && typeof value !== "number") return "";
   const clean = String(value).toWellFormed().replace(CONTROL, " ").replace(INVISIBLE, "");
   let s = cutPoints(clean.replace(/\s+/g, " ").trim(), max);
-  s = s.replace(/[\\`*_~[\]<>|]/g, "\\$&");
+  s = s.replace(/[\\`*_~[\]<>|&]/g, "\\$&");
   s = s.replace(/:\/\//g, "\\[://\\]");
   s = s.replace(/(www)\./gi, "$1\\[.\\]");
   s = s.replace(/([A-Za-z0-9._%+-])@(?=[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})/g, "$1\\[@\\]");

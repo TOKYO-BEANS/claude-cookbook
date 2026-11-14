@@ -1045,3 +1045,23 @@ test("a tool whose repository is its github.com address gets its release notes f
   assert.match(readFileSync(join(folder, "texts", "gizmo-cli.txt"), "utf8"), /GIZMO-NOTES/);
   assert.equal(d.run.count(/^claude -p/), 1);
 });
+
+test("inert: an entity-encoded link or address cannot be decoded into one", () => {
+  assert.equal(inert("https&#58;//evil.test"), String.raw`https\&#58;//evil.test`);
+  assert.equal(inert("www&#46;evil&#46;test"), String.raw`www\&#46;evil\&#46;test`);
+  assert.equal(inert("a & b"), String.raw`a \& b`);
+});
+
+test("a report too long to page fails before the state is saved: state.json is untouched", async (t) => {
+  const state = tmp(t);
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], fakes())).code, 0);
+  const before = readFileSync(join(state, "state.json"), "utf8");
+  // 220 missing parts whose names are 400 four-byte characters: two lines a page, more than 99 pages.
+  const wide = "\u{1F600}".repeat(400);
+  const many = Array.from({ length: 220 }, (_, i) => tool(`gone-${i}`, wide,
+    [{ name: "cli", installed: { kind: "pinned", folder: `gone-${i}`, package: "gone" }, feed: { kind: "none", reason: "fixture" } }]));
+  const r = await cli(["run", ...at(state, "2026-11-14")], fakes(), { ...CAT, tools: [...CAT.tools, ...many] });
+  assert.equal(r.code, 1);
+  assert.match(r.err, /more than 99 pages/);
+  assert.equal(readFileSync(join(state, "state.json"), "utf8"), before, "the baseline did not move");
+});
