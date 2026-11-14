@@ -78,7 +78,7 @@ test("a quiet run reports the registry only and nothing left behind", { skip }, 
   assert.match(out, /^SANDBOX dns names during start: $/m);
   assert.match(out, /^SANDBOX install: 1 remote addresses; not on port 443: $/m);
   assert.match(out, /^SANDBOX install programs: (node x1, npm x1|npm x1, node x1), $/m);
-  assert.match(out, /^SANDBOX files written outside the project.*: 0$/m);
+  assert.match(out, /^SANDBOX files the outside code wrote outside the project.*: 0$/m);
   assert.match(out, /^SANDBOX processes left running: 0$/m);
   assert.ok(!out.includes("install log, last lines"), "a passed install shows no log tail");
   assert.ok(!out.includes("dns capture failed"));
@@ -116,7 +116,7 @@ test("a surprise shows: another host, a port, a program, a file, a process", { s
     /^SANDBOX install: 3 remote addresses; not on port 443: 203\.0\.113\.9 port 8080;2606:4700::6810:122 port 22;$/m,
   );
   assert.match(out, /^SANDBOX install programs: curl x2, $/m, "a failed exec is not a program run");
-  assert.match(out, /^SANDBOX files written outside the project.*: 2$/m);
+  assert.match(out, /^SANDBOX files the outside code wrote outside the project.*: 2$/m);
   assert.match(out, /^ {2}\/home\/user\/\.ssh\/authorized_keys$/m);
   assert.match(out, /^SANDBOX processes left running: 1$/m);
   assert.match(out, /^ {2}node \/tmp\/daemon\.js$/m);
@@ -436,6 +436,18 @@ test("DNS is not a blind spot: other query types and other servers are reported"
   // The system resolver on port 53 is not remote traffic; another address on port 53 is.
   assert.match(out, /^SANDBOX install: 2 remote addresses; not on port 443: 203\.0\.113\.53 port 53;$/m);
   assert.match(report(quiet), /^SANDBOX dns servers asked other than the system's: $/m);
+});
+
+test("the sandbox's own lookups are marked as its own", { skip }, () => {
+  const out = report({
+    ...quiet,
+    meta: meta({ dns_install: 3 }),
+    "dns.txt": dns("registry.npmjs.org") + dns("ntp.ubuntu.com") + dns("ntp.ubuntu.com.evil.example"),
+  });
+  assert.match(
+    out,
+    /^SANDBOX dns names during install: ntp\.ubuntu\.com \(the sandbox itself\) ntp\.ubuntu\.com\.evil\.example registry\.npmjs\.org $/m,
+  );
 });
 
 test("a program counts when strace split its start over two lines", { skip }, () => {

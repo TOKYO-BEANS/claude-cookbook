@@ -32,7 +32,11 @@ clean() { tr -cd '\11\12\40-\176' | cut -c1-160; }
 # unless it is an address lookup: a TXT or NULL question can carry data out.
 names() { grep -oE ' [A-Za-z0-9]+\? [^ ]+' \
   | awk '{ t = $1; sub(/\?$/, "", t); n = $2; sub(/\.$/, "", n)
-           print (t ~ /^(A|AAAA|HTTPS|SVCB|Type64|Type65)$/) ? n : n " (" t ")" }' | sort -u; }
+           print (t ~ /^(A|AAAA|HTTPS|SVCB|Type64|Type65)$/) ? n : n " (" t ")" }' | sort -u | own_names; }
+# The capture sees the whole machine, so Ubuntu's own services show up in it now and then
+# (time sync, the update and snap checks). Those few fixed names are marked, not hidden:
+# they are the sandbox's, not the package's, and none of them is a name a package controls.
+own_names() { sed -E 's/^((ntp|connectivity-check|motd|changelogs|esm|archive|security|api\.snapcraft)\.ubuntu\.com|api\.snapcraft\.io)$/\1 (the sandbox itself)/'; }
 # Drops the lines whose first word is one of the system's own resolvers ($1, comma separated).
 not_resolver() { awk -v res="$1" 'BEGIN { n = split(res, r, ","); for (i = 1; i <= n; i++) if (r[i] != "") sys[r[i]] = 1 }
   !($1 in sys)'; }
@@ -112,7 +116,7 @@ report_lines() {
     echo "SANDBOX $phase programs: $(execs "$T/$phase.trace" | clean)"
   done
 
-  echo "SANDBOX files written outside the project, the npm cache and Node's compile cache: $(wc -l < "$T/files.txt" | tr -d ' ')"
+  echo "SANDBOX files the outside code wrote outside the project, the npm cache and Node's compile cache: $(wc -l < "$T/files.txt" | tr -d ' ')"
   head -10 "$T/files.txt" | clean | sed 's/^/  /'
   echo "SANDBOX processes left running: $(wc -l < "$T/left.txt" | tr -d ' ')"
   head -6 "$T/left.txt" | clean | sed 's/^/  /'
@@ -204,7 +208,9 @@ fi
 sleep 2
 sudo -n pkill tcpdump; sleep 1
 
-sudo -n find / -xdev -newer "$T/marker" -type f \
+# Only files that belong to vet: other users' files are the machine's own services (a print
+# or time daemon), and vet cannot write as anyone else.
+sudo -n find / -xdev -newer "$T/marker" -type f -user vet \
   -not -path '/proc/*' -not -path '/sys/*' -not -path '/dev/*' -not -path '/run/*' \
   -not -path "$T/*" -not -path "$HERE/*" -not -path "$WORK/*" -not -path '/home/vet/.npm/*' \
   -not -path '/var/log/*' -not -path '/var/lib/systemd/*' -not -path '/var/cache/*' \

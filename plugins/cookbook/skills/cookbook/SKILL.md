@@ -644,6 +644,9 @@ The owner added boat (boat.dev) on 12 November 2026: full Ubuntu virtual machine
   type than an address lookup, or one sent to another server than the system's, is a surprise
   too. `pinned-vet.sh` exits 0 only with a sandbox result and a report from each scanner: a
   scanner that wrote none prints "no report" and the run exits 3.
+  The capture sees the whole sandbox, so one of Ubuntu's own lookups can show up (time sync,
+  update checks): the probe marks those few fixed names "(the sandbox itself)", and they are
+  not a surprise. The files it lists are only those the outside code's own user wrote.
   In the sandbox the outside code runs as a user of its own, `vet`, who has no sudo: it cannot
   alter the probe, the trace files or the DNS capture, and `sudo` or `pkill` among the programs
   it started is a surprise. What the probe cannot see: what is sent over a connection it does
