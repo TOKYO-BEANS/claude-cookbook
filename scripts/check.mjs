@@ -68,6 +68,18 @@ function installedErrors(inst, at) {
   return errors;
 }
 
+// What an `updater` text never tells the updating session to do: install a package
+// globally (into AppData, unvetted), take whatever is newest, or run a vendor's
+// install script. A pinned copy moves through a new lockfile, the three scans and
+// `npm ci --ignore-scripts`.
+const UNVETTED = Object.freeze([
+  ["npm install -g", /\bnpm\s+install\s+(?:\S+\s+)*?(?:-g|--global)\b/i],
+  ["npm i -g", /\bnpm\s+i\s+(?:\S+\s+)*?(?:-g|--global)\b/i],
+  ["@latest", /@latest\b/i],
+  ["install.ps1", /\binstall\.ps1\b/i],
+  ["curl piped to a shell", /\bcurl\s[^|]*\|\s*(?:sudo\s+)?(?:sh|bash|zsh|pwsh|powershell|iex)\b/i],
+]);
+
 function feedErrors(feed, at) {
   if (!isObject(feed)) return [`${at}: feed must be an object`];
   if (!Object.hasOwn(FEED_FIELDS, feed.kind)) return [`${at}: feed kind must be one of ${Object.keys(FEED_FIELDS).join(", ")}`];
@@ -90,6 +102,10 @@ function feedErrors(feed, at) {
     errors.push(`${at}: feed none needs a reason of at most 200 characters`);
   if ("updater" in feed && (typeof feed.updater !== "string" || feed.updater.length > 200))
     errors.push(`${at}: feed updater must be text of at most 200 characters`);
+  else if ("updater" in feed) {
+    const found = UNVETTED.filter(([, re]) => re.test(feed.updater)).map(([name]) => name);
+    if (found.length) errors.push(`${at}: feed updater must not install unvetted (${found.join(", ")})`);
+  }
   return errors;
 }
 

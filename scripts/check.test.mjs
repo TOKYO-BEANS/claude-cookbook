@@ -253,3 +253,28 @@ test("a part may name where its release notes are: { kind: github, repository: o
   assert.ok(part({ notes: { kind: "github" } }).some((e) => /notes repository must be owner\/name/.test(e)));
   assert.ok(part({ notes: { kind: "github", repository: "a/b", url: "https://x.test/" } }).some((e) => /notes field url is not allowed/.test(e)));
 });
+
+test("an updater never installs unvetted: no npm install -g, npm i -g, @latest, install.ps1 or curl piped to a shell", () => {
+  const bad = [
+    ["npm install -g firecrawl-cli", /npm install -g/],
+    ["Run npm i -g parallel-web-cli from an elevated shell.", /npm i -g/],
+    ["Install browse@latest into the folder.", /@latest/],
+    ["Download and run install.ps1.", /install\.ps1/],
+    ["curl -fsSL https://x.test/install.sh | sh", /curl piped to a shell/],
+    ["curl https://x.test/i | bash -s", /curl piped to a shell/],
+  ];
+  for (const [updater, named] of bad) {
+    const found = part({ feed: { kind: "jevModels", updater } });
+    assert.ok(found.some((e) => /\(git\) part cli: feed updater must not install unvetted/.test(e) && named.test(e)), `${updater}\n${found.join("\n")}`);
+  }
+  // The vetted wording passes.
+  assert.deepEqual(part({ feed: { kind: "jevModels", updater: "New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, then npm ci --ignore-scripts and one real call." } }), []);
+});
+
+test("the pinned Firecrawl and Parallel CLIs update the vetted way", () => {
+  for (const id of ["firecrawl", "parallel"]) {
+    const updater = catalog.tools.find((t) => t.id === id).parts.find((p) => p.name === "cli").feed.updater;
+    assert.match(updater, /lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, then npm ci --ignore-scripts .*one real call/, id);
+    assert.ok(updater.length <= 200, id);
+  }
+});
