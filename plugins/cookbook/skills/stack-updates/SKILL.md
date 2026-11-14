@@ -113,7 +113,8 @@ Steps, in an interactive session only (an unattended session installs nothing):
    older one, run the check first. When the session can start a background subagent, hand it the
    installs so the owner's own request is not held up.
 3. Install one part at a time, by the row for its kind in the table below, with every step of its
-   recipe (the diff read, the three scans, `npm ci --ignore-scripts`, the checksum). Install
+   recipe (the diff read, the three scans, the sandbox run, `npm ci --ignore-scripts`, the
+   checksum). Install
    exactly the version the list names as `to`: a pinned copy's lockfile names that version, and
    before a plugin update check that its marketplace offers exactly that version. A newer one has
    not been judged by the rules: stop, and the next run will list it.
@@ -147,7 +148,7 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json`:
 | Kind | What to do | Recipe |
 | --- | --- | --- |
 | `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>` | "Claude Code add-ons" (Updates); "Context window (context-mode)" |
-| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
+| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`~/.local/share/vetting/_tools/pinned-vet.sh` does all of these; read its `SANDBOX` lines as "Cloud sandboxes (boat)" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
 | `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
