@@ -731,30 +731,36 @@ test("routine updates: a release waits three days, is then ready to install, and
   const before = entries();
   const unasked = await cli(["verify", "firecrawl/cli", ...on("2026-11-17")], fakes());
   assert.equal(unasked.code, 2);
-  assert.match(unasked.err, /Firecrawl 1\.31\.0 is not a routine update in the newest run: it needs the owner's yes, and then verify with --owner-yes/);
+  assert.match(unasked.err, /Firecrawl 1\.31\.0 is not a routine update in the newest run: it needs the owner's yes, and then verify with --owner-yes <that version>/);
   assert.equal(entries(), before);
-  assert.equal((await cli(["run", ...on("2026-11-17"), "--owner-yes"], fakes())).code, 2, "--owner-yes goes with verify only");
+  assert.equal((await cli(["run", ...on("2026-11-17"), "--owner-yes", "1.31.0"], fakes())).code, 2, "--owner-yes goes with verify only");
+  // The owner's yes names one version: none, or another one, counts for nothing.
+  assert.equal((await cli(["verify", "firecrawl/cli", "--owner-yes", ...on("2026-11-17")], fakes())).code, 2);
+  const other = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.30.0", ...on("2026-11-17")], fakes());
+  assert.equal(other.code, 2);
+  assert.match(other.err, /--owner-yes names 1\.30\.0, but the newest release of Firecrawl is 1\.31\.0: the owner's yes was for another version/);
+  assert.equal(entries(), before);
 
   // With the owner's yes: the new version is there but its service does not answer. Not an install.
   const dead = fakes();
-  const down = await cli(["verify", "firecrawl/cli", "--owner-yes", ...on("2026-11-17")], { ...dead, run: async (argv, opts) => (argv.join(" ").includes("firecrawl.cmd") ? { code: 1, stdout: "", stderr: "401" } : dead.run(argv, opts)) });
+  const down = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], { ...dead, run: async (argv, opts) => (argv.join(" ").includes("firecrawl.cmd") ? { code: 1, stdout: "", stderr: "401" } : dead.run(argv, opts)) });
   assert.equal(down.code, 1);
   assert.match(down.err, /Firecrawl is at 1\.31\.0, but its connection check failed: recorded as a failed install/);
 
   // A newer version than the one that was judged is not that install: never counted.
   setInstalled("1.32.0");
-  const newer = await cli(["verify", "firecrawl/cli", "--owner-yes", ...on("2026-11-17")], fakes());
+  const newer = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], fakes());
   assert.equal(newer.code, 1);
   assert.match(newer.err, /Firecrawl is not at 1\.31\.0 \(it reads 1\.32\.0\): recorded as a failed install/);
 
   // Exactly that version, with the service answering: it counts, and the next report says so, once.
   setInstalled("1.31.0");
-  const good = await cli(["verify", "firecrawl/cli", "--owner-yes", ...on("2026-11-17")], fakes());
+  const good = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], fakes());
   assert.equal(good.code, 0, good.err);
   assert.equal(good.out, "Installed: Firecrawl 1.29.0 -> 1.31.0; recorded for the next report.\n");
   const after = readJson(join(state, "state.json")).parts["firecrawl/cli"];
   assert.deepEqual([after.installed, after.behindSince, after.applyFailed], ["1.31.0", null, null]);
-  const again = await cli(["verify", "firecrawl/cli", "--owner-yes", ...on("2026-11-17")], fakes());
+  const again = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], fakes());
   assert.equal(again.code, 1);
   assert.match(again.err, /is not recorded as behind/);
   assert.equal((await cli(["run", ...on("2026-11-18")], fakes({ gh: notes }))).code, 0);
@@ -796,6 +802,37 @@ test("routine updates: notes that say breaking need a yes; --no-read fetches not
   // The next run with reading on finds what the notes of that patch release say.
   assert.equal((await cli(["run", ...at(offline, "2026-11-18")], fakes({ npm: "1.29.1", gh: { "repos/firecrawl/cli/releases?per_page=30": [{ tag_name: "v1.29.1", draft: false, prerelease: false, body: "The --old flag is removed." }] } }))).code, 0);
   assert.deepEqual(readJson(join(offline, "runs", "2026-11-18", "result.json")).apply.ask.map((a) => a.reason), ["its notes say something breaks, is deprecated or is removed"]);
+});
+
+test("routine updates: the notes are read again on the run that would install, so notes published during the wait still count", async (t) => {
+  const state = tmp(t);
+  const releases = (list) => ({ "repos/firecrawl/cli/releases?per_page=30": list });
+  const fetched = (f) => f.gh.calls.filter((a) => /firecrawl\/cli\/releases\?per_page/.test(a[1])).length;
+  const apply = (day) => readJson(join(state, "runs", day, "result.json")).apply;
+  // Day one: the patch release is on npm, its GitHub release is not written yet. "No notes" is stored.
+  const d13 = fakes({ npm: "1.29.1", gh: releases([]) });
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], d13)).code, 0);
+  assert.equal(readJson(join(state, "state.json")).parts["firecrawl/cli"].notes, "1.29.1 none");
+  assert.deepEqual(apply("2026-11-13").waiting.map((w) => w.until), ["2026-11-16"]);
+  // Day four: it would be routine on the stored check. The notes are read again, and now they warn.
+  const d16 = fakes({ npm: "1.29.1", gh: releases([{ tag_name: "v1.29.1", draft: false, prerelease: false, body: "The --legacy flag is removed." }]) });
+  assert.equal((await cli(["run", ...at(state, "2026-11-16")], d16)).code, 0);
+  assert.equal(fetched(d16), 1);
+  assert.deepEqual(apply("2026-11-16").routine, []);
+  assert.deepEqual(apply("2026-11-16").ask.map((a) => a.reason), ["its notes say something breaks, is deprecated or is removed"]);
+  // The same with a fetch that fails on that day, or with --no-read: it waits, it is never routine on an old check.
+  for (const [more, gh] of [[[], {}], [["--no-read"], releases([])]]) {
+    const other = tmp(t);
+    assert.equal((await cli(["run", ...at(other, "2026-11-13")], fakes({ npm: "1.29.1", gh: releases([]) }))).code, 0);
+    assert.equal((await cli(["run", ...at(other, "2026-11-16"), ...more], fakes({ npm: "1.29.1", gh }))).code, 0);
+    const a = readJson(join(other, "runs", "2026-11-16", "result.json")).apply;
+    assert.deepEqual([a.routine.length, a.waiting.map((w) => w.reason)], [0, ["its notes could not be checked yet"]], more.join(" ") || "fetch failed");
+  }
+  // And when the notes are still clean on that day, it is routine.
+  const fine = tmp(t);
+  assert.equal((await cli(["run", ...at(fine, "2026-11-13")], fakes({ npm: "1.29.1", gh: releases([]) }))).code, 0);
+  assert.equal((await cli(["run", ...at(fine, "2026-11-16")], fakes({ npm: "1.29.1", gh: releases([]) }))).code, 0);
+  assert.deepEqual(readJson(join(fine, "runs", "2026-11-16", "result.json")).apply.routine.map((r) => r.to), ["1.29.1"]);
 });
 
 test("the word check of notes: clean only for whole, real release notes with no warning word", async () => {

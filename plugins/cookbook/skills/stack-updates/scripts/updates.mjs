@@ -5,10 +5,12 @@
 //   inventory | compare | connect | read | report [--out <dir>]
 //                                    one stage on one run folder
 //   record <part key> <commit>       after an update: the commit now installed
-//   verify <part key> [--owner-yes]  after an install: was this version marked routine (or
-//                                    did the owner agree: --owner-yes), is the part at
-//                                    exactly that release, and does its service answer;
-//                                    the outcome is kept for the next report (applied.json)
+//   verify <part key> [--owner-yes <version>]
+//                                    after an install: was this version marked routine (or
+//                                    did the owner agree to exactly it: --owner-yes), is
+//                                    the part at exactly that release, and does its service
+//                                    answer; the outcome is kept for the next report
+//                                    (applied.json)
 //   page <n> [<date>]                page n of report.md of today's run, or of the run of
 //                                    <date> (see below); it marks that report seen
 //
@@ -77,7 +79,7 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const VERSION = /^\d+(?:\.\d+)+$/;
 const DAY_MS = 86_400_000;
 const STAGES = ["inventory", "compare", "connect", "read", "report"];
-const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | verify <part key> [--owner-yes] | page <n> [<date>]; options --unattended (with run: nobody reads the output), --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
+const USAGE = "usage: updates.mjs run [--out <dir>] [--no-read] | inventory|compare|connect|read|report [--out <dir>] | record <part key> <commit> | verify <part key> [--owner-yes <version>] | page <n> [<date>]; options --unattended (with run: nobody reads the output), --home <dir>, --state <dir>, --today YYYY-MM-DD (with --state)";
 
 class UsageError extends Error {}
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -687,10 +689,22 @@ async function decideUpdates(ctx, result, checkedNow = new Map()) {
     let notes = NOTES.includes(stored) ? stored : null;
     // Notes this run really fetched for this very release (the read stage's map).
     const now = checkedNow.get(`${b.key}|${b.latest}`);
-    if (NOTES.includes(now)) notes = now;
+    let fresh = NOTES.includes(now);
+    if (fresh) notes = now;
+    const fetchNow = async () => {
+      fresh = true;
+      return verdictOf(b.installed, b.latest, await notesFor(ctx, { key: b.key, from: b.installed, to: b.latest }));
+    };
     // Fetch only when the notes can still decide: everything else already needs a yes.
     if (notes === null && !ctx.noRead && ["routine", "waiting"].includes(decide(b, { ...facts, notes: "clean", today: ctx.today }).decision)) {
-      notes = verdictOf(b.installed, b.latest, await notesFor(ctx, { key: b.key, from: b.installed, to: b.latest }));
+      notes = await fetchNow();
+    }
+    // A stored check may be days old: notes are often published or edited after a release
+    // first appears. The run that would make the part routine reads them again, and
+    // without a check made in this run nothing is routine.
+    if (!fresh && decide(b, { ...facts, notes, today: ctx.today }).decision === "routine") {
+      notes = ctx.noRead ? null : await fetchNow();
+      if (notes === null && ps) ps.notes = null;
     }
     if (notes !== null && ps) ps.notes = `${b.latest} ${notes}`;
     verdicts.set(b.key, notes);
@@ -775,10 +789,10 @@ function markTold(ctx, day) {
 }
 
 /**
- * `verify <part key> [--owner-yes]`, after an install. It counts an install only when
+ * `verify <part key> [--owner-yes <version>]`, after an install. It counts an install only when
  * - the part's newest release was marked routine by the newest run (today's or
- *   yesterday's) and no install of it failed before, or --owner-yes says the owner
- *   agreed to this update;
+ *   yesterday's) and no install of it failed before, or --owner-yes names that very
+ *   version as the one the owner agreed to;
  * - the script's own read of the disk shows exactly that release, not an older and not
  *   a newer one (a newer one was never judged by the rules);
  * - the tool's free connection check, when it has one, passes.
@@ -796,7 +810,11 @@ async function verify(ctx, key) {
   const want = ps.latest;
   const routine = ps.applyFailed !== want && routineIn(ctx, state.lastRun, key, want);
   if (!routine && !ctx.ownerYes) {
-    throw new UsageError(`${label} ${shortVersion(want)} is not a routine update in the newest run: it needs the owner's yes, and then verify with --owner-yes`);
+    throw new UsageError(`${label} ${shortVersion(want)} is not a routine update in the newest run: it needs the owner's yes, and then verify with --owner-yes <that version>`);
+  }
+  // The owner's yes is for one version: a release that appeared since is not covered by it.
+  if (ctx.ownerYes && !namesVersion(ctx.ownerYes, want)) {
+    throw new UsageError(`--owner-yes names ${String(ctx.ownerYes).slice(0, 40)}, but the newest release of ${label} is ${shortVersion(want)}: the owner's yes was for another version`);
   }
   const basis = ctx.ownerYes ? "owner" : "routine";
   const isCommit = COMMIT.test(want);
@@ -830,6 +848,12 @@ async function verify(ctx, key) {
   const how = recorded !== null ? " (the commit as recorded; a copy cannot be read from disk)" : "";
   return { printed: `Installed: ${label} ${ps.installed === null ? "" : `${shortVersion(ps.installed)} -> `}${shortVersion(want)}${how}; recorded for the next report.\n` };
 }
+// True when what was typed after --owner-yes is this version: the same text (a leading
+// "v" aside), or at least 7 characters from the start of a commit id.
+const namesVersion = (typed, version) => {
+  const t = String(typed).replace(/^v/, ""), v = String(version).replace(/^v/, "");
+  return COMMIT.test(v) ? /^[0-9a-f]{7,40}$/.test(t) && v.startsWith(t) : t === v;
+};
 const shortVersion = (v) => (COMMIT.test(String(v)) ? String(v).slice(0, 7) : String(v).slice(0, 40));
 
 async function stageReport(ctx) {
@@ -902,12 +926,16 @@ function unseenReport(ctx) {
 // ---- the command line -------------------------------------------------------------------
 
 function parseArgs(argv) {
-  const opts = { positional: [], noRead: false, unattended: false, ownerYes: false };
+  const opts = { positional: [], noRead: false, unattended: false, ownerYes: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--no-read") opts.noRead = true;
     else if (a === "--unattended") opts.unattended = true;
-    else if (a === "--owner-yes") opts.ownerYes = true;
+    else if (a === "--owner-yes") {
+      const v = argv[++i];
+      if (typeof v !== "string" || v === "" || v.startsWith("--")) throw new UsageError("--owner-yes needs the version the owner agreed to");
+      opts.ownerYes = v;
+    }
     else if (["--out", "--home", "--state", "--today"].includes(a)) {
       const v = argv[++i];
       if (typeof v !== "string" || v === "" || v.startsWith("--")) throw new UsageError(`${a} needs a value`);

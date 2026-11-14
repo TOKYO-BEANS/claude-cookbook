@@ -93,8 +93,9 @@ behind part is routine only when all of these hold:
   major version, and a change of z as a minor one;
 - its release notes were read in full and carry no warning word: any form of break, deprecate or
   remove, dropped or ended support, "no longer", incompatible, or a migration (a word check by the
-  script). Notes too long to read in full need a yes. While the notes cannot be
-  fetched, the part waits and is checked again the next day;
+  script). They are read again on the run that would make the part routine, because notes are
+  often published or edited after a release appears. Notes too long to read in full need a yes.
+  While the notes cannot be fetched, the part waits and is checked again the next day;
 - with no notes, it is a patch release. Commit subject lines, which is all a marketplace or a
   commit feed gives, are not release notes;
 - the release has been seen for 3 days;
@@ -137,9 +138,10 @@ Steps, in an interactive session only (an unattended session installs nothing):
 
 An update that is not routine needs the owner's yes for that tool, in an interactive session. The
 daily run and the session-start note install nothing, and a release note never decides an update.
-Finish with `verify <tool id>/<part> --owner-yes`: the flag says the owner agreed to this update,
-and the report then shows it as installed "with your yes". Never pass it for an update the owner
-did not agree to. A skill copy is checked against the commit given to `record`, because a copy
+Finish with `verify <tool id>/<part> --owner-yes <version>`: the flag names the version the owner
+agreed to, and the report then shows it as installed "with your yes". A release that appeared
+since is not covered: the script refuses it, and the owner is asked again. Never pass the flag for
+an update the owner did not agree to. A skill copy is checked against the commit given to `record`, because a copy
 cannot be read back from disk. By the part's `installed` kind in `catalog.json`:
 
 | Kind | What to do | Recipe |

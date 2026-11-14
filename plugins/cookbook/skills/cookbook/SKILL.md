@@ -738,7 +738,7 @@ about the dates the catalog records. It installs, updates and commits nothing.
   giving the owner the report, then runs `updates.mjs verify <part>`: the script refuses a part it
   did not list, and counts an install only when its own read of the disk shows exactly the listed
   version and the service's check passes. An update made on the owner's yes is verified with
-  `--owner-yes`. The 07:00 task and unattended sessions install nothing, and a release note never
+  `--owner-yes <version>`, the version the owner agreed to. The 07:00 task and unattended sessions install nothing, and a release note never
   decides an update. The skill has the steps.
 - **The catalog side:** each tool's `parts` name how the installed version is read (`installed`)
   and where releases appear (`feed`). An npm feed carries no release notes: they come from the
