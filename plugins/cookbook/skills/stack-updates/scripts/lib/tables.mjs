@@ -62,7 +62,8 @@ export const VERSION_COMMANDS = Object.freeze({
 // `ok` must match a line that proves the account answered (an identity, a plan or a
 // balance line), not just a zero exit. Each pattern was written against the real
 // output on the owner's PC on 13 November 2026, except `proton-pass-cli`, which
-// was signed out that day: its pattern is a "Label: value" line and is unproven.
+// was signed out that day: its pattern was written against the signed-in output
+// on 14 November 2026.
 // No result keeps account detail: only the service name and, on a failure, a
 // scrubbed error of at most 200 characters. Jev has no entry: `connect.mjs` reads
 // the router's decision log instead. `claude mcp list` is run once by `connect.mjs`
