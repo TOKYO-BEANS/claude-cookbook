@@ -105,6 +105,9 @@ function partsErrors(parts, at) {
     else if (seen.has(p.name)) errors.push(`${at}: duplicate part ${p.name}`);
     else seen.add(p.name);
     errors.push(...installedErrors(p.installed, pat), ...feedErrors(p.feed, pat));
+    // A page hash can never say an installed version is behind, so it follows only what has none.
+    if (isObject(p.feed) && p.feed.kind === "changelog" && !["hosted", "none"].includes(p.installed?.kind))
+      errors.push(`${pat}: a changelog feed is allowed only on a hosted or none part`);
   });
   return errors;
 }

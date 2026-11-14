@@ -10,7 +10,9 @@
 // - A new release: in full once, the day it is first seen after the baseline.
 //   One that is already installed by then is reported once as "installed-changed".
 // - Still behind afterwards: one line on the first run on or after each Monday,
-//   from the values last read when the feed fails that day.
+//   from the values last read when the feed fails that day. A part whose newest
+//   release is known only as a page hash is never behind: nothing can say it is
+//   not, so its change is reported once and no reminder follows.
 // - A self-updating tool (SELF_UPDATING_TOOLS) whose installed version is read:
 //   a change when that version moves ("installed-changed"), never twice for one
 //   version; a newer release that has not arrived is neither a change nor "still behind".
@@ -20,14 +22,16 @@
 //   left as it was, so nothing unread is ever marked seen. When every feed
 //   failed, one line with the count, on every such run.
 // - The first run records a baseline and reports only what is already behind,
-//   unlisted, missing or could not be checked.
+//   unlisted, missing or could not be checked. So does a part whose feed changed
+//   (a different kind or source, by `feedFingerprint`): what the old feed left in
+//   the state is dropped, apart from a recorded installed commit.
 // - What a rule holds back because it is not its day is counted in
 //   `result.suppressed`, so a quiet day can still say what it did not show.
 // - A day is quiet when no list but `unchecked` has an entry.
 // A new release on a marketplace or commit feed carries `fromRef` and `toRef`
 // (commit ids) beside the human-readable `from` and `to`, when they are known.
 // Broken connections, unchecked services and dates are filled in later (connect.mjs).
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, writeSync } from "node:fs";
 import { join } from "node:path";
 import { compareNumeric } from "./feeds.mjs";
@@ -42,7 +46,10 @@ const DAY_MS = 86_400_000;
 // check is a standing fact, not news. `suppressed` counts and `weekly` are not either.
 const NEWS = ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing"];
 const COMMIT = /^[0-9a-f]{40}$/;
-const PART_FIELDS = ["installed", "latest", "reported", "behindSince", "feedErrorSince", "feedErrorShown", "installedCommit"];
+const PAGE_HASH = /^[0-9a-f]{64}$/; // feeds.mjs's sha256 of a changelog page
+const PART_FIELDS = ["installed", "latest", "reported", "behindSince", "feedErrorSince", "feedErrorShown", "installedCommit", "feed"];
+// The fields that say which source a feed reads (not `updater` or `reason`).
+const FEED_SOURCE = { npm: ["package", "tag"], github: ["repository"], marketplace: ["repository", "plugin"], commit: ["repository", "path"], changelog: ["url"] };
 const INSTALLED_STATES = ["read", "not-found", "unreadable", "hosted", "none"];
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -117,7 +124,7 @@ function normalizeState(raw) {
       .map(([key, p]) => [key, {
         installed: str(p.installed), latest: str(p.latest), reported: str(p.reported),
         behindSince: day(p.behindSince), feedErrorSince: day(p.feedErrorSince), feedErrorShown: day(p.feedErrorShown),
-        installedCommit: str(p.installedCommit),
+        installedCommit: str(p.installedCommit), feed: str(p.feed),
       }]),
   );
   const firstSeen = (o) => Object.fromEntries(Object.entries(isObject(o) ? o : {}).filter(([, d]) => validDay(d)));
@@ -184,6 +191,28 @@ export function saveState(home, state, { folder: where } = {}) {
 }
 
 // ---- compare -------------------------------------------------------------------
+
+/**
+ * A short id of the source a feed reads: 16 hex characters of a hash of its kind
+ * and the fields that name the source (an npm tag defaults to latest). Stored per
+ * part, so values a part's old feed left in the state are never compared with a
+ * new feed's. null for a part with no feed.
+ */
+export function feedFingerprint(feed) {
+  if (!isObject(feed)) return null;
+  const fields = Object.hasOwn(FEED_SOURCE, feed.kind) ? FEED_SOURCE[feed.kind] : [];
+  const source = fields.map((k) => String(feed.kind === "npm" && k === "tag" ? (feed.tag ?? "latest") : (feed[k] ?? "")));
+  return createHash("sha256").update(JSON.stringify([String(feed.kind), ...source])).digest("hex").slice(0, 16);
+}
+
+// For a state written before feeds were remembered: could this feed have produced
+// that stored value? A page hash comes only from a changelog page, a commit only
+// from a commit feed, and a version from the others.
+function fitsFeed(feed, value) {
+  if (feed?.kind === "changelog") return PAGE_HASH.test(value);
+  if (feed?.kind === "commit") return COMMIT.test(value);
+  return !PAGE_HASH.test(value) && !COMMIT.test(value);
+}
 
 // Today's records for one part. An absent record was not read: "could not check",
 // except where nothing needs reading (a hosted or none installed kind, a none feed).
@@ -291,7 +320,13 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   const allFailed = feeds.length > 1 && feeds.every((e) => !e.lat.ok);
 
   for (const { t, p, key, inst, lat } of entries) {
-    const ps = Object.hasOwn(prev.parts, key) ? { ...prev.parts[key] } : emptyPart();
+    let ps = Object.hasOwn(prev.parts, key) ? { ...prev.parts[key] } : emptyPart();
+    // A changed feed (or, in a state from before feeds were remembered, a stored value
+    // this feed could not have produced): a new baseline; a recorded commit stays.
+    const feedId = feedFingerprint(p.feed);
+    if (ps.feed !== null ? ps.feed !== feedId : ps.latest !== null && !fitsFeed(p.feed, ps.latest))
+      ps = { ...emptyPart(), installedCommit: ps.installedCommit };
+    ps.feed = feedId;
     next.parts[key] = ps;
     const firstMissing = Object.hasOwn(prev.missing, key) ? prev.missing[key] : null;
 
@@ -317,7 +352,8 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
         couldNotCheck.push({ key, message, since: ps.feedErrorSince });
       } else suppressed.couldNotCheck += 1;
       // A failing feed does not hide a remembered "still behind" on its Monday: the line uses what was last read.
-      if (feedFailed && ps.behindSince !== null && ps.latest !== null) {
+      // A page hash never is (a state saved before that rule may still hold one).
+      if (feedFailed && ps.behindSince !== null && ps.latest !== null && !PAGE_HASH.test(ps.latest)) {
         const installedThen = COMMIT.test(ps.latest) ? (ps.installedCommit ?? ps.installed) : ps.installed;
         if (mondaySections) stillBehind.push({ key, installed: installedThen, latest: ps.latest, since: ps.behindSince });
         else suppressed.stillBehind += 1;
@@ -354,7 +390,9 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     }
 
     // Behind: known from the versions, or (position unknown) since a new release was reported.
-    if (inst.state === "read" && !self) {
+    // Never from a page hash: nothing could ever clear it.
+    const hashOnly = !str(lat.version) && !str(lat.commit) && str(lat.hash) !== null;
+    if (inst.state === "read" && !self && !hashOnly) {
       if (behind === true || (behind === null && reportedNew)) ps.behindSince ??= today;
       else if (behind === false) ps.behindSince = null;
     } else ps.behindSince = null;
@@ -378,14 +416,17 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   }
 
   // Unlisted: keyed "<kind>:<name>". A scan with an unreadable source keeps what it could not see.
+  // A name over 200 characters is cut to 200 (never inside a surrogate pair), not dropped.
   const shownUnlisted = [];
   for (const it of Array.isArray(unlisted?.items) ? unlisted.items : []) {
-    if (!isObject(it) || !str(it.kind) || !str(it.name)) continue;
-    const id = `${it.kind}:${it.name}`;
+    if (!isObject(it) || !str(it.kind) || typeof it.name !== "string" || !it.name) continue;
+    const high = it.name.length > 200 && /[\uD800-\uDBFF]/.test(it.name[199]);
+    const name = it.name.length > 200 ? it.name.slice(0, high ? 199 : 200) : it.name;
+    const id = `${it.kind}:${name}`;
     if (Object.hasOwn(next.unlisted, id)) continue;
     const first = Object.hasOwn(prev.unlisted, id) ? prev.unlisted[id] : null;
     next.unlisted[id] = first ?? today;
-    if (!first || mondaySections) shownUnlisted.push({ kind: it.kind, name: it.name });
+    if (!first || mondaySections) shownUnlisted.push({ kind: it.kind, name });
     else suppressed.unlisted += 1;
   }
   if (Array.isArray(unlisted?.unreadable) && unlisted.unreadable.length)

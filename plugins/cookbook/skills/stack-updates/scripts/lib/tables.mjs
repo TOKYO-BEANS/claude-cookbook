@@ -2,14 +2,15 @@
 // live inside the plugin because the plugin ships only plugins/cookbook.
 
 // Hosts a `changelog` feed may name; add a host here in the same pull request as
-// its feed. A page qualifies only when it is the vendor's own, answers without a
-// redirect, and its text changes only with a release: on 13 November 2026 these
-// two read the same twice and carried no live counter. Rejected that day:
-// graphify.com and firecrawl.dev (a live star count in the page text),
-// docs.parallel.ai (the docs build id) and developers.cloudflare.com (several
-// entries a day across every product).
+// its feed. A changelog feed follows only a hosted or none part (check.mjs): a page
+// hash cannot say an installed version is behind. A page qualifies only when it is
+// the vendor's own, answers without a redirect, and its text changes only with a
+// release: on 13 November 2026 it read the same twice and carried no live counter.
+// Rejected that day: graphify.com and firecrawl.dev (a live star count in the page
+// text), docs.parallel.ai (the docs build id) and developers.cloudflare.com (several
+// entries a day across every product). proton.me left on 14 November 2026: the
+// Proton Pass CLI follows its GitHub releases instead.
 export const CHANGELOG_HOSTS = Object.freeze([
-  "proton.me", // Proton Pass CLI: its version list, download/pass-cli/versions.json
   "www.browserbase.com", // Browserbase: the platform changelog
 ]);
 

@@ -8,7 +8,7 @@ import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  ALL_FEEDS, READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState,
+  ALL_FEEDS, READ_LIMIT, compare, compareVersions, feedFingerprint, isQuiet, isRisky, loadState, saveState,
 } from "../plugins/cookbook/skills/stack-updates/scripts/lib/compare.mjs";
 import { SELF_UPDATING_TOOLS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
@@ -95,7 +95,7 @@ test("first run: baseline, reports only what is already behind, unlisted, missin
   assert.deepEqual(state.week, { runs: 1, changes: 0 });
   assert.deepEqual(state.parts["browse/cli"], {
     installed: "0.11.3", latest: "0.11.4", reported: null, behindSince: "2026-11-13",
-    feedErrorSince: null, feedErrorShown: null, installedCommit: null,
+    feedErrorSince: null, feedErrorShown: null, installedCommit: null, feed: feedFingerprint({ kind: "npm", package: "browse" }),
   });
   assert.equal(state.parts[CC].installed, "2.1.0");
   assert.equal(state.parts[CC].latest, "2.1.5");
@@ -657,4 +657,70 @@ test("loadState and saveState take another folder for a trial run", (t) => {
   assert.deepEqual(loadState(undefined, { folder }), { state: one, fresh: false });
   assert.throws(() => loadState(undefined, { folder: "" }), TypeError);
   assert.throws(() => saveState(undefined, one, { folder: 5 }), TypeError);
+});
+
+// ---- final review fixes --------------------------------------------------------
+
+const PAGE_HASH = (c) => c.repeat(64);
+const pager = (feed) => ({ version: 1, ignored: [], tools: [tool("pager", "Pager", [part("cli", { kind: "command" }, feed)])] });
+const CHANGELOG_FEED = { kind: "changelog", url: "https://changelog.test/versions.json" };
+const GITHUB_FEED = { kind: "github", repository: "o/pager" };
+const pagerDay = (today, state, feed, latest, installed = read("2.7.0")) =>
+  compare({ catalog: pager(feed), installed: { "pager/cli": installed }, latest: { "pager/cli": latest }, unlisted: nothing, state, today });
+
+test("a page-hash feed on a part with a readable installed version: the change is reported once and the part is never still behind", () => {
+  const fri = pagerDay("2026-11-13", null, CHANGELOG_FEED, ok({ hash: PAGE_HASH("a") }));
+  const sat = pagerDay("2026-11-14", fri.state, CHANGELOG_FEED, ok({ hash: PAGE_HASH("b") }));
+  assert.deepEqual(sat.result.changes.map((c) => [c.key, c.kind, c.from, c.to]), [["pager/cli", "new-release", PAGE_HASH("a"), PAGE_HASH("b")]]);
+  assert.equal(sat.state.parts["pager/cli"].behindSince, null, "a page hash cannot say the part is behind");
+  const mon = pagerDay("2026-11-16", sat.state, CHANGELOG_FEED, ok({ hash: PAGE_HASH("b") }));
+  assert.deepEqual([mon.result.changes, mon.result.stillBehind], [[], []]);
+  assert.deepEqual(mon.result.suppressed, NONE_HELD);
+  const mon2 = pagerDay("2026-11-23", mon.state, CHANGELOG_FEED, ok({ hash: PAGE_HASH("b") }));
+  assert.deepEqual([mon2.result.changes, mon2.result.stillBehind], [[], []]);
+  assert.equal(mon2.result.quiet, true);
+  // A state saved before this rule, with behindSince set: cleared by the next read, never shown; not on a failing day either.
+  const stuck = structuredClone(sat.state);
+  stuck.parts["pager/cli"].behindSince = "2026-11-14";
+  const monStuck = pagerDay("2026-11-16", stuck, CHANGELOG_FEED, ok({ hash: PAGE_HASH("b") }));
+  assert.deepEqual(monStuck.result.stillBehind, []);
+  assert.equal(monStuck.state.parts["pager/cli"].behindSince, null);
+  const monFailing = pagerDay("2026-11-16", stuck, CHANGELOG_FEED, failed("Provider returned HTTP 503"));
+  assert.deepEqual(monFailing.result.stillBehind, []);
+});
+
+test("a part whose feed changed starts from a new baseline: no change and nothing behind from the old feed's value", () => {
+  const fri = pagerDay("2026-11-13", null, CHANGELOG_FEED, ok({ hash: PAGE_HASH("a") }));
+  assert.match(fri.state.parts["pager/cli"].feed, /^[0-9a-f]{16}$/);
+  // The feed becomes a GitHub release feed the next day, on a Monday.
+  const mon = pagerDay("2026-11-16", fri.state, GITHUB_FEED, ok({ version: "2.7.0" }));
+  assert.deepEqual([mon.result.changes, mon.result.stillBehind], [[], []]);
+  assert.equal(mon.state.parts["pager/cli"].latest, "2.7.0");
+  assert.notEqual(mon.state.parts["pager/cli"].feed, fri.state.parts["pager/cli"].feed);
+  // From then on it is followed as usual.
+  const tue = pagerDay("2026-11-17", mon.state, GITHUB_FEED, ok({ version: "2.8.0" }));
+  assert.deepEqual(tue.result.changes.map((c) => [c.kind, c.from, c.to]), [["new-release", "2.7.0", "2.8.0"]]);
+  // A switch that fails to read on its first day shows nothing remembered from the old feed.
+  const behindHash = structuredClone(fri.state);
+  behindHash.parts["pager/cli"].behindSince = "2026-11-13";
+  const monFail = pagerDay("2026-11-16", behindHash, GITHUB_FEED, failed("gh api failed: HTTP 502"));
+  assert.deepEqual(monFail.result.stillBehind, []);
+  assert.equal(monFail.state.parts["pager/cli"].latest, null);
+  // A state written before feeds were remembered: a page hash cannot have come from a release feed.
+  const legacy = structuredClone(fri.state);
+  delete legacy.parts["pager/cli"].feed;
+  const monLegacy = pagerDay("2026-11-16", legacy, GITHUB_FEED, ok({ version: "2.7.0" }));
+  assert.deepEqual([monLegacy.result.changes, monLegacy.result.stillBehind], [[], []]);
+  // ...while a version that fits the feed is kept, so a real release on that day is still news.
+  const legacyFit = structuredClone(tue.state);
+  delete legacyFit.parts["pager/cli"].feed;
+  const wed = pagerDay("2026-11-18", legacyFit, GITHUB_FEED, ok({ version: "2.9.0" }));
+  assert.deepEqual(wed.result.changes.map((c) => [c.kind, c.from, c.to]), [["new-release", "2.7.0", "2.9.0"]]);
+});
+
+test("an unlisted name over 200 characters is cut to 200, not dropped", () => {
+  const long = { kind: "skill", name: "x".repeat(250) };
+  const { result, state } = day("2026-11-13", null, { unlisted: [long] });
+  assert.deepEqual(result.unlisted, [{ kind: "skill", name: "x".repeat(200) }]);
+  assert.deepEqual(Object.keys(state.unlisted), [`skill:${"x".repeat(200)}`]);
 });

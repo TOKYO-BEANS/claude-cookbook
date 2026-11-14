@@ -68,7 +68,9 @@ test("feed: known kinds, own fields, changelog host on the allow list", () => {
   assert.ok(Object.isFrozen(CHANGELOG_HOSTS) && Array.isArray(CHANGELOG_HOSTS));
 });
 test("feed: a changelog page on an allowed host passes; the same path on another host does not", () => {
-  for (const host of CHANGELOG_HOSTS) assert.deepEqual(part({ feed: { kind: "changelog", url: `https://${host}/changelog` } }), [], host);
+  // On a hosted part: a changelog feed follows nothing else (see "a changelog feed is allowed only on a hosted or none part").
+  const onHosted = (feed) => errors({ catalogText: withTools((t) => ((t.find((x) => x.id === "browserbase").parts.find((p) => p.name === "service").feed = feed), t)) });
+  for (const host of CHANGELOG_HOSTS) assert.deepEqual(onHosted({ kind: "changelog", url: `https://${host}/changelog` }), [], host);
   assert.ok(part({ feed: { kind: "changelog", url: "https://browserbase.com/changelog" } }).some((e) => /feed host browserbase.com is not on the allow list/.test(e)));
   assert.ok(part({ feed: { kind: "changelog", url: "https://www.browserbase.com/changelog?page=2" } }).some((e) => /feed url/.test(e)));
 });
@@ -84,7 +86,6 @@ test("the real catalog keeps the shapes the first real run corrected (13 Novembe
   // Only the folder that records its source gets a feed.
   assert.deepEqual(partOf("shopify-theme-skills", "themes").feed, { kind: "commit", repository: "Shopify/liquid-skills", path: "plugins/liquid-skills/skills/shopify-liquid-themes" });
   assert.equal(partOf("shopify-theme-skills", "standards").feed.kind, "none");
-  assert.equal(partOf("proton-pass-cli", "cli").feed.url, "https://proton.me/download/pass-cli/versions.json");
   assert.equal(partOf("browserbase", "service").feed.url, "https://www.browserbase.com/changelog");
 });
 test("the real catalog keeps the shapes of review fix round 1", () => {
@@ -219,4 +220,27 @@ test("connection checks: no token after the cmd.exe shim", () => {
   assert.deepEqual(errors({ checks: { github: { argv: ["cmd.exe", "/d", "/c", "{bin}/boat.cmd", "limits"], ok: /x/ } } }), []);
   assert.ok(errors({ checks: { github: { argv: ["cmd.exe", "/d", "/c", "{bin}/boat.cmd", "{share}/x"], ok: /x/ } } }).some((e) => /token after the shim/.test(e)));
   assert.ok(errors({ checks: { github: { argv: ["cmd.exe", "/d", "/c", "{bin}/boat.cmd", "{lib}/x"], ok: /x/ } } }).some((e) => /token after the shim/.test(e)));
+});
+
+// ---- final review fixes --------------------------------------------------------
+
+// The Browserbase service part: hosted, with the one changelog feed left in the catalog.
+const hosted = (patch) =>
+  errors({ catalogText: withTools((t) => (Object.assign(t.find((x) => x.id === "browserbase").parts.find((p) => p.name === "service"), patch), t)) });
+
+test("a changelog feed is allowed only on a hosted or none part, and the error names the part", () => {
+  const page = { kind: "changelog", url: "https://www.browserbase.com/changelog" };
+  assert.deepEqual(hosted({ feed: page }), []);
+  assert.deepEqual(hosted({ installed: { kind: "none" }, feed: page }), []);
+  const onCommand = part({ feed: page }); // git's cli part: installed kind command
+  assert.ok(onCommand.some((e) => /tools\[\d+\] \(git\) part cli: a changelog feed is allowed only on a hosted or none part/.test(e)), onCommand.join("\n"));
+  const onPinned = hosted({ installed: { kind: "pinned", folder: "x", package: "x" }, feed: page });
+  assert.ok(onPinned.some((e) => /\(browserbase\) part service: a changelog feed is allowed only on a hosted or none part/.test(e)), onPinned.join("\n"));
+});
+
+test("the Proton Pass CLI follows its GitHub releases, and proton.me is off the changelog allow list", () => {
+  const cli = catalog.tools.find((t) => t.id === "proton-pass-cli").parts.find((p) => p.name === "cli");
+  assert.equal(cli.installed.kind, "command");
+  assert.deepEqual(cli.feed, { kind: "github", repository: "protonpass/pass-cli" });
+  assert.ok(!CHANGELOG_HOSTS.includes("proton.me"));
 });

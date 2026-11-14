@@ -724,7 +724,8 @@ about the dates the catalog records. It installs, updates and commits nothing.
 - **The catalog side:** each tool's `parts` name how the installed version is read (`installed`)
   and where releases appear (`feed`). Commands live only in the fixed tables of
   `skills/stack-updates/scripts/lib/tables.mjs`, and a `changelog` page's host must be on the allow
-  list there. Something on the PC that the catalog does not name shows under "Not in the Cookbook"
+  list there. A `changelog` feed follows only a hosted (or not installed) part: a page hash cannot
+  say an installed version is behind. Something on the PC that the catalog does not name shows under "Not in the Cookbook"
   until it is added to the catalog or to `ignored`.
 - Proven on 13 and 14 November 2026 on a trial state: 79 parts checked in about 45 s, 48 with a
   readable version, none unreadable, 15 already behind; one real read (GitHub CLI 2.104.0: 3,488 input and 238 output tokens, no

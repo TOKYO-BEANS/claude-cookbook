@@ -102,8 +102,9 @@ test("changelog: hash of the page text, tags and whitespace removed", async () =
   assert.equal(a.source, PAGE);
 });
 test("changelog: a host that is not on the allow list is never requested", async () => {
-  // The allow list holds only the pages the first real run proved stable (13 November 2026).
-  assert.deepEqual([...CHANGELOG_HOSTS].sort(), ["proton.me", "www.browserbase.com"]);
+  // The allow list holds only the pages the first real run proved stable (13 November 2026);
+  // proton.me left when the Proton Pass CLI moved to its GitHub releases (14 November 2026).
+  assert.deepEqual([...CHANGELOG_HOSTS].sort(), ["www.browserbase.com"]);
   assert.ok(!CHANGELOG_HOSTS.includes("docs.example.org"));
   const d = deps({ http: { [PAGE]: fx("changelog-page.html") } });
   assert.equal((await readLatest({ kind: "changelog", url: PAGE }, d)).ok, false);
