@@ -1,0 +1,7 @@
+{
+  "tag_name": "v2.104.0",
+  "draft": false,
+  "prerelease": false,
+  "published_at": "2026-11-12T19:03:51Z",
+  "body": "## Protect private forks when deleting repositories\r\n\r\n`gh repo delete` now warns when deleting a private or internal repository will also delete its forks. The additional confirmation is required even with `--yes`.\r\n\r\nNon-interactive workflows and agents must explicitly accept the cascading deletion:\r\n\r\n```shell\r\ngh repo delete OWNER/REPO --yes --accept-cascading-deletion-of-private-forks\r\n```\r\n\r"
+}

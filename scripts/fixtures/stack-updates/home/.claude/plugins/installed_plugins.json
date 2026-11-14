@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "plugins": {
+    "superpowers@claude-plugins-official": [
+      { "scope": "project", "version": "7.0.1", "gitCommitSha": "1111111111111111111111111111111111111111", "projectPath": "C:/somewhere" },
+      { "scope": "user", "version": "7.0.2", "gitCommitSha": "2222222222222222222222222222222222222222" }
+    ],
+    "onlyproject@market-a": [
+      { "scope": "project", "version": "0.1.0", "gitCommitSha": "3333333333333333333333333333333333333333", "projectPath": "C:/somewhere" }
+    ],
+    "stray@stray-market": [
+      { "scope": "user", "version": "1.0.0", "gitCommitSha": "4444444444444444444444444444444444444444" }
+    ]
+  }
+}

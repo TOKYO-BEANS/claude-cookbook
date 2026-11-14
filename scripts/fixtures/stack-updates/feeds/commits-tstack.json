@@ -1,0 +1,29 @@
+[
+  {
+    "sha": "11e37a74d0a6868c121cd0910ab2b3bd9873b92a",
+    "commit": {
+      "message": "feat(council): act on results as they arrive",
+      "committer": {
+        "date": "2026-11-11T11:33:02Z"
+      }
+    }
+  },
+  {
+    "sha": "1085050f3baed1ac724caa4a8166145fb2ac88af",
+    "commit": {
+      "message": "fix(council): address known issues before review",
+      "committer": {
+        "date": "2026-10-28T02:38:02Z"
+      }
+    }
+  },
+  {
+    "sha": "92e38e2cf677a84a142e8df296861c588542135c",
+    "commit": {
+      "message": "fix(full-stop): trigger on a closing \"Full stop.\"",
+      "committer": {
+        "date": "2026-10-27T08:27:19Z"
+      }
+    }
+  }
+]

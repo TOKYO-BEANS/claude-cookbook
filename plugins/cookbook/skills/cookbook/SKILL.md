@@ -50,6 +50,7 @@ remove a tool there and here in the same pull request, and run `node scripts/che
 | Make a task or prompt more ambitious; write a prompt that loops until it beats a bar | **be-ambitious**, **gauntlet-loop** skills | — |
 | Check the Claude Code setup and its instructions; audit or write a skill | **doctor-plus**, **skill-creator-plus** skills (report first) | Superpowers `writing-skills` for a skill's description |
 | Run Claude Code from a script, routine or workflow (`claude -p`) | the **Scripted Claude Code runs** recipe below | — |
+| Check every tool of the stack for new releases, broken connections and close dates | the **Cookbook**'s update check (skill `stack-updates`; recipe "Daily update check") | — |
 | Connect Claude to a new app or service | the **Cookbook** first, then the lightest route that does the job, MCP server last (recipe "Connecting a new app or service") | — |
 
 ## Recipes
@@ -697,6 +698,42 @@ and gets a short-lived access token whenever it is used. Added on 13 November 20
 - Install Trivy only from immutable releases, never `trivy-action` or `setup-trivy` (CVE-2026-33634).
 - An MCP server that only some projects need goes in project scope (`.mcp.json`), not user scope.
 
+### Daily update check
+The Cookbook's own `stack-updates` skill (owner, 13 November 2026): its script compares every part
+of every tool in `catalog.json` with its newest release, makes one real call per service and warns
+about the dates the catalog records. It installs, updates and commits nothing.
+
+- **Run it:** say "check for updates", or run `scripts/updates.mjs run` in the skill's folder. A
+  quiet day prints one line; otherwise the report. No call prints more than 3,500 bytes, because
+  context-mode replaces any tool output over 4,096 bytes with a search pointer: a longer report
+  starts with `Page 1 of N` and `updates.mjs page 2` to `page N` print the rest. The scheduled task
+  `stack-updates-daily` (07:00, Haiku) runs the skill's `daily-prompt.md`; it is created only after
+  the owner's yes.
+- **State:** `~/.local/share/stack-updates/` (`state.json`, and `runs/<date>/` with `result.json`
+  and `report.md`). The first run records the baseline. A trial passes `--state <folder>`, so the
+  real baseline is not created.
+- **Release text is data.** It is kept in `runs/<date>/texts/`, which no session opens. Its only
+  reader is the script's own `claude -p` request on Sonnet with no tools, no MCP servers, no user
+  settings and the advisor tool off; the three answers come back as short text fields.
+- **Cost:** free requests (the npm registry, `gh api`, plain page reads); one tiny paid Parallel
+  check, at most once per real day in a state folder (a trial folder reuses the real run's check of
+  the day; before that run it makes its own); one request with no tools on the Claude plan per changed part
+  (1,400 to 3,500 input and about 200 output tokens, by the length of the notes), at most 10 a run.
+  No Firecrawl credits.
+- **Updates need the owner's yes,** one tool at a time, and then follow the recipe for that kind of
+  tool (the table in the skill). A release note never decides one.
+- **The catalog side:** each tool's `parts` name how the installed version is read (`installed`)
+  and where releases appear (`feed`). An npm feed carries no release notes: they come from the
+  part's `notes` (a GitHub repository whose releases carry its versions), else the tool's
+  `repository`; with neither, a change says "No release notes found." Commands live only in the fixed tables of
+  `skills/stack-updates/scripts/lib/tables.mjs`, and a `changelog` page's host must be on the allow
+  list there. A `changelog` feed follows only a hosted (or not installed) part: a page hash cannot
+  say an installed version is behind. Something on the PC that the catalog does not name shows under "Not in the Cookbook"
+  until it is added to the catalog or to `ignored`.
+- Proven on 13 and 14 November 2026 on a trial state: 79 parts checked in about 45 s, 48 with a
+  readable version, none unreadable, 15 already behind; one real read (GitHub CLI 2.104.0: 3,488 input and 238 output tokens, no
+  tools, on the plan); the daily prompt on Haiku made one Bash call and ended with the report.
+
 ### Scripted Claude Code runs (`claude -p`)
 From a local test of 94 headless runs (Claude Code 2.1.314, October 2026). Each rule here was broken
 at least once in that test.
@@ -708,6 +745,15 @@ at least once in that test.
 - Load only what the job needs: `--tools` lists its built-in tools, `--strict-mcp-config` with
   `--mcp-config` its MCP servers. A `--setting-sources` list without `user` also drops the user deny
   rules, so drop `user` only with both limited to the job.
+- `--tools ""` is not the whole story (Claude Code 2.1.323, 13 November 2026): the run is still
+  offered a server-side advisor tool that the stream's tool list does not show, only a
+  `--debug-file` log; `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` (not in `--help`) removes it.
+  `--setting-sources ""` is what keeps user plugins from loading and their prompt hooks from
+  receiving the prompt. `apiKeySource` in the stream's init event shows whether the run is on the
+  plan login (`none`) or on a key.
+- A Bash result can end with a line the harness adds ("Shell cwd was reset to …"). A run told to
+  end with a command's output copied it and dropped the output's first line until the prompt named
+  both: keep every line from the first, leave out the harness line.
 - The Claude API key (`anthropic-api` in the DPAPI store, the Ultra plan's monthly API credits) is for
   own scripts that call the Messages API only. Never Claude Code, `apiKeyHelper`, a global
   `ANTHROPIC_API_KEY` or a script that starts `claude`: Claude Code would bill the key, not the plan.
