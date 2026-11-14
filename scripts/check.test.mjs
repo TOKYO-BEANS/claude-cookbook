@@ -104,13 +104,13 @@ test("the real catalog keeps the shapes of review fix round 1", () => {
   assert.deepEqual(ab.parts.map((p) => p.name), ["playwright-core"]);
   assert.equal(ab.parts[0].installed.package, "playwright-core");
 });
-test("no dollar sign before a digit in the plugin's other skill and prompt bodies", () => {
-  const found = errors({ otherTexts: [{ name: "skills/x/daily-prompt.md", text: "Rules\r\nIt costs $5 a day." }] });
-  assert.deepEqual(found, ['skills/x/daily-prompt.md line 2: dollar sign before a digit (write "${1}" or USD 30)']);
+test("no dollar sign before a digit in the plugin's other skill bodies", () => {
+  const found = errors({ otherTexts: [{ name: "skills/x/SKILL.md", text: "Rules\r\nIt costs $5 a day." }] });
+  assert.deepEqual(found, ['skills/x/SKILL.md line 2: dollar sign before a digit (write "${1}" or USD 30)']);
   assert.deepEqual(errors({ otherTexts: [{ name: "a.md", text: 'Use "${1}" and USD 20.' }] }), []);
   // The real files named by OTHER_TEXTS pass.
   assert.deepEqual(errors({ otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: read(p) })) }), []);
-  assert.ok(OTHER_TEXTS.includes("plugins/cookbook/skills/stack-updates/daily-prompt.md"));
+  assert.deepEqual([...OTHER_TEXTS], ["plugins/cookbook/skills/stack-updates/SKILL.md"]);
 });
 test("feed: each kind's own fields and values", () => {
   assert.deepEqual(part({ feed: { kind: "npm", package: "@scope/name", tag: "stable", updater: "x" } }), []);
@@ -129,6 +129,8 @@ test("feed: each kind's own fields and values", () => {
 test("lifecycle watching, dates and ignored", () => {
   assert.deepEqual(broken({ lifecycle: "watching" }), []);
   assert.ok(broken({ dates: [{ label: "Trial ends", on: "19 Nov" }] }).some((e) => /date on must be YYYY-MM-DD/.test(e)));
+  // An impossible date of the right shape is an error line, not a crash.
+  assert.ok(broken({ dates: [{ label: "Trial ends", on: "2026-13-45" }] }).some((e) => /date on must be YYYY-MM-DD/.test(e)));
   assert.ok(errors({ catalogText: withTop({ ignored: [{ name: "ruff" }] }) }).some((e) => /ignored entry needs a reason/.test(e)));
 });
 

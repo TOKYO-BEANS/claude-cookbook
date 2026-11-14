@@ -1,0 +1,17 @@
+{
+  "description": "Cookbook: at session start, says when a daily update report is waiting (reads ~/.local/share/stack-updates only).",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/stack-updates-notice.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -390,11 +390,13 @@ export async function findUnlisted(catalog, { home, run } = {}) {
   await guard("bin", async () => {
     const dir = join(home, ".local", "bin");
     const seen = new Set();
-    for (const file of await names(dir)) {
+    const files = await names(dir);
+    // An ignored file also covers its twins: an ignored `x.exe` clears `x.cmd` too,
+    // whichever of them the folder lists first.
+    const ignoredStems = new Set(files.filter((f) => sets.ignored.has(norm(f)) || sets.ignored.has(norm(stemOf(f)))).map((f) => norm(stemOf(f))));
+    for (const file of files) {
       const stem = stemOf(file);
-      if (seen.has(norm(stem)) || covers(sets.binWords, stem)) continue;
-      if (sets.ignored.has(norm(file)) || sets.ignored.has(norm(stem))) continue;
-      // Skip a twin of an ignored sibling file (an ignored `x.exe` also covers `x.cmd`).
+      if (seen.has(norm(stem)) || covers(sets.binWords, stem) || ignoredStems.has(norm(stem))) continue;
       seen.add(norm(stem));
       found.push({ kind: "bin", name: stem });
     }
