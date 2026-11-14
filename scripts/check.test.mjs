@@ -244,3 +244,12 @@ test("the Proton Pass CLI follows its GitHub releases, and proton.me is off the 
   assert.deepEqual(cli.feed, { kind: "github", repository: "protonpass/pass-cli" });
   assert.ok(!CHANGELOG_HOSTS.includes("proton.me"));
 });
+
+test("a part may name where its release notes are: { kind: github, repository: owner/name } and nothing else", () => {
+  assert.deepEqual(part({ notes: { kind: "github", repository: "a/b" } }), []);
+  assert.ok(part({ notes: "a/b" }).some((e) => /\(git\) part cli: notes must be an object/.test(e)));
+  assert.ok(part({ notes: { kind: "npm", repository: "a/b" } }).some((e) => /notes kind must be github/.test(e)));
+  assert.ok(part({ notes: { kind: "github", repository: "https://github.com/a/b" } }).some((e) => /notes repository must be owner\/name/.test(e)));
+  assert.ok(part({ notes: { kind: "github" } }).some((e) => /notes repository must be owner\/name/.test(e)));
+  assert.ok(part({ notes: { kind: "github", repository: "a/b", url: "https://x.test/" } }).some((e) => /notes field url is not allowed/.test(e)));
+});

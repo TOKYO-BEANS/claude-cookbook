@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inert, quietLine, renderReport, safeLink } from "../plugins/cookbook/skills/stack-updates/scripts/lib/report.mjs";
-import { main, pruneRuns, recipeSection } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
+import { main, notesRepository, pruneRuns, recipeSection } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
 import { ALL_FEEDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/compare.mjs";
 import { READ_MODEL } from "../plugins/cookbook/skills/stack-updates/scripts/lib/read.mjs";
 
@@ -125,8 +125,8 @@ test("an unread change says why ('not read today' for the cap, the reason for a 
   assert.ok(text({ notRead: "failed: timed out after 120 s" }).includes("\n- Not read: failed: timed out after 120 s.\n"));
   assert.ok(text({ notRead: "read skipped" }).includes("\n- Not read: read skipped.\n"));
   assert.ok(text({ notRead: null }).includes("\n- Not read.\n"));
-  const none = text({ notRead: "no release notes published" });
-  assert.ok(none.includes("\n- No release notes published.\n"));
+  const none = text({ notRead: "no release notes found" });
+  assert.ok(none.includes("\n- No release notes found.\n"));
   assert.ok(none.includes("\n- Link: https://www.npmjs.com/package/browse/v/0.11.4\n"));
   assert.ok(!text({ notRead: "cap" }).includes("Changed:"));
 });
@@ -320,8 +320,11 @@ const CAT = {
   version: 1,
   ignored: [{ name: "helper-key.ps1", reason: "fixture" }],
   tools: [
-    tool("firecrawl", "Firecrawl", [{ name: "cli", installed: { kind: "pinned", folder: "firecrawl-cli", package: "firecrawl-cli" }, feed: { kind: "npm", package: "firecrawl-cli" } }],
-      { recipe: "Firecrawl without surprises", repository: "firecrawl/cli" }),
+    // The real catalog's shape: no tool repository, the part names where its notes are.
+    tool("firecrawl", "Firecrawl", [{
+      name: "cli", installed: { kind: "pinned", folder: "firecrawl-cli", package: "firecrawl-cli" },
+      feed: { kind: "npm", package: "firecrawl-cli" }, notes: { kind: "github", repository: "firecrawl/cli" },
+    }], { recipe: "Firecrawl without surprises" }),
     tool("superpowers", "Superpowers", [{ name: "plugin", installed: { kind: "plugin", id: "superpowers@claude-plugins-official" }, feed: { kind: "github", repository: "obra/superpowers" } }],
       { recipe: "Building a change (Superpowers)", repository: "obra/superpowers" }),
     tool("github", "GitHub", [{ name: "gh-cli", installed: { kind: "command" }, feed: { kind: "github", repository: "cli/cli" } }], { recipe: "CI and releases" }),
@@ -473,7 +476,7 @@ test("a change day: release notes go to texts/ and only to the request with no t
     gh: {
       "repos/obra/superpowers/releases/latest": { tag_name: "v7.1.0", draft: false, prerelease: false },
       "repos/obra/superpowers/releases?per_page=30": [{ tag_name: "v7.1.0", draft: false, prerelease: false, published_at: "2026-11-14T08:00:00Z", body: "SUPERPOWERS-NOTES: the old flow is deprecated." }],
-      // npm publishes no notes: the tool's repository is read instead.
+      // npm publishes no notes: the repository the part's `notes` names is read instead.
       "repos/firecrawl/cli/releases?per_page=30": [
         { tag_name: "v1.32.0", draft: false, prerelease: false, body: "FIRECRAWL-NOTES: adds --json." },
         { tag_name: "v1.31.0", draft: false, prerelease: false, body: "FIRECRAWL-NOTES: faster maps." },
@@ -489,7 +492,7 @@ test("a change day: release notes go to texts/ and only to the request with no t
   assert.deepEqual(result.changes.map((c) => [c.key, c.risky]), [["superpowers/plugin", true], ["firecrawl/cli", false], ["widget/cli", false]]);
   assert.deepEqual(result.changes.map((c) => c.textFile), ["texts/superpowers-plugin.txt", "texts/firecrawl-cli.txt", null]);
   assert.deepEqual(result.changes[0].answers, RISKY_ANSWER);
-  assert.equal(result.changes[2].notRead, "no release notes published");
+  assert.equal(result.changes[2].notRead, "no release notes found");
   assert.deepEqual(result.reads, { count: 2, failed: 0, input: 2648, output: 390, missingUsage: 0 });
   assert.match(readFileSync(join(folder, "texts", "firecrawl-cli.txt"), "utf8"), /FIRECRAWL-NOTES: adds --json[\s\S]*FIRECRAWL-NOTES: faster maps/);
   assert.match(readFileSync(join(folder, "texts", "superpowers-plugin.txt"), "utf8"), /SUPERPOWERS-NOTES/);
@@ -513,7 +516,7 @@ test("a change day: release notes go to texts/ and only to the request with no t
   assert.ok(report.includes("\n- Changed: Use \\`new-flow\\` \\<now\\>; the old flow is deprecated.\n"));
   assert.ok(report.includes('\n- To update: say "update Superpowers" (read the diff from the installed commit, then update the marketplace and the plugin).\n'));
   assert.ok(report.includes("\n- Link: https://github.com/obra/superpowers/releases/tag/v7.1.0\n"));
-  assert.ok(report.includes("\nWidget 2.0.0 -> 2.1.0, not installed\n- No release notes published.\n- Link: https://www.npmjs.com/package/widget-cli/v/2.1.0\n"));
+  assert.ok(report.includes("\nWidget 2.0.0 -> 2.1.0, not installed\n- No release notes found.\n- Link: https://www.npmjs.com/package/widget-cli/v/2.1.0\n"));
   assert.ok(report.endsWith("\n\n2 release notes read on the Claude plan: 2,648 input and 390 output tokens; one paid Parallel check.\n"), report);
 
   // The read stage again on the same folder: the changes already answered are kept, nothing is read twice.
@@ -546,7 +549,7 @@ test("a self-updated tool: 'already installed', no update line, and the link nam
   const result = readJson(join(state, "runs", "2026-11-14", "result.json"));
   assert.deepEqual(result.changes.map((c) => [c.kind, c.from, c.to, c.source]),
     [["installed-changed", "2.1.0", "2.1.2", "https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.2"]]);
-  assert.ok(r.out.includes("\nClaude Code 2.1.0 -> 2.1.2, installed command, already installed\n- No release notes published.\n- Link: https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.2\n"), r.out);
+  assert.ok(r.out.includes("\nClaude Code 2.1.0 -> 2.1.2, installed command, already installed\n- No release notes found.\n- Link: https://www.npmjs.com/package/@anthropic-ai/claude-code/v/2.1.2\n"), r.out);
   assert.ok(!r.out.includes("To update"));
 });
 
@@ -776,7 +779,7 @@ test("a record made between the start of a run and its report survives the repor
   assert.equal(saved.parts["x/skill"].installedCommit, C2);
 });
 
-test("release notes that could not be fetched say so; only a feed that answered with none says 'No release notes published.'; a major version stays first", async (t) => {
+test("release notes that could not be fetched say so; only a feed that answered with none says 'No release notes found.'; a major version stays first", async (t) => {
   const state = tmp(t);
   const cat = {
     version: 1, ignored: [],
@@ -801,12 +804,12 @@ test("release notes that could not be fetched say so; only a feed that answered 
   const result = readJson(join(state, "runs", "2026-11-14", "result.json"));
   assert.deepEqual(result.changes.map((c) => [c.key, c.risky, c.notRead]), [
     ["zeta/cli", true, "release notes could not be fetched (gh api failed: HTTP 404: Not Found)"],
-    ["alpha/cli", false, "no release notes published"],
+    ["alpha/cli", false, "no release notes found"],
     ["beta/cli", false, "release notes could not be fetched (gh api failed: HTTP 404: Not Found)"],
   ]);
   assert.match(r.out, /\nUpdates, 14 Nov: 3 changes, 2 could not be read\n/);
   assert.ok(r.out.includes("\nZeta 1.0.0 -> 2.0.0, not installed, may need a change (major version or breaking notes)\n- Not read: release notes could not be fetched (gh api failed: HTTP 404: Not Found).\n"), r.out);
-  assert.ok(r.out.includes("\nAlpha 1.0.0 -> 1.1.0, not installed\n- No release notes published.\n"));
+  assert.ok(r.out.includes("\nAlpha 1.0.0 -> 1.1.0, not installed\n- No release notes found.\n"));
   assert.ok(r.out.includes("\nBeta 1.0.0 -> 1.1.0, not installed\n- Not read: release notes could not be fetched (gh api failed: HTTP 404: Not Found).\n"));
 });
 
@@ -988,4 +991,57 @@ test("a long report: run prints page 1 with the page count, `page <n>` prints th
   const none = await cli(["page", "1", ...at(state, "2026-11-15")], {}, cat);
   assert.equal(none.code, 1);
   assert.match(none.err, /no report\.md for 2026-11-15/);
+});
+
+// ---- final review fixes --------------------------------------------------------
+
+test("notesRepository: the part's notes, else the tool's repository as owner/name or exactly its github.com address", () => {
+  const t = (repository) => ({ repository });
+  const p = (notes) => ({ feed: { kind: "npm", package: "x" }, ...(notes === undefined ? {} : { notes }) });
+  assert.equal(notesRepository(t("o/r"), p()), "o/r");
+  for (const url of ["https://github.com/o/r", "https://github.com/o/r/", "https://github.com/o/r.git"]) assert.equal(notesRepository(t(url), p()), "o/r", url);
+  for (const bad of ["", "http://github.com/o/r", "https://www.github.com/o/r", "https://github.com/o", "https://github.com/o/r/tree/main",
+    "git+https://github.com/o/r.git", "https://github.com/o/r.git/", "https://github.com/o/r?x=1", "https://github.com/../r", " o/r", undefined]) {
+    assert.equal(notesRepository(t(bad), p()), null, String(bad));
+  }
+  // The part's own notes source comes before the tool's repository.
+  assert.equal(notesRepository(t("o/r"), p({ kind: "github", repository: "a/b" })), "a/b");
+  assert.equal(notesRepository(t("o/r"), p({ kind: "npm", repository: "a/b" })), null);
+});
+
+test("every active or trial part with an npm feed has a repository for its release notes, or a reason it has none", () => {
+  const real = JSON.parse(readFileSync(new URL("../plugins/cookbook/catalog.json", import.meta.url), "utf8"));
+  // npm publishes no notes. These two are released from a monorepo whose release tags are
+  // "<package>@x.y.z", which no reader here follows (checked 14 November 2026).
+  const KNOWN_NONE = {
+    "browserbase/cli": "browse is released from browserbase/stagehand, tagged browse@x.y.z",
+    "wrangler/cli": "wrangler is released from cloudflare/workers-sdk, tagged wrangler@x.y.z",
+  };
+  const parts = real.tools.filter((x) => x.lifecycle === "active" || x.lifecycle === "trial")
+    .flatMap((x) => x.parts.filter((p) => p.feed.kind === "npm").map((p) => ({ key: `${x.id}/${p.name}`, repo: notesRepository(x, p) })));
+  assert.deepEqual(parts.filter((p) => p.repo === null).map((p) => p.key).sort(), Object.keys(KNOWN_NONE).sort());
+  for (const reason of Object.values(KNOWN_NONE)) assert.ok(reason.length > 0);
+  const repoOf = (key) => parts.find((p) => p.key === key)?.repo;
+  assert.equal(repoOf("1c9ccea9-8ebf-4d9c-9512-38e6890ea5b6/cli"), "anthropics/claude-code"); // Claude Code
+  assert.equal(repoOf("agent-browser/playwright-core"), "microsoft/playwright"); // the tool's github.com address
+  assert.equal(repoOf("firecrawl/cli"), "firecrawl/cli");
+  assert.equal(repoOf("parallel/cli"), "parallel-web/parallel-web-tools");
+  assert.equal(repoOf("shopify-cli/cli"), "Shopify/cli");
+});
+
+test("a tool whose repository is its github.com address gets its release notes from there", async (t) => {
+  const state = tmp(t);
+  const cat = { version: 1, ignored: [], tools: [
+    tool("gizmo", "Gizmo", [{ name: "cli", installed: { kind: "none" }, feed: { kind: "npm", package: "gizmo-cli" } }], { repository: "https://github.com/o/gizmo" }),
+  ] };
+  const npm = (version) => fakeFetch({ "https://registry.npmjs.org/gizmo-cli/latest": { version } });
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], { ...fakes(), fetcher: npm("1.0.0") }, cat)).code, 0);
+  const d = { ...fakes(), fetcher: npm("1.1.0"), gh: fakeGh({ "repos/o/gizmo/releases?per_page=30": [{ tag_name: "v1.1.0", draft: false, prerelease: false, body: "GIZMO-NOTES: a new flag." }] }) };
+  const r = await cli(["run", ...at(state, "2026-11-14")], d, cat);
+  assert.equal(r.code, 0, r.err);
+  const folder = join(state, "runs", "2026-11-14");
+  const result = readJson(join(folder, "result.json"));
+  assert.deepEqual(result.changes.map((c) => [c.key, c.textFile, c.notRead]), [["gizmo/cli", "texts/gizmo-cli.txt", null]]);
+  assert.match(readFileSync(join(folder, "texts", "gizmo-cli.txt"), "utf8"), /GIZMO-NOTES/);
+  assert.equal(d.run.count(/^claude -p/), 1);
 });

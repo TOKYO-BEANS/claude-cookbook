@@ -722,7 +722,9 @@ about the dates the catalog records. It installs, updates and commits nothing.
 - **Updates need the owner's yes,** one tool at a time, and then follow the recipe for that kind of
   tool (the table in the skill). A release note never decides one.
 - **The catalog side:** each tool's `parts` name how the installed version is read (`installed`)
-  and where releases appear (`feed`). Commands live only in the fixed tables of
+  and where releases appear (`feed`). An npm feed carries no release notes: they come from the
+  part's `notes` (a GitHub repository whose releases carry its versions), else the tool's
+  `repository`; with neither, a change says "No release notes found." Commands live only in the fixed tables of
   `skills/stack-updates/scripts/lib/tables.mjs`, and a `changelog` page's host must be on the allow
   list there. A `changelog` feed follows only a hosted (or not installed) part: a page hash cannot
   say an installed version is behind. Something on the PC that the catalog does not name shows under "Not in the Cookbook"

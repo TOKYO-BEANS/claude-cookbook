@@ -528,16 +528,36 @@ function skillText(ctx) {
   return ctx.skillText;
 }
 
+// owner/name, or exactly https://github.com/<owner>/<name> with an optional trailing
+// slash or ".git": that repository's owner/name; anything else null.
+const GITHUB_ADDRESS = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git|\/)?$/;
+function repositoryName(value) {
+  if (typeof value !== "string") return null;
+  const address = GITHUB_ADDRESS.exec(value)?.[1];
+  const name = REPO.test(value) ? value : address && !address.endsWith(".git") ? address : null; // not ".git/"
+  return name && REPO.test(name) && !name.split("/").some((s) => /^\.+$/.test(s)) ? name : null;
+}
+
+/**
+ * The GitHub repository whose releases hold a part's notes when its feed has none:
+ * the part's own `notes` source when it names one, otherwise the tool's
+ * `repository` (owner/name or its github.com address). null when there is none.
+ */
+export function notesRepository(tool, part) {
+  if (isObject(part) && Object.hasOwn(part, "notes")) return part.notes?.kind === "github" ? repositoryName(part.notes.repository) : null;
+  return repositoryName(tool?.repository);
+}
+
 // A change's release notes: from its feed, else (when the feed gave none) from the
-// tool's GitHub repository. `{ text }`, or `{ text: "", error }` when a source that
-// was tried failed and no text was found.
+// repository `notesRepository` names. `{ text }`, or `{ text: "", error }` when a
+// source that was tried failed and no text was found.
 async function notesFor(ctx, c) {
   const e = ctx.byKey.get(c.key);
   const deps = { fetcher: ctx.fetcher, gh: ctx.gh };
   const notes = await releaseNotes(e?.part.feed, c.fromRef ?? c.from, c.toRef ?? c.to, deps);
   if (notes.text.trim()) return notes;
-  const repo = e?.tool.repository;
-  if (!REPO.test(String(repo)) || (e.part.feed?.kind === "github" && e.part.feed.repository === repo)) return notes;
+  const repo = e ? notesRepository(e.tool, e.part) : null;
+  if (!repo || (e.part.feed?.kind === "github" && e.part.feed.repository === repo)) return notes;
   const fallback = await releaseNotes({ kind: "github", repository: repo }, c.from, c.to, deps);
   if (fallback.text.trim()) return fallback;
   const error = notes.error ?? fallback.error;
@@ -581,7 +601,7 @@ async function stageRead(ctx) {
     if (isObject(c.answers)) continue;
     if (!texts.has(c)) {
       c.answers = null;
-      c.notRead = c.notesError ? `release notes could not be fetched (${c.notesError})` : "no release notes published";
+      c.notRead = c.notesError ? `release notes could not be fetched (${c.notesError})` : "no release notes found";
       continue;
     }
     if (reads.count + reads.failed >= READ_LIMIT) {

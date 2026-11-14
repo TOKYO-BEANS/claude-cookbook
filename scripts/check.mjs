@@ -93,6 +93,17 @@ function feedErrors(feed, at) {
   return errors;
 }
 
+// A part's own source of release notes, for a feed that publishes none (npm): a
+// GitHub repository whose releases are tagged with the part's versions.
+function notesErrors(notes, at) {
+  if (!isObject(notes)) return [`${at}: notes must be an object`];
+  const errors = [];
+  if (notes.kind !== "github") errors.push(`${at}: notes kind must be github`);
+  for (const k of Object.keys(notes)) if (!["kind", "repository"].includes(k)) errors.push(`${at}: notes field ${k} is not allowed`);
+  if (!REPO.test(String(notes.repository))) errors.push(`${at}: notes repository must be owner/name`);
+  return errors;
+}
+
 function partsErrors(parts, at) {
   if (!Array.isArray(parts) || !parts.length) return [`${at}: needs at least one part`];
   const errors = [];
@@ -100,7 +111,8 @@ function partsErrors(parts, at) {
   parts.forEach((p, i) => {
     const pat = `${at} part ${isObject(p) && typeof p.name === "string" ? p.name : i}`;
     if (!isObject(p)) return errors.push(`${pat}: not an object`);
-    for (const k of Object.keys(p)) if (!["name", "installed", "feed"].includes(k)) errors.push(`${pat}: unknown field ${k}`);
+    for (const k of Object.keys(p)) if (!["name", "installed", "feed", "notes"].includes(k)) errors.push(`${pat}: unknown field ${k}`);
+    if ("notes" in p) errors.push(...notesErrors(p.notes, pat));
     if (typeof p.name !== "string" || !PART.test(p.name)) errors.push(`${pat}: part name must match [a-z0-9-], at most 40`);
     else if (seen.has(p.name)) errors.push(`${at}: duplicate part ${p.name}`);
     else seen.add(p.name);

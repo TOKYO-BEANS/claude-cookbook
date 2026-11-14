@@ -97,7 +97,7 @@ function kindWords(c) {
 
 function notReadLine(notRead) {
   if (notRead === "cap") return `- Not read today: more than ${READ_LIMIT} changes.`;
-  if (notRead === "no release notes published") return "- No release notes published.";
+  if (notRead === "no release notes found") return "- No release notes found.";
   const why = inert(notRead).replace(/\.+$/, "");
   return why ? `- Not read: ${why}.` : "- Not read.";
 }
