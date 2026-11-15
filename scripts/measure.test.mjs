@@ -79,9 +79,17 @@ test("a stream is reduced to its requests, tool calls and result; a message spli
 });
 
 test("the cap, the stop and the repeats must be positive numbers; a bad one stops the command", () => {
-  assert.deepEqual(parseLimits({}), { cap: 1, limit: 30, reps: 2, model: "claude-opus-5-5" });
-  assert.deepEqual(parseLimits({ cap: "0.5", limit: "10", reps: "1", model: "m" }), { cap: 0.5, limit: 10, reps: 1, model: "m" });
+  assert.deepEqual(parseLimits({}), { cap: 1, limit: 30, reps: 2, model: "claude-opus-5-5", transcripts: false });
+  assert.deepEqual(parseLimits({ cap: "0.5", limit: "10", reps: "1", model: "m" }), { cap: 0.5, limit: 10, reps: 1, model: "m", transcripts: false });
   for (const bad of [{ limit: "3O" }, { limit: "" }, { cap: "NaN" }, { cap: "0" }, { cap: "-1" }, { reps: "1.5" }, { reps: "x" }, { cap: "40" }, { limit: "Infinity" }]) assert.throws(() => parseLimits(bad), /--(cap|limit|reps)/, JSON.stringify(bad));
+});
+
+test("a run's full text is kept only when asked for, and a search is recorded without its pattern", () => {
+  assert.equal(parseLimits({ transcripts: "yes" }).transcripts, true);
+  assert.equal(parseLimits({ transcripts: "no" }).transcripts, false);
+  assert.throws(() => parseLimits({ transcripts: "1" }), /--transcripts/);
+  const line = JSON.stringify({ type: "assistant", message: { id: "a", model: "m", usage: {}, content: [{ type: "tool_use", name: "Grep", input: { pattern: "a line quoted from the rules file" } }] } });
+  assert.deepEqual(summarizeStream([line], "m").toolCalls, ["Grep"]);
 });
 
 test("a flag without a value is an error", () => {

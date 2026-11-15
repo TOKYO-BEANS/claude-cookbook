@@ -68,7 +68,7 @@ into `<side>/plugin`, the rules file as `<side>/work/CLAUDE.md`), then `probe`, 
 `report`. Results compare within one task set only: a changed task or check takes a new
 `set` name.
 
-**Verification.** `npm test` passes (338 tests, 11 of them in `scripts/measure.test.mjs`). The 48
+**Verification.** `npm test` passes (339 tests, 12 of them in `scripts/measure.test.mjs`). The 48
 stored answers were scored again from the raw streams after the last change to the parser:
 152 of 152, none moved.
 
@@ -79,7 +79,13 @@ raised one high finding (`js/clear-text-logging`, alert 3): the probe printed th
 only whether a run was on the plan login. AI review round 1 (of three), two low findings, both
 fixed: a `--cap`, `--limit` or `--reps` that is no positive number stops the command (it would
 have switched the batch stop off), as does a flag without a value; and `run` and `report`
-refuse a folder that holds results of another task set or model.
+refuse a folder that holds results of another task set or model. Round 2, from GitHub's
+security review: a run wrote its whole stream to the output folder, and the model's text can
+quote the rules file it was given. The stream, the run's stderr and the probe's stream are now
+written only with `--transcripts yes`, and a search is recorded without its pattern; by
+default the folder holds numbers, tool names and which checks passed. The first measurement
+was made before this, so its folder holds every stream; it is on this PC only, in no
+repository.
 
 **Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`
 (`RESULT.md`, `runs/report.md`, `runs/summary.jsonl`, one stream per run, both sides in

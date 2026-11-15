@@ -5,6 +5,9 @@
 // servers, no user settings or plugins, a spend cap per run and a stop for the whole batch.
 //   node scripts/measure/measure.mjs run --sides <dir> --out <dir> [--side before] [--task T1-who-calls] [--reps 2]
 //   node scripts/measure/measure.mjs report --out <dir>
+// By default a run leaves numbers only in --out: counts, cost, the tools called, which checks passed.
+// The model's text can quote the rules file it was given, so the full stream of a run (and what the
+// run printed on stderr) is written only with `--transcripts yes`. Keep such a folder out of a repository.
 // The rules for scripted runs are in recipes/scripted-runs.md.
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -54,7 +57,7 @@ export function summarizeStream(lines, model) {
       s.init = { tools: e.tools ?? [], plugins: (e.plugins ?? []).map((p) => p.name), skills: (e.skills ?? []).length, mcp: (e.mcp_servers ?? []).map((m) => m.name), login: e.apiKeySource === "none" ? "plan" : "key", model: e.model, version: e.claude_code_version };
     } else if (e.type === "assistant" && e.message) {
       for (const b of e.message.content ?? []) {
-        if (b.type === "tool_use") s.toolCalls.push(b.name === "Read" ? `Read ${short(b.input?.file_path)}` : b.name === "Skill" ? `Skill ${b.input?.skill}` : `${b.name} ${b.input?.pattern ?? ""}`.trim());
+        if (b.type === "tool_use") s.toolCalls.push(b.name === "Read" ? `Read ${short(b.input?.file_path)}` : b.name === "Skill" ? `Skill ${b.input?.skill}` : b.name);
       }
       if (seen.has(e.message.id) || (model && e.message.model !== model) || e.parent_tool_use_id) continue;
       seen.add(e.message.id);
@@ -126,7 +129,8 @@ export function parseLimits(opts) {
   const cap = num("cap"), limit = num("limit"), reps = num("reps");
   if (!Number.isInteger(reps)) throw new Error(`--reps must be a whole number, got "${opts.reps}"`);
   if (cap > limit) throw new Error(`--cap ${cap} is above --limit ${limit}`);
-  return { cap, limit, reps, model: opts.model ?? DEFAULTS.model };
+  if (![undefined, "yes", "no"].includes(opts.transcripts)) throw new Error(`--transcripts must be yes or no, got "${opts.transcripts}"`);
+  return { cap, limit, reps, model: opts.model ?? DEFAULTS.model, transcripts: opts.transcripts === "yes" };
 }
 
 // Rows of another task set or model in the same folder: results compare within one set and one
@@ -148,7 +152,7 @@ export function parseFlags(rest) {
 }
 
 async function run(opts) {
-  const { cap, limit, reps, model } = parseLimits(opts);
+  const { cap, limit, reps, model, transcripts } = parseLimits(opts);
   const { suffix, tasks, set } = loadTasks();
   const sidesDir = resolve(opts.sides), outDir = resolve(opts.out);
   mkdirSync(outDir, { recursive: true });
@@ -172,10 +176,12 @@ async function run(opts) {
         const started = Date.now();
         const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap }), join(sideDir, "work"), buildPrompt(task, suffix));
         const wallMs = Date.now() - started;
-        writeFileSync(join(outDir, `${name}.jsonl`), res.out);
-        if (res.err.trim()) writeFileSync(join(outDir, `${name}.err`), res.err);
+        if (transcripts) {
+          writeFileSync(join(outDir, `${name}.jsonl`), res.out);
+          if (res.err.trim()) writeFileSync(join(outDir, `${name}.err`), res.err);
+        }
         const s = summarizeStream(res.out.split("\n"), model);
-        if (!s.result) { console.log(`${name}: NO RESULT (exit ${res.code}); see ${name}.err`); return; }
+        if (!s.result) { console.log(`${name}: NO RESULT (exit ${res.code})${transcripts ? `; see ${name}.err` : "; run it again with --transcripts yes to keep its output"}`); return; }
         const score = scoreAnswer(task, s.result.text);
         const row = { set, model, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
         delete row.text;
@@ -196,11 +202,11 @@ async function probe(opts) {
   const emptyMcp = join(outDir, "empty-mcp.json"), settings = join(outDir, "run-settings.json");
   writeFileSync(emptyMcp, '{"mcpServers":{}}\n');
   writeFileSync(settings, `${JSON.stringify(runSettings())}\n`);
-  const { cap, model } = parseLimits(opts);
+  const { cap, model, transcripts } = parseLimits(opts);
   for (const side of ["before", "after"]) {
     const sideDir = join(sidesDir, side);
     const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap }), join(sideDir, "work"), PROBE_PROMPT);
-    writeFileSync(join(outDir, `probe-${side}.jsonl`), res.out);
+    if (transcripts) writeFileSync(join(outDir, `probe-${side}.jsonl`), res.out);
     const s = summarizeStream(res.out.split("\n"), model);
     console.log(`== ${side}: first request ${s.firstContext} tokens, USD ${(s.result?.costUsd ?? 0).toFixed(3)}, login ${s.init?.login}\n${s.result?.text ?? res.err}`);
   }
@@ -242,7 +248,7 @@ function report(opts) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [cmd, ...rest] = process.argv.slice(2);
-  const usage = "usage: measure.mjs probe --sides <dir> --out <dir> | run --sides <dir> --out <dir> [--side before|after] [--task <id>] [--reps 2] [--cap 1] [--limit 30] [--model <id>] | report --out <dir>";
+  const usage = "usage: measure.mjs probe --sides <dir> --out <dir> [--transcripts yes] | run --sides <dir> --out <dir> [--side before|after] [--task <id>] [--reps 2] [--cap 1] [--limit 30] [--model <id>] [--transcripts yes] | report --out <dir>";
   try {
     const opts = parseFlags(rest);
     if (cmd === "run" && opts.sides && opts.out) await run(opts);
