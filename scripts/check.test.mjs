@@ -70,6 +70,20 @@ test("pages: a link between pages resolves, and every page is reached from SKILL
   assert.deepEqual(errors({ pages: withPage("recipes/boat.md", (t) => `${t}\n[doc](https://example.com/a.md)\n`) }), []);
 });
 
+test("the stack-updates skill's update table names recipe pages by their exact titles", () => {
+  const titles = new Set(pages.filter((p) => p.name.startsWith("recipes/")).map((p) => /^# (.+)\r?\n/.exec(p.text)[1].trim()));
+  const skill = read("plugins/cookbook/skills/stack-updates/SKILL.md").replace(/\r/g, "");
+  const table = skill.slice(skill.indexOf("| Kind | What to do | Recipe |"));
+  const rows = table.split("\n").filter((l) => l.startsWith("|")).slice(2);
+  assert.ok(rows.length >= 5);
+  const named = rows.flatMap((r) => [...r.split("|").at(-2).matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(named.length >= 6);
+  for (const n of named) assert.ok(titles.has(n), `"${n}" is not the title of a page in recipes/`);
+  // The steps are on the page the row names: an update row never points at a page without them.
+  const body = (title) => pages.find((p) => p.text.startsWith(`# ${title}\n`) || p.text.startsWith(`# ${title}\r\n`)).text;
+  for (const n of named.filter((x) => /setup|mods|terminal proxy/.test(x))) assert.match(body(n), /update/i, n);
+});
+
 test("pages: each fits one Read, has its own title and a plain name; SKILL.md stays an index", () => {
   const long = withPage("recipes/seo.md", (t) => `${t}${"x".repeat(60)}\n`.repeat(40));
   assert.ok(errors({ pages: long }).some((e) => /^recipes\/seo\.md: \d+ bytes as a Read result, over 4000: split the page$/.test(e)));

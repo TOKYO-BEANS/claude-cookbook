@@ -149,15 +149,15 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json` 
 
 | Kind | What to do | Recipe |
 | --- | --- | --- |
-| `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>`. No sandbox run (a plugin starts only inside Claude Code); say so in the report | "Claude Code add-ons" (Updates); "Context window (context-mode)" |
-| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`scripts/vetting/pinned-vet.sh` beside this skill does all of these, and `pinned-install.sh` there installs the vetted lockfile; read its `SANDBOX` lines as "Vetting outside code: reading the sandbox report" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
-| `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command. No sandbox run (the Windows binary installed here; the sandbox is Linux); say so in the report | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
+| `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>`. No sandbox run (a plugin starts only inside Claude Code); say so in the report | "Claude Code add-ons: mods" (Updates); "Context window (context-mode)" |
+| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`scripts/vetting/pinned-vet.sh` beside this skill does all of these, and `pinned-install.sh` there installs the vetted lockfile; read its `SANDBOX` lines as "Vetting outside code: reading the sandbox report" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase): setup and updates" (To update) |
+| `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command. No sandbox run (the Windows binary installed here; the sandbox is Linux); say so in the report | "Cloud sandboxes (boat): the plan, setup and evidence"; "Sign-ins: setup and evidence"; "Google accounts: setup and evidence" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
-| `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit. No sandbox run; say so in the report | "Claude Code add-ons" (Updates) |
+| `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit. No sandbox run; say so in the report | "Claude Code add-ons: mods" (Updates) |
 | `project` | The version pull request Dependabot opens in that repository | "Security in a repository" |
 | The standard's own pins (Semgrep in CI, Safe Chain) | Nothing on this PC. Semgrep's CI pin is not followed here; a Safe Chain release is reported for information only. A pin moves when Stack Atlas bumps the standard, decided there, never because of this report | "Security in a repository" |
-| Jev Router | Its own steps | "Model routing (Jev Router)" |
+| Jev Router | Its own steps | "Model routing (Jev Router): the `jev-claude` terminal proxy" (To update) |
 
 A recipe that names the old version is updated in the same pull request. Claude Code updates
 itself: it is reported once its installed version has moved, and there is nothing to run. (The Wix
