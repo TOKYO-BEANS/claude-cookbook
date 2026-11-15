@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aggregate, buildPrompt, claudeArgs, loadTasks, parseAnswer, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
+import { resolve } from "node:path";
+import { aggregate, buildPrompt, claudeArgs, loadTasks, parseAnswer, readRule, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
 
 const { tasks, suffix, set } = loadTasks();
 const task = (id) => tasks.find((t) => t.id === id);
@@ -45,11 +46,13 @@ test("a yes or no check reads the start of the value only", () => {
 });
 
 test("a run is read-only, capped, on no MCP server, and excludes the user's own rules file", () => {
-  const args = claudeArgs({ sideDir: "C:\\x\\sides\\before", emptyMcp: "e.json", settings: "s.json", model: "m", cap: 1 });
+  const args = claudeArgs({ sideDir: "sides/before", emptyMcp: "e.json", settings: "s.json", model: "m", cap: 1 });
   const after = (flag) => args[args.indexOf(flag) + 1];
   assert.deepEqual(args.slice(args.indexOf("--tools") + 1, args.indexOf("--permission-mode")), [...TOOLS]);
   assert.equal(after("--permission-mode"), "dontAsk");
-  assert.ok(args.includes("Read(//c/x/sides/before/**)"));
+  assert.ok(args.includes(readRule(resolve("sides/before"))));
+  assert.equal(readRule("C:\\x\\sides\\before"), "Read(//c/x/sides/before/**)");
+  assert.equal(readRule("/home/x/sides/before"), "Read(//home/x/sides/before/**)");
   assert.equal(after("--max-budget-usd"), "1");
   assert.equal(after("--setting-sources"), "project");
   assert.equal(after("--settings"), "s.json");

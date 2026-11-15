@@ -73,7 +73,8 @@ export function summarizeStream(lines, model) {
   return s;
 }
 
-const readRule = (dir) => `Read(//${resolve(dir).replace(/\\/g, "/").replace(/^([A-Za-z]):/, (_, d) => d.toLowerCase())}/**)`;
+// A Read rule for an absolute folder: `//c/x` on Windows (C:\x), `//x` elsewhere (/x).
+export const readRule = (absDir) => `Read(//${absDir.replace(/\\/g, "/").replace(/^([A-Za-z]):/, (_, d) => d.toLowerCase()).replace(/^\/+/, "")}/**)`;
 
 // `--setting-sources project` does not keep the user's own CLAUDE.md out (probed on Claude Code
 // 2.1.325: both files were loaded), so the run's settings exclude it by path. The side's file in
@@ -88,7 +89,7 @@ export function claudeArgs({ sideDir, emptyMcp, settings, model, cap }) {
   return [
     "-p", "--model", model, "--output-format", "stream-json", "--verbose",
     "--tools", ...TOOLS,
-    "--permission-mode", "dontAsk", "--allowedTools", "Skill", readRule(sideDir), "Glob", "Grep",
+    "--permission-mode", "dontAsk", "--allowedTools", "Skill", readRule(resolve(sideDir)), "Glob", "Grep",
     "--strict-mcp-config", "--mcp-config", emptyMcp,
     "--setting-sources", "project", "--settings", settings,
     "--plugin-dir", join(sideDir, "plugin"),
