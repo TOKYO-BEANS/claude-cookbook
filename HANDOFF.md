@@ -1,5 +1,39 @@
 # Handoff
 
+## 15 November 2026 (late night): the measuring script, two findings from the last review of #56
+
+No plugin file changes, so the plugin stays 0.31.1.
+
+**What changed** in `scripts/measure/measure.mjs`, both from the AI review of #56's head
+commit (two low findings, left for this pull request because #56's three rounds were spent):
+- `run` does not score a run that ended in an error (`is_error`, or a subtype other than
+  `success`, such as a run cut off by the spend cap): it prints the subtype, stops the batch
+  and keeps the run as a `discarded` row, so its cost counts against the batch limit (a run
+  with no result at all is counted at the full cap) while the report leaves it out and names
+  it. The AI review's first round (medium) asked for the cost to count: without it, a task
+  that kept hitting the cap could have passed the limit across reruns. Round 2 (two low): a
+  result that reports no cost is also counted at the cap, and a run that succeeds without a
+  cost is not scored; `report` applies its check for another task set or model to every row,
+  the discarded ones included. Scored, such a run would have counted as wrong answers. None of the
+  48 runs of the first measurement was one (every row: exit 0, `isError` false, `success`).
+- `--side` must be `before` or `after`; any other name stops the command before a run. A row
+  under another name would have cost money and been left out of the report.
+
+**Verification.** `npm test` passes (344 tests, 17 of them in `scripts/measure.test.mjs`).
+No paid run was made for this pull request.
+
+**From #56** (the entry below). It merged as `187cfc2`. The release check
+of that commit is `verified` and acknowledged (execution 1533; `sa-release` itself ended
+`unknown` for the skipped `ai-review` job, as on every merge commit; log
+`release-cookbook-56-merge.log` in the evidence folder). Plugin 0.31.1 was installed the same
+night (from 0.31.0, which the Adobe job had installed) and proved with a new headless
+session that loaded it from `cookbook/0.31.1` (`newsession-0.31.1.jsonl`). Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`.
+
+**Outstanding.** The list in the entry below stands, less its first item. The merge commit
+and the release check of this pull request go into the next Cookbook pull request. The order
+the owner set on 15 November 2026 is complete.
+
 ## 15 November 2026 (night): a fixed set of tasks, measured before and after (0.31.1)
 
 The last step of the order the owner set on 15 November 2026 (the map #51, the removals #52,

@@ -16,6 +16,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const TOOLS = Object.freeze(["Skill", "Read", "Glob", "Grep"]);
+export const SIDES = Object.freeze(["before", "after"]);
 export const DEFAULTS = Object.freeze({ model: "claude-opus-5-5", cap: 1, limit: 30, reps: 2 });
 
 export const loadTasks = (file = fileURLToPath(new URL("./tasks.json", import.meta.url))) => JSON.parse(readFileSync(file, "utf8"));
@@ -69,7 +70,7 @@ export function summarizeStream(lines, model) {
       s.peakContext = Math.max(s.peakContext, c);
     } else if (e.type === "result") {
       s.result = {
-        subtype: e.subtype, isError: Boolean(e.is_error), text: e.result ?? "", turns: e.num_turns, durationMs: e.duration_ms, costUsd: e.total_cost_usd ?? 0,
+        subtype: e.subtype, isError: Boolean(e.is_error), text: e.result ?? "", turns: e.num_turns, durationMs: e.duration_ms, costUsd: e.total_cost_usd ?? 0, costReported: Number.isFinite(e.total_cost_usd),
         input: e.usage?.input_tokens ?? 0, cacheWrite: e.usage?.cache_creation_input_tokens ?? 0, cacheRead: e.usage?.cache_read_input_tokens ?? 0, output: e.usage?.output_tokens ?? 0,
         denials: (e.permission_denials ?? []).length, models: Object.keys(e.modelUsage ?? {}),
       };
@@ -135,6 +136,7 @@ export function parseLimits(opts) {
   const cap = num("cap"), limit = num("limit"), reps = num("reps");
   if (!Number.isInteger(reps)) throw new Error(`--reps must be a whole number, got "${opts.reps}"`);
   if (cap > limit) throw new Error(`--cap ${cap} is above --limit ${limit}`);
+  if (opts.side !== undefined && !SIDES.includes(opts.side)) throw new Error(`--side must be ${SIDES.join(" or ")}, got "${opts.side}"`);
   if (![undefined, "yes", "no"].includes(opts.transcripts)) throw new Error(`--transcripts must be yes or no, got "${opts.transcripts}"`);
   return { cap, limit, reps, model: opts.model ?? DEFAULTS.model, transcripts: opts.transcripts === "yes" };
 }
@@ -157,6 +159,26 @@ export function parseFlags(rest) {
   return opts;
 }
 
+// Why a finished run must not be scored, or null. A run that ended in an error (cut off by the spend
+// cap, for one) has an empty or partial answer: scored, it would count as wrong answers.
+export function runProblem(s, exitCode, model) {
+  if (!s.result) return `no result (exit ${exitCode})`;
+  if (s.result.isError || s.result.subtype !== "success") return `the run ended as "${s.result.subtype}"`;
+  if (!s.calls) return `a result but no request of the session's model (${s.init?.model ?? model}) was counted`;
+  if (!s.result.costReported) return "the run reported no cost";
+  return null;
+}
+
+// A run that is not scored has still spent money. Its row is kept as `discarded`, so the batch
+// stop counts it, and it is left out of the resume check and the report. A run with no result
+// or a result that reports no cost is counted at the full cap, the most it can have spent.
+export const discardedRow = ({ set, model, task, side, rep, problem, result, cap }) => {
+  const costKnown = Boolean(result) && result.costReported !== false && Number.isFinite(result.costUsd);
+  return { set, model, task, side, rep, discarded: problem, costUsd: costKnown ? result.costUsd : cap, costKnown };
+};
+export const scoredRows = (rows) => rows.filter((r) => !r.discarded);
+export const spentSoFar = (rows) => rows.reduce((a, r) => a + (Number.isFinite(r.costUsd) ? r.costUsd : 0), 0);
+
 async function run(opts) {
   const { cap, limit, reps, model, transcripts } = parseLimits(opts);
   const { suffix, tasks, set } = loadTasks();
@@ -166,7 +188,7 @@ async function run(opts) {
   writeFileSync(emptyMcp, '{"mcpServers":{}}\n');
   const settings = join(outDir, "run-settings.json");
   writeFileSync(settings, `${JSON.stringify(runSettings())}\n`);
-  const sides = opts.side ? [opts.side] : ["before", "after"];
+  const sides = opts.side ? [opts.side] : SIDES;
   const chosen = opts.task ? tasks.filter((t) => t.id === opts.task) : tasks;
   if (!chosen.length) throw new Error(`no task ${opts.task}`);
   for (let rep = 1; rep <= reps; rep += 1) {
@@ -174,8 +196,8 @@ async function run(opts) {
       for (const side of sides) {
         const done = readSummaries(outDir);
         refuseForeign(done, set, model, outDir);
-        if (done.some((r) => r.task === task.id && r.side === side && r.rep === rep)) continue;
-        const spent = done.reduce((a, r) => a + r.costUsd, 0);
+        if (scoredRows(done).some((r) => r.task === task.id && r.side === side && r.rep === rep)) continue;
+        const spent = spentSoFar(done);
         if (spent + cap > limit) { console.log(`STOPPED: ${spent.toFixed(2)} spent, the next run could pass the limit of ${limit}`); return; }
         const sideDir = join(sidesDir, side);
         const name = `${side}-${task.id}-r${rep}`;
@@ -187,8 +209,13 @@ async function run(opts) {
           if (res.err.trim()) writeFileSync(join(outDir, `${name}.err`), res.err);
         }
         const s = summarizeStream(res.out.split("\n"), model);
-        if (!s.result) { console.log(`${name}: NO RESULT (exit ${res.code})${transcripts ? `; see ${name}.err` : "; run it again with --transcripts yes to keep its output"}`); return; }
-        if (!s.calls) { console.log(`${name}: a result but no request of the session's model (${s.init?.model ?? model}) was counted; stopped, nothing recorded`); return; }
+        const problem = runProblem(s, res.code, model);
+        if (problem) {
+          const lost = discardedRow({ set, model, task: task.id, side, rep, problem, result: s.result, cap });
+          appendFileSync(join(outDir, "summary.jsonl"), `${JSON.stringify(lost)}\n`);
+          console.log(`${name}: ${problem}; stopped, not scored; USD ${lost.costUsd.toFixed(3)}${lost.costKnown ? "" : " (no cost reported: the full cap)"} counted against the limit${transcripts ? `; see ${name}.jsonl` : "; run it again with --transcripts yes to keep its output"}`);
+          return;
+        }
         const score = scoreAnswer(task, s.result.text);
         const row = { set, model, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
         delete row.text;
@@ -222,7 +249,7 @@ async function probe(opts) {
   writeFileSync(emptyMcp, '{"mcpServers":{}}\n');
   writeFileSync(settings, `${JSON.stringify(runSettings())}\n`);
   const { cap, model, transcripts } = parseLimits(opts);
-  for (const side of ["before", "after"]) {
+  for (const side of SIDES) {
     const sideDir = join(sidesDir, side);
     const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap }), join(sideDir, "work"), PROBE_PROMPT);
     if (transcripts) writeFileSync(join(outDir, `probe-${side}.jsonl`), res.out);
@@ -241,7 +268,7 @@ const totalIn = (r) => r.input + r.cacheWrite + r.cacheRead;
 export function aggregate(rows) {
   const out = [];
   for (const task of [...new Set(rows.map((r) => r.task))]) {
-    for (const side of ["before", "after"]) {
+    for (const side of SIDES) {
       const rs = rows.filter((r) => r.task === task && r.side === side);
       if (!rs.length) continue;
       const ins = rs.map(totalIn);
@@ -252,16 +279,19 @@ export function aggregate(rows) {
 }
 
 function report(opts) {
-  const rows = readSummaries(resolve(opts.out));
-  if (rows.length) refuseForeign(rows, rows[0].set, rows.find((r) => r.model !== undefined)?.model, resolve(opts.out));
+  const all = readSummaries(resolve(opts.out));
+  if (all.length) refuseForeign(all, all[0].set, all.find((r) => r.model !== undefined)?.model, resolve(opts.out));
+  const rows = scoredRows(all);
   const agg = aggregate(rows);
   const lines = ["| Task | Side | Input tokens (range) | First request | Largest request | Output | Turns | Seconds | USD | Checks |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"];
   for (const a of agg) lines.push(`| ${a.task} | ${a.side} | ${a.input} (${a.inputMin} to ${a.inputMax}) | ${a.firstContext} | ${a.peakContext} | ${a.output} | ${a.turns.toFixed(1)} | ${a.seconds.toFixed(1)} | ${a.costUsd.toFixed(3)} | ${a.passed}/${a.of} |`);
-  for (const side of ["before", "after"]) {
+  for (const side of SIDES) {
     const rs = rows.filter((r) => r.side === side);
     if (!rs.length) continue;
     lines.push(`| ALL (sum of ${rs.length} runs) | ${side} | ${rs.reduce((a, r) => a + totalIn(r), 0)} | | | ${rs.reduce((a, r) => a + r.output, 0)} | ${rs.reduce((a, r) => a + r.turns, 0)} | ${(rs.reduce((a, r) => a + r.durationMs, 0) / 1000).toFixed(0)} | ${rs.reduce((a, r) => a + r.costUsd, 0).toFixed(2)} | ${rs.reduce((a, r) => a + r.passed, 0)}/${rs.reduce((a, r) => a + r.of, 0)} |`);
   }
+  const lost = all.filter((r) => r.discarded);
+  if (lost.length) lines.push("", `Not scored: ${lost.length} run(s), USD ${spentSoFar(lost).toFixed(2)} (${lost.map((r) => `${r.side} ${r.task} r${r.rep}: ${r.discarded}`).join("; ")}).`);
   const text = `${lines.join("\n")}\n`;
   writeFileSync(join(resolve(opts.out), "report.md"), text);
   writeFileSync(join(resolve(opts.out), "report.json"), `${JSON.stringify(agg, null, 2)}\n`);
