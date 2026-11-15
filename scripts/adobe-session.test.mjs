@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import {
-  buildRun, connected, CONNECTOR, folderErrors, initErrors, OTHER_CONNECTORS, otherServers, parseArgs,
-  READ_ONLY, RULES, rulePath, SECRET_DENY, summarize, TOOL_PREFIX, WAIT,
+  buildRun, connected, CONNECTOR, folderErrors, initErrors, logEntry, OTHER_CONNECTORS, otherServers, parseArgs,
+  READ_ONLY, RULES, rulePath, SECRET_DENY, sendList, STAGE, stageFiles, summarize, TOOL_PREFIX, WAIT,
 } from "../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs";
 
 // A home folder and a file system the tests control: nothing here depends on the machine.
@@ -11,7 +11,7 @@ import {
 // folder the script refuses (a worktree under .claude, for one).
 const HOME = resolve("/home/tester");
 const OUT = join(HOME, "work", "out");
-const PHOTOS = join(HOME, "work", "photos");
+const PHOTO = join(HOME, "work", "photos", "1598.jpg");
 const checks = { home: HOME, exists: () => false };
 const run = (...extra) => parseArgs(["run", "--brief", "b.md", "--out", OUT, ...extra], checks);
 const after = (argv, flag) => argv[argv.indexOf(flag) + 1];
@@ -39,6 +39,23 @@ test("a tool that is not read-only needs the owner's yes, on one line", () => {
   assert.ok(!READ_ONLY.some((n) => /^asset_|upload|create|kit|embed|boards_|activate|license|expand|apply|remove|select|export|import|share|invite/.test(n)));
 });
 
+test("a file goes along only when the owner's yes names it", () => {
+  const yes = "Yes, upload 1598.jpg and 1601.jpg to my Adobe account for masks, 0 credits";
+  const other = join(HOME, "work", "photos", "1601.jpg");
+  assert.deepEqual(run("--allow", "image_select_subject", "--owner-yes", yes, "--send", PHOTO, "--send", other).send, [
+    { from: PHOTO, name: "1598.jpg" }, { from: other, name: "1601.jpg" },
+  ]);
+  // No yes, a yes that names another file, or a yes for some of the files only.
+  assert.throws(() => run("--allow", "font_search", "--send", PHOTO), /--owner-yes .* is required/);
+  assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", "Yes, go ahead", "--send", PHOTO), /does not name 1598\.jpg/);
+  assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", "Yes, upload 1598.jpg", "--send", PHOTO, "--send", other), /does not name 1601\.jpg/);
+  // The name is compared, not the folder: two files with one name cannot both be meant.
+  assert.throws(() => sendList([PHOTO, join(HOME, "elsewhere", "1598.JPG")], yes), /two files with the name/);
+  assert.throws(() => sendList([join(HOME, ".ssh", "id_rsa.pub")], "Yes, send id_rsa.pub"), /inside \.ssh/);
+  assert.throws(() => sendList([join(HOME, "work", "a;b.jpg")], "Yes, send a;b.jpg"), /plain file name/);
+  assert.deepEqual(sendList([], undefined), []);
+});
+
 test("arguments are checked before anything runs", () => {
   assert.throws(() => parseArgs(["go"], checks), /"run" or "tools"/);
   assert.throws(() => parseArgs(["run", "--out", OUT, "--allow", "font_search"], checks), /--brief/);
@@ -47,89 +64,110 @@ test("arguments are checked before anything runs", () => {
   assert.throws(() => run("--allow", "font_search", "--budget", "50"), /--budget/);
   assert.throws(() => run("--allow", "font_search", "--budget", "x"), /--budget/);
   assert.throws(() => run("--allow", "font_search", "--minutes", "0"), /--minutes/);
-  assert.throws(() => run("--allow", "font_search", "--nope", "1"), /unknown option/);
   assert.throws(() => run("--allow"), /needs a value/);
+  // There is no way to give the child a shell or another folder to read.
+  for (const flag of ["--bash", "--add-dir", "--tools", "--nope"]) assert.throws(() => run("--allow", "font_search", flag, "curl *"), /unknown option/, flag);
 });
 
-test("the only shell rule is curl with plain arguments", () => {
-  for (const rule of ["curl * ; rm -rf x", "curl *) Bash(*", "curl $(x)", "curl a && b", "curl x | y", "`x`", "sh -c *", "node *", "powershell -Command *", "bash", "curly *", "curl\t*"]) {
-    assert.throws(() => run("--allow", "font_search", "--bash", rule), /the only shell rule/, rule);
-  }
-  assert.deepEqual(run("--allow", "font_search", "--bash", "curl *", "--bash", "curl -sS -o *").bash, ["curl *", "curl -sS -o *"]);
-});
-
-test('"tools" takes no tool, shell, folder or yes', () => {
-  for (const extra of [["--allow", "font_search"], ["--bash", "curl *"], ["--add-dir", PHOTOS], ["--owner-yes", ""], ["--owner-yes", "yes"], ["--brief", "b.md"]]) {
+test('"tools" takes no tool, file or yes', () => {
+  for (const extra of [["--allow", "font_search"], ["--send", PHOTO], ["--owner-yes", ""], ["--owner-yes", "yes"], ["--brief", "b.md"]]) {
     assert.throws(() => parseArgs(["tools", "--out", OUT, ...extra], checks), /"tools" takes/, extra.join(" "));
   }
-  const { argv, prompt } = buildRun(parseArgs(["tools", "--out", OUT], checks));
+  const { argv, prompt, system } = buildRun(parseArgs(["tools", "--out", OUT], checks));
   assert.ok(!argv.some((a) => a.startsWith(TOOL_PREFIX)));
   assert.ok(prompt.startsWith(WAIT));
   assert.match(prompt, /Then call no Adobe tool\./);
+  assert.match(system, /No file is staged for this run: send no file to Adobe\./);
 });
 
-test("the output folder and the extra folders cannot be a root, the home folder or a secret place", () => {
-  const home = HOME;
-  const at = (folder, more = {}) => folderErrors(folder, { home, exists: () => false, ...more });
-  assert.deepEqual(at(join(home, "jobs", "13", "out")), []);
+test("the output folder cannot be a root, the home folder, a secret place or a project root", () => {
+  const at = (folder, more = {}) => folderErrors(folder, { home: HOME, exists: () => false, ...more });
+  assert.deepEqual(at(join(HOME, "jobs", "13", "out")), []);
   assert.match(at(resolve("/"))[0], /root/);
-  assert.match(at(home)[0], /home folder/);
+  assert.match(at(HOME)[0], /home folder/);
   assert.match(at(resolve("/home"))[0], /home folder/);
-  for (const secret of [".claude", ".codex", ".secrets", ".ssh", ".stack-atlas"]) assert.match(at(join(home, secret, "x"))[0], new RegExp(`inside \\${secret}`), secret);
-  assert.match(at(join(home, "project", ".claude", "out"))[0], /inside \.claude/);
-  // A repository or project root is refused as the folder the child may write in, not as one it may read.
-  const repo = join(home, "repo");
+  for (const secret of [".claude", ".codex", ".secrets", ".ssh", ".stack-atlas"]) assert.match(at(join(HOME, secret, "x"))[0], new RegExp(`inside \\${secret}`), secret);
+  assert.match(at(join(HOME, "project", ".claude", "out"))[0], /inside \.claude/);
+  const repo = join(HOME, "repo");
   const exists = (p) => p === join(repo, ".git");
-  assert.match(at(repo, { exists, writable: true })[0], /repository or project root/);
-  assert.deepEqual(at(repo, { exists }), []);
-  assert.throws(() => parseArgs(["run", "--brief", "b", "--out", home, "--allow", "font_search"], checks), /--out .*home folder/);
-  assert.throws(() => run("--allow", "font_search", "--add-dir", join(home, ".ssh")), /--add-dir .*inside \.ssh/);
-  assert.throws(() => parseArgs(["tools", "--out", repo], { home, exists }), /repository or project root/);
+  assert.match(at(repo, { exists })[0], /repository or project root/);
+  assert.throws(() => parseArgs(["run", "--brief", "b", "--out", HOME, "--allow", "font_search"], checks), /--out .*home folder/);
+  assert.throws(() => parseArgs(["tools", "--out", repo], { home: HOME, exists }), /repository or project root/);
 });
 
 test("the child session is limited on its command line and by its settings", () => {
-  const o = run("--allow", "font_search,image_select_subject", "--owner-yes", "Yes, 1598.jpg to my account, masks, 0 credits", "--bash", "curl *", "--add-dir", PHOTOS);
-  const { argv, settings, prompt, system, out, control, paths } = buildRun(o, "Make a subject mask of 1598.jpg.\n");
+  const yes = "Yes, 1598.jpg to my account, masks, 0 credits";
+  const o = run("--allow", "font_search,image_select_subject", "--owner-yes", yes, "--send", PHOTO);
+  const debug = join(HOME, "tmp", "debug.log");
+  const { argv, settings, prompt, system, out, control, stage, paths } = buildRun(o, "Make a subject mask of 1598.jpg.\n", debug);
   assert.equal(argv[0], "-p");
   assert.equal(after(argv, "--setting-sources"), "");
   assert.equal(after(argv, "--permission-mode"), "dontAsk");
   assert.equal(after(argv, "--max-budget-usd"), "3");
   assert.equal(after(argv, "--input-format"), "stream-json");
   assert.ok(argv.includes("--no-session-persistence"));
-  assert.equal(after(argv, "--tools"), "Read,Glob,Grep,ToolSearch,Write,Bash");
+  // No shell, in any run.
+  assert.equal(after(argv, "--tools"), "Read,Glob,Grep,ToolSearch,Write");
+  assert.ok(!argv.some((a) => /Bash|PowerShell/.test(a) && a !== system));
   const allowed = argv.slice(argv.indexOf("--allowedTools") + 1, argv.indexOf("--permission-mode"));
   assert.deepEqual(allowed, [
-    "ToolSearch", `Read(${rulePath(out)}/**)`, `Read(${rulePath(PHOTOS)}/**)`, `Edit(${rulePath(out)}/**)`,
-    `${TOOL_PREFIX}font_search`, `${TOOL_PREFIX}image_select_subject`, "Bash(curl *)",
+    "ToolSearch", `Read(${rulePath(out)}/**)`, `Edit(${rulePath(out)}/**)`,
+    `${TOOL_PREFIX}font_search`, `${TOOL_PREFIX}image_select_subject`,
   ]);
-  // No rule allows a read, search or write everywhere.
-  for (const open of ["Read", "Glob", "Grep", "Write", "Edit", "Bash"]) assert.ok(!allowed.includes(open), open);
-  assert.equal(after(argv, "--add-dir"), PHOTOS);
+  // No rule allows a read, search or write outside --out, and nothing adds a folder.
+  for (const open of ["Read", "Glob", "Grep", "Write", "Edit"]) assert.ok(!allowed.includes(open), open);
+  assert.ok(!argv.includes("--add-dir"));
   for (const never of ["bypassPermissions", "--dangerously-skip-permissions", "acceptEdits"]) assert.ok(!argv.includes(never));
   assert.deepEqual(settings.deniedMcpServers.map((s) => s.serverName), [...OTHER_CONNECTORS]);
   assert.ok(!OTHER_CONNECTORS.includes(CONNECTOR));
   assert.deepEqual(settings.permissions.deny, [...SECRET_DENY]);
   for (const rule of ["Read(~/.claude/**)", "Read(//**/.claude/**)", "Read(~/.codex/**)", "Read(~/.secrets/**)", "Read(~/.ssh/**)", "Read(~/.stack-atlas/**)", "Read(//**/.env)"]) assert.ok(SECRET_DENY.includes(rule), rule);
-  // The script's own files are beside the folder the child may write in, not inside it.
+  // The script's own files are beside the folder the child may use, not inside it.
   assert.equal(control, `${out}.adobe-session`);
-  for (const p of Object.values(paths)) assert.ok(p.startsWith(control) && !p.startsWith(join(out, "x").slice(0, -1)), p);
+  assert.equal(stage, join(out, STAGE));
+  for (const p of [paths.settings, paths.log]) assert.ok(p.startsWith(`${control}`) && !p.startsWith(join(out, "x").slice(0, -1)), p);
+  assert.equal(paths.debug, debug);
   assert.equal(after(argv, "--settings"), paths.settings);
-  assert.equal(after(argv, "--debug-file"), paths.debug);
-  // The yes is in the system prompt, which the brief cannot write to; the brief is in the prompt.
+  assert.equal(after(argv, "--debug-file"), debug);
+  // The yes and the list of files are in the system prompt, which the brief cannot write to.
   assert.equal(after(argv, "--append-system-prompt"), system);
   assert.ok(system.startsWith(RULES));
-  assert.ok(system.endsWith('The owner\'s yes, quoted by the chat that started this run: "Yes, 1598.jpg to my account, masks, 0 credits"'));
+  assert.ok(system.includes(`Files you may send to Adobe, all in ${stage}: 1598.jpg. No other file.`));
+  assert.ok(system.endsWith(`The owner's yes, quoted by the chat that started this run: "${yes}"`));
   assert.ok(!prompt.includes("Yes, 1598.jpg"));
   assert.match(RULES, /The owner's yes is quoted in this system prompt and nowhere else/);
+  assert.match(RULES, /You have no shell/);
   assert.ok(prompt.startsWith(WAIT));
   assert.match(prompt, /Make a subject mask of 1598\.jpg\.$/);
 });
 
-test("without a shell rule the child has no shell, and without a yes the system prompt says so", () => {
-  const { argv, system } = buildRun(run("--allow", "font_search"), "Find Lato.");
-  assert.equal(after(argv, "--tools"), "Read,Glob,Grep,ToolSearch,Write");
-  assert.ok(!argv.some((a) => a.startsWith("Bash")));
-  assert.match(system, /The owner has given no yes for this run: send no file to Adobe and leave nothing in the Adobe account\.$/);
+test("without a yes the system prompt says that nothing is sent and nothing is left", () => {
+  const { system } = buildRun(run("--allow", "font_search"), "Find Lato.");
+  assert.match(system, /No file is staged for this run: send no file to Adobe\./);
+  assert.match(system, /The owner has given no yes for this run: leave nothing in the Adobe account\.$/);
+});
+
+test("the staging folder holds exactly the files of this run", () => {
+  const stage = join(OUT, STAGE);
+  const made = [];
+  const fs = (present) => ({
+    existsSync: () => present.length > 0,
+    readdirSync: () => present,
+    statSync: (p) => ({ isFile: () => !p.endsWith("folder") }),
+    mkdirSync: (p) => made.push(`mkdir ${p}`),
+    copyFileSync: (from, to) => made.push(`${from} -> ${to}`),
+  });
+  const send = [{ from: PHOTO, name: "1598.jpg" }];
+  stageFiles(stage, send, fs([]));
+  assert.deepEqual(made, [`mkdir ${stage}`, `${PHOTO} -> ${join(stage, "1598.jpg")}`]);
+  // The same file again is fine; a file from an earlier run is not, with or without files to send.
+  stageFiles(stage, send, fs(["1598.JPG"]));
+  assert.throws(() => stageFiles(stage, send, fs(["1598.jpg", "1601.jpg"])), /holds files this run does not send \(1601\.jpg\)/);
+  assert.throws(() => stageFiles(stage, [], fs(["1601.jpg"])), /holds files this run does not send/);
+  assert.throws(() => stageFiles(stage, [{ from: join(HOME, "folder"), name: "folder" }], fs([])), /not a file/);
+  made.length = 0;
+  stageFiles(stage, [], fs([]));
+  assert.deepEqual(made, []);
 });
 
 test("a file rule path is in the form Claude Code matches", () => {
@@ -153,6 +191,27 @@ test("the prompt waits for the connector, and any other server ends the run", ()
   assert.deepEqual(initErrors({ mcp_servers: [] }), []);
   assert.match(initErrors({ mcp_servers: [{ name: CONNECTOR }, { name: "claude.ai Notion" }] })[0], /another server: claude\.ai Notion/);
   assert.match(initErrors({ mcp_servers: [], plugins: [{ name: "superpowers" }] })[0], /user plugin/);
+});
+
+test("the log keeps tool names, denials and cost, and no content", () => {
+  const secret = "SECRET-CONTENT";
+  const events = [
+    { type: "system", subtype: "init", cwd: secret, tools: [secret], mcp_servers: [{ name: secret }] },
+    { type: "assistant", message: { content: [{ type: "text", text: secret }, { type: "tool_use", name: `${TOOL_PREFIX}font_search`, input: { user_query: secret } }] } },
+    { type: "user", message: { content: [{ type: "tool_result", content: secret }, { type: "tool_result", is_error: true, content: secret }] } },
+    { type: "result", subtype: "success", is_error: false, result: secret, num_turns: 3, total_cost_usd: 0.2, permission_denials: [{ tool_name: "Read", tool_input: { file_path: secret } }] },
+    { type: secret.toLowerCase() },
+    null,
+  ];
+  const entries = events.map(logEntry);
+  assert.deepEqual(entries.slice(0, 4), [
+    { type: "system", subtype: "init" },
+    { type: "assistant", tools: [`${TOOL_PREFIX}font_search`] },
+    { type: "user", toolResults: 2, toolErrors: 1 },
+    { type: "result", subtype: "success", isError: false, turns: 3, costUsd: 0.2, denied: ["Read"] },
+  ]);
+  assert.deepEqual(entries[5], { type: "unknown" });
+  assert.ok(!JSON.stringify(entries.slice(0, 4)).includes(secret));
 });
 
 test("the summary reports calls, denials and failure as they are", () => {

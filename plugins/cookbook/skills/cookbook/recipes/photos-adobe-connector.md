@@ -1,9 +1,9 @@
 # Photos: the Adobe for creativity connector
 
 - For editing a real photo beyond sharpening: masks (subject, skin, a named object such as a
-  window), cut-out, straighten, lens blur and generative expand; it also has Adobe Fonts tools.
-  **Adobe for creativity** is Adobe's official hosted connector, reached through the owner's
-  claude.ai account. None of its tools sharpens or upscales: that stays on [photos.md](photos.md).
+  window), cut-out, straighten, lens blur, generative expand; also Adobe Fonts tools. **Adobe
+  for creativity** is Adobe's hosted connector, reached through the owner's claude.ai account.
+  None of its tools sharpens or upscales: that stays on [photos.md](photos.md).
 - Proved on a business website's photos (10 November 2026): 26 masks (subject on every photo,
   skin on 8, window on 6) under a yellow-cast fix on 14 photos, straighten kept on 21 of 29, lens
   blur on 14, expand on 4 and one cut-out. The owner, 15 November 2026: "it really helped alot
@@ -11,19 +11,20 @@
 - An ordinary session does not load it (109 tool names; that was why it was switched off). A
   task brings it in with a child session that loads this connector and nothing else:
   `node <skill folder>/scripts/adobe-session.mjs run --brief <file> --out <folder> --allow
-  <tool>,<tool>`. Name each Adobe tool the piece needs; `tools --out <folder>` lists them. How
-  it is limited: [setup](photos-adobe-connector-setup.md). No photo has gone through the script
-  yet: the first job used the connector in an ordinary session.
+  <tool>,<tool> [--send <file>]`. Name each Adobe tool the piece needs; `tools --out <folder>`
+  lists them. The child sees no file but the ones named with `--send`, and has no shell:
+  [setup](photos-adobe-connector-setup.md). No photo has gone through the script yet: the
+  first job used the connector in an ordinary session.
 - The upload gate and the personal-data check in [photos.md](photos.md) hold here unchanged: no
   photo or film goes to Adobe without the owner's yes in the current chat naming the files, the
-  Adobe account, the operation and the credits. Pass that yes word for word as `--owner-yes`;
-  the script refuses every tool that is not read-only without it. The script cannot know what
-  the owner said: quoting a yes the owner did not give in this chat is breaking the gate. An
-  upload stays in the owner's Creative Cloud (the first job left a folder of 29 photos): say so
-  in the request.
+  Adobe account, the operation and the credits. Pass that yes word for word as `--owner-yes`:
+  the script refuses a tool that is not read-only without it, and a file the yes does not
+  name. It cannot know what the owner said: quoting a yes the owner did not give in this chat
+  is breaking the gate. An upload stays in the owner's Creative Cloud (the first job left a
+  folder of 29 photos): say so in the request.
 - Ask first, each time, for anything that stays in the owner's Adobe account: a Creative Cloud
   folder or file, a font kit or web project (`font_create_kit` and `get_fontkit_embed_url` both
-  create one, whatever their descriptions say), a Firefly board, a Stock licence. Say afterwards
+  create one), a Firefly board, a Stock licence. Say afterwards
   what was left there; removing it is the owner's call.
 - Money: the connector's calls have shown no charge, which is unsettled, not zero. Read the
   Firefly credit balance (the account menu at firefly.adobe.com) before and after a batch and

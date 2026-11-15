@@ -15,10 +15,11 @@ grab it if you need it?". This pull request is that, and it removes no stop.
   the stops, what the first job taught), `recipes/photos-adobe-connector-setup.md` (the child
   session and its limits) and `recipes/photos-adobe-connector-dead-ends.md`.
 - `scripts/adobe-session.mjs` in the skill's folder starts a child session that loads only this
-  connector, in `dontAsk` mode: it reads the folders it is given, writes in its output folder
-  and calls the Adobe tools named on its command line; tests in
-  `scripts/adobe-session.test.mjs`. A tool that is not read-only needs `--owner-yes`. The upload
-  gate of `recipes/photos.md` is unchanged and is repeated on the new page.
+  connector, in `dontAsk` mode and without a shell: it reads and writes its output folder and
+  calls the Adobe tools named on its command line; tests in `scripts/adobe-session.test.mjs`.
+  The only files of the owner's it can see are the ones named with `--send`, and each must be
+  named in `--owner-yes`; a tool that is not read-only needs that yes too. The upload gate of
+  `recipes/photos.md` is unchanged and is repeated on the new page.
 - On this PC nothing in `~/.claude/settings.json` changed: `claude.ai Adobe` and the plugin's
   server stay denied and the plugin stays disabled, so an ordinary session loads no Adobe tool.
   The connector stays connected in claude.ai: the owner is asked **not** to disconnect it (the
@@ -26,12 +27,13 @@ grab it if you need it?". This pull request is that, and it removes no stop.
 
 **Proved** (15 November 2026, Claude Code 2.1.325). One run of the script with three read-only
 tools: `adobe_mandatory_init`, `get_account_type` and `font_search` answered; no file was sent
-and nothing was created. Limits measured in three more runs. Denied: an Adobe tool not on the
-list; a read, Glob and Grep outside the folders given; `~/.claude/settings.json`; the script's
-own settings file; a write outside the output folder; and (with `--bash "curl *"`) a `mkdir`
-and a redirect. `whoami` and `node --version` ran, because Claude Code runs commands it reads
-as read-only once a shell is on. An ordinary headless session on the same day listed no Adobe
-server, tool, skill or plugin.
+and nothing was created. Limits measured with the final script: denied were an Adobe tool not
+on the list, a read and a Glob outside the output folder, the script's own settings file and
+a write outside the output folder; a shell command had no tool to run in. A one-minute time
+limit stopped a long run with exit code 3. An earlier version that could be given a shell rule
+for curl also ran `whoami` and `node --version` (Claude Code runs commands it reads as
+read-only once a shell is on), which is one reason the shell is gone. An ordinary headless
+session on the same day listed no Adobe server, tool, skill or plugin.
 
 **Reviewed before the first push** by a `cookbook:review` subagent that did not build it. Nine
 findings, all fixed in the second commit: the child could read every file the user can (the
@@ -40,6 +42,13 @@ settings and log, the check for other servers never saw one (it now reads the de
 the run), any command was accepted as a shell rule (now curl only), the output folder was
 not checked, the yes sat in the same prompt as the brief (now in the system prompt), and the
 child process was not ended cleanly.
+
+**Review round 1** (of three). The AI review: a folder given for reading could contain the
+script's own log folder. GitHub's security review: nothing in code tied the owner's yes to
+the files that could be sent, and the log kept every event word for word. Fixed in the third
+commit by taking away rather than adding: no extra folders and no shell at all, the files to
+send are named with `--send` and must each be named in the yes, and the log keeps tool names,
+denials and cost only. The session's debug log is deleted after it has been read.
 
 **Dead ends.**
 - A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
@@ -58,8 +67,9 @@ child process was not ended cleanly.
   holds the prompt back until the debug log shows the connector connected.
 
 **Not proved.** A photo run through the script: no upload was made in this job, because none
-was asked for. The first real one needs the owner's yes, and will show which asset tools and
-which `--bash` rule an upload takes. The connector's calls still report no cost: unsettled.
+was asked for. The first real one needs the owner's yes, and will show which asset tools an
+upload takes and which steps (a PUT to a presigned link, a download) the calling chat does
+itself, since the child has no shell. The connector's calls still report no cost: unsettled.
 
 **Evidence and copies.** `~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-connector-on-demand/`
 (the proof run, the limit runs, the three connection logs of the dead end, the tool names). The
@@ -71,7 +81,7 @@ removed agent file and sign-in folder, and a copy of the unchanged settings file
 
 **Outstanding.**
 - The first photo run through the script: it needs the owner's yes, and will show which asset
-  tools and which shell rule an upload takes.
+  tools an upload takes and which steps the calling chat does itself.
 - The Adobe plan started as a 7-day trial on 10 November 2026 and turns paid on day 7. Keeping
   or cancelling it is the owner's decision.
 - The merge commit and the release check of this pull request go into the next Cookbook pull
