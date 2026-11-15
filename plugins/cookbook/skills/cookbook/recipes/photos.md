@@ -1,4 +1,4 @@
-# Photos (Adobe Firefly and Adobe for creativity)
+# Photos (Adobe Firefly)
 
 - For real photos that are soft from camera shake or missed focus and must look sharp, such as the photos of a
   business website. **Adobe Firefly** is an owner-approved exception, chosen on 10 November 2026 ("Yes,
@@ -34,5 +34,3 @@
 - The plan started as a 7-day free trial on 10 November 2026 and turns into a paid plan on day 7 unless it
   is cancelled. Keeping or cancelling it is the owner's decision; Claude never starts, buys or cancels a
   plan.
-
-More: [the Adobe for creativity connector](photos-adobe-connector.md).

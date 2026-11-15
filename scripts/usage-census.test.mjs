@@ -22,7 +22,7 @@ test("counts each tool_use id and each slash message once, inside the window", a
       assistant(recent, [call("t1", "Skill", { skill: "superpowers:writing-plans" })]),
       assistant(recent, [call("t1", "Skill", { skill: "superpowers:writing-plans" })]), // same id again
       assistant(recent, [call("t2", "Skill", { skill: "/stop-slop" })]),
-      assistant(old, [call("t3", "Skill", { skill: "be-ambitious" })]), // outside the window
+      assistant(old, [call("t3", "Skill", { skill: "doctor-plus" })]), // outside the window
       assistant(recent, [call("t4", "mcp__a__b", {})]),
       user("u1", recent, "<command-name>/sa-build</command-name>\n<command-args>x</command-args>"),
       user("u1", recent, "<command-name>/sa-build</command-name>"), // same message again
@@ -49,12 +49,12 @@ test("skips malformed lines, reads array content, and names folders from a root 
     mkdirSync(join(root, "proj-b"));
     const lines = [
       '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t9","name":"mcp__x__y"', // cut off
-      user("u3", recent, [{ type: "text", text: "<command-name>/cache-tax</command-name>" }]),
+      user("u3", recent, [{ type: "text", text: "<command-name>/context-mode</command-name>" }]),
       assistant(recent, [call("t5", "mcp__a__b", {})]),
     ];
     writeFileSync(join(root, "proj-b", "s.jsonl"), lines.join("\n") + "\n");
     const r = await census({ root: root + "/", days: 30, now });
-    assert.deepEqual([...r.slash], [["cache-tax", 1]]);
+    assert.deepEqual([...r.slash], [["context-mode", 1]]);
     assert.equal(r.servers.has("x"), false);
     assert.deepEqual([...r.servers.get("a").projects], ["proj-b"]);
   } finally {

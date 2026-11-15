@@ -15,22 +15,21 @@ export const CHANGELOG_HOSTS = Object.freeze([
 ]);
 
 // Tool ids whose installed version moves without us: Claude Code updates itself,
-// and the app syncs the Wix and Adobe for creativity plugins. A part of such a
+// and the app syncs the Wix plugin. A part of such a
 // tool is reported when its installed version changes, never as "still behind".
-// Today only Claude Code has a readable version: Wix and Adobe are hosted parts with
-// no feed, so they are never reported; their ids take effect only if they get one.
+// Today only Claude Code has a readable version: Wix is a hosted part with
+// no feed, so it is never reported; its id takes effect only if it gets one.
 // `check.mjs` requires each id to name a tool in the catalog.
 export const SELF_UPDATING_TOOLS = Object.freeze([
   "1c9ccea9-8ebf-4d9c-9512-38e6890ea5b6", // Claude Code
   "wix", // Wix
-  "adobe-for-creativity", // Adobe for creativity
 ]);
 
 // The only commands the daily update check ever runs to read an installed
 // version, keyed by part key "<tool id>/<part name>". argv[0] is a bare command
 // name that must be a real executable on PATH (no .cmd or .bat shim: it is run
 // without a shell), or `{share}/<relative path>` for a binary under ~/.local/share.
-// `{share}`, `{bin}` (~/.local/bin) and `{lib}` (this plugin's scripts/lib) are the only substitutions, allowed only in the tables of this file, never in the catalog. When the capture is a 40-character hex id it is a commit, not a version. `pattern` is matched against stdout; group 1 is the version.
+// `{share}`, `{bin}` (~/.local/bin) and `{lib}` (this plugin's scripts/lib) are the only substitutions, allowed only in the tables of this file, never in the catalog. `pattern` is matched against stdout; group 1 is the version.
 // Each pattern was written against the real output on the owner's PC on
 // 13 November 2026. A part whose command cannot run here has no entry.
 export const VERSION_COMMANDS = Object.freeze({
@@ -46,8 +45,6 @@ export const VERSION_COMMANDS = Object.freeze({
   "boat/cli": { argv: ["{share}/boat/boat.exe", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
   "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli.exe", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
   "google-workspace-cli/cli": { argv: ["{share}/gws/gws.exe", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },
-  // The upstream commit the local patches sit on (HEAD is local patch commits on top of it).
-  "jev-router/pinned": { argv: ["git", "-C", "{share}/jev-router", "merge-base", "HEAD", "origin/HEAD"], pattern: /^([0-9a-f]{40})\s*$/m },
 });
 
 // The only commands the daily update check runs to prove a service answers,
@@ -66,7 +63,7 @@ export const VERSION_COMMANDS = Object.freeze({
 // on 14 November 2026.
 // No result keeps account detail: only the service name and, on a failure, a
 // scrubbed error of at most 200 characters. Jev has no entry: `connect.mjs` reads
-// the router's decision log instead. `claude mcp list` is run once by `connect.mjs`
+// the Jev compaction plugin's decision log instead. `claude mcp list` is run once by `connect.mjs`
 // for every hosted part that names a server.
 const shim = (name, ...args) => ["cmd.exe", "/d", "/c", `{bin}/${name}.cmd`, ...args];
 export const CONNECTION_CHECKS = Object.freeze({

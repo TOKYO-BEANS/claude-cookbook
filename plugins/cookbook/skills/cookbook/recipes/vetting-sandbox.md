@@ -3,7 +3,7 @@
 A fixed step of every vetting: outside code is run once in a boat sandbox before it is installed,
 after the three scanners (`connecting.md`). It is a step, not a choice, because a use left to
 judgement did not happen. It holds for every install and update recipe here and in the
-`stack-updates` skill, also where a recipe's own steps do not repeat it (Jev Router, REA).
+`stack-updates` skill, also where a recipe's own steps do not repeat it (REA).
 
 The scripts are in the `stack-updates` skill's `scripts/vetting` folder, with tests in the
 repository's `scripts/vetting.test.mjs`. The files of the same names in
