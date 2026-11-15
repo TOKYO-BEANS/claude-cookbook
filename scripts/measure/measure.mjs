@@ -1,0 +1,216 @@
+// Measures a fixed set of tasks (tasks.json) on two "sides" of the setup, each a folder:
+//   <sides>/<name>/work/CLAUDE.md   the global rules file of that side, loaded as the folder's own
+//   <sides>/<name>/plugin/          the Cookbook plugin of that side (`git archive <commit> plugins/cookbook`)
+// Every run is headless on the Claude plan login, read-only (Skill, Read, Glob, Grep), with no MCP
+// servers, no user settings or plugins, a spend cap per run and a stop for the whole batch.
+//   node scripts/measure/measure.mjs run --sides <dir> --out <dir> [--side before] [--task T1-who-calls] [--reps 2]
+//   node scripts/measure/measure.mjs report --out <dir>
+// The rules for scripted runs are in recipes/scripted-runs.md.
+import { spawn } from "node:child_process";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const TOOLS = Object.freeze(["Skill", "Read", "Glob", "Grep"]);
+export const DEFAULTS = Object.freeze({ model: "claude-opus-5-5", cap: 1, limit: 30, reps: 2 });
+
+export const loadTasks = (file = fileURLToPath(new URL("./tasks.json", import.meta.url))) => JSON.parse(readFileSync(file, "utf8"));
+
+export const buildPrompt = (task, suffix) =>
+  [task.job, "", suffix, ...Object.entries(task.fields).map(([name, hint]) => `${name}: <${hint}>`)].join("\n");
+
+// The answer is lines of "FIELD: value"; a value runs until the next field line.
+export function parseAnswer(text, fieldNames) {
+  const out = {};
+  let current = null;
+  for (const raw of String(text ?? "").replace(/\r/g, "").split("\n")) {
+    const m = /^[\s*`>-]*([A-Z][A-Z0-9_]+)[*`]*\s*:\s*(.*)$/.exec(raw);
+    if (m && fieldNames.includes(m[1])) {
+      current = m[1];
+      out[current] = m[2].replace(/^[*\s]+/, "");
+    } else if (current) out[current] += `\n${raw}`;
+  }
+  return out;
+}
+
+export function scoreAnswer(task, text) {
+  const answer = parseAnswer(text, Object.keys(task.fields));
+  const checks = task.checks.map((c) => ({ label: c.label, field: c.field, pass: new RegExp(c.pattern, "i").test(answer[c.field] ?? "") }));
+  return { passed: checks.filter((c) => c.pass).length, of: checks.length, checks, answer };
+}
+
+const context = (u) => (u?.input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0) + (u?.cache_read_input_tokens ?? 0);
+const short = (p) => String(p ?? "").replace(/\\/g, "/").split("/").slice(-2).join("/");
+
+// One run's stream-json lines, reduced to the numbers and the tool calls.
+export function summarizeStream(lines, model) {
+  const s = { calls: 0, firstContext: 0, peakContext: 0, toolCalls: [], init: null, result: null };
+  const seen = new Set();
+  for (const line of lines) {
+    let e;
+    try { e = JSON.parse(line); } catch { continue; }
+    if (e.type === "system" && e.subtype === "init") {
+      s.init = { tools: e.tools ?? [], plugins: (e.plugins ?? []).map((p) => p.name), skills: (e.skills ?? []).length, mcp: (e.mcp_servers ?? []).map((m) => m.name), apiKeySource: e.apiKeySource, model: e.model, version: e.claude_code_version };
+    } else if (e.type === "assistant" && e.message) {
+      for (const b of e.message.content ?? []) {
+        if (b.type === "tool_use") s.toolCalls.push(b.name === "Read" ? `Read ${short(b.input?.file_path)}` : b.name === "Skill" ? `Skill ${b.input?.skill}` : `${b.name} ${b.input?.pattern ?? ""}`.trim());
+      }
+      if (seen.has(e.message.id) || (model && e.message.model !== model) || e.parent_tool_use_id) continue;
+      seen.add(e.message.id);
+      const c = context(e.message.usage);
+      s.calls += 1;
+      if (s.calls === 1) s.firstContext = c;
+      s.peakContext = Math.max(s.peakContext, c);
+    } else if (e.type === "result") {
+      s.result = {
+        subtype: e.subtype, isError: Boolean(e.is_error), text: e.result ?? "", turns: e.num_turns, durationMs: e.duration_ms, costUsd: e.total_cost_usd ?? 0,
+        input: e.usage?.input_tokens ?? 0, cacheWrite: e.usage?.cache_creation_input_tokens ?? 0, cacheRead: e.usage?.cache_read_input_tokens ?? 0, output: e.usage?.output_tokens ?? 0,
+        denials: (e.permission_denials ?? []).length, models: Object.keys(e.modelUsage ?? {}),
+      };
+    }
+  }
+  return s;
+}
+
+const readRule = (dir) => `Read(//${resolve(dir).replace(/\\/g, "/").replace(/^([A-Za-z]):/, (_, d) => d.toLowerCase())}/**)`;
+
+// `--setting-sources project` does not keep the user's own CLAUDE.md out (probed on Claude Code
+// 2.1.325: both files were loaded), so the run's settings exclude it by path. The side's file in
+// `work/` is then the only rules file; the `probe` command proves it before a batch.
+export const userRulesFile = () => join(homedir(), ".claude", "CLAUDE.md");
+export const runSettings = () => {
+  const p = userRulesFile();
+  return { claudeMdExcludes: [p, p.replaceAll("\\", "/")] };
+};
+
+export function claudeArgs({ sideDir, emptyMcp, settings, model, cap }) {
+  return [
+    "-p", "--model", model, "--output-format", "stream-json", "--verbose",
+    "--tools", ...TOOLS,
+    "--permission-mode", "dontAsk", "--allowedTools", "Skill", readRule(sideDir), "Glob", "Grep",
+    "--strict-mcp-config", "--mcp-config", emptyMcp,
+    "--setting-sources", "project", "--settings", settings,
+    "--plugin-dir", join(sideDir, "plugin"),
+    "--max-budget-usd", String(cap),
+    "--no-session-persistence",
+  ];
+}
+
+function runClaude(args, cwd, prompt) {
+  return new Promise((done, fail) => {
+    const child = spawn("claude", args, { cwd, env: { ...process.env, CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1", CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1" }, stdio: ["pipe", "pipe", "pipe"] });
+    let out = "", err = "";
+    child.stdout.on("data", (d) => { out += d; });
+    child.stderr.on("data", (d) => { err += d; });
+    child.on("error", fail);
+    child.on("close", (code) => done({ code, out, err }));
+    child.stdin.end(prompt);
+  });
+}
+
+const readSummaries = (outDir) => {
+  const file = join(outDir, "summary.jsonl");
+  return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
+};
+
+async function run(opts) {
+  const { suffix, tasks, set } = loadTasks();
+  const sidesDir = resolve(opts.sides), outDir = resolve(opts.out);
+  mkdirSync(outDir, { recursive: true });
+  const emptyMcp = join(outDir, "empty-mcp.json");
+  writeFileSync(emptyMcp, '{"mcpServers":{}}\n');
+  const settings = join(outDir, "run-settings.json");
+  writeFileSync(settings, `${JSON.stringify(runSettings())}\n`);
+  const sides = opts.side ? [opts.side] : ["before", "after"];
+  const chosen = opts.task ? tasks.filter((t) => t.id === opts.task) : tasks;
+  if (!chosen.length) throw new Error(`no task ${opts.task}`);
+  const model = opts.model ?? DEFAULTS.model, cap = Number(opts.cap ?? DEFAULTS.cap), limit = Number(opts.limit ?? DEFAULTS.limit), reps = Number(opts.reps ?? DEFAULTS.reps);
+  for (let rep = 1; rep <= reps; rep += 1) {
+    for (const task of chosen) {
+      for (const side of sides) {
+        const done = readSummaries(outDir);
+        if (done.some((r) => r.task === task.id && r.side === side && r.rep === rep)) continue;
+        const spent = done.reduce((a, r) => a + r.costUsd, 0);
+        if (spent + cap > limit) { console.log(`STOPPED: ${spent.toFixed(2)} spent, the next run could pass the limit of ${limit}`); return; }
+        const sideDir = join(sidesDir, side);
+        const name = `${side}-${task.id}-r${rep}`;
+        const started = Date.now();
+        const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap }), join(sideDir, "work"), buildPrompt(task, suffix));
+        const wallMs = Date.now() - started;
+        writeFileSync(join(outDir, `${name}.jsonl`), res.out);
+        if (res.err.trim()) writeFileSync(join(outDir, `${name}.err`), res.err);
+        const s = summarizeStream(res.out.split("\n"), model);
+        if (!s.result) { console.log(`${name}: NO RESULT (exit ${res.code}); see ${name}.err`); return; }
+        const score = scoreAnswer(task, s.result.text);
+        const row = { set, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), apiKeySource: s.init?.apiKeySource, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
+        delete row.text;
+        appendFileSync(join(outDir, "summary.jsonl"), `${JSON.stringify(row)}\n`);
+        console.log(`${name}: ${score.passed}/${score.of} | in ${row.input + row.cacheWrite + row.cacheRead} out ${row.output} | turns ${row.turns} | ${(row.durationMs / 1000).toFixed(1)}s | USD ${row.costUsd.toFixed(3)} | ${row.toolCalls.join(", ") || "no tools"}${row.failed.length ? ` | missed: ${row.failed.join("; ")}` : ""}${row.denials ? ` | ${row.denials} denied` : ""}`);
+      }
+    }
+  }
+}
+
+// One cheap run per side that names the rules files it was given. A side is clean when it names
+// one file, the one in its own `work/` folder.
+export const PROBE_PROMPT = "Use no tools. Look only at the instruction files given to you in this session. Answer with exactly two lines.\nFILES: <how many separate instruction files (CLAUDE.md) you were given, then the full path of each>\nFIRST_HEADING: <the first top-level heading of each, copied character for character>";
+
+async function probe(opts) {
+  const sidesDir = resolve(opts.sides), outDir = resolve(opts.out);
+  mkdirSync(outDir, { recursive: true });
+  const emptyMcp = join(outDir, "empty-mcp.json"), settings = join(outDir, "run-settings.json");
+  writeFileSync(emptyMcp, '{"mcpServers":{}}\n');
+  writeFileSync(settings, `${JSON.stringify(runSettings())}\n`);
+  const model = opts.model ?? DEFAULTS.model;
+  for (const side of ["before", "after"]) {
+    const sideDir = join(sidesDir, side);
+    const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap: Number(opts.cap ?? DEFAULTS.cap) }), join(sideDir, "work"), PROBE_PROMPT);
+    writeFileSync(join(outDir, `probe-${side}.jsonl`), res.out);
+    const s = summarizeStream(res.out.split("\n"), model);
+    console.log(`== ${side}: first request ${s.firstContext} tokens, USD ${(s.result?.costUsd ?? 0).toFixed(3)}, key source ${s.init?.apiKeySource}\n${s.result?.text ?? res.err}`);
+  }
+}
+
+const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+const totalIn = (r) => r.input + r.cacheWrite + r.cacheRead;
+
+// Per task and side: the mean over the repeats, and the range of the total input.
+export function aggregate(rows) {
+  const out = [];
+  for (const task of [...new Set(rows.map((r) => r.task))]) {
+    for (const side of ["before", "after"]) {
+      const rs = rows.filter((r) => r.task === task && r.side === side);
+      if (!rs.length) continue;
+      const ins = rs.map(totalIn);
+      out.push({ task, group: rs[0].group, side, runs: rs.length, input: Math.round(mean(ins)), inputMin: Math.min(...ins), inputMax: Math.max(...ins), firstContext: Math.round(mean(rs.map((r) => r.firstContext))), peakContext: Math.round(mean(rs.map((r) => r.peakContext))), output: Math.round(mean(rs.map((r) => r.output))), turns: mean(rs.map((r) => r.turns)), seconds: mean(rs.map((r) => r.durationMs)) / 1000, costUsd: mean(rs.map((r) => r.costUsd)), passed: rs.reduce((a, r) => a + r.passed, 0), of: rs.reduce((a, r) => a + r.of, 0) });
+    }
+  }
+  return out;
+}
+
+function report(opts) {
+  const rows = readSummaries(resolve(opts.out));
+  const agg = aggregate(rows);
+  const lines = ["| Task | Side | Input tokens (range) | First request | Largest request | Output | Turns | Seconds | USD | Checks |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"];
+  for (const a of agg) lines.push(`| ${a.task} | ${a.side} | ${a.input} (${a.inputMin} to ${a.inputMax}) | ${a.firstContext} | ${a.peakContext} | ${a.output} | ${a.turns.toFixed(1)} | ${a.seconds.toFixed(1)} | ${a.costUsd.toFixed(3)} | ${a.passed}/${a.of} |`);
+  for (const side of ["before", "after"]) {
+    const rs = rows.filter((r) => r.side === side);
+    if (!rs.length) continue;
+    lines.push(`| ALL (sum of ${rs.length} runs) | ${side} | ${rs.reduce((a, r) => a + totalIn(r), 0)} | | | ${rs.reduce((a, r) => a + r.output, 0)} | ${rs.reduce((a, r) => a + r.turns, 0)} | ${(rs.reduce((a, r) => a + r.durationMs, 0) / 1000).toFixed(0)} | ${rs.reduce((a, r) => a + r.costUsd, 0).toFixed(2)} | ${rs.reduce((a, r) => a + r.passed, 0)}/${rs.reduce((a, r) => a + r.of, 0)} |`);
+  }
+  const text = `${lines.join("\n")}\n`;
+  writeFileSync(join(resolve(opts.out), "report.md"), text);
+  writeFileSync(join(resolve(opts.out), "report.json"), `${JSON.stringify(agg, null, 2)}\n`);
+  console.log(text);
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [cmd, ...rest] = process.argv.slice(2);
+  const opts = {};
+  for (let i = 0; i < rest.length; i += 2) opts[rest[i].replace(/^--/, "")] = rest[i + 1];
+  if (cmd === "run" && opts.sides && opts.out) await run(opts);
+  else if (cmd === "probe" && opts.sides && opts.out) await probe(opts);
+  else if (cmd === "report" && opts.out) report(opts);
+  else { console.error("usage: measure.mjs probe --sides <dir> --out <dir> | run --sides <dir> --out <dir> [--side before|after] [--task <id>] [--reps 2] [--cap 1] [--limit 30] [--model <id>] | report --out <dir>"); process.exit(2); }
+}
