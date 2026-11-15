@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolve } from "node:path";
-import { aggregate, buildPrompt, claudeArgs, foreignRows, loadTasks, parseAnswer, parseFlags, parseLimits, probeVerdict, readRule, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
+import { aggregate, buildPrompt, claudeArgs, foreignRows, loadTasks, parseAnswer, parseFlags, parseLimits, probeVerdict, readRule, runProblem, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
 
 const { tasks, suffix, set } = loadTasks();
 const task = (id) => tasks.find((t) => t.id === id);
@@ -123,6 +123,26 @@ test("the probe's verdict: clean only with one rules file, the side's own, and n
   assert.equal(probeVerdict(`FILES: 1 — ${user}`, side, user).clean, false);
   assert.equal(probeVerdict(undefined, side, user).clean, false);
   assert.equal(probeVerdict("no such line", side, user).clean, false);
+});
+
+test("a run that ended in an error, has no result or no counted request is not scored", () => {
+  const stream = (result) => summarizeStream([
+    { type: "system", subtype: "init", model: "m" },
+    { type: "assistant", message: { id: "a", model: "m", usage: { input_tokens: 5 }, content: [] } },
+    ...(result ? [{ type: "result", ...result }] : []),
+  ].map((e) => JSON.stringify(e)), "m");
+  assert.equal(runProblem(stream({ subtype: "success", result: "TOOL: x" }), 0, "m"), null);
+  assert.match(runProblem(stream({ subtype: "error_max_budget_usd", is_error: true }), 0, "m"), /error_max_budget_usd/);
+  assert.match(runProblem(stream({ subtype: "error_during_execution" }), 1, "m"), /error_during_execution/);
+  assert.match(runProblem(stream({ subtype: "success", is_error: true }), 0, "m"), /ended as/);
+  assert.match(runProblem(stream(null), 3, "m"), /no result \(exit 3\)/);
+  assert.match(runProblem(summarizeStream([JSON.stringify({ type: "result", subtype: "success" })], "m"), 0, "m"), /no request/);
+});
+
+test("a side is before or after, nothing else", () => {
+  assert.equal(parseLimits({ side: "before" }).cap, 1);
+  assert.equal(parseLimits({ side: "after" }).cap, 1);
+  for (const side of ["Before", "both", "", "old"]) assert.throws(() => parseLimits({ side }), /--side must be before or after/);
 });
 
 test("the report takes the mean of the repeats and keeps the range of the input", () => {
