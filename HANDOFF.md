@@ -74,6 +74,14 @@ network share is refused, the log copies no free text at all, a run that called 
 tool exits 1, and a debug log that cannot be deleted is reported. Measured in that pass: a
 `CLAUDE.md` above the output folder does not reach the child.
 
+**After round 3 was pushed**, GitHub's security review commented twice more on the round 2
+commit. The system prompt, with the owner's yes and the file names, was on the child's
+command line, where another user of the PC could list it: it is now in a file in the
+temporary folder that is deleted after the run. And a general yes covered any tool that is
+not read-only: the yes must now name the Adobe account, the credits and the operation of
+each such tool (`mask`, `upload`, `expand` and so on; a tool the script does not know by an
+operation word must be named itself), beside each file. Fixed in the sixth commit.
+
 **Dead ends.**
 - A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
   works (proved with Graphify: the subagent called it, the main session listed no server), but

@@ -18,14 +18,14 @@
 - The upload gate and the personal-data check in [photos.md](photos.md) hold here unchanged: no
   photo or film goes to Adobe without the owner's yes in the current chat naming the files, the
   Adobe account, the operation and the credits. Pass that yes word for word as `--owner-yes`:
-  the script refuses a tool that is not read-only without it, and a file the yes does not
-  name. It cannot know what the owner said: quoting a yes the owner did not give in this chat
-  is breaking the gate. An upload stays in the owner's Creative Cloud (the first job left a
-  folder of 29 photos): say so in the request.
+  the script refuses a yes that does not name each file, the Adobe account, the operation and
+  the credits, so ask with a yes that says all four. It cannot know what the owner said:
+  quoting a yes the owner did not give in this chat is breaking the gate. An upload stays in
+  the owner's Creative Cloud: say so in the request.
 - Ask first, each time, for anything that stays in the owner's Adobe account: a Creative Cloud
   folder or file, a font kit or web project (`font_create_kit` and `get_fontkit_embed_url` both
-  create one), a Firefly board, a Stock licence. Say afterwards
-  what was left there; removing it is the owner's call.
+  create one), a Firefly board, a Stock licence. Say afterwards what was left there; removing
+  it is the owner's call.
 - Money: the connector's calls have shown no charge, which is unsettled, not zero. Read the
   Firefly credit balance (the account menu at firefly.adobe.com) before and after a batch and
   give it a stop ("stop if it falls by more than N"). The Adobe plan is the owner's to keep or

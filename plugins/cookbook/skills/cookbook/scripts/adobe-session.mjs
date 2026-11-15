@@ -37,8 +37,12 @@
 //   would have given it.
 // - The script's settings and log are beside --out (<out>.adobe-session), where the child
 //   can neither read nor write. The log holds the allow list, the model, tool names,
-//   denials, counts and cost: no prompt, no file name, no argument and no result text. The
-//   session's debug log is read for the servers that connected and then deleted.
+//   denials, counts and cost: no prompt, no file name, no argument and no result text.
+// - The system prompt (with the owner's yes and the file names) reaches the child in a
+//   file, not on its command line. That file and the session's debug log are in a
+//   temporary folder that is deleted after the run.
+// - The owner's yes is checked for what the gate asks of it: the Adobe account, the
+//   credits, each file by name, and the operation of every tool that is not read-only.
 // The script cannot know what the owner said. It checks that a yes is there and names the
 // files; whether the owner gave it is the recipe's gate (recipes/photos.md).
 import { spawn } from "node:child_process";
@@ -148,6 +152,35 @@ export function namedIn(ownerYes, name) {
   return false;
 }
 
+// The words by which a yes names the operation of a tool that is not read-only. A tool that
+// is not here is named by its own name: an unknown tool is never covered by a general yes.
+export const OPERATIONS = Object.freeze({
+  asset_add_file: ["upload"], asset_initialize_file_upload: ["upload"], asset_finalize_file_upload: ["upload"],
+  asset_get_presigned_urls: ["upload"], asset_add_file_check_status: ["upload"],
+  image_select_subject: ["mask"], image_select_by_prompt: ["mask"], image_invert_selection: ["mask"],
+  image_remove_background: ["cut-out", "cutout", "cut out", "background"],
+  image_auto_straighten: ["straighten"], image_apply_lens_blur: ["blur"], image_generative_expand: ["expand"],
+  image_crop_and_resize: ["crop", "resize"], image_crop_to_bounds: ["crop"],
+  font_create_kit: ["font kit", "web project"], get_fontkit_embed_url: ["font kit", "web project"],
+});
+
+// What a yes must hold, beside the file names (`sendList`), for a run that sends a file or
+// calls a tool that is not read-only: the account, the credits and each operation. Returns
+// what is missing. It reads words; whether the owner said them is the caller's gate.
+export function yesGaps(ownerYes, gatedTools) {
+  const said = String(ownerYes ?? "").toLowerCase();
+  const gaps = [];
+  if (!said.includes("adobe")) gaps.push("the Adobe account");
+  if (!said.includes("credit")) gaps.push("the credits it may spend");
+  for (const tool of gatedTools) {
+    const words = OPERATIONS[tool] ?? [];
+    if (![tool.toLowerCase(), ...words].some((w) => said.includes(w))) {
+      gaps.push(`the operation of ${tool} (${[...words, tool].map((w) => `'${w}'`).join(" or ")})`);
+    }
+  }
+  return gaps;
+}
+
 // The files a run may send: [{ from, name }]. Each is named in the owner's yes by its file
 // name, which is what the gate asks of a yes. Throws a usage error otherwise.
 export function sendList(files, ownerYes) {
@@ -208,6 +241,10 @@ export function parseArgs(argv, checks = {}) {
   const gated = o.allow.filter((n) => !READ_ONLY.includes(n));
   if (gated.length && !o.ownerYes) throw fail(`${gated.join(", ")}: not read-only, so --owner-yes "<the owner's words from this chat>" is required`);
   o.send = sendList(files, o.ownerYes);
+  if (gated.length || o.send.length) {
+    const gaps = yesGaps(o.ownerYes, gated);
+    if (gaps.length) throw fail(`--owner-yes does not name ${gaps.join("; ")}. A yes names the files, the Adobe account, the operation and the credits`);
+  }
   return o;
 }
 
@@ -220,13 +257,13 @@ export function rulePath(folder) {
   return drive ? `//${drive[1].toLowerCase()}/${drive[2]}` : `/${p.replace(/^\/+/, "/")}`;
 }
 
-export function buildRun(o, briefText = "", debugPath = join(tmpdir(), "adobe-session-debug.log")) {
+export function buildRun(o, briefText = "", temp = join(tmpdir(), "adobe-session-dry-run")) {
   const out = resolve(o.out);
   const control = `${out}.adobe-session`;
   const stage = join(out, STAGE);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const results = join(out, `run-${stamp}`);
-  const paths = { settings: join(control, `${stamp}.settings.json`), log: join(control, `${stamp}.jsonl`), debug: debugPath };
+  const paths = { settings: join(control, `${stamp}.settings.json`), log: join(control, `${stamp}.jsonl`), debug: join(temp, "debug.log"), system: join(temp, "system.txt") };
   const settings = {
     deniedMcpServers: OTHER_CONNECTORS.map((serverName) => ({ serverName })),
     permissions: { deny: [...SECRET_DENY] },
@@ -258,7 +295,7 @@ export function buildRun(o, briefText = "", debugPath = join(tmpdir(), "adobe-se
     "--tools", "Read,Glob,Grep,ToolSearch,Write", "--allowedTools", ...allowed,
     "--permission-mode", "dontAsk", "--max-budget-usd", String(o.budget),
     "--no-session-persistence", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-    "--debug-file", paths.debug, "--append-system-prompt", system,
+    "--debug-file", paths.debug, "--append-system-prompt-file", paths.system,
   ];
   return { argv, settings, paths, prompt, system, out, control, stage, results };
 }
@@ -394,19 +431,19 @@ async function main(argv) {
   const brief = o.command === "run" ? readBrief(o.brief) : "";
   if (o.dryRun) {
     const run = buildRun(o, brief);
-    console.log(JSON.stringify({ argv: run.argv, settings: run.settings, prompt: run.prompt }, null, 2));
+    console.log(JSON.stringify({ argv: run.argv, settings: run.settings, system: run.system, prompt: run.prompt }, null, 2));
     return 0;
   }
   o.out = realOut(o.out);
   const debugDir = mkdtempSync(join(tmpdir(), "adobe-session-"));
   let code;
   try {
-    code = await session(o, buildRun(o, brief, join(debugDir, "debug.log")));
+    code = await session(o, buildRun(o, brief, debugDir));
   } finally {
     try {
       rmSync(debugDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
     } catch {
-      console.log(`the session's debug log could not be deleted: ${debugDir}. Delete it by hand: it can hold the prompt`);
+      console.log(`the session's temporary folder could not be deleted: ${debugDir}. Delete it by hand: it holds the system prompt and the debug log`);
       code = 3;
     }
   }
@@ -420,6 +457,10 @@ async function session(o, run) {
   mkdirSync(run.control, { recursive: true });
   for (const made of [run.stage, run.results, run.control]) plainFolder(made);
   writeFileSync(run.paths.settings, `${JSON.stringify(run.settings, null, 2)}\n`);
+  // The system prompt holds the owner's yes and the names of the files. It goes to the child
+  // in a file only this user can read, in the temporary folder that is deleted after the
+  // run, not on a command line that other users of the PC could list.
+  writeFileSync(run.paths.system, run.system, { mode: 0o600 });
   const log = createWriteStream(run.paths.log);
   const note = (entry) => log.write(`${JSON.stringify(entry)}\n`);
   note({ type: "adobe-session", command: o.command, allow: o.allow, filesSent: o.send.length, ownerYesGiven: Boolean(o.ownerYes), model: o.model });
