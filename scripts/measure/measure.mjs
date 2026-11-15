@@ -51,7 +51,7 @@ export function summarizeStream(lines, model) {
     let e;
     try { e = JSON.parse(line); } catch { continue; }
     if (e.type === "system" && e.subtype === "init") {
-      s.init = { tools: e.tools ?? [], plugins: (e.plugins ?? []).map((p) => p.name), skills: (e.skills ?? []).length, mcp: (e.mcp_servers ?? []).map((m) => m.name), apiKeySource: e.apiKeySource, model: e.model, version: e.claude_code_version };
+      s.init = { tools: e.tools ?? [], plugins: (e.plugins ?? []).map((p) => p.name), skills: (e.skills ?? []).length, mcp: (e.mcp_servers ?? []).map((m) => m.name), login: e.apiKeySource === "none" ? "plan" : "key", model: e.model, version: e.claude_code_version };
     } else if (e.type === "assistant" && e.message) {
       for (const b of e.message.content ?? []) {
         if (b.type === "tool_use") s.toolCalls.push(b.name === "Read" ? `Read ${short(b.input?.file_path)}` : b.name === "Skill" ? `Skill ${b.input?.skill}` : `${b.name} ${b.input?.pattern ?? ""}`.trim());
@@ -144,7 +144,7 @@ async function run(opts) {
         const s = summarizeStream(res.out.split("\n"), model);
         if (!s.result) { console.log(`${name}: NO RESULT (exit ${res.code}); see ${name}.err`); return; }
         const score = scoreAnswer(task, s.result.text);
-        const row = { set, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), apiKeySource: s.init?.apiKeySource, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
+        const row = { set, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
         delete row.text;
         appendFileSync(join(outDir, "summary.jsonl"), `${JSON.stringify(row)}\n`);
         console.log(`${name}: ${score.passed}/${score.of} | in ${row.input + row.cacheWrite + row.cacheRead} out ${row.output} | turns ${row.turns} | ${(row.durationMs / 1000).toFixed(1)}s | USD ${row.costUsd.toFixed(3)} | ${row.toolCalls.join(", ") || "no tools"}${row.failed.length ? ` | missed: ${row.failed.join("; ")}` : ""}${row.denials ? ` | ${row.denials} denied` : ""}`);
@@ -169,7 +169,7 @@ async function probe(opts) {
     const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap: Number(opts.cap ?? DEFAULTS.cap) }), join(sideDir, "work"), PROBE_PROMPT);
     writeFileSync(join(outDir, `probe-${side}.jsonl`), res.out);
     const s = summarizeStream(res.out.split("\n"), model);
-    console.log(`== ${side}: first request ${s.firstContext} tokens, USD ${(s.result?.costUsd ?? 0).toFixed(3)}, key source ${s.init?.apiKeySource}\n${s.result?.text ?? res.err}`);
+    console.log(`== ${side}: first request ${s.firstContext} tokens, USD ${(s.result?.costUsd ?? 0).toFixed(3)}, login ${s.init?.login}\n${s.result?.text ?? res.err}`);
   }
 }
 

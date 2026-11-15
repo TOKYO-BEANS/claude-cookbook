@@ -75,7 +75,7 @@ test("a stream is reduced to its requests, tool calls and result; a message spli
   assert.deepEqual([s.calls, s.firstContext, s.peakContext], [2, 112, 512]);
   assert.deepEqual(s.toolCalls, ["Skill cookbook:cookbook", "Read recipes/wix.md"]);
   assert.deepEqual([s.result.costUsd, s.result.cacheWrite, s.result.output, s.result.denials], [0.5, 600, 7, 0]);
-  assert.equal(s.init.apiKeySource, "none");
+  assert.equal(s.init.login, "plan");
 });
 
 test("the report takes the mean of the repeats and keeps the range of the input", () => {
