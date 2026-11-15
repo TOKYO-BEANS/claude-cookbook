@@ -1,6 +1,83 @@
 # Handoff
 
+## 15 November 2026 (later): the global rules file is cut to the hard rules (0.30.1)
+
+**On this PC.** The owner's global `~/.claude/CLAUDE.md` now holds the machine's hard rules,
+"How we work", the sign-in rule and one paragraph that points at the Cookbook. It went from
+36,078 to 9,201 bytes. Measured in a new headless session with no tools and no MCP servers,
+two runs each side, within 5 tokens: the session's input fell from 18,233 to 8,709 tokens, so
+9,524 fewer at every session start. In the measure the job was set in (about 4.24 bytes a
+token) that is about 8,500 to about 2,200; the model's own count is higher on both sides.
+
+**Nothing was loosened.** Every stop and every "never" of the old file is listed with where it
+lives now in `placement.md` (evidence folder below): kept in the global file, held by
+`SKILL.md`, or held by a recipe page. The stops the old file had in three places (an access
+change, an uninstall, an update that is not routine, a security finding, a first publication, a
+message to other people) are now in its one stop list. The owner answered three questions
+before the file was saved (15 November 2026):
+- "May they leave the global file?" about the rules held only on a recipe page: "Yes, a page
+  counts".
+- "Update the installed plugin to the newest version after the pull request is merged and
+  verified?": "Yes, update it".
+- "Correct the page to match the global rule?" about `recipes/sign-ins.md`, which said Claude
+  never adds a vault item, against the owner's global rule of 14 November 2026 ("Claude can
+  add to the vault itself ... That covers a login for a user made for Claude. A login that is
+  the owner's own ... is still added by the owner, never typed in chat."): "Yes, correct the
+  page". The page now says that and no more: Claude still never edits or moves an item.
+
+**In this pull request.**
+- Four rules that were in the global file and on no page are on their page: `firecrawl.md`
+  (an agent run's `effort`, a monitor's schedule and monthly estimate), `code-navigation.md`
+  (`set_workspace`, `remember`, private data), `research.md` (Parallel's keys, monitors and
+  private uploads) and `judgement.md` (community demos, literal fallbacks). Each adds a limit.
+- The map row "From a finished change to a merged pull request" is decided: `sa-release` with
+  `merge: true`. The comparison with tstack's `full-send` (Stack-Atlas's `HANDOFF.md`,
+  15 November 2026) is summed up in `options/ship.md`; what it taught is in
+  `recipes/ci-releases.md`: three review rounds set up front, a pull request the AI review can
+  read whole, and one reviewer that did not build a large change.
+
+**Proved with a new session** (headless, the Skill tool only): it listed the five headings of
+the new global file, quoted the credential and Sophos rules, counted seven stops, and loaded
+the `cookbook` skill from the installed 0.30.0. The installed plugin was 0.29.0 when this job
+started and 0.30.0 when that session ran; this job did not update it.
+
+**Memory indexes.** Stack-Atlas's went from 18,165 to 5,635 bytes and Probiz's from 16,117 to
+4,624: one short line per memory. Where a long line named something its memory file did not,
+the line's text was added to that file (13 files). Removed, because wrong or about something
+that is gone: `jev-router-setup`, `claude-code-addons`, `claude-compaction-plugins` (it said
+Jev compaction runs in Stack-Atlas only), `deploy-approval-timing`, `fixer-paid-checks` and
+`autonomous-queue-oct21` in Stack-Atlas's memory, and `control-room-handoff-pause-gate` (Magic
+Workflow). Three indexes that held prose and no memory are empty.
+
+**Evidence and copies.** `~/.local/share/claude-cookbook/evidence/2026-11-15-global-claude-md-diet/`
+(`placement.md`, the new file, the four measurement runs and the proof session's answer). A
+copy of the old global file, every memory folder as it was and the removed memories:
+`~/.local/share/backups/claude-md-diet-20261115/`.
+
+**Outstanding.**
+- Once the plugin with this pull request is installed: the last section of the global file
+  ("Job rules the Cookbook does not hold yet", four lines) is deleted, because the pages hold
+  them then. Done in the same chat when the install is verified.
+- The merge commit and the release check of this pull request go into the next Cookbook pull
+  request.
+- Dead end: the Claude API's token counter could not be used for the measurement. The
+  `anthropic-api` key needs a workspace ID on every request and none is recorded on this PC.
+  The owner's to clear: the ID from the Console's Workspaces page, saved as `workspace_id` in
+  `~/.local/share/claude-api/caption/config.json`.
+- The owner disconnects "Adobe for creativity" in claude.ai (Settings, Connectors).
+- The Proton Pass CLI was reported signed out by the daily update check on the morning of
+  15 November; not rechecked in this job.
+- The visual-check row is "being built": its recipe arrives from the chat that builds the
+  visual check for live sites. That chat is the next job; after it, a fixed set of tasks
+  measured before and after.
+- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
+  ranges.
+- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+
 ## 15 November 2026: the tools without a job are removed (0.30.0)
+
+**Merged and verified.** Pull request #52, merge commit `8f464e0`. The release check of that
+commit is `verified` (execution 1512).
 
 **The owner's decision this follows.** After the map was merged, the owner was asked one
 question that listed every installed tool the map gives no job, with a recommendation per
@@ -44,28 +121,13 @@ line and `ctx_resume` answered in it; `npm test` passes.
 `add-ons-mods.md`, `jev-router.md`, `jev-router-terminal.md` and `photos-adobe-connector.md`
 are deleted. The map row "The model for a session or a piece" has no fallback and no page.
 
-**Outstanding.**
-- The owner disconnects "Adobe for creativity" in claude.ai (Settings, Connectors). Until
-  then it is blocked in terminal and T3 Code sessions only: `claude.ai Adobe` is in
-  `deniedMcpServers` in `~/.claude/settings.json` and the synced plugin is disabled (a new
-  T3-style session on 15 November listed it as blocked). The desktop app ignores
-  `deniedMcpServers` for the connectors it delivers, so a desktop session still loads its
-  tools. The upload gate in `recipes/photos.md` covers them: no photo goes to Adobe by any
-  route without the owner's yes.
-- The Proton Pass CLI is signed out (the daily update check has reported it broken since the
-  morning of 15 November, before this job).
-- The merge commit and the release check of this pull request go into the next Cookbook pull
-  request, as below for #51.
-- The visual-check row is "being built": its recipe arrives from the chat that builds the
-  visual check for live sites.
-- The tstack comparison, then one edit of the map row and `options/ship.md`.
-- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
-  ranges.
-- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
-- `recipes/sign-ins.md` still says Claude never adds an item to the vault; the owner's global
-  rules (14 November 2026) say Claude adds logins for users made for Claude. Changing the
-  page widens what a rule file allows, so it needs the owner's yes: left unchanged here.
-- Next job: the diet of the global `CLAUDE.md` and of the memory index.
+**Outstanding** is carried in the entry above. Still true from this entry: "Adobe for
+creativity" is blocked in terminal and T3 Code sessions only (`claude.ai Adobe` is in
+`deniedMcpServers` in `~/.claude/settings.json` and the synced plugin is disabled; a new
+headless `claude -p` session on 15 November listed it as blocked). The desktop app ignores
+`deniedMcpServers` for the connectors it delivers, so a desktop session still loads its
+tools. The upload gate in `recipes/photos.md` covers them: no photo goes to Adobe by any
+route without the owner's yes.
 
 ## 15 November 2026: the map and the recipe split (0.29.0)
 

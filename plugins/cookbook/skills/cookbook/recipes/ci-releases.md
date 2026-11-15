@@ -18,8 +18,10 @@
   `stack-atlas-onboard` skill), which merges when green.
 - **From a finished change to a merged pull request:** `sa-release` with `merge: true`, and T3's
   `watch_pull_request` to wait for checks. The watch also wakes for older commits: check the head
-  commit on each wake-up. Whether tstack's `full-send` takes over this step is decided after the
-  comparison run; its result goes in Stack-Atlas's `HANDOFF.md`.
+  commit on each wake-up. Set the number of review rounds before the first push (three); what
+  is left after the last round goes into a follow-up pull request. Keep a pull request small
+  enough for the AI review to read whole, and give a large change one reviewer that did not
+  build it (`sa-review` or a `cookbook:review` subagent).
 - **After a merge or deploy**, in the same task: Release Maintenance (commit, checks, deployed
   version, health), recorded with the release verifier, before calling it done. A failed release
   check: roll back to the last good version first, then fix through a new pull request.
