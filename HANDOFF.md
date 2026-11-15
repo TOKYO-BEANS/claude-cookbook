@@ -46,8 +46,12 @@ are deleted. The map row "The model for a session or a piece" has no fallback an
 
 **Outstanding.**
 - The owner disconnects "Adobe for creativity" in claude.ai (Settings, Connectors). Until
-  then it is blocked on this PC only: `claude.ai Adobe` is in `deniedMcpServers` in
-  `~/.claude/settings.json` and the synced plugin is disabled.
+  then it is blocked in terminal and T3 Code sessions only: `claude.ai Adobe` is in
+  `deniedMcpServers` in `~/.claude/settings.json` and the synced plugin is disabled (a new
+  T3-style session on 15 November listed it as blocked). The desktop app ignores
+  `deniedMcpServers` for the connectors it delivers, so a desktop session still loads its
+  tools. The upload gate in `recipes/photos.md` covers them: no photo goes to Adobe by any
+  route without the owner's yes.
 - The Proton Pass CLI is signed out (the daily update check has reported it broken since the
   morning of 15 November, before this job).
 - The merge commit and the release check of this pull request go into the next Cookbook pull
