@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolve } from "node:path";
-import { aggregate, buildPrompt, claudeArgs, foreignRows, loadTasks, parseAnswer, parseFlags, parseLimits, readRule, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
+import { aggregate, buildPrompt, claudeArgs, foreignRows, loadTasks, parseAnswer, parseFlags, parseLimits, probeVerdict, readRule, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
 
 const { tasks, suffix, set } = loadTasks();
 const task = (id) => tasks.find((t) => t.id === id);
@@ -112,6 +112,17 @@ test("requests are counted for the model the session reports, also when --model 
   const s = summarizeStream(lines, "x");
   assert.deepEqual([s.calls, s.firstContext, s.peakContext], [1, 7, 7]);
   assert.equal(summarizeStream(lines.slice(1), "x").calls, 0);
+});
+
+test("the probe's verdict: clean only with one rules file, the side's own, and not the user's", () => {
+  const side = "C:\\e\\arms\\before", user = "C:\\Users\\u\\.claude\\CLAUDE.md";
+  const own = "C:\\e\\arms\\before\\work\\CLAUDE.md";
+  assert.deepEqual(probeVerdict(`FILES: 1 — ${own}\nFIRST_HEADING: # x`, side, user), { files: 1, own: true, user: false, clean: true });
+  assert.equal(probeVerdict(`**FILES:** 1 - ${own.replaceAll("\\", "/")}`, side, user).clean, true);
+  assert.deepEqual(probeVerdict(`FILES: 2 — ${user}; ${own}`, side, user), { files: 2, own: true, user: true, clean: false });
+  assert.equal(probeVerdict(`FILES: 1 — ${user}`, side, user).clean, false);
+  assert.equal(probeVerdict(undefined, side, user).clean, false);
+  assert.equal(probeVerdict("no such line", side, user).clean, false);
 });
 
 test("the report takes the mean of the repeats and keeps the range of the input", () => {

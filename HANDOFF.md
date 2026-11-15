@@ -68,7 +68,7 @@ into `<side>/plugin`, the rules file as `<side>/work/CLAUDE.md`), then `probe`, 
 `report`. Results compare within one task set only: a changed task or check takes a new
 `set` name.
 
-**Verification.** `npm test` passes (340 tests, 13 of them in `scripts/measure.test.mjs`; the run's allow list is one of the things they pin). The 48
+**Verification.** `npm test` passes (341 tests, 14 of them in `scripts/measure.test.mjs`; the run's allow list is one of the things they pin). The 48
 stored answers were scored again from the raw streams after the last change to the parser:
 152 of 152, none moved.
 
@@ -97,6 +97,13 @@ folder, so the numbers above stand. The fix: only `Skill` and the one Read rule 
 One capped run proved it (`checks/scope-probe-read-rule-only.jsonl` in the evidence
 folder): Grep, Glob and Read worked inside the side folder and all three were refused
 outside it. The rule is on `recipes/scripted-runs-rules.md`.
+
+**And one from GitHub's security review on that commit:** `probe` printed the model's answer,
+which holds the paths and first headings of the rules files. It now prints a verdict it
+works out itself (clean or not, how many rules files, whether the side's own and the user's
+own are among them) and ends with exit code 1 when a side is not clean; the answer is shown
+only with `--transcripts yes`. The line `run` prints per run names the tools without their
+arguments; the pages read stay in `summary.jsonl`.
 
 **Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`
 (`RESULT.md`, `runs/report.md`, `runs/summary.jsonl`, one stream per run, both sides in

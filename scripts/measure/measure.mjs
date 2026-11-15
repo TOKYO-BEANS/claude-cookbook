@@ -193,15 +193,27 @@ async function run(opts) {
         const row = { set, model, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
         delete row.text;
         appendFileSync(join(outDir, "summary.jsonl"), `${JSON.stringify(row)}\n`);
-        console.log(`${name}: ${score.passed}/${score.of} | in ${row.input + row.cacheWrite + row.cacheRead} out ${row.output} | turns ${row.turns} | ${(row.durationMs / 1000).toFixed(1)}s | USD ${row.costUsd.toFixed(3)} | ${row.toolCalls.join(", ") || "no tools"}${row.failed.length ? ` | missed: ${row.failed.join("; ")}` : ""}${row.denials ? ` | ${row.denials} denied` : ""}`);
+        console.log(`${name}: ${score.passed}/${score.of} | in ${row.input + row.cacheWrite + row.cacheRead} out ${row.output} | turns ${row.turns} | ${(row.durationMs / 1000).toFixed(1)}s | USD ${row.costUsd.toFixed(3)} | ${[...new Set(row.toolCalls.map((t) => t.split(" ")[0]))].join(", ") || "no tools"}${row.failed.length ? ` | missed: ${row.failed.join("; ")}` : ""}${row.denials ? ` | ${row.denials} denied` : ""}`);
       }
     }
   }
 }
 
 // One cheap run per side that names the rules files it was given. A side is clean when it names
-// one file, the one in its own `work/` folder.
+// one file, the one in its own `work/` folder. The command prints that verdict, not the answer, and
+// ends with exit code 1 when a side is not clean.
 export const PROBE_PROMPT = "Use no tools. Look only at the instruction files given to you in this session. Answer with exactly two lines.\nFILES: <how many separate instruction files (CLAUDE.md) you were given, then the full path of each>\nFIRST_HEADING: <the first top-level heading of each, copied character for character>";
+
+// What the probe's answer says, worked out here so the answer itself (paths, headings) need not be
+// printed: how many rules files it names, whether the side's own is among them, and the user's.
+export function probeVerdict(text, sideDir, userFile = userRulesFile()) {
+  const norm = (p) => String(p ?? "").replaceAll("\\", "/").toLowerCase();
+  const answer = norm(text);
+  const files = Number(/^[^a-z0-9]*files[^0-9\n]*(\d+)/m.exec(answer)?.[1] ?? NaN);
+  const own = answer.includes(norm(join(sideDir, "work", "CLAUDE.md")));
+  const user = answer.includes(norm(userFile));
+  return { files, own, user, clean: files === 1 && own && !user };
+}
 
 async function probe(opts) {
   const sidesDir = resolve(opts.sides), outDir = resolve(opts.out);
@@ -215,7 +227,10 @@ async function probe(opts) {
     const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap }), join(sideDir, "work"), PROBE_PROMPT);
     if (transcripts) writeFileSync(join(outDir, `probe-${side}.jsonl`), res.out);
     const s = summarizeStream(res.out.split("\n"), model);
-    console.log(`== ${side}: first request ${s.firstContext} tokens, USD ${(s.result?.costUsd ?? 0).toFixed(3)}, login ${s.init?.login}\n${s.result?.text ?? res.err}`);
+    const v = probeVerdict(s.result?.text, sideDir);
+    console.log(`${side}: ${v.clean ? "CLEAN" : "NOT CLEAN"} | rules files named: ${Number.isNaN(v.files) ? "unreadable" : v.files} | the side's own: ${v.own ? "yes" : "no"} | the user's own: ${v.user ? "yes" : "no"} | first request ${s.firstContext} tokens | USD ${(s.result?.costUsd ?? 0).toFixed(3)} | login ${s.init?.login ?? "unknown"}`);
+    if (transcripts) console.log(s.result?.text ?? res.err);
+    if (!v.clean) process.exitCode = 1;
   }
 }
 
