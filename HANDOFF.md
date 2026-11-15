@@ -91,7 +91,12 @@ it to know when the connector has connected and which servers did. It is in a te
 folder that only this user can read and that is deleted whatever happens. The review
 proposed a brief in a fixed JSON form and a debug log only on request; neither was done, for
 those reasons. A fourth push went beyond the three rounds, so it and those two answers were
-put to the owner (see the pull request).
+put to the owner with the question tool (15 November 2026). Asked: push a fourth round,
+accept the two answered comments (the brief in a fixed JSON form; the debug log off by
+default) as they are, and merge when every check passes and the new review has nothing high
+or medium, with any new security comment coming back to the owner first? Answer: "Push,
+accept those two, merge (Recommended)". That acceptance covers those two comments and no
+other finding.
 
 **Dead ends.**
 - A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
