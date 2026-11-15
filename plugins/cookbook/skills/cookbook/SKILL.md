@@ -90,11 +90,16 @@ fallback and say that you did.
 
 - The owner sets the outcome; Claude plans, builds, merges, deploys and verifies without asking
   for approval. Checks decide: the merge condition is in `recipes/ci-releases.md`.
-- Stop and ask only for: spending money (a new paid service, a plan change, a paid batch over
-  its stated limit); deleting data that cannot be restored; a customer-visible change on a live
+- Stop and ask for: spending money (a new paid service, a plan change, a paid batch over its
+  stated limit); deleting data that cannot be restored; a customer-visible change on a live
   Wix or Shopify site that has not passed the site's visual check; access only the owner can
-  give; and any change that loosens one of these stops or weakens a check, a ruleset or a CI
-  job. Also unchanged: a first publication, messages to other people, an access change, an uninstall.
+  give, and any access change; a first publication; a message to other people; an uninstall;
+  a major-version update; and any change that loosens one of these stops or weakens a check, a
+  ruleset or a CI job.
+- A security finding is fixed. Dismissing, accepting or suppressing one goes to the owner; a
+  model's judgement never clears one.
+- A recipe page may add stricter stops for its own job (a write on a live system, a publish,
+  an upload). Those hold as well: this list is the least, not the most.
 - Credentials never go into chat, files or commands as literals; programs get keys at run time
   from an encrypted store.
 - Paid calls: before a batch of about 10 or more items, run one with the exact settings and
