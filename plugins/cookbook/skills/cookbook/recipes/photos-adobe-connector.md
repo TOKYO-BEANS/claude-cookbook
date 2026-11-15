@@ -12,9 +12,9 @@
   task brings it in with a child session that loads this connector and nothing else:
   `node <skill folder>/scripts/adobe-session.mjs run --brief <file> --out <folder> --allow
   <tool>,<tool> [--send <file>]`. Name each Adobe tool the piece needs; `tools --out <folder>`
-  lists them. The child sees no file but the ones named with `--send`, and has no shell:
-  [setup](photos-adobe-connector-setup.md). No photo has gone through the script yet: the
-  first job used the connector in an ordinary session.
+  lists them. The child has no shell and sees no file of the owner's but the ones named with
+  `--send`: [setup](photos-adobe-connector-setup.md). No photo has gone through the script
+  yet: the first job used the connector in an ordinary session.
 - The upload gate and the personal-data check in [photos.md](photos.md) hold here unchanged: no
   photo or film goes to Adobe without the owner's yes in the current chat naming the files, the
   Adobe account, the operation and the credits. Pass that yes word for word as `--owner-yes`:

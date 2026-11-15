@@ -39,10 +39,10 @@ read-only once a shell is on), which is one reason the shell is gone. An ordinar
 session on the same day listed no Adobe server, tool, skill or plugin.
 
 **Reviewed before the first push** by a `cookbook:review` subagent that did not build it. Nine
-findings, all fixed in the second commit: the child could read every file the user can (the
+findings, all fixed in the second commit. The main ones: the child could read every file the user can (the
 user settings' deny rules for secrets do not reach it), it could overwrite the script's own
 settings and log, the check for other servers never saw one (it now reads the debug log after
-the run), any command was accepted as a shell rule (now curl only), the output folder was
+the run), any command was accepted as a shell rule (the shell is gone since), the output folder was
 not checked, the yes sat in the same prompt as the brief (now in the system prompt), and the
 child process was not ended cleanly.
 
@@ -62,6 +62,17 @@ rule on the output folder at all: it reads `to-adobe` and writes a folder made n
 run. The yes must name each file by its whole name; a link is refused; the output folder is
 checked again with links followed; `.git`, CI and hook folders are refused; every run has
 its own settings file.
+
+**Reviewed again before the last push** by a second `cookbook:review` pass: nothing high,
+three medium, the rest low; all fixed in the fifth commit. A staging folder that was already
+a link was copied through before it was refused (it is checked first now, as are the other
+folders the script uses). Started through a linked folder the script did nothing and exited
+0. The brief was an unchecked way to bring any file's text to the child (it is a small
+`.md` or `.txt` now, not a link, not in a secret folder). Also: a file to send has an
+extension, a double quote in the yes is refused, a path with pattern characters or on a
+network share is refused, the log copies no free text at all, a run that called no Adobe
+tool exits 1, and a debug log that cannot be deleted is reported. Measured in that pass: a
+`CLAUDE.md` above the output folder does not reach the child.
 
 **Dead ends.**
 - A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
