@@ -120,7 +120,7 @@ Steps, in an interactive session only (an unattended session installs nothing):
    before a plugin update check that its marketplace offers exactly that version. A newer one has
    not been judged by the rules: stop, and the next run will list it.
 4. Stop that install, and leave the old copy in place, when a scan finds a high or critical
-   advisory, when the sandbox run shows a surprise or "no result" ("Cloud sandboxes (boat)" in
+   advisory, when the sandbox run shows a surprise or "no result" ("Vetting outside code: reading the sandbox report" in
    the Cookbook says what counts), when the recipe needs something this session cannot do (an
    admin prompt, a sign-in), or when the diff of a plugin adds a hook, an MCP server, a network host, a read of credentials,
    or code that hides what it does. A doubt can stop an install; it never starts one.
@@ -145,12 +145,12 @@ Finish with `verify <tool id>/<part> --owner-yes <version>`: the flag names the 
 agreed to, and the report then shows it as installed "with your yes". A release that appeared
 since is not covered: the script refuses it, and the owner is asked again. Never pass the flag for
 an update the owner did not agree to. A skill copy is checked against the commit given to `record`, because a copy
-cannot be read back from disk. By the part's `installed` kind in `catalog.json`:
+cannot be read back from disk. By the part's `installed` kind in `catalog.json` (a recipe named in the table is the page with that title in the cookbook skill's `recipes/` folder):
 
 | Kind | What to do | Recipe |
 | --- | --- | --- |
 | `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>`. No sandbox run (a plugin starts only inside Claude Code); say so in the report | "Claude Code add-ons" (Updates); "Context window (context-mode)" |
-| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`scripts/vetting/pinned-vet.sh` beside this skill does all of these, and `pinned-install.sh` there installs the vetted lockfile; read its `SANDBOX` lines as "Cloud sandboxes (boat)" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
+| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`scripts/vetting/pinned-vet.sh` beside this skill does all of these, and `pinned-install.sh` there installs the vetted lockfile; read its `SANDBOX` lines as "Vetting outside code: reading the sandbox report" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), one real call | "Cloud browser (Browserbase)" (To update) |
 | `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command. No sandbox run (the Windows binary installed here; the sandbox is Linux); say so in the report | "Cloud sandboxes (boat)"; "Sign-ins (Proton Pass and agent-browser)"; "Google accounts (google and gws)" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |

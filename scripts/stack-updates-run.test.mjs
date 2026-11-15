@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inert, quietLine, renderReport, safeLink } from "../plugins/cookbook/skills/stack-updates/scripts/lib/report.mjs";
-import { main, notesRepository, pruneRuns, recipeSection } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
+import { main, notesRepository, pruneRuns, recipeText } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
 import { ALL_FEEDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/compare.mjs";
 import { READ_MODEL } from "../plugins/cookbook/skills/stack-updates/scripts/lib/read.mjs";
 
@@ -504,7 +504,7 @@ test("a change day: release notes go to texts/ and only to the request with no t
   const reads = day.run.calls.filter((c) => c.argv[0] === "claude" && c.argv[1] === "-p");
   assert.equal(reads.length, 2);
   assert.ok(reads.every((c) => c.argv.includes("--tools") && c.argv[c.argv.indexOf("--tools") + 1] === ""));
-  assert.ok(reads[1].opts.input.includes("FIRECRAWL-NOTES") && reads[1].opts.input.includes("### Firecrawl without surprises"));
+  assert.ok(reads[1].opts.input.includes("FIRECRAWL-NOTES") && reads[1].opts.input.includes("\n# Firecrawl without surprises\n"));
   for (const c of day.run.calls.filter((x) => !reads.includes(x))) {
     assert.ok(!JSON.stringify(c).includes("-NOTES"), c.argv.join(" "));
   }
@@ -1200,13 +1200,32 @@ test("an offline day on the real catalog: one 'all N feeds failed' line and noth
   assert.ok(Object.values(readJson(join(state, "state.json")).parts).every((p) => p.latest === null));
 });
 
-test("recipeSection: the Cookbook section the recipe names, up to the next heading of its level", () => {
-  const text = "# Cookbook\n\n## Recipes\n\n### Alpha\nalpha body\n```\n### not a heading\n```\n#### Detail\nmore\n### Beta\nbeta\n## Multi (`x-*`)\nmulti body\n### Inner\ninner\n## End\n";
-  assert.equal(recipeSection(text, "Alpha"), "### Alpha\nalpha body\n```\n### not a heading\n```\n#### Detail\nmore");
-  assert.equal(recipeSection(text, "Multi (`x-*`)"), "## Multi (`x-*`)\nmulti body\n### Inner\ninner");
-  assert.equal(recipeSection(text, "End"), "## End");
-  assert.equal(recipeSection(text, "Missing"), "");
-  assert.equal(recipeSection(text, null), "");
+test("recipeText: the recipe page with the title the catalog names, followed by its own parts", () => {
+  const pages = [
+    { name: "alpha-setup.md", text: "# Alpha: setup\r\nsetup body\r\n" },
+    { name: "alpha.md", text: "# Alpha\n\nalpha body\n## Detail\nmore\n" },
+    { name: "alpha-b.md", text: "# Alpha: b\nb body\n" },
+    { name: "alphabet.md", text: "# Alphabet\nnot a part of alpha\n" },
+    { name: "multi.md", text: "# Multi (`x-*`)\nmulti body\n" },
+  ];
+  assert.equal(recipeText(pages, "Alpha"), "# Alpha\n\nalpha body\n## Detail\nmore\n\n# Alpha: b\nb body\n\n# Alpha: setup\r\nsetup body");
+  assert.equal(recipeText(pages, " Multi (`x-*`) "), "# Multi (`x-*`)\nmulti body");
+  assert.equal(recipeText(pages, "Detail"), "", "only a page's first line is its title");
+  assert.equal(recipeText(pages, "Missing"), "");
+  assert.equal(recipeText(pages, null), "");
+  assert.equal(recipeText(null, "Alpha"), "");
+  assert.equal(recipeText([null, { name: 1, text: "# Alpha" }], "Alpha"), "");
+});
+
+test("recipeText: every recipe the real catalog names is found among the real recipe pages", () => {
+  const dir = new URL("../plugins/cookbook/skills/cookbook/recipes/", import.meta.url);
+  const pages = readdirSync(dir).filter((f) => f.endsWith(".md")).map((name) => ({ name, text: readFileSync(new URL(name, dir), "utf8") }));
+  const catalog = JSON.parse(readFileSync(new URL("../plugins/cookbook/catalog.json", import.meta.url), "utf8"));
+  for (const t of catalog.tools.filter((x) => typeof x.recipe === "string")) assert.ok(recipeText(pages, t.recipe).startsWith(`# ${t.recipe}`), t.id);
+  // A recipe split over pages reaches the reader whole: boat's setup page follows its main page.
+  assert.match(recipeText(pages, "Cloud sandboxes (boat)"), /\n# Cloud sandboxes \(boat\): the plan, setup and evidence\n/);
+  // Another recipe whose name only starts the same way is not a part.
+  assert.doesNotMatch(recipeText(pages, "Classification and judgment (Jev)"), /Jev Router\)/);
 });
 
 // ---- fix round 1 (Task 8): pages under context-mode's 4,096-byte cut -------------------

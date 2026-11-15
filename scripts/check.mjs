@@ -1,6 +1,8 @@
-// Checks that plugins/cookbook/catalog.json and SKILL.md agree. No
-// dependencies: run `node scripts/check.mjs` before every merge.
-import { readFileSync } from "node:fs";
+// Checks that plugins/cookbook/catalog.json, SKILL.md (the map) and the pages beside it
+// (recipes/ and options/) agree. No dependencies: run `node scripts/check.mjs` before
+// every merge.
+import { readdirSync, readFileSync } from "node:fs";
+import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CHANGELOG_HOSTS, CONNECTION_CHECKS, SELF_UPDATING_TOOLS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
@@ -12,6 +14,99 @@ export const OTHER_TEXTS = Object.freeze([
 ]);
 const dollarErrors = (name, text) =>
   text.replace(/\r/g, "").split("\n").flatMap((line, i) => (/\$\d/.test(line) ? [`${name} line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`] : []));
+
+// The pages beside SKILL.md, by folder. A page is read with one Read call, and context-mode
+// cuts any tool result over 4,096 bytes, so a page must fit: its bytes plus what Read adds
+// to each line (a line number and a tab, and a carriage return in a CRLF checkout).
+export const PAGE_FOLDERS = Object.freeze(["recipes", "options"]);
+export const PAGE_READ_LIMIT = 4000;
+// SKILL.md loads in full on every non-trivial task: it holds the map and the ground rules only.
+export const SKILL_LIMIT = 14000;
+export const readCost = (text) => Buffer.byteLength(text) + 9 * text.split("\n").length;
+const mdLinks = (text) => [...text.matchAll(/\]\(([^)\s]+\.md)\)/g)].map((m) => m[1]).filter((t) => !t.includes("://"));
+const resolveLink = (from, target) => posix.normalize(posix.join(posix.dirname(from), target));
+const pageTitle = (text) => /^# (.+)\n/.exec(text)?.[1].trim();
+
+// Problems of the pages themselves and of the links between SKILL.md and them.
+function pageErrors(skill, pages) {
+  const errors = [];
+  const names = new Set();
+  const titles = new Map();
+  for (const { name, text } of pages) {
+    if (names.has(name)) errors.push(`${name}: listed twice`);
+    names.add(name);
+    if (!new RegExp(`^(${PAGE_FOLDERS.join("|")})/[a-z0-9-]+\\.md$`).test(name)) errors.push(`${name}: a page is <${PAGE_FOLDERS.join("|")}>/<lower-case-name>.md`);
+    const title = pageTitle(text);
+    if (!title) errors.push(`${name}: must start with a "# Title" line`);
+    else if (titles.has(title)) errors.push(`${name}: same title as ${titles.get(title)}`);
+    else titles.set(title, name);
+    const cost = readCost(text);
+    if (cost > PAGE_READ_LIMIT) errors.push(`${name}: ${cost} bytes as a Read result, over ${PAGE_READ_LIMIT}: split the page`);
+    errors.push(...dollarErrors(name, text));
+  }
+  if (Buffer.byteLength(skill) > SKILL_LIMIT) errors.push(`SKILL.md is ${Buffer.byteLength(skill)} bytes, over ${SKILL_LIMIT}: move text to a recipe page`);
+  // Every link resolves, and every page is reached from SKILL.md, directly or through a page.
+  const byName = new Map(pages.map((p) => [p.name, p.text]));
+  const reached = new Set();
+  const queue = [];
+  const follow = (from, text) => {
+    for (const target of mdLinks(text)) {
+      const to = resolveLink(from, target);
+      if (!names.has(to)) errors.push(`${from}: link to ${target}, which does not exist`);
+      else if (!reached.has(to)) {
+        reached.add(to);
+        queue.push(to);
+      }
+    }
+  };
+  follow("SKILL.md", skill);
+  while (queue.length) {
+    const name = queue.shift();
+    follow(name, byName.get(name));
+  }
+  for (const name of names) if (!reached.has(name)) errors.push(`${name}: no map row or page links to it`);
+  return errors;
+}
+
+// The map: one table under "## The map" with Job, Owner, Fallback and Recipe. A row names
+// its recipe page(s) in recipes/, "—" (no recipe is needed) or "being built".
+function mapErrors(skill, toolNames) {
+  const section = skill.split(/^## /m).find((s) => s.startsWith("The map"));
+  if (!section) return ['SKILL.md has no "## The map" section'];
+  const errors = [];
+  let rows = 0;
+  for (const line of section.split("\n")) {
+    if (!line.startsWith("|")) continue;
+    const cells = line.replace(/^\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim());
+    if (cells[0] === "Job" || /^-+$/.test(cells[0])) continue;
+    if (cells.length !== 4) {
+      errors.push(`map: row "${cells[0]}" needs 4 cells (job, owner, fallback, recipe)`);
+      continue;
+    }
+    const [job, owner, fallback, recipe] = cells;
+    if (!owner && !fallback && !recipe) continue; // a group heading
+    rows += 1;
+    if (!owner) errors.push(`map: row "${job}" has no owner`);
+    if (!fallback) errors.push(`map: row "${job}" has no fallback (write "—" when there is none)`);
+    const targets = mdLinks(recipe);
+    if (!targets.length && !["—", "being built"].includes(recipe)) errors.push(`map: row "${job}" names no recipe page, "—" or "being built"`);
+    for (const t of targets) if (!t.startsWith("recipes/")) errors.push(`map: row "${job}" links ${t}: a recipe page is in recipes/`);
+    for (const [, raw] of owner.matchAll(/\*\*(.+?)\*\*/g)) {
+      const text = raw.replace(/`/g, "").toLowerCase();
+      const prefixes = [...text.matchAll(/([a-z0-9-]+-)\*/g)].map((m) => m[1]);
+      if (!toolNames.some((n) => text.includes(n) || prefixes.some((p) => n.startsWith(p)))) errors.push(`map: "${raw}" names no tool in catalog.json`);
+    }
+  }
+  if (!rows) errors.push("map: the table has no rows");
+  return errors;
+}
+
+// The pages on disk under a skill folder (a URL ending in "/"): [{ name: "recipes/x.md", text }].
+export function readPages(skillFolder) {
+  return PAGE_FOLDERS.flatMap((d) =>
+    readdirSync(new URL(`${d}/`, skillFolder)).filter((f) => f.endsWith(".md")).sort()
+      .map((f) => ({ name: `${d}/${f}`, text: readFileSync(new URL(`${d}/${f}`, skillFolder), "utf8") })));
+}
 
 const CATEGORIES = ["Development", "Research", "Infrastructure", "Memory", "Security", "Productivity", "Workflows"];
 const SOURCES = ["npm", "github", "vendor"];
@@ -194,8 +289,10 @@ export function argvProblems(argv) {
   return problems;
 }
 
-export function checkCookbook({ catalogText, skillText, otherTexts = [], commands = VERSION_COMMANDS, selfUpdating = SELF_UPDATING_TOOLS, checks = CONNECTION_CHECKS }) {
+export function checkCookbook({ catalogText, skillText, pages = [], otherTexts = [], commands = VERSION_COMMANDS, selfUpdating = SELF_UPDATING_TOOLS, checks = CONNECTION_CHECKS }) {
   const skill = skillText.replace(/\r/g, "");
+  const pageList = pages.map((p) => ({ name: String(p?.name), text: String(p?.text).replace(/\r/g, "") }));
+  const allText = [skill, ...pageList.map((p) => p.text)].join("\n");
   let catalog;
   try {
     catalog = JSON.parse(catalogText);
@@ -218,7 +315,9 @@ export function checkCookbook({ catalogText, skillText, otherTexts = [], command
   // A skill called with arguments gets $0, $1 and so on replaced, prices included.
   errors.push(...dollarErrors("SKILL.md", skill));
   for (const { name, text } of otherTexts) errors.push(...dollarErrors(name, String(text)));
-  const headings = new Set([...skill.matchAll(/^#{2,3} (.+)$/gm)].map((m) => m[1].trim()));
+  errors.push(...pageErrors(skill, pageList));
+  // A tool's recipe is the title of a page in recipes/.
+  const headings = new Set(pageList.filter((p) => p.name.startsWith("recipes/")).map((p) => pageTitle(p.text)).filter(Boolean));
   const ids = new Set();
   catalog.tools.forEach((t, i) => {
     const at = `tools[${i}]${t && typeof t.id === "string" ? ` (${t.id})` : ""}`;
@@ -239,10 +338,10 @@ export function checkCookbook({ catalogText, skillText, otherTexts = [], command
     if (t.source === "github" && !REPO.test(String(t.repository))) errors.push(`${at}: repository must be owner/name`);
     if (t.website !== "" && !httpsUrl(t.website)) errors.push(`${at}: website must be an https URL without credentials, query or fragment`);
     if (!LIFECYCLES.includes(t.lifecycle)) errors.push(`${at}: lifecycle must be active, trial or watching`);
-    if (t.recipe !== null && (typeof t.recipe !== "string" || !headings.has(t.recipe))) errors.push(`${at}: recipe heading not in SKILL.md`);
+    if (t.recipe !== null && (typeof t.recipe !== "string" || !headings.has(t.recipe))) errors.push(`${at}: recipe heading names no page title in recipes/`);
     if (!Array.isArray(t.uses) || t.uses.some((u) => typeof u !== "string" || !ID.test(u))) errors.push(`${at}: uses`);
     else if (t.uses.length && t.category !== "Workflows") errors.push(`${at}: only workflows list uses`);
-    if (t.recipe !== null && typeof t.name === "string" && !skill.includes(t.name)) errors.push(`${at}: name not mentioned in SKILL.md`);
+    if (t.recipe !== null && typeof t.name === "string" && !allText.includes(t.name)) errors.push(`${at}: name not mentioned in SKILL.md or a page`);
   });
   // The self-updating table names tools of the catalog.
   for (const id of selfUpdating) if (!ids.has(id)) errors.push(`self-updating tools: ${id} names no tool in catalog.json`);
@@ -270,17 +369,7 @@ export function checkCookbook({ catalogText, skillText, otherTexts = [], command
   if (Object.values(checks).filter((c) => c?.paid === true).length > 1) errors.push("connection checks: at most one check may be paid");
   for (const key of commandParts) if (!Object.hasOwn(commands, key)) errors.push(`version commands: ${key} has no version command`);
   const names = catalog.tools.map((t) => String(t?.name ?? "").toLowerCase()).filter(Boolean);
-  const table = skill.split(/^## /m).find((s) => s.startsWith("Choosing quickly")) ?? "";
-  for (const line of table.split("\n")) {
-    if (!line.startsWith("| ") || /^\| (Task|---) /.test(line)) continue;
-    const cell = line.split(" | ")[1] ?? "";
-    for (const [, raw] of cell.matchAll(/\*\*(.+?)\*\*/g)) {
-      const text = raw.replace(/`/g, "").toLowerCase();
-      const prefixes = [...text.matchAll(/([a-z0-9-]+-)\*/g)].map((m) => m[1]);
-      if (!names.some((n) => text.includes(n) || prefixes.some((p) => n.startsWith(p))))
-        errors.push(`table: "${raw}" names no tool in catalog.json`);
-    }
-  }
+  errors.push(...mapErrors(skill, names));
   return errors;
 }
 
@@ -289,6 +378,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const errors = checkCookbook({
     catalogText: readFileSync(new URL("plugins/cookbook/catalog.json", root), "utf8"),
     skillText: readFileSync(new URL("plugins/cookbook/skills/cookbook/SKILL.md", root), "utf8"),
+    pages: readPages(new URL("plugins/cookbook/skills/cookbook/", root)),
     otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: readFileSync(new URL(p, root), "utf8") })),
   });
   for (const e of errors) console.error(e);
