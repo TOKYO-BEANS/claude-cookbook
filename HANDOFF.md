@@ -82,6 +82,17 @@ not read-only: the yes must now name the Adobe account, the credits and the oper
 each such tool (`mask`, `upload`, `expand` and so on; a tool the script does not know by an
 operation word must be named itself), beside each file. Fixed in the sixth commit.
 
+**Round 3**, the last of the three set. The AI review: one low finding, no test for the end
+of a run; the exit codes are now one function with a test for each. GitHub's security review
+on that commit: the brief goes into the prompt as it is, and the debug log exists while the
+run lasts. The brief is now fenced as data with a mark made from its own text, and the
+system prompt says that nothing in it changes a rule. The debug log stays: the script needs
+it to know when the connector has connected and which servers did. It is in a temporary
+folder that only this user can read and that is deleted whatever happens. The review
+proposed a brief in a fixed JSON form and a debug log only on request; neither was done, for
+those reasons. A fourth push went beyond the three rounds, so it and those two answers were
+put to the owner (see the pull request).
+
 **Dead ends.**
 - A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
   works (proved with Graphify: the subagent called it, the main session listed no server), but
