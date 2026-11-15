@@ -1,5 +1,144 @@
 # Handoff
 
+## 15 November 2026 (night): a fixed set of tasks, measured before and after (0.31.1)
+
+The last step of the order the owner set on 15 November 2026 (the map #51, the removals #52,
+the diet #53, the visual check's recipe #54, then this).
+
+**What was compared.** "Before" is the global rules file as it was before the diet (36,078
+bytes, from `~/.local/share/backups/claude-md-diet-20261115/CLAUDE.md`) with Cookbook 0.28.4
+(`52aead6`, a 94,928-byte skill). "After" is today's file (8,411 bytes) with Cookbook 0.30.2
+(`b75dbaf`, an 11,730-byte map and one page per recipe). The removed tools were not
+reinstalled (an install needs the owner's yes), so the removal step (#52) is not in these
+numbers; what is recorded for it is the tool count of a full session start, 205 before and
+173 after (`evidence/2026-11-15-remove-jobless-tools/`).
+
+**The task set**, chosen by the owner with the question tool ("12 tasks, twice
+(Recommended)"), is in `scripts/measure/tasks.json`: six tool choices (who calls a function,
+a JS-heavy page, merging a finished pull request, vetting outside code, a scripted
+`claude -p` run, a live Wix change), four stops (a paid plan, dismissing a finding, merging
+without waiting, publishing without a visual check) and two rule lookups (a new key,
+force-push). Each task asks for the answer in named fields. The key (38 checks, each a
+pattern on one field) was written before any run and holds only answers both rule sets give.
+
+**How.** `scripts/measure/measure.mjs`: headless runs on the Claude plan login, Opus 5.5,
+tools Skill, Read, Glob and Grep only, no MCP servers, no user settings or plugins, a cap of
+USD 1 a run and a stop at USD 30 for the batch. Each side is a folder with that side's rules
+file and plugin. 12 tasks, two sides, two repeats: 48 runs, none failed, no tool call denied.
+
+**Results** (sums over the 24 runs of a side; the table per task is in the evidence folder).
+
+| | Before | After | Change |
+| --- | --- | --- | --- |
+| Checks passed | 76 of 76 | 76 of 76 | none |
+| Input tokens, all requests | 1,627,339 | 1,109,261 | 32% fewer |
+| First request of a run (mean) | 22,254 | 12,459 | 44% smaller |
+| Largest request of a run (mean) | 50,190 | 17,544 | 65% smaller |
+| Output tokens | 10,615 | 10,635 | the same |
+| Requests (turns) | 62 | 94 | 52% more |
+| Seconds (as Claude Code reports them) | 140 | 152 | 9% more |
+| Cost at list prices (plan usage, no invoice) | USD 7.75 | USD 2.46 | 68% lower |
+
+- Nothing was lost and nothing was gained in correctness on this set: both sides passed every
+  check, stops and rules that left the global file included. The set cannot show a gain: its
+  key holds only answers both sides give.
+- The saving is in size and cost, not in speed. After loads a short map and then reads the
+  page of the job (19 page reads and 7 searches in 24 runs); before loaded the whole skill and
+  read nothing else. That is why after needs more requests and a little more time.
+- Two tasks cost after more input tokens than before, as means: merging without waiting
+  (65,671 against 51,129) and force-push (64,879 against 51,090). In both, after took five
+  requests to find the rule on a page, and one of before's two runs answered from the global
+  file without loading the skill. Their cost was still lower (USD 0.12 against 0.24).
+- Before was less steady: three of its second-repeat runs skipped the skill (22,000 tokens
+  against 80,000 with it). After loaded the skill in 22 of 24 runs; the two without were the
+  dismissal stop, which both sides answer from the global file.
+- The first request shrank by 9,795 tokens, which matches the diet's own measurement (9,798).
+
+**A flaw found before the batch, and fixed.** `--setting-sources project` does not keep the
+user's `~/.claude/CLAUDE.md` out: a probe run named both rules files, so both sides had
+today's file on top. The first trial run and two probes are void (kept in `void/`). The runs
+now pass `--settings` with `claudeMdExcludes`; `measure.mjs probe` showed one rules file per
+side before the batch. The rule is on `recipes/scripted-runs-rules.md`.
+
+**Spend.** The batch: USD 10.21 at list prices, on the plan login (`apiKeySource` `none` in
+every run). Outside it, the void trial, the probes and the scope proof: USD 0.87.
+
+**To measure a later change:** build the two sides (`git archive <commit> plugins/cookbook`
+into `<side>/plugin`, the rules file as `<side>/work/CLAUDE.md`), then `probe`, `run` and
+`report`. Results compare within one task set only: a changed task or check takes a new
+`set` name.
+
+**Verification.** `npm test` passes (341 tests, 14 of them in `scripts/measure.test.mjs`; the run's allow list is one of the things they pin). The 48
+stored answers were scored again from the raw streams after the last change to the parser:
+152 of 152, none moved.
+
+**Checks and review on the pull request (#56).** The first push failed `Depot CI / test`: a new
+test assumed a Windows path; the Read rule and its test now hold on Linux too. CodeQL then
+raised one high finding (`js/clear-text-logging`, alert 3): the probe printed the stream's
+`apiKeySource` label. It is no key, but the finding was fixed, not answered: the runner records
+only whether a run was on the plan login. AI review round 1 (of three), two low findings, both
+fixed: a `--cap`, `--limit` or `--reps` that is no positive number stops the command (it would
+have switched the batch stop off), as does a flag without a value; and `run` and `report`
+refuse a folder that holds results of another task set or model. Round 2, from GitHub's
+security review: a run wrote its whole stream to the output folder, and the model's text can
+quote the rules file it was given. The stream, the run's stderr and the probe's stream are now
+written only with `--transcripts yes`, and a search is recorded without its pattern; by
+default the folder holds numbers, tool names and which checks passed. The first measurement
+was made before this, so its folder holds every stream; it is on this PC only, in no
+repository. Round 3, the last: requests are counted for the model the session reports, so an
+alias in `--model` no longer leaves the request columns at 0, and a run with a result but no
+counted request stops the batch; the header comment names both scripted-runs pages.
+
+**After the third round, one more finding, about isolation, so it was fixed here and not in a
+follow-up.** The runs allowed `Glob` and `Grep` without a path, so a run could have searched
+any file the user can read, the user's own rules file included. None did: the 48 stored
+streams hold 26 file-tool calls (19 Read, 7 Grep), every one inside the run's own side
+folder, so the numbers above stand. The fix: only `Skill` and the one Read rule are allowed.
+One capped run proved it (`checks/scope-probe-read-rule-only.jsonl` in the evidence
+folder): Grep, Glob and Read worked inside the side folder and all three were refused
+outside it. The rule is on `recipes/scripted-runs-rules.md`.
+
+**And one from GitHub's security review on that commit:** `probe` printed the model's answer,
+which holds the paths and first headings of the rules files. It now prints a verdict it
+works out itself (clean or not, how many rules files, whether the side's own and the user's
+own are among them) and ends with exit code 1 when a side is not clean; the answer is shown
+only with `--transcripts yes`. The line `run` prints per run names the tools without their
+arguments; the pages read stay in `summary.jsonl`.
+
+**Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`
+(`RESULT.md`, `runs/report.md`, `runs/summary.jsonl`, one stream per run, both sides in
+`arms/`, the void runs in `void/`).
+
+**From #55** (the entry below, the Adobe connector on demand, 0.31.0). It merged as `e5a2527`
+while this job ran; this branch took `main` in by a merge commit, and the plugin is 0.31.1.
+The release check of `e5a2527` is `verified` and acknowledged (execution 1532; log in
+`~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-connector-on-demand/release/`).
+Plugin 0.31.0 was not installed on this PC when this was written. The measurement's "after"
+side is 0.30.2, as stated: #55 added one map row and three pages after it.
+
+**From #54.** It merged as `b75dbaf`; the release check of that commit is `verified` and
+acknowledged (execution 1530; `sa-release` itself ended `unknown` for the skipped
+`ai-review` job, as on every merge commit). Plugin 0.30.2 was installed the same evening and
+proved with a new headless session. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-15-visual-check-recipe/`.
+
+**Outstanding.**
+- The merge commit, the release check and the install of this pull request (0.31.1) go into
+  the next Cookbook pull request.
+- Not measured: the removal step by itself, and a session with every MCP server on (two such
+  runs differ by thousands of tokens). A per-server measurement belongs to a job of its own
+  (memory `whole-design-one-owner`).
+- "Adobe for creativity" stays connected in claude.ai: #55 reversed the earlier request to
+  disconnect it. Nothing waits on the owner there.
+- Open from #55, the owner's: the yes for the first photo run through the script, and keeping
+  or cancelling the Adobe plan (a 7-day trial from 10 November 2026 that turns paid on day 7).
+- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+- Stagehand's review date is 28 November (`connector-register.md`); the owner chose to keep
+  it, do not ask again.
+- Still open from #54: the Proton Pass CLI was reported signed out on the morning of
+  15 November and not rechecked; `dispatch-profiles.md` and `connector-register.md` are
+  still read in ranges; the Claude API's token counter was not retried.
+
 ## 15 November 2026 (late evening): the Adobe connector is back, on demand only (0.31.0)
 
 **Why.** #52 switched "Adobe for creativity" off because the map gave it no job and its page
