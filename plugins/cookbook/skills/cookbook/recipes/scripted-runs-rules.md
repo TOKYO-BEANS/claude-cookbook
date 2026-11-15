@@ -2,6 +2,9 @@
 
 - File rules use `Edit(...)`, which also covers the Write tool; a `Write(path)` rule never matches. On
   Windows, write the path as `//c/...`.
+- A Read rule also scopes Grep and Glob: under `dontAsk` with only `Read(//c/dir/**)` allowed, all
+  three work inside the folder and are refused outside it (Claude Code 2.1.325). A bare `Glob` or
+  `Grep` in `--allowedTools` lets the run search every file the user can read.
 - A Bash allow rule matches the command word for word. A run that phrases a command differently is
   denied and can still exit 0 having done nothing, so check the result, not the exit code.
 - Under `acceptEdits`, add `--disallowedTools Bash PowerShell` unless the run needs a shell: in the

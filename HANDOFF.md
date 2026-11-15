@@ -61,14 +61,14 @@ now pass `--settings` with `claudeMdExcludes`; `measure.mjs probe` showed one ru
 side before the batch. The rule is on `recipes/scripted-runs-rules.md`.
 
 **Spend.** The batch: USD 10.21 at list prices, on the plan login (`apiKeySource` `none` in
-every run). Outside it, the void trial and the probes: USD 0.69.
+every run). Outside it, the void trial, the probes and the scope proof: USD 0.87.
 
 **To measure a later change:** build the two sides (`git archive <commit> plugins/cookbook`
 into `<side>/plugin`, the rules file as `<side>/work/CLAUDE.md`), then `probe`, `run` and
 `report`. Results compare within one task set only: a changed task or check takes a new
 `set` name.
 
-**Verification.** `npm test` passes (340 tests, 13 of them in `scripts/measure.test.mjs`). The 48
+**Verification.** `npm test` passes (340 tests, 13 of them in `scripts/measure.test.mjs`; the run's allow list is one of the things they pin). The 48
 stored answers were scored again from the raw streams after the last change to the parser:
 152 of 152, none moved.
 
@@ -88,6 +88,15 @@ was made before this, so its folder holds every stream; it is on this PC only, i
 repository. Round 3, the last: requests are counted for the model the session reports, so an
 alias in `--model` no longer leaves the request columns at 0, and a run with a result but no
 counted request stops the batch; the header comment names both scripted-runs pages.
+
+**After the third round, one more finding, about isolation, so it was fixed here and not in a
+follow-up.** The runs allowed `Glob` and `Grep` without a path, so a run could have searched
+any file the user can read, the user's own rules file included. None did: the 48 stored
+streams hold 26 file-tool calls (19 Read, 7 Grep), every one inside the run's own side
+folder, so the numbers above stand. The fix: only `Skill` and the one Read rule are allowed.
+One capped run proved it (`checks/scope-probe-read-rule-only.jsonl` in the evidence
+folder): Grep, Glob and Read worked inside the side folder and all three were refused
+outside it. The rule is on `recipes/scripted-runs-rules.md`.
 
 **Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`
 (`RESULT.md`, `runs/report.md`, `runs/summary.jsonl`, one stream per run, both sides in

@@ -50,7 +50,7 @@ test("a run is read-only, capped, on no MCP server, and excludes the user's own 
   const after = (flag) => args[args.indexOf(flag) + 1];
   assert.deepEqual(args.slice(args.indexOf("--tools") + 1, args.indexOf("--permission-mode")), [...TOOLS]);
   assert.equal(after("--permission-mode"), "dontAsk");
-  assert.ok(args.includes(readRule(resolve("sides/before"))));
+  assert.deepEqual(args.slice(args.indexOf("--allowedTools") + 1, args.indexOf("--strict-mcp-config")), ["Skill", readRule(resolve("sides/before"))], "no unscoped Read, Glob or Grep is allowed");
   assert.equal(readRule("C:\\x\\sides\\before"), "Read(//c/x/sides/before/**)");
   assert.equal(readRule("/home/x/sides/before"), "Read(//home/x/sides/before/**)");
   assert.equal(after("--max-budget-usd"), "1");

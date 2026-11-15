@@ -90,11 +90,15 @@ export const runSettings = () => {
   return { claudeMdExcludes: [p, p.replaceAll("\\", "/")] };
 };
 
+// Only Skill and one Read rule are allowed. Claude Code applies a Read rule to Grep and Glob too, so
+// under `dontAsk` all three work inside the side folder and are refused outside it (proved with one
+// run on Claude Code 2.1.325). A bare `Glob` or `Grep` here would let a run search every file the
+// user can read, the user's own rules file included.
 export function claudeArgs({ sideDir, emptyMcp, settings, model, cap }) {
   return [
     "-p", "--model", model, "--output-format", "stream-json", "--verbose",
     "--tools", ...TOOLS,
-    "--permission-mode", "dontAsk", "--allowedTools", "Skill", readRule(resolve(sideDir)), "Glob", "Grep",
+    "--permission-mode", "dontAsk", "--allowedTools", "Skill", readRule(resolve(sideDir)),
     "--strict-mcp-config", "--mcp-config", emptyMcp,
     "--setting-sources", "project", "--settings", settings,
     "--plugin-dir", join(sideDir, "plugin"),
