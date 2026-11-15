@@ -8,7 +8,8 @@ Each recipe is a page in `plugins/cookbook/skills/cookbook/recipes/` (51 pages),
 job comes up; `options/` (5 pages) holds why each owner was chosen and what else was weighed.
 `scripts/check.mjs` checks the map, every link, that no page is orphaned, and that a page fits
 one `Read`. The update reader (`updates.mjs`) takes a tool's recipe from the pages
-(`recipeText`).
+(`recipeText`): only the recipe's main page goes into the read request, fenced as data with a
+hash of its own; setup and evidence pages (this PC's paths and key names) stay out.
 
 **Why pages are small.** context-mode cuts any tool result over 4,096 bytes (measured: 4,105
 was cut). A page is limited to 4,000 bytes as a `Read` result; a recipe's further pages are

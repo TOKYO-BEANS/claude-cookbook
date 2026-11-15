@@ -1200,15 +1200,13 @@ test("an offline day on the real catalog: one 'all N feeds failed' line and noth
   assert.ok(Object.values(readJson(join(state, "state.json")).parts).every((p) => p.latest === null));
 });
 
-test("recipeText: the recipe page with the title the catalog names, followed by its own parts", () => {
+test("recipeText: the recipe page with the title the catalog names, and only that page", () => {
   const pages = [
-    { name: "alpha-setup.md", text: "# Alpha: setup\r\nsetup body\r\n" },
-    { name: "alpha.md", text: "# Alpha\n\nalpha body\n## Detail\nmore\n" },
-    { name: "alpha-b.md", text: "# Alpha: b\nb body\n" },
-    { name: "alphabet.md", text: "# Alphabet\nnot a part of alpha\n" },
+    { name: "alpha-setup.md", text: "# Alpha: setup\nsetup body with ~/.local/share/alpha and the key name\n" },
+    { name: "alpha.md", text: "# Alpha\r\n\r\nalpha body\r\n## Detail\r\nmore\r\n" },
     { name: "multi.md", text: "# Multi (`x-*`)\nmulti body\n" },
   ];
-  assert.equal(recipeText(pages, "Alpha"), "# Alpha\n\nalpha body\n## Detail\nmore\n\n# Alpha: b\nb body\n\n# Alpha: setup\r\nsetup body");
+  assert.equal(recipeText(pages, "Alpha"), "# Alpha\r\n\r\nalpha body\r\n## Detail\r\nmore");
   assert.equal(recipeText(pages, " Multi (`x-*`) "), "# Multi (`x-*`)\nmulti body");
   assert.equal(recipeText(pages, "Detail"), "", "only a page's first line is its title");
   assert.equal(recipeText(pages, "Missing"), "");
@@ -1217,15 +1215,19 @@ test("recipeText: the recipe page with the title the catalog names, followed by 
   assert.equal(recipeText([null, { name: 1, text: "# Alpha" }], "Alpha"), "");
 });
 
-test("recipeText: every recipe the real catalog names is found among the real recipe pages", () => {
+test("recipeText: every recipe the real catalog names is found; setup and evidence pages stay out of the request", () => {
   const dir = new URL("../plugins/cookbook/skills/cookbook/recipes/", import.meta.url);
   const pages = readdirSync(dir).filter((f) => f.endsWith(".md")).map((name) => ({ name, text: readFileSync(new URL(name, dir), "utf8") }));
   const catalog = JSON.parse(readFileSync(new URL("../plugins/cookbook/catalog.json", import.meta.url), "utf8"));
-  for (const t of catalog.tools.filter((x) => typeof x.recipe === "string")) assert.ok(recipeText(pages, t.recipe).startsWith(`# ${t.recipe}`), t.id);
-  // A recipe split over pages reaches the reader whole: boat's setup page follows its main page.
-  assert.match(recipeText(pages, "Cloud sandboxes (boat)"), /\n# Cloud sandboxes \(boat\): the plan, setup and evidence\n/);
-  // Another recipe whose name only starts the same way is not a part.
-  assert.doesNotMatch(recipeText(pages, "Classification and judgment (Jev)"), /Jev Router\)/);
+  for (const t of catalog.tools.filter((x) => typeof x.recipe === "string")) {
+    const text = recipeText(pages, t.recipe);
+    assert.ok(text.startsWith("# " + t.recipe), t.id);
+    assert.equal(text.match(/^# /gm).length, 1, t.id + ": one page only");
+  }
+  // The page that says how the tool is used goes; the page with this PC's paths and key names does not.
+  const boat = recipeText(pages, "Cloud sandboxes (boat)");
+  assert.match(boat, /One command, then gone/);
+  assert.doesNotMatch(boat, /On this PC|\.local\/share\/boat/);
 });
 
 // ---- fix round 1 (Task 8): pages under context-mode's 4,096-byte cut -------------------

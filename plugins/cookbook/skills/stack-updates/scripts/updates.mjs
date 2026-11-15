@@ -332,19 +332,16 @@ function pageOf(ctx, n, day = ctx.today) {
 
 /**
  * The Cookbook recipe titled `heading`, from `pages` (`[{ name: "boat.md", text }]`, the
- * files of the Cookbook skill's `recipes/` folder): the page whose first line is
- * `# <heading>`, followed by its own parts, which are the pages named `<its name>-….md`
- * (`boat-setup.md` for `boat.md`), in name order. "" when there is none.
+ * files of the Cookbook skill's `recipes/` folder): the one page whose first line is
+ * `# <heading>`. "" when there is none. Only that page goes into the read request: it says
+ * how the stack uses the tool. A recipe's further pages (`boat-setup.md` for `boat.md`)
+ * hold this PC's paths, key names and evidence, which the request does not need.
  */
 export function recipeText(pages, heading) {
   if (!Array.isArray(pages) || typeof heading !== "string" || !heading.trim()) return "";
   const usable = pages.filter((p) => isObject(p) && typeof p.name === "string" && typeof p.text === "string");
   const title = (text) => /^#\s+(.*?)\s*$/.exec(text.split(/\r?\n/, 1)[0])?.[1];
-  const main = usable.find((p) => title(p.text) === heading.trim());
-  if (!main) return "";
-  const stem = main.name.replace(/\.md$/, "");
-  const parts = usable.filter((p) => p.name.startsWith(`${stem}-`)).sort((a, b) => (a.name < b.name ? -1 : 1));
-  return [main, ...parts].map((p) => p.text.trim()).join("\n\n");
+  return usable.find((p) => title(p.text) === heading.trim())?.text.trim() ?? "";
 }
 
 // The page of release `to` for a change already installed: the feed's newest source
