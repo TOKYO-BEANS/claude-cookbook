@@ -14,13 +14,14 @@ Chosen by fit for the job on 15 November 2026.
   inside an agent budget. Weighed: Parallel Task and deep research (one vendor's synthesis,
   priced per run: the fallback is its quick `web_research`); the bundled deep-research skill
   (no budget).
-- **Operating a public page: Browserbase through the `browse` CLI.** The page runs in a cloud
-  browser, away from this PC and from any signed-in profile, and the CLI adds nothing to a
-  session. Weighed:
-  - Stagehand (the same cloud browser as an MCP server: several steps in one call, but three
-    tool names and two Node processes in every session, a source build the update check
-    cannot follow, and no job the CLI cannot do with a short script). It stays installed
-    until the visual check is built, and goes if that check does not use it.
+- **Operating a public page: Browserbase, by two routes.** The page runs in a cloud browser,
+  away from this PC and from any signed-in profile. From a script, or for one step: the
+  `browse` CLI, which adds nothing to a session. Several steps inside a session: Stagehand,
+  the same cloud browser as an MCP server. On the same four screenshots one Stagehand call
+  took 8 seconds and one browser minute; nine `browse` commands took 137 seconds and two.
+  Its price: three tool names and two Node processes in every session, and a source build
+  the update check cannot follow. The visual check uses neither. The owner chose on
+  15 November 2026 to keep Stagehand for "In-session browser work". Weighed:
   - the built-in browser (holds the owner's signed-in sessions: keep unknown pages out of it);
   - Playwright MCP and Chrome DevTools MCP (a local browser on this PC, and a server in every
     session);

@@ -3,9 +3,10 @@
 The route to Browserbase is its official `browse` CLI: one short command, one short JSON answer, no plugin
 and no MCP server, so it adds nothing to a session.
 
-- **Use it** when a public page has to be operated, not just read: click, fill, wait for a state,
-  read a value, take a screenshot, across several steps. Reading a page stays on Firecrawl and
-  Parallel. A site that needs a sign-in goes to agent-browser ([sign-ins.md](sign-ins.md)), never to a cloud session.
+- **Use it** when a public page has to be operated, not just read (click, fill, wait for a
+  state, read a value, take a screenshot), from a script or for one step. Several steps
+  inside a session go to Stagehand ([stagehand.md](stagehand.md)), with `browse` as its
+  fallback. Reading a page stays on Firecrawl and Parallel. A site that needs a sign-in goes to agent-browser ([sign-ins.md](sign-ins.md)), never to a cloud session.
 - **A session:** `browse open <url> --remote --session <name>`, then `browse snapshot` (the page as
   an accessibility tree with element refs), `browse click <ref>`, `browse fill <ref> "<text>"`,
   `browse get title` or `browse get text <ref>`, `browse screenshot`, and always

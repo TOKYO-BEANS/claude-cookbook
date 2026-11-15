@@ -1,13 +1,93 @@
 # Handoff
 
+## 15 November 2026 (evening): the visual check has its row and its pages (0.30.2)
+
+**The map.** The row "Visual check of a live site before a customer-visible change" no longer
+says "being built". Its owner is the site's own check script, in the site's repository; its
+fallback is to ask the owner; its page is `recipes/visual-check.md` (when a pass lifts the
+stop, how to use a check, what a pass never covers), with `recipes/visual-check-build.md`
+(how a site gets one: the four layers, the capture traps, the proofs, the record). Both are
+general. What is specific to wecarestudio.dk stays in that project (`CLAUDE.md`, section
+"Visual check", and `jobs/25-visuelt-tjek/FINDINGS.md`), where the check was built and
+proved on 15 November 2026.
+
+**The stop is not loosened.** The page quotes the owner's global rule (15 November 2026,
+"How we work", stop 3): "A change customers see on a live site (Wix, Shopify or any other
+host), unless that change has passed the site's visual check: screenshots at desktop and
+phone size, judged against the intended design by an agent that did not build the change.
+Until a site's check is recorded in that project's `CLAUDE.md` and the owner has said yes to
+it once, always ask." The page adds limits and takes none away: this page lifts no stop, a
+check that merely exists lifts none, and a change to a check's thresholds, routes, judge or
+pass rule needs the owner's yes. The ground rules in `SKILL.md` are unchanged.
+
+**Two owner answers, asked with the question tool in this chat (15 November 2026).**
+- Stagehand. Asked "Remove it?", with the finding that nothing uses it and the recommendation
+  to remove it. Answer: "so i want to keep stagehand and use it instead of playwright, theot3
+  also said it is faster and better." Asked again, with the correction that the other chat
+  found Stagehand better than the `browse` CLI and not better than Playwright, and that for
+  the visual check it cannot open a local build, ignored phone emulation and runs only
+  inside a session: "So where should Stagehand be used?" Answer: "In-session browser work
+  (Recommended)". So Stagehand stays installed (nothing was uninstalled) and has a job: the
+  map row "Several steps on a public page inside a session", with the `browse` CLI as its
+  fallback. `browse` keeps "A public page from a script, or one step". The visual check
+  stays on the site repository's Playwright.
+- The Wix page. `recipes/wix-ask-first.md` said to ask before every publish or release, which
+  is stricter than the global rule and held beside it. Asked "May the Wix page name that one
+  exception?" Answer: "Name the exception (Recommended)". The page now excepts a release of
+  a code change that has passed the site's visual check, where the check and the owner's yes
+  are recorded in the project's `CLAUDE.md`; publishing from the editor or the dashboard and
+  creating a site still ask.
+- The rollback after a failed check is not a new exception. It is the owner's global rule
+  (15 November 2026, "How we work"), quoted: "A failed release check means: roll back to the
+  last good version first, then fix through a new pull request." `recipes/ci-releases.md`
+  already held it; the two pages now quote it and limit it to the version that was live
+  before the release, with the owner told at once. (The AI review's first round asked for
+  this.)
+
+**What uses Stagehand, checked on this PC.** Only its own user-scope MCP entry. No hook,
+script in `~/.local/bin`, scheduled task or project file names it. Its tools were called 18
+times, all in the WeCare project on 14 and 15 November (the screenshot trial of job 25).
+
+**Verification.** `npm test` passes. Three review rounds were set before the first push.
+Before it, a `cookbook:review` subagent that did not write the change read the diff: no stop
+loosened, three gaps closed (release exactly the build that was judged; a change to what the
+capture hides or skips needs the owner's yes; `recipes/workflows.md` and
+`recipes/cloudflare.md` now also name "recorded in the project's `CLAUDE.md` with the
+owner's yes"). Evidence of the Stagehand check and the owner's answers:
+`~/.local/share/claude-cookbook/evidence/2026-11-15-visual-check-recipe/`.
+
+**Corrections to the entry below (#53).** It merged as `987bbea`; the release check of that
+commit is `verified` (execution 1528; `sa-release` itself ended `unknown` for the skipped
+`ai-review` job, as on every merge commit). Plugin 0.30.1 was installed the same evening.
+Its numbers are now the final ones, and its "dead end" is corrected: a workspace ID for the
+`anthropic-api` key can be read with `depot ci vars list --repo TOKYO-BEANS/WeCare-Wix`
+(variable `ANTHROPIC_WORKSPACE_ID_REVIEW`), as the WeCare check does.
+
+**Outstanding.**
+- The merge commit and the release check of this pull request go into the next Cookbook
+  pull request.
+- Next job, in its own chat: a fixed set of tasks measured before and after.
+- Stagehand's review date is 28 November (`connector-register.md`): with calls from only one
+  or two projects it moves to project scope.
+- Waiting on the owner, not to be redone: disconnecting "Adobe for creativity" in claude.ai
+  (Settings, Connectors).
+- The Proton Pass CLI was reported signed out by the daily update check on the morning of
+  15 November; not rechecked.
+- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
+  ranges.
+- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+- Not retried: the Claude API's token counter for measuring what a file costs a session. It
+  needs a workspace ID in the request (see the correction above).
+
 ## 15 November 2026 (later): the global rules file is cut to the hard rules (0.30.1)
 
 **On this PC.** The owner's global `~/.claude/CLAUDE.md` now holds the machine's hard rules,
 "How we work", the sign-in rule and one paragraph that points at the Cookbook. It went from
-36,078 to 9,201 bytes. Measured in a new headless session with no tools and no MCP servers,
-two runs each side, within 5 tokens: the session's input fell from 18,233 to 8,709 tokens, so
-9,524 fewer at every session start. In the measure the job was set in (about 4.24 bytes a
-token) that is about 8,500 to about 2,200; the model's own count is higher on both sides.
+36,078 to 8,411 bytes (9,201 before the four rules below left it, once 0.30.1 was
+installed). Measured in a new headless session with no tools and no MCP servers: the
+session's input fell from 18,233 to 8,435 tokens, so 9,798 fewer at every session start. In
+the measure the job was set in (about 4.24 bytes a token) that is about 8,500 to about
+2,000; the model's own count is higher on both sides.
 
 **Nothing was loosened.** Every stop and every "never" of the old file is listed with where it
 lives now in `placement.md` (evidence folder below): kept in the global file, held by
@@ -58,25 +138,13 @@ Workflow). Three indexes that held prose and no memory are empty.
 copy of the old global file, every memory folder as it was and the removed memories:
 `~/.local/share/backups/claude-md-diet-20261115/`.
 
-**Outstanding.**
-- Once the plugin with this pull request is installed: the last section of the global file
-  ("Job rules the Cookbook does not hold yet", four lines) is deleted, because the pages hold
-  them then. Done in the same chat when the install is verified.
-- The merge commit and the release check of this pull request go into the next Cookbook pull
-  request.
-- Dead end: the Claude API's token counter could not be used for the measurement. The
-  `anthropic-api` key needs a workspace ID on every request and none is recorded on this PC.
-  The owner's to clear: the ID from the Console's Workspaces page, saved as `workspace_id` in
-  `~/.local/share/claude-api/caption/config.json`.
-- The owner disconnects "Adobe for creativity" in claude.ai (Settings, Connectors).
-- The Proton Pass CLI was reported signed out by the daily update check on the morning of
-  15 November; not rechecked in this job.
-- The visual-check row is "being built": its recipe arrives from the chat that builds the
-  visual check for live sites. That chat is the next job; after it, a fixed set of tasks
-  measured before and after.
-- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
-  ranges.
-- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+**Done after the merge.** Once 0.30.1 was installed, the last section of the global file
+("Job rules the Cookbook does not hold yet", four lines) was deleted, because the pages hold
+them. The token counter of the Claude API was not used for the measurement: the
+`anthropic-api` key needs a workspace ID on every request (how to read one is in the entry
+above).
+
+**Outstanding** is carried in the entry above.
 
 ## 15 November 2026: the tools without a job are removed (0.30.0)
 
@@ -100,7 +168,7 @@ tables and the tests that named them):
 - Files left from tools retired earlier, in `~/.local/bin`, and two marketplaces left
   registered from tools retired earlier.
 
-Kept, and not part of the answer: Stagehand (it waits for the visual check), Adobe Firefly
+Kept, and not part of the answer: Stagehand (it waited for the visual check), Adobe Firefly
 (the photo route), doctor-plus, and everything else.
 
 **How it was done.** Each item was checked first: no hook, MCP entry, scheduled task, other
@@ -125,7 +193,7 @@ line and `ctx_resume` answered in it; `npm test` passes.
 `add-ons-mods.md`, `jev-router.md`, `jev-router-terminal.md` and `photos-adobe-connector.md`
 are deleted. The map row "The model for a session or a piece" has no fallback and no page.
 
-**Outstanding** is carried in the entry above. Still true from this entry: "Adobe for
+**Outstanding** is carried in the newest entry. Still true from this entry: "Adobe for
 creativity" is blocked in terminal and T3 Code sessions only (`claude.ai Adobe` is in
 `deniedMcpServers` in `~/.claude/settings.json` and the synced plugin is disabled; a new
 headless `claude -p` session on 15 November listed it as blocked). The desktop app ignores

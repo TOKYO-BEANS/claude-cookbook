@@ -29,10 +29,13 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
 - **Outside code before an install: three scanners, then one boat sandbox run.** The scanners
   read the code; the sandbox shows what it does. Weighed: scanners alone (they cannot see
   behaviour); a run on this PC or in WSL (that is the machine being protected).
-- **Visual check of a live site: being built.** Screenshots at desktop and phone size, judged
-  against the intended design by an agent that did not build the change. Candidates for the
-  screenshots: the `browse` CLI, Stagehand, the built-in browser. The recipe arrives from the
-  chat that builds the check.
+- **Visual check of a live site: the site's own script.** The repository's Playwright (its
+  own dependency, like a test runner) and a plain Chromium take the pictures; a Claude API request on another model than the builder's
+  judges them. Built for wecarestudio.dk on 15 November 2026. Weighed for the pictures, on
+  the same four screenshots: the `browse` CLI and Stagehand (a cloud browser cannot reach a
+  local build, and neither emulates a phone) and the built-in browser (a model call per
+  step, the visible window only). Weighed for the judge: TypeSafe / Jev (a typed probability
+  cannot carry the faults in words, with their place on the page).
 - **Agent configuration: AgentShield.** A security scan of permissions, hooks and MCP servers
   on a sanitized copy. Weighed: reading the settings by hand (no baseline to compare with).
 - **The Claude setup and its instructions: doctor-plus.** It audits the instruction files
