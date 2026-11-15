@@ -11,10 +11,12 @@ grab it if you need it?". This pull request is that, and it removes no stop.
 
 **What changed.**
 - A map row ("Edit a real photo: masks, cut-out, straighten, colour by region"), the tool in
-  `catalog.json`, a register row, and two pages: `recipes/photos-adobe-connector.md` (the use,
-  the stops, what the first job taught) and `recipes/photos-adobe-connector-setup.md`.
+  `catalog.json`, a register row, and three pages: `recipes/photos-adobe-connector.md` (the use,
+  the stops, what the first job taught), `recipes/photos-adobe-connector-setup.md` (the child
+  session and its limits) and `recipes/photos-adobe-connector-dead-ends.md`.
 - `scripts/adobe-session.mjs` in the skill's folder starts a child session that loads only this
-  connector, in `dontAsk` mode with the Adobe tools named on its command line; tests in
+  connector, in `dontAsk` mode: it reads the folders it is given, writes in its output folder
+  and calls the Adobe tools named on its command line; tests in
   `scripts/adobe-session.test.mjs`. A tool that is not read-only needs `--owner-yes`. The upload
   gate of `recipes/photos.md` is unchanged and is repeated on the new page.
 - On this PC nothing in `~/.claude/settings.json` changed: `claude.ai Adobe` and the plugin's
@@ -24,11 +26,20 @@ grab it if you need it?". This pull request is that, and it removes no stop.
 
 **Proved** (15 November 2026, Claude Code 2.1.325). One run of the script with three read-only
 tools: `adobe_mandatory_init`, `get_account_type` and `font_search` answered; no file was sent
-and nothing was created. Limits measured in two more runs: an Adobe tool not on the list, a
-write outside the output folder, and (with `--bash "curl *"`) a `mkdir` and a redirect were
-denied; `whoami` and `node --version` ran, because Claude Code runs commands it reads as
-read-only once a shell is on. An ordinary headless session on the same day listed no Adobe
-server.
+and nothing was created. Limits measured in three more runs. Denied: an Adobe tool not on the
+list; a read, Glob and Grep outside the folders given; `~/.claude/settings.json`; the script's
+own settings file; a write outside the output folder; and (with `--bash "curl *"`) a `mkdir`
+and a redirect. `whoami` and `node --version` ran, because Claude Code runs commands it reads
+as read-only once a shell is on. An ordinary headless session on the same day listed no Adobe
+server, tool, skill or plugin.
+
+**Reviewed before the first push** by a `cookbook:review` subagent that did not build it. Nine
+findings, all fixed in the second commit: the child could read every file the user can (the
+user settings' deny rules for secrets do not reach it), it could overwrite the script's own
+settings and log, the check for other servers never saw one (it now reads the debug log after
+the run), any command was accepted as a shell rule (now curl only), the output folder was
+not checked, the yes sat in the same prompt as the brief (now in the system prompt), and the
+child process was not ended cleanly.
 
 **Dead ends.**
 - A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
@@ -40,7 +51,11 @@ server.
   `remove`).
 - `allowedMcpServers` with the connector's name blocked the connector too, so the child
   session's settings deny the other connectors by name. A connector added in claude.ai later
-  stops the run at its first event until it is added to `OTHER_CONNECTORS`.
+  loads into the child (it cannot be called: no rule allows its tools); the script then ends
+  with exit code 3 and names it, until it is added to `OTHER_CONNECTORS`.
+- The connector reaches a new session a moment after it starts. A session that got its prompt
+  at once had no ToolSearch and no Adobe tool, and gave up with exit code 0. The script now
+  holds the prompt back until the debug log shows the connector connected.
 
 **Not proved.** A photo run through the script: no upload was made in this job, because none
 was asked for. The first real one needs the owner's yes, and will show which asset tools and

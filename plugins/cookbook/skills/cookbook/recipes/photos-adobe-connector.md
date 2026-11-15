@@ -12,19 +12,23 @@
   task brings it in with a child session that loads this connector and nothing else:
   `node <skill folder>/scripts/adobe-session.mjs run --brief <file> --out <folder> --allow
   <tool>,<tool>`. Name each Adobe tool the piece needs; `tools --out <folder>` lists them. How
-  it is limited, and why it is not a subagent: [setup](photos-adobe-connector-setup.md).
+  it is limited: [setup](photos-adobe-connector-setup.md). No photo has gone through the script
+  yet: the first job used the connector in an ordinary session.
 - The upload gate and the personal-data check in [photos.md](photos.md) hold here unchanged: no
   photo or film goes to Adobe without the owner's yes in the current chat naming the files, the
   Adobe account, the operation and the credits. Pass that yes word for word as `--owner-yes`;
   the script refuses every tool that is not read-only without it. The script cannot know what
-  the owner said: quoting a yes the owner did not give in this chat is breaking the gate.
+  the owner said: quoting a yes the owner did not give in this chat is breaking the gate. An
+  upload stays in the owner's Creative Cloud (the first job left a folder of 29 photos): say so
+  in the request.
 - Ask first, each time, for anything that stays in the owner's Adobe account: a Creative Cloud
   folder or file, a font kit or web project (`font_create_kit` and `get_fontkit_embed_url` both
   create one, whatever their descriptions say), a Firefly board, a Stock licence. Say afterwards
   what was left there; removing it is the owner's call.
 - Money: the connector's calls have shown no charge, which is unsettled, not zero. Read the
-  Firefly credit balance before and after a batch and give it a stop ("stop if it falls by more
-  than N"). The Adobe plan is the owner's to keep or cancel ([photos.md](photos.md)).
+  Firefly credit balance (the account menu at firefly.adobe.com) before and after a batch and
+  give it a stop ("stop if it falls by more than N"). The Adobe plan is the owner's to keep or
+  cancel ([photos.md](photos.md)).
 - What the first job taught:
   - Use the masks and do the colour work locally. The connector's own temperature adjustment
     darkened the photo and turned a neutral window frame blue.
@@ -34,7 +38,6 @@
     person. Check the crop before keeping one.
   - Generative expand invents what it adds (a second plant pot, once). The owner or the client
     approves every expanded photo.
-  - Lens blur also blurs what stands beside the person; little gain on a calm background.
   - Never relight or image-to-video on a photo of a real person: both redrew the face.
   - Adobe's result links expire: download at once, keep the originals, and look at zoomed crops
     of flat areas (walls, glass, whiteboards) before calling a batch done.
