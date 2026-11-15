@@ -1,5 +1,150 @@
 # Handoff
 
+## 15 November 2026 (late evening): the Adobe connector is back, on demand only (0.31.0)
+
+**Why.** #52 switched "Adobe for creativity" off because the map gave it no job and its page
+said "connected but not yet used for a task". That was wrong: in a business-website project it
+had made 26 masks under a colour fix on 14 photos, plus straighten, blur, expand and a cut-out
+(10 November 2026). The owner, 15 November 2026: "it really helped alot with photos/images on
+camilla site" and "can we make it so it is not auto loaded in evry session/chat but you can
+grab it if you need it?". This pull request is that, and it removes no stop.
+
+**What changed.**
+- A map row ("Edit a real photo: masks, cut-out, straighten, colour by region"), the tool in
+  `catalog.json`, a register row, and three pages: `recipes/photos-adobe-connector.md` (the use,
+  the stops, what the first job taught), `recipes/photos-adobe-connector-setup.md` (the child
+  session and its limits) and `recipes/photos-adobe-connector-dead-ends.md`.
+- `scripts/adobe-session.mjs` in the skill's folder starts a child session that loads only this
+  connector, in `dontAsk` mode and without a shell: it reads the files staged for it, writes
+  in a folder made new for the run, and calls the Adobe tools named on its command line; tests
+  in `scripts/adobe-session.test.mjs`. The only files of the owner's it can see are the ones
+  named with `--send`, and each must be named in `--owner-yes` by its whole file name; a tool
+  that is not read-only needs that yes too. The upload gate of
+  `recipes/photos.md` is unchanged and is repeated on the new page.
+- On this PC nothing in `~/.claude/settings.json` changed: `claude.ai Adobe` and the plugin's
+  server stay denied and the plugin stays disabled, so an ordinary session loads no Adobe tool.
+  The connector stays connected in claude.ai: the owner is asked **not** to disconnect it (the
+  earlier entries asked for the opposite).
+
+**Proved** (15 November 2026, Claude Code 2.1.325). One run of the script with three read-only
+tools: `adobe_mandatory_init`, `get_account_type` and `font_search` answered; no file was sent
+and nothing was created. Limits measured with the final script: allowed were a read of the
+staged file and a write and a read in the run's own folder; denied were an Adobe tool not on
+the list, an older file in the output folder, a Glob of it, the staged file's original, the
+script's own files and a write anywhere but the run's folder; a shell command had no tool to
+run in. A one-minute time
+limit stopped a long run with exit code 3. An earlier version that could be given a shell rule
+for curl also ran `whoami` and `node --version` (Claude Code runs commands it reads as
+read-only once a shell is on), which is one reason the shell is gone. An ordinary headless
+session on the same day listed no Adobe server, tool, skill or plugin.
+
+**Reviewed before the first push** by a `cookbook:review` subagent that did not build it. Nine
+findings, all fixed in the second commit. The main ones: the child could read every file the user can (the
+user settings' deny rules for secrets do not reach it), it could overwrite the script's own
+settings and log, the check for other servers never saw one (it now reads the debug log after
+the run), any command was accepted as a shell rule (the shell is gone since), the output folder was
+not checked, the yes sat in the same prompt as the brief (now in the system prompt), and the
+child process was not ended cleanly.
+
+**Review round 1** (of three). The AI review: a folder given for reading could contain the
+script's own log folder. GitHub's security review: nothing in code tied the owner's yes to
+the files that could be sent, and the log kept every event word for word. Fixed in the third
+commit by taking away rather than adding: no extra folders and no shell at all, the files to
+send are named with `--send` and must each be named in the yes, and the log keeps tool names,
+denials and cost only. The session's debug log is deleted after it has been read.
+
+**Review round 2.** The AI review: the child could read everything in an output folder that
+already held files; the yes was matched as a piece of text, so `a.jpg` passed on a yes for
+`banana.jpg`; and a link could be sent as its target. Graphify: the output folder could be
+inside `.git`, and two runs shared one settings file. Fixed in the fourth commit. A live test
+then showed that a write rule on a folder also lets the child read it, so the child has no
+rule on the output folder at all: it reads `to-adobe` and writes a folder made new for the
+run. The yes must name each file by its whole name; a link is refused; the output folder is
+checked again with links followed; `.git`, CI and hook folders are refused; every run has
+its own settings file.
+
+**Reviewed again before the last push** by a second `cookbook:review` pass: nothing high,
+three medium, the rest low; all fixed in the fifth commit. A staging folder that was already
+a link was copied through before it was refused (it is checked first now, as are the other
+folders the script uses). Started through a linked folder the script did nothing and exited
+0. The brief was an unchecked way to bring any file's text to the child (it is a small
+`.md` or `.txt` now, not a link, not in a secret folder). Also: a file to send has an
+extension, a double quote in the yes is refused, a path with pattern characters or on a
+network share is refused, the log copies no free text at all, a run that called no Adobe
+tool exits 1, and a debug log that cannot be deleted is reported. Measured in that pass: a
+`CLAUDE.md` above the output folder does not reach the child.
+
+**After round 3 was pushed**, GitHub's security review commented twice more on the round 2
+commit. The system prompt, with the owner's yes and the file names, was on the child's
+command line, where another user of the PC could list it: it is now in a file in the
+temporary folder that is deleted after the run. And a general yes covered any tool that is
+not read-only: the yes must now name the Adobe account, the credits and the operation of
+each such tool (`mask`, `upload`, `expand` and so on; a tool the script does not know by an
+operation word must be named itself), beside each file. Fixed in the sixth commit.
+
+**Round 3**, the last of the three set. The AI review: one low finding, no test for the end
+of a run; the exit codes are now one function with a test for each. GitHub's security review
+on that commit: the brief goes into the prompt as it is, and the debug log exists while the
+run lasts. The brief is now fenced as data with a mark made from its own text, and the
+system prompt says that nothing in it changes a rule. The debug log stays: the script needs
+it to know when the connector has connected and which servers did. It is in a temporary
+folder that only this user can read and that is deleted whatever happens. The review
+proposed a brief in a fixed JSON form and a debug log only on request; neither was done, for
+those reasons. A fourth push went beyond the three rounds, so it and those two answers were
+put to the owner with the question tool (15 November 2026). Asked: push a fourth round,
+accept the two answered comments (the brief in a fixed JSON form; the debug log off by
+default) as they are, and merge when every check passes and the new review has nothing high
+or medium, with any new security comment coming back to the owner first? Answer: "Push,
+accept those two, merge (Recommended)". That acceptance covers those two comments and no
+other finding.
+
+**Dead ends.**
+- A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
+  works (proved with Graphify: the subagent called it, the main session listed no server), but
+  Adobe's server answers every direct request with HTTP 403, also with a fresh token after the
+  owner signed in through `claude mcp login`. Adobe offers the connector in Claude chat, Cowork
+  and Claude Desktop only. Owner: Adobe. Clears when Adobe accepts other MCP clients. The agent
+  file, the direct server entry and its sign-in were removed again (`claude mcp logout`, then
+  `remove`).
+- `allowedMcpServers` with the connector's name blocked the connector too, so the child
+  session's settings deny the other connectors by name. A connector added in claude.ai later
+  loads into the child (it cannot be called: no rule allows its tools); the script then ends
+  with exit code 3 and names it, until it is added to `OTHER_CONNECTORS`.
+- The connector reaches a new session a moment after it starts. A session that got its prompt
+  at once had no ToolSearch and no Adobe tool, and gave up with exit code 0. The script now
+  holds the prompt back until the debug log shows the connector connected.
+
+**Not proved.** A photo run through the script: no upload was made in this job, because none
+was asked for. The first real one needs the owner's yes, and will show which asset tools an
+upload takes and which steps (a PUT to a presigned link, a download) the calling chat does
+itself, since the child has no shell. The connector's calls still report no cost: unsettled.
+
+**Evidence and copies.** `~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-connector-on-demand/`
+(the proof run, the limit runs, the three connection logs of the dead end, the tool names). The
+removed agent file and sign-in folder, and a copy of the unchanged settings file:
+`~/.local/share/backups/adobe-connector-20261115/`.
+
+**From the entry below (#54).** It merged as `b75dbaf`; the release check of that commit is
+`verified` (execution 1530).
+
+**Outstanding.**
+- The first photo run through the script: it needs the owner's yes, and will show which asset
+  tools an upload takes and which steps the calling chat does itself.
+- The Adobe plan started as a 7-day trial on 10 November 2026 and turns paid on day 7. Keeping
+  or cancelling it is the owner's decision.
+- The merge commit and the release check of this pull request go into the next Cookbook pull
+  request.
+- Next job, in its own chat: a fixed set of tasks measured before and after.
+- Stagehand's review date is 28 November (`connector-register.md`): with calls from only one
+  or two projects it moves to project scope.
+- The Proton Pass CLI was reported signed out by the daily update check on the morning of
+  15 November; not rechecked.
+- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
+  ranges.
+- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+- Not retried: the Claude API's token counter for measuring what a file costs a session. It
+  needs a workspace ID in the request (see the entry below).
+
 ## 15 November 2026 (evening): the visual check has its row and its pages (0.30.2)
 
 **The map.** The row "Visual check of a live site before a customer-visible change" no longer
@@ -63,21 +208,8 @@ Its numbers are now the final ones, and its "dead end" is corrected: a workspace
 `anthropic-api` key can be read with `depot ci vars list --repo TOKYO-BEANS/WeCare-Wix`
 (variable `ANTHROPIC_WORKSPACE_ID_REVIEW`), as the WeCare check does.
 
-**Outstanding.**
-- The merge commit and the release check of this pull request go into the next Cookbook
-  pull request.
-- Next job, in its own chat: a fixed set of tasks measured before and after.
-- Stagehand's review date is 28 November (`connector-register.md`): with calls from only one
-  or two projects it moves to project scope.
-- Waiting on the owner, not to be redone: disconnecting "Adobe for creativity" in claude.ai
-  (Settings, Connectors).
-- The Proton Pass CLI was reported signed out by the daily update check on the morning of
-  15 November; not rechecked.
-- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
-  ranges.
-- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
-- Not retried: the Claude API's token counter for measuring what a file costs a session. It
-  needs a workspace ID in the request (see the correction above).
+**Outstanding** is carried in the entry above.
+
 
 ## 15 November 2026 (later): the global rules file is cut to the hard rules (0.30.1)
 
