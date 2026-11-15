@@ -1,5 +1,77 @@
 # Handoff
 
+## 15 November 2026 (late evening): the Adobe connector is back, on demand only (0.31.0)
+
+**Why.** #52 switched "Adobe for creativity" off because the map gave it no job and its page
+said "connected but not yet used for a task". That was wrong: in a business-website project it
+had made 26 masks under a colour fix on 14 photos, plus straighten, blur, expand and a cut-out
+(10 November 2026). The owner, 15 November 2026: "it really helped alot with photos/images on
+camilla site" and "can we make it so it is not auto loaded in evry session/chat but you can
+grab it if you need it?". This pull request is that, and it removes no stop.
+
+**What changed.**
+- A map row ("Edit a real photo: masks, cut-out, straighten, colour by region"), the tool in
+  `catalog.json`, a register row, and two pages: `recipes/photos-adobe-connector.md` (the use,
+  the stops, what the first job taught) and `recipes/photos-adobe-connector-setup.md`.
+- `scripts/adobe-session.mjs` in the skill's folder starts a child session that loads only this
+  connector, in `dontAsk` mode with the Adobe tools named on its command line; tests in
+  `scripts/adobe-session.test.mjs`. A tool that is not read-only needs `--owner-yes`. The upload
+  gate of `recipes/photos.md` is unchanged and is repeated on the new page.
+- On this PC nothing in `~/.claude/settings.json` changed: `claude.ai Adobe` and the plugin's
+  server stay denied and the plugin stays disabled, so an ordinary session loads no Adobe tool.
+  The connector stays connected in claude.ai: the owner is asked **not** to disconnect it (the
+  earlier entries asked for the opposite).
+
+**Proved** (15 November 2026, Claude Code 2.1.325). One run of the script with three read-only
+tools: `adobe_mandatory_init`, `get_account_type` and `font_search` answered; no file was sent
+and nothing was created. Limits measured in two more runs: an Adobe tool not on the list, a
+write outside the output folder, and (with `--bash "curl *"`) a `mkdir` and a redirect were
+denied; `whoami` and `node --version` ran, because Claude Code runs commands it reads as
+read-only once a shell is on. An ordinary headless session on the same day listed no Adobe
+server.
+
+**Dead ends.**
+- A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
+  works (proved with Graphify: the subagent called it, the main session listed no server), but
+  Adobe's server answers every direct request with HTTP 403, also with a fresh token after the
+  owner signed in through `claude mcp login`. Adobe offers the connector in Claude chat, Cowork
+  and Claude Desktop only. Owner: Adobe. Clears when Adobe accepts other MCP clients. The agent
+  file, the direct server entry and its sign-in were removed again (`claude mcp logout`, then
+  `remove`).
+- `allowedMcpServers` with the connector's name blocked the connector too, so the child
+  session's settings deny the other connectors by name. A connector added in claude.ai later
+  stops the run at its first event until it is added to `OTHER_CONNECTORS`.
+
+**Not proved.** A photo run through the script: no upload was made in this job, because none
+was asked for. The first real one needs the owner's yes, and will show which asset tools and
+which `--bash` rule an upload takes. The connector's calls still report no cost: unsettled.
+
+**Evidence and copies.** `~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-connector-on-demand/`
+(the proof run, the limit runs, the three connection logs of the dead end, the tool names). The
+removed agent file and sign-in folder, and a copy of the unchanged settings file:
+`~/.local/share/backups/adobe-connector-20261115/`.
+
+**From the entry below (#54).** It merged as `b75dbaf`; the release check of that commit is
+`verified` (execution 1530).
+
+**Outstanding.**
+- The first photo run through the script: it needs the owner's yes, and will show which asset
+  tools and which shell rule an upload takes.
+- The Adobe plan started as a 7-day trial on 10 November 2026 and turns paid on day 7. Keeping
+  or cancelling it is the owner's decision.
+- The merge commit and the release check of this pull request go into the next Cookbook pull
+  request.
+- Next job, in its own chat: a fixed set of tasks measured before and after.
+- Stagehand's review date is 28 November (`connector-register.md`): with calls from only one
+  or two projects it moves to project scope.
+- The Proton Pass CLI was reported signed out by the daily update check on the morning of
+  15 November; not rechecked.
+- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
+  ranges.
+- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+- Not retried: the Claude API's token counter for measuring what a file costs a session. It
+  needs a workspace ID in the request (see the entry below).
+
 ## 15 November 2026 (evening): the visual check has its row and its pages (0.30.2)
 
 **The map.** The row "Visual check of a live site before a customer-visible change" no longer
@@ -63,21 +135,8 @@ Its numbers are now the final ones, and its "dead end" is corrected: a workspace
 `anthropic-api` key can be read with `depot ci vars list --repo TOKYO-BEANS/WeCare-Wix`
 (variable `ANTHROPIC_WORKSPACE_ID_REVIEW`), as the WeCare check does.
 
-**Outstanding.**
-- The merge commit and the release check of this pull request go into the next Cookbook
-  pull request.
-- Next job, in its own chat: a fixed set of tasks measured before and after.
-- Stagehand's review date is 28 November (`connector-register.md`): with calls from only one
-  or two projects it moves to project scope.
-- Waiting on the owner, not to be redone: disconnecting "Adobe for creativity" in claude.ai
-  (Settings, Connectors).
-- The Proton Pass CLI was reported signed out by the daily update check on the morning of
-  15 November; not rechecked.
-- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
-  ranges.
-- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
-- Not retried: the Claude API's token counter for measuring what a file costs a session. It
-  needs a workspace ID in the request (see the correction above).
+**Outstanding** is carried in the entry above.
+
 
 ## 15 November 2026 (later): the global rules file is cut to the hard rules (0.30.1)
 

@@ -31,6 +31,11 @@ fair trial; they never pick an owner.
 - **Photos: Adobe Firefly.** Sharpest on real faces in the side-by-side test, without
   redrawing them. Weighed: Nero AI Unblur (half the sharpness score), Upscayl (no gain),
   Topaz Photo AI (not tested; a paid desktop app).
+- **Photo editing: Adobe for creativity.** Its masks (subject, skin, a named object) carried a
+  colour fix on 14 photos that one preset could not do. Weighed: Firefly's web app (no masks;
+  its "remove object" re-rendered the whole photo small); the connector in every session (109
+  tool names each time, the reason it was once switched off); a subagent with the server
+  defined inline (Adobe refuses a direct connection).
 - **Skills: Superpowers `writing-skills`.** It tests a skill the way code is tested. Weighed:
   the bundled `skill-creator` (the fallback: it ships with the app).
 - **Model per turn: the thread's setting.** No router that works inside T3 Code was found: a

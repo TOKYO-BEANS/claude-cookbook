@@ -34,3 +34,5 @@
 - The plan started as a 7-day free trial on 10 November 2026 and turns into a paid plan on day 7 unless it
   is cancelled. Keeping or cancelling it is the owner's decision; Claude never starts, buys or cancels a
   plan.
+
+Masks, cut-out, straighten and expand: [the Adobe for creativity connector](photos-adobe-connector.md).
