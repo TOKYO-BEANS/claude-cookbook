@@ -1,9 +1,10 @@
 # Browser automation in a session (Stagehand)
 
 The owner added Stagehand on 14 November 2026: Browserbase's open-source browser SDK, the one the
-`browse` CLI is built on, mounted in Claude Code as an MCP server. Trial. In the map the
-`browse` CLI owns the job of operating a public page; Stagehand stays installed until the visual
-check for live sites is built, and has no job if that check does not use it.
+`browse` CLI is built on, mounted in Claude Code as an MCP server. Trial. In the map it owns
+several steps on a public page inside a session; the `browse` CLI owns a script or a single
+step (the owner, 15 November 2026: keep it, for "In-session browser work"). The visual check
+of a live site does not use it: it cannot reach a local build and has no phone emulation.
 
 - **When:** several steps on one public page from inside a session (open, wait, click, fill, read
   back), where the `browse` CLI would take a shell command per step. `mcp__stagehand__run` takes

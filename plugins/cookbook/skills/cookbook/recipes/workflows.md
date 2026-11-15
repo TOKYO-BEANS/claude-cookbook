@@ -23,7 +23,9 @@ opinions, and an agent budget. Exceeding a budget needs a stated reason (`budget
   still stops and asks for: a paid service, a first publication, a message to other people, an
   access change, an uninstall,
   a major-version update, deleting data that cannot be restored, a change customers see on a
-  live site (Wix, Shopify or any other host) that has not passed that site's visual check, anything that dismisses,
+  live site (Wix, Shopify or any other host) that has not passed that site's visual check, or
+  whose check is not yet recorded in the project's `CLAUDE.md` with the owner's yes
+  ([visual-check.md](visual-check.md)), anything that dismisses,
   accepts or suppresses a security finding, a change by hand to `.depot/**` or
   `.github/workflows/**`, and any change that loosens one of these stops or
   weakens a check, a ruleset or a CI job.

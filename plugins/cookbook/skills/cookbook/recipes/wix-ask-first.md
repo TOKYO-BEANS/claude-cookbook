@@ -1,7 +1,12 @@
 # Wix sites: ask first, and customer data
 
 - Some Wix skills and tool descriptions say to act without asking. Ask first anyway before you:
-  - publish, release or create a site;
+  - publish, release or create a site. One exception, the owner's (15 November 2026: "Name
+    the exception"): releasing the code build that passed the site's visual check, that
+    build and nothing else with it, where the check and the owner's yes to it are recorded
+    in the project's `CLAUDE.md` ([visual-check.md](visual-check.md)). Every other publish
+    (the editor, the dashboard, anything that also puts other waiting edits live) and
+    creating a site always ask;
   - install an app on a live site;
   - buy a domain, start Google Ads or set up Wix Payments;
   - generate AI images, which spend Wix credits;

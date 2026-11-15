@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening (Adobe Firefly), SEO, Wix sites, Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening (Adobe Firefly), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -47,7 +47,7 @@ fallback and say that you did.
 | Dependency updates | Dependabot version updates | — | [security](recipes/security.md) |
 | Open CodeQL alerts and Semgrep findings | **sa-triage** | — | [workflows](recipes/workflows.md) |
 | Vet outside code before an install | the vetting scripts: **Gitleaks**, **OSV-Scanner**, **Trivy**, then one **boat** sandbox run | none: "no result" stops the install | [connecting](recipes/connecting.md), [vetting-sandbox](recipes/vetting-sandbox.md) |
-| Visual check of a live site before a customer-visible change | being built | until it exists: ask the owner | being built |
+| Visual check of a live site before a customer-visible change | the site's own check script, in its repository: capture, pixels, layout rules, a judge on another model | none: no check recorded and approved for the site, or no pass, means ask the owner | [visual-check](recipes/visual-check.md) |
 | Agent configuration: permissions, hooks, MCP servers | **AgentShield** on a sanitized copy | — | [agent-audit](recipes/agent-audit.md) |
 | Health of the Claude setup and its instruction files | **doctor-plus** | Claude Code's own `/doctor` | [add-ons](recipes/add-ons.md) |
 | **Ship** | | | |
@@ -67,7 +67,8 @@ fallback and say that you did.
 | Typed records: companies, people, jobs, filings, places | **Firecrawl** Alexandria | Parallel FindAll | [firecrawl](recipes/firecrawl.md) |
 | One question across 10 to 50 pages | the web batch script (**Parallel**, **Firecrawl**, **TypeSafe / Jev**) | Parallel Search excerpts | [web-batch](recipes/web-batch.md) |
 | A cited answer that needs several sources | **sa-research** | Parallel `web_research` | [workflows](recipes/workflows.md) |
-| Operate a public page: click, fill, screenshot | **Browserbase**, the `browse` CLI | Firecrawl, when reading is enough | [cloud-browser](recipes/cloud-browser.md) |
+| Several steps on a public page inside a session: click, fill, screenshot | **Stagehand** | the `browse` CLI, a command per step | [stagehand](recipes/stagehand.md) |
+| A public page from a script, or one step | **Browserbase**, the `browse` CLI | Firecrawl, when reading is enough | [cloud-browser](recipes/cloud-browser.md) |
 | A site that needs a sign-in | **agent-browser**, with a login from the vault | the built-in browser, where the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Web logins | the **Proton Pass CLI**, vault "Claude" | the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Keys and tokens | the DPAPI store (`agent-key.ps1`, `with-key.mjs`) | — | — |
