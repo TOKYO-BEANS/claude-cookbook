@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolve } from "node:path";
-import { aggregate, buildPrompt, claudeArgs, loadTasks, parseAnswer, readRule, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
+import { aggregate, buildPrompt, claudeArgs, foreignRows, loadTasks, parseAnswer, parseFlags, parseLimits, readRule, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
 
 const { tasks, suffix, set } = loadTasks();
 const task = (id) => tasks.find((t) => t.id === id);
@@ -76,6 +76,23 @@ test("a stream is reduced to its requests, tool calls and result; a message spli
   assert.deepEqual(s.toolCalls, ["Skill cookbook:cookbook", "Read recipes/wix.md"]);
   assert.deepEqual([s.result.costUsd, s.result.cacheWrite, s.result.output, s.result.denials], [0.5, 600, 7, 0]);
   assert.equal(s.init.login, "plan");
+});
+
+test("the cap, the stop and the repeats must be positive numbers; a bad one stops the command", () => {
+  assert.deepEqual(parseLimits({}), { cap: 1, limit: 30, reps: 2, model: "claude-opus-5-5" });
+  assert.deepEqual(parseLimits({ cap: "0.5", limit: "10", reps: "1", model: "m" }), { cap: 0.5, limit: 10, reps: 1, model: "m" });
+  for (const bad of [{ limit: "3O" }, { limit: "" }, { cap: "NaN" }, { cap: "0" }, { cap: "-1" }, { reps: "1.5" }, { reps: "x" }, { cap: "40" }, { limit: "Infinity" }]) assert.throws(() => parseLimits(bad), /--(cap|limit|reps)/, JSON.stringify(bad));
+});
+
+test("a flag without a value is an error", () => {
+  assert.deepEqual(parseFlags(["--out", "o", "--limit", "5"]), { out: "o", limit: "5" });
+  for (const bad of [["--limit"], ["--limit", "--out", "o"], ["limit", "5"]]) assert.throws(() => parseFlags(bad), /needs a value/);
+});
+
+test("rows of another task set or model in the folder are found; a row from before the model was recorded counts as this model", () => {
+  const rows = [{ set: "a", task: "T" }, { set: "a", model: "m" }, { set: "b", model: "m" }, { set: "a", model: "other" }];
+  assert.deepEqual(foreignRows(rows, "a", "m"), [rows[2], rows[3]]);
+  assert.deepEqual(foreignRows(rows.slice(0, 2), "a", "m"), []);
 });
 
 test("the report takes the mean of the repeats and keeps the range of the input", () => {

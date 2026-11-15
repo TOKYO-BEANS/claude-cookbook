@@ -115,7 +115,40 @@ const readSummaries = (outDir) => {
   return existsSync(file) ? readFileSync(file, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
 };
 
+// The cap, the batch stop and the repeats, read strictly: a value that is no positive number
+// would switch the stop off (a comparison with NaN is false), so it stops the command instead.
+export function parseLimits(opts) {
+  const num = (name) => {
+    const v = opts[name] === undefined ? DEFAULTS[name] : Number(opts[name]);
+    if (!Number.isFinite(v) || v <= 0) throw new Error(`--${name} must be a number above 0, got "${opts[name]}"`);
+    return v;
+  };
+  const cap = num("cap"), limit = num("limit"), reps = num("reps");
+  if (!Number.isInteger(reps)) throw new Error(`--reps must be a whole number, got "${opts.reps}"`);
+  if (cap > limit) throw new Error(`--cap ${cap} is above --limit ${limit}`);
+  return { cap, limit, reps, model: opts.model ?? DEFAULTS.model };
+}
+
+// Rows of another task set or model in the same folder: results compare within one set and one
+// model only, so `run` and `report` stop on them. A row written before `model` was recorded has none.
+export const foreignRows = (rows, set, model) => rows.filter((r) => r.set !== set || (r.model !== undefined && r.model !== model));
+const refuseForeign = (rows, set, model, outDir) => {
+  const other = foreignRows(rows, set, model);
+  if (other.length) throw new Error(`${outDir} holds ${other.length} result(s) of another task set or model (${[...new Set(other.map((r) => `${r.set}, ${r.model ?? "model not recorded"}`))].join("; ")}): use a new --out folder`);
+};
+
+// Flags come in pairs; a flag without a value is an error, never a silent default.
+export function parseFlags(rest) {
+  const opts = {};
+  for (let i = 0; i < rest.length; i += 2) {
+    if (!/^--[a-z]+$/.test(rest[i]) || rest[i + 1] === undefined || rest[i + 1].startsWith("--")) throw new Error(`"${rest[i]}" needs a value`);
+    opts[rest[i].slice(2)] = rest[i + 1];
+  }
+  return opts;
+}
+
 async function run(opts) {
+  const { cap, limit, reps, model } = parseLimits(opts);
   const { suffix, tasks, set } = loadTasks();
   const sidesDir = resolve(opts.sides), outDir = resolve(opts.out);
   mkdirSync(outDir, { recursive: true });
@@ -126,11 +159,11 @@ async function run(opts) {
   const sides = opts.side ? [opts.side] : ["before", "after"];
   const chosen = opts.task ? tasks.filter((t) => t.id === opts.task) : tasks;
   if (!chosen.length) throw new Error(`no task ${opts.task}`);
-  const model = opts.model ?? DEFAULTS.model, cap = Number(opts.cap ?? DEFAULTS.cap), limit = Number(opts.limit ?? DEFAULTS.limit), reps = Number(opts.reps ?? DEFAULTS.reps);
   for (let rep = 1; rep <= reps; rep += 1) {
     for (const task of chosen) {
       for (const side of sides) {
         const done = readSummaries(outDir);
+        refuseForeign(done, set, model, outDir);
         if (done.some((r) => r.task === task.id && r.side === side && r.rep === rep)) continue;
         const spent = done.reduce((a, r) => a + r.costUsd, 0);
         if (spent + cap > limit) { console.log(`STOPPED: ${spent.toFixed(2)} spent, the next run could pass the limit of ${limit}`); return; }
@@ -144,7 +177,7 @@ async function run(opts) {
         const s = summarizeStream(res.out.split("\n"), model);
         if (!s.result) { console.log(`${name}: NO RESULT (exit ${res.code}); see ${name}.err`); return; }
         const score = scoreAnswer(task, s.result.text);
-        const row = { set, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
+        const row = { set, model, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
         delete row.text;
         appendFileSync(join(outDir, "summary.jsonl"), `${JSON.stringify(row)}\n`);
         console.log(`${name}: ${score.passed}/${score.of} | in ${row.input + row.cacheWrite + row.cacheRead} out ${row.output} | turns ${row.turns} | ${(row.durationMs / 1000).toFixed(1)}s | USD ${row.costUsd.toFixed(3)} | ${row.toolCalls.join(", ") || "no tools"}${row.failed.length ? ` | missed: ${row.failed.join("; ")}` : ""}${row.denials ? ` | ${row.denials} denied` : ""}`);
@@ -163,10 +196,10 @@ async function probe(opts) {
   const emptyMcp = join(outDir, "empty-mcp.json"), settings = join(outDir, "run-settings.json");
   writeFileSync(emptyMcp, '{"mcpServers":{}}\n');
   writeFileSync(settings, `${JSON.stringify(runSettings())}\n`);
-  const model = opts.model ?? DEFAULTS.model;
+  const { cap, model } = parseLimits(opts);
   for (const side of ["before", "after"]) {
     const sideDir = join(sidesDir, side);
-    const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap: Number(opts.cap ?? DEFAULTS.cap) }), join(sideDir, "work"), PROBE_PROMPT);
+    const res = await runClaude(claudeArgs({ sideDir, emptyMcp, settings, model, cap }), join(sideDir, "work"), PROBE_PROMPT);
     writeFileSync(join(outDir, `probe-${side}.jsonl`), res.out);
     const s = summarizeStream(res.out.split("\n"), model);
     console.log(`== ${side}: first request ${s.firstContext} tokens, USD ${(s.result?.costUsd ?? 0).toFixed(3)}, login ${s.init?.login}\n${s.result?.text ?? res.err}`);
@@ -192,6 +225,7 @@ export function aggregate(rows) {
 
 function report(opts) {
   const rows = readSummaries(resolve(opts.out));
+  if (rows.length) refuseForeign(rows, rows[0].set, rows.find((r) => r.model !== undefined)?.model, resolve(opts.out));
   const agg = aggregate(rows);
   const lines = ["| Task | Side | Input tokens (range) | First request | Largest request | Output | Turns | Seconds | USD | Checks |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"];
   for (const a of agg) lines.push(`| ${a.task} | ${a.side} | ${a.input} (${a.inputMin} to ${a.inputMax}) | ${a.firstContext} | ${a.peakContext} | ${a.output} | ${a.turns.toFixed(1)} | ${a.seconds.toFixed(1)} | ${a.costUsd.toFixed(3)} | ${a.passed}/${a.of} |`);
@@ -208,10 +242,15 @@ function report(opts) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [cmd, ...rest] = process.argv.slice(2);
-  const opts = {};
-  for (let i = 0; i < rest.length; i += 2) opts[rest[i].replace(/^--/, "")] = rest[i + 1];
-  if (cmd === "run" && opts.sides && opts.out) await run(opts);
-  else if (cmd === "probe" && opts.sides && opts.out) await probe(opts);
-  else if (cmd === "report" && opts.out) report(opts);
-  else { console.error("usage: measure.mjs probe --sides <dir> --out <dir> | run --sides <dir> --out <dir> [--side before|after] [--task <id>] [--reps 2] [--cap 1] [--limit 30] [--model <id>] | report --out <dir>"); process.exit(2); }
+  const usage = "usage: measure.mjs probe --sides <dir> --out <dir> | run --sides <dir> --out <dir> [--side before|after] [--task <id>] [--reps 2] [--cap 1] [--limit 30] [--model <id>] | report --out <dir>";
+  try {
+    const opts = parseFlags(rest);
+    if (cmd === "run" && opts.sides && opts.out) await run(opts);
+    else if (cmd === "probe" && opts.sides && opts.out) await probe(opts);
+    else if (cmd === "report" && opts.out) report(opts);
+    else { console.error(usage); process.exit(2); }
+  } catch (e) {
+    console.error(`${e.message}\n${usage}`);
+    process.exit(2);
+  }
 }

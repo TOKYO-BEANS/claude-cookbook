@@ -68,9 +68,18 @@ into `<side>/plugin`, the rules file as `<side>/work/CLAUDE.md`), then `probe`, 
 `report`. Results compare within one task set only: a changed task or check takes a new
 `set` name.
 
-**Verification.** `npm test` passes (335 tests, 8 of them in `scripts/measure.test.mjs`). The 48
+**Verification.** `npm test` passes (338 tests, 11 of them in `scripts/measure.test.mjs`). The 48
 stored answers were scored again from the raw streams after the last change to the parser:
 152 of 152, none moved.
+
+**Checks and review on the pull request (#56).** The first push failed `Depot CI / test`: a new
+test assumed a Windows path; the Read rule and its test now hold on Linux too. CodeQL then
+raised one high finding (`js/clear-text-logging`, alert 3): the probe printed the stream's
+`apiKeySource` label. It is no key, but the finding was fixed, not answered: the runner records
+only whether a run was on the plan login. AI review round 1 (of three), two low findings, both
+fixed: a `--cap`, `--limit` or `--reps` that is no positive number stops the command (it would
+have switched the batch stop off), as does a flag without a value; and `run` and `report`
+refuse a folder that holds results of another task set or model.
 
 **Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`
 (`RESULT.md`, `runs/report.md`, `runs/summary.jsonl`, one stream per run, both sides in
