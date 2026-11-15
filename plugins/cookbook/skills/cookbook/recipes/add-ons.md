@@ -7,8 +7,9 @@ in every session, headless ones included, so a misbehaving one affects scheduled
   accepted fixes through a worktree pull request. Leave alone the standard-managed CLAUDE.md
   section, AGENTS.md's shared owner decisions and the junctioned shared skills
   (`release-maintenance`, `typesafe-ai`).
-- Updates: the skill is a plain copy in `~/.claude/skills`; the `stack-updates` skill's steps
-  update it.
+- Updates: the skill is a plain copy in `~/.claude/skills`. Read the upstream diff from the
+  recorded commit to the new one, copy the folder over the old one, then record the commit
+  with the `stack-updates` skill's `updates.mjs record doctor-plus/skill <commit>`.
 - In a skill or command body, a dollar sign right before a digit becomes an argument when the
   skill gets arguments: write `"${1}"` in shell code and `USD 30` for prices
   (`scripts/check.mjs` enforces it here). Fix a skill in its source repository, never in a

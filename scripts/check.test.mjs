@@ -86,7 +86,7 @@ test("the stack-updates skill's update table names recipe pages by their exact t
   for (const n of named) assert.ok(titles.has(n), `"${n}" is not the title of a page in recipes/`);
   // The steps are on the page the row names: an update row never points at a page without them.
   const body = (title) => pages.find((p) => p.text.startsWith(`# ${title}\n`) || p.text.startsWith(`# ${title}\r\n`)).text;
-  for (const n of named.filter((x) => /setup|add-ons/.test(x))) assert.match(body(n), /update/i, n);
+  for (const n of named.filter((x) => /setup|add-ons|^Compaction$/.test(x))) assert.match(body(n), /update/i, n);
 });
 
 test("pages: each fits one Read, has its own title and a plain name; SKILL.md stays an index", () => {
