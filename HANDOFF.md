@@ -23,7 +23,10 @@ before the file was saved (15 November 2026):
   never adds a vault item, against the owner's global rule of 14 November 2026 ("Claude can
   add to the vault itself ... That covers a login for a user made for Claude. A login that is
   the owner's own ... is still added by the owner, never typed in chat."): "Yes, correct the
-  page". The page now says that and no more: Claude still never edits or moves an item.
+  page". The page now says that and no more: Claude still never edits or moves an item, and
+  each new login needs the owner's yes to that login in the current chat (added after GitHub's
+  security review asked for a gate at the moment of creation; the global rule already says a
+  route is set up "on the yes").
 
 **In this pull request.**
 - Four rules that were in the global file and on no page are on their page: `firecrawl.md`
@@ -39,7 +42,8 @@ before the file was saved (15 November 2026):
 **Proved with a new session** (headless, the Skill tool only): it listed the five headings of
 the new global file, quoted the credential and Sophos rules, counted seven stops, and loaded
 the `cookbook` skill from the installed 0.30.0. The installed plugin was 0.29.0 when this job
-started and 0.30.0 when that session ran; this job did not update it.
+started and 0.30.0 when that session ran: the chat that merged #52 installed it on the owner's
+yes.
 
 **Memory indexes.** Stack-Atlas's went from 18,165 to 5,635 bytes and Probiz's from 16,117 to
 4,624: one short line per memory. Where a long line named something its memory file did not,
