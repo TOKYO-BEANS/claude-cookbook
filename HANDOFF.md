@@ -32,6 +32,14 @@ named `<recipe>-<part>.md`. The Skill tool is not cut, which is why `SKILL.md` l
 - tstack against the `sa-*` route: the comparison is not in Stack-Atlas's `HANDOFF.md`, so the
   map row says "decided after the comparison"; `sa-release` owns the step until then.
 
+**The owner's decision this follows** (15 November 2026, the owner's global rules, section
+"How we work: the owner sets the outcome, Claude ships it", quoted): "Do not ask for approval
+of a spec, a plan, a design option, a merge or a deploy. Ask a question only when the outcome
+itself is unclear." and "Where a project file still asks for a yes before a spec, plan, design
+choice, merge or deploy, this rule wins; correct that file in the next pull request to that
+repository." This pull request is that correction for the Cookbook. The live-site stop is
+worded wider than before (any host, not only Wix and Shopify).
+
 **Aligned with "How we work" (owner, 15 November 2026).** The ground rules, the workflow
 stops, the Cloudflare deploy line and the design-approval lines now say what the global rules
 say: no approval for a spec, plan, design, merge or deploy; the stops stay. A security finding

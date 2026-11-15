@@ -91,8 +91,10 @@ fallback and say that you did.
 - The owner sets the outcome; Claude plans, builds, merges, deploys and verifies without asking
   for approval. Checks decide: the merge condition is in `recipes/ci-releases.md`.
 - Stop and ask for: spending money (a new paid service, a plan change, a paid batch over its
-  stated limit); deleting data that cannot be restored; a customer-visible change on a live
-  Wix or Shopify site that has not passed the site's visual check; access only the owner can
+  stated limit); deleting data that cannot be restored; a change customers see on a live
+  site (Wix, Shopify or any other host) that has not passed that site's visual check, and
+  until the check is recorded in the project's `CLAUDE.md` and the owner has said yes to it
+  once, always ask; access only the owner can
   give, and any access change; a first publication; a message to other people; an uninstall;
   a major-version update; and any change that loosens one of these stops or weakens a check, a
   ruleset or a CI job.

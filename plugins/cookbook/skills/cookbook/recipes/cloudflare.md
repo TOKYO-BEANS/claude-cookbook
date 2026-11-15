@@ -3,7 +3,9 @@
 - Projects with a `wrangler.jsonc` use the project-pinned Wrangler; otherwise the `cf` CLI.
 - Before a deploy: build, test, dry run, list pending D1 migrations, note the rollback version.
   A deploy follows a merge whose checks passed, and the release check follows the deploy at once.
-  An Access change needs the owner's yes.
+  An Access change needs the owner's yes. So does a change customers see on a live site that
+  has not passed that site's visual check (the ground rules): Cloudflare hosting is no way
+  around that stop.
 - Run Wrangler with `WRANGLER_SEND_METRICS=false`, `WRANGLER_SEND_ERROR_REPORTS=false` and
   `WRANGLER_NO_SKILLS_UPDATE_PROMPTS=true`. Wrangler 4.151's skills install and update prompt can
   write into `~/.claude/skills` from an interactive terminal.

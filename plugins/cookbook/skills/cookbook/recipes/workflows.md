@@ -22,8 +22,8 @@ opinions, and an agent budget. Exceeding a budget needs a stated reason (`budget
 - `merge: true` when the merge condition in [ci-releases.md](ci-releases.md) holds and no stop applies. A workflow
   still stops and asks for: a paid service, a first publication, a message to other people, an
   access change, an uninstall,
-  a major-version update, deleting data that cannot be restored, a customer-visible change on a
-  live Wix or Shopify site that has not passed the site's visual check, anything that dismisses,
+  a major-version update, deleting data that cannot be restored, a change customers see on a
+  live site (Wix, Shopify or any other host) that has not passed that site's visual check, anything that dismisses,
   accepts or suppresses a security finding, and any change that loosens one of these stops or
   weakens a check, a ruleset or a CI job.
 - Record each completed run as Stack-Atlas's `workflows/README.md` "After a run" says.
