@@ -84,7 +84,7 @@ function mapErrors(skill, toolNames) {
       continue;
     }
     const [job, owner, fallback, recipe] = cells;
-    if (!owner && !fallback && !recipe) continue; // a group heading
+    if (!owner && !fallback && !recipe && /^\*\*.+\*\*$/.test(job)) continue; // a group heading: a bold job cell alone
     rows += 1;
     if (!owner) errors.push(`map: row "${job}" has no owner`);
     if (!fallback) errors.push(`map: row "${job}" has no fallback (write "—" when there is none)`);

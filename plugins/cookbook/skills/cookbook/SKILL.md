@@ -96,8 +96,9 @@ fallback and say that you did.
   until the check is recorded in the project's `CLAUDE.md` and the owner has said yes to it
   once, always ask; access only the owner can
   give, and any access change; a first publication; a message to other people; an uninstall;
-  a major-version update; and any change that loosens one of these stops or weakens a check, a
-  ruleset or a CI job.
+  a major-version update; a change by hand to CI or secret-bearing files (`.depot/**`,
+  `.github/workflows/**`); and any change that loosens one of these stops or weakens a check,
+  a ruleset or a CI job.
 - A security finding is fixed. Dismissing, accepting or suppressing one goes to the owner; a
   model's judgement never clears one.
 - A recipe page may add stricter stops for its own job (a write on a live system, a publish,

@@ -11,6 +11,11 @@
   about security. A security finding, from the review or a scanner, is fixed in the pull
   request; one Claude would dispute, dismiss or accept goes to the owner before any merge. A
   model's judgement never clears one.
+- **A hand change to CI goes to the owner.** A pull request that changes `.depot/**` or
+  `.github/workflows/**` can read the CI secrets, and the `ai-review` job runs the base branch's
+  reviewer, so the review does not stop it. It does not merge on the merge condition: the
+  owner sees it first. The exception is the standard's own upgrade pull request (the
+  `stack-atlas-onboard` skill), which merges when green.
 - **From a finished change to a merged pull request:** `sa-release` with `merge: true`, and T3's
   `watch_pull_request` to wait for checks. The watch also wakes for older commits: check the head
   commit on each wake-up. Whether tstack's `full-send` takes over this step is decided after the

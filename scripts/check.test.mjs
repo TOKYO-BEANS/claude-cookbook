@@ -55,6 +55,11 @@ test("the map: every row has an owner, a fallback and a recipe page, a dash or '
   assert.ok(errors({ skillText: row("| A new job | | — | — |") }).some((e) => /row "A new job" has no owner/.test(e)));
   assert.ok(errors({ skillText: row("| A new job | someone | | — |") }).some((e) => /row "A new job" has no fallback/.test(e)));
   assert.ok(errors({ skillText: row("| A new job | someone | — |") }).some((e) => /row "A new job" needs 4 cells/.test(e)));
+  // Only a bold job cell makes a group heading: a job row left blank is reported, not skipped.
+  const blank = errors({ skillText: row("| A new job | | | |") });
+  assert.ok(blank.some((e) => /row "A new job" has no owner/.test(e)) && blank.some((e) => /row "A new job" has no fallback/.test(e)));
+  assert.ok(blank.some((e) => /row "A new job" names no recipe page/.test(e)));
+  assert.deepEqual(errors({ skillText: row("| **A new group** | | | |") }), []);
   assert.ok(errors({ skillText: row("| A new job | someone | — | [why](options/ship.md) |") }).some((e) => /a recipe page is in recipes\//.test(e)));
   assert.ok(errors({ skillText: skillText.replace("## The map", "## Choosing") }).some((e) => /no "## The map" section/.test(e)));
 });

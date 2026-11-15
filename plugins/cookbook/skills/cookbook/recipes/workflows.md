@@ -24,6 +24,7 @@ opinions, and an agent budget. Exceeding a budget needs a stated reason (`budget
   access change, an uninstall,
   a major-version update, deleting data that cannot be restored, a change customers see on a
   live site (Wix, Shopify or any other host) that has not passed that site's visual check, anything that dismisses,
-  accepts or suppresses a security finding, and any change that loosens one of these stops or
+  accepts or suppresses a security finding, a change by hand to `.depot/**` or
+  `.github/workflows/**`, and any change that loosens one of these stops or
   weakens a check, a ruleset or a CI job.
 - Record each completed run as Stack-Atlas's `workflows/README.md` "After a run" says.
