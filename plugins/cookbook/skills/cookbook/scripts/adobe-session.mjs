@@ -8,7 +8,8 @@
 //        [--send <file>]... [--owner-yes "<the owner's words>"]
 //        [--model claude-sonnet-5-5] [--budget 3] [--minutes 20] [--dry-run]
 //   node adobe-session.mjs tools --out <folder>
-//        writes the connector's tool names to <folder>/adobe-tools.txt; calls none of them
+//        writes the connector's tool names to adobe-tools.txt in the run's results folder
+//        (<folder>/run-<time>, printed at the end); calls none of them
 //
 // Why a child session: Adobe's server refuses a direct connection from Claude Code (HTTP
 // 403 on every request, 15 November 2026), so an agent file cannot define it inline. The
@@ -17,9 +18,13 @@
 // The limits are in code, not in the child's good behaviour:
 // - It runs without the user settings (no plugins, hooks or other servers) and in `dontAsk`
 //   mode, where a call that no rule allows is denied.
-// - It has no shell. It may read and write --out and nothing else, so the only files of the
-//   owner's it can see are the ones this script copied into <out>/to-adobe: the files named
-//   with --send. Each of those must be named in --owner-yes, by file name.
+// - It has no shell. It may read <out>/to-adobe, which holds exactly the files this script
+//   copied there (the files named with --send), and read and write <out>/run-<time>, a
+//   folder this script makes new for the run. Nothing else: a rule that lets it write a
+//   folder also lets it read that folder (measured), so it gets no rule on --out itself.
+//   The files named with --send are therefore the only files of the owner's it can see,
+//   whatever else --out holds. Each must be named in --owner-yes, by its whole file name,
+//   and may not be a link to another file.
 // - It may call the Adobe tools named in --allow and no other. A tool outside READ_ONLY
 //   needs --owner-yes.
 // - Its own settings repeat the deny rules for logins and keys, which the user settings
@@ -31,9 +36,9 @@
 // The script cannot know what the owner said. It checks that a yes is there and names the
 // files; whether the owner gave it is the recipe's gate (recipes/photos.md).
 import { spawn } from "node:child_process";
-import { copyFileSync, createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname as dirOf, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const CONNECTOR = "claude.ai Adobe";
@@ -60,6 +65,10 @@ export const SECRET_DENY = Object.freeze([
   ...SECRET_FOLDERS.flatMap((f) => [`Read(~/${f}/**)`, `Edit(~/${f}/**)`, `Read(//**/${f}/**)`, `Edit(//**/${f}/**)`]),
   "Read(//**/.env)", "Read(//**/.env.*)", "Read(~/.claude.json)", "Edit(~/.claude.json)",
 ]);
+// Folders whose files a tool runs or obeys (git hooks, CI workflows, editor tasks). The
+// child writes in --out, so --out may not be in one: a results folder inside a repository
+// is fine, one inside its .git is not.
+export const RUN_FOLDERS = Object.freeze([".git", ".github", ".depot", ".husky", ".vscode", "node_modules"]);
 export const DEFAULTS = Object.freeze({ model: "claude-sonnet-5-5", budget: 3, minutes: 20 });
 const TOOL_NAME = /^[A-Za-z0-9_-]{1,80}$/;
 const MODEL = /^claude-[a-z0-9-]{3,40}$/;
@@ -91,7 +100,8 @@ export const WAIT = `The connector's tools are deferred: load each one you need 
 
 const fail = (message) => Object.assign(new Error(message), { usage: true });
 const slashes = (p) => String(p).replace(/\\/g, "/").replace(/\/+$/, "");
-const secretIn = (p) => slashes(p).split("/").find((s) => SECRET_FOLDERS.includes(s.toLowerCase()));
+const segmentIn = (p, list) => slashes(p).split("/").find((s) => list.includes(s.toLowerCase()));
+const secretIn = (p) => segmentIn(p, SECRET_FOLDERS);
 
 // Why a folder may not be --out: [] when it may. `exists` is injectable for tests.
 export function folderErrors(folder, { home = homedir(), exists = existsSync } = {}) {
@@ -102,8 +112,17 @@ export function folderErrors(folder, { home = homedir(), exists = existsSync } =
   if (!p.replace(/^[A-Za-z]:/, "")) errors.push("a drive or file-system root");
   else if (lower(h) === lower(p) || lower(h).startsWith(`${lower(p)}/`)) errors.push("the home folder or a folder above it");
   if (secretIn(p)) errors.push(`inside ${secretIn(p)}`);
+  if (segmentIn(p, RUN_FOLDERS)) errors.push(`inside ${segmentIn(p, RUN_FOLDERS)}, whose files are run or obeyed`);
   for (const mark of [".git", ".claude"]) if (exists(join(p, mark))) errors.push(`a repository or project root (it holds ${mark})`);
   return errors;
+}
+
+// Whether the owner's yes names a file: the whole name, not a piece of a longer one. "a.jpg"
+// is not named by "banana.jpg", nor "1.jpg" by "11.jpg" or "1.jpg.bak"; a full stop or a
+// comma after the name is punctuation.
+export function namedIn(ownerYes, name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![A-Za-z0-9._-])${escaped}(?![A-Za-z0-9_-]|\\.[A-Za-z0-9_-])`, "i").test(String(ownerYes));
 }
 
 // The files a run may send: [{ from, name }]. Each is named in the owner's yes by its file
@@ -118,7 +137,7 @@ export function sendList(files, ownerYes) {
     if (seen.has(name.toLowerCase())) throw fail(`--send ${file}: two files with the name ${name}`);
     seen.add(name.toLowerCase());
     if (!ownerYes) throw fail(`--send ${file}: --owner-yes "<the owner's words from this chat>" is required`);
-    if (!ownerYes.toLowerCase().includes(name.toLowerCase())) throw fail(`--send ${file}: the owner's yes does not name ${name}. A yes names each file it covers`);
+    if (!namedIn(ownerYes, name)) throw fail(`--send ${file}: the owner's yes does not name ${name}. A yes names each file it covers`);
     return { from, name };
   });
 }
@@ -179,13 +198,14 @@ export function buildRun(o, briefText = "", debugPath = join(tmpdir(), "adobe-se
   const control = `${out}.adobe-session`;
   const stage = join(out, STAGE);
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const paths = { settings: join(control, "settings.json"), log: join(control, `${stamp}.jsonl`), debug: debugPath };
+  const results = join(out, `run-${stamp}`);
+  const paths = { settings: join(control, `${stamp}.settings.json`), log: join(control, `${stamp}.jsonl`), debug: debugPath };
   const settings = {
     deniedMcpServers: OTHER_CONNECTORS.map((serverName) => ({ serverName })),
     permissions: { deny: [...SECRET_DENY] },
   };
   const listing = o.command === "tools";
-  const allowed = ["ToolSearch", `Read(${rulePath(out)}/**)`, `Edit(${rulePath(out)}/**)`, ...o.allow.map((n) => `${TOOL_PREFIX}${n}`)];
+  const allowed = ["ToolSearch", `Read(${rulePath(stage)}/**)`, `Edit(${rulePath(results)}/**)`, ...o.allow.map((n) => `${TOOL_PREFIX}${n}`)];
   const system = [
     RULES,
     "",
@@ -197,10 +217,10 @@ export function buildRun(o, briefText = "", debugPath = join(tmpdir(), "adobe-se
       : "The owner has given no yes for this run: leave nothing in the Adobe account.",
   ].join("\n");
   const prompt = listing
-    ? `${WAIT}\nThen call no Adobe tool. Write the name of every tool that starts with ${TOOL_PREFIX} (deferred ones included), without that prefix, sorted, one per line, to ${join(out, "adobe-tools.txt")}. Answer with the count only.`
+    ? `${WAIT}\nThen call no Adobe tool. Write the name of every tool that starts with ${TOOL_PREFIX} (deferred ones included), without that prefix, sorted, one per line, to ${join(results, "adobe-tools.txt")}. Answer with the count only.`
     : [
         WAIT,
-        `Output folder: ${out}`,
+        `Output folder, the only place you can write: ${results}`,
         `Adobe tools you may call: ${o.allow.join(", ")}. Every other tool of the connector is denied.`,
         "",
         "The brief:",
@@ -213,7 +233,7 @@ export function buildRun(o, briefText = "", debugPath = join(tmpdir(), "adobe-se
     "--no-session-persistence", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
     "--debug-file", paths.debug, "--append-system-prompt", system,
   ];
-  return { argv, settings, paths, prompt, system, out, control, stage };
+  return { argv, settings, paths, prompt, system, out, control, stage, results };
 }
 
 // The session's first event names the servers it knows by then, and the plugins. It is
@@ -275,14 +295,30 @@ export function summarize(events) {
 
 // Copies the files to send into <out>/to-adobe, which must then hold exactly those files:
 // a file left there by an earlier run was covered by an earlier yes, not by this one.
-export function stageFiles(stage, send, fs = { existsSync, readdirSync, statSync, mkdirSync, copyFileSync }) {
+// A file to send must be a real file where its path says it is: a link (to a key, say)
+// would be copied as its target. The folder is made even when nothing is sent: the child
+// starts in it.
+export function stageFiles(stage, send, fs = { existsSync, readdirSync, lstatSync, realpathSync, mkdirSync, copyFileSync }) {
   const names = new Set(send.map((s) => s.name.toLowerCase()));
   const left = fs.existsSync(stage) ? fs.readdirSync(stage).filter((n) => !names.has(n.toLowerCase())) : [];
   if (left.length) throw fail(`${stage} holds files this run does not send (${left.slice(0, 5).join(", ")}): use a new --out`);
-  for (const s of send) if (!fs.statSync(s.from).isFile()) throw fail(`--send ${s.from}: not a file`);
-  if (!send.length) return;
+  for (const s of send) {
+    if (!fs.lstatSync(s.from).isFile()) throw fail(`--send ${s.from}: not a plain file (a link or a folder is refused)`);
+    const real = fs.realpathSync(s.from);
+    if (secretIn(real)) throw fail(`--send ${s.from}: it is really inside ${secretIn(real)}`);
+  }
   fs.mkdirSync(stage, { recursive: true });
   for (const s of send) fs.copyFileSync(s.from, join(stage, s.name));
+}
+
+// --out as the file system has it, links followed, checked once more: a folder that is
+// really somewhere else (a link into .ssh, say) is refused like that place.
+export function realOut(out, fs = { mkdirSync, realpathSync }, checks = {}) {
+  fs.mkdirSync(out, { recursive: true });
+  const real = fs.realpathSync(out);
+  const errors = folderErrors(real, checks);
+  if (errors.length) throw fail(`--out ${out} is really ${real}: ${errors.join("; ")}`);
+  return real;
 }
 
 // Ends the child and what it started. On Windows `kill()` leaves grandchildren running,
@@ -300,6 +336,7 @@ async function main(argv) {
     const run = buildRun(o, brief);
     return console.log(JSON.stringify({ argv: run.argv, settings: run.settings, prompt: run.prompt }, null, 2));
   }
+  o.out = realOut(o.out);
   const debugDir = mkdtempSync(join(tmpdir(), "adobe-session-"));
   try {
     return await session(o, buildRun(o, brief, join(debugDir, "debug.log")));
@@ -309,14 +346,15 @@ async function main(argv) {
 }
 
 async function session(o, run) {
-  mkdirSync(run.out, { recursive: true });
   mkdirSync(run.control, { recursive: true });
   stageFiles(run.stage, o.send);
+  mkdirSync(run.results);
+  for (const made of [run.stage, run.results]) if (dirOf(realpathSync(made)) !== run.out) throw fail(`${made} is a link to another folder`);
   writeFileSync(run.paths.settings, `${JSON.stringify(run.settings, null, 2)}\n`);
   const log = createWriteStream(run.paths.log);
   const note = (entry) => log.write(`${JSON.stringify(entry)}\n`);
   note({ type: "adobe-session", command: o.command, allow: o.allow, sent: o.send.map((s) => s.name), ownerYesGiven: Boolean(o.ownerYes), model: o.model });
-  const child = spawn("claude", run.argv, { cwd: run.out, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+  const child = spawn("claude", run.argv, { cwd: run.stage, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
   const events = [];
   let stopped = "";
   let finish;
@@ -377,6 +415,7 @@ async function session(o, run) {
   const s = summarize(events);
   note({ type: "adobe-session-end", stopped: stopped || null, connectorConnected: connected(debugText), otherServers: others, exit: code });
   log.end();
+  console.log(`results: ${run.results}`);
   console.log(`log: ${run.paths.log}`);
   if (stopped) { console.log(`stopped: ${stopped}`); return 3; }
   console.log(`calls: ${s.calls.join(", ") || "none"}`);

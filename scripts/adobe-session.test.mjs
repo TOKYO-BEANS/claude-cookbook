@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import {
-  buildRun, connected, CONNECTOR, folderErrors, initErrors, logEntry, OTHER_CONNECTORS, otherServers, parseArgs,
-  READ_ONLY, RULES, rulePath, SECRET_DENY, sendList, STAGE, stageFiles, summarize, TOOL_PREFIX, WAIT,
+  buildRun, connected, CONNECTOR, folderErrors, initErrors, logEntry, namedIn, OTHER_CONNECTORS, otherServers, parseArgs, realOut,
+  READ_ONLY, RULES, RUN_FOLDERS, rulePath, SECRET_DENY, sendList, STAGE, stageFiles, summarize, TOOL_PREFIX, WAIT,
 } from "../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs";
 
 // A home folder and a file system the tests control: nothing here depends on the machine.
@@ -54,6 +54,15 @@ test("a file goes along only when the owner's yes names it", () => {
   assert.throws(() => sendList([join(HOME, ".ssh", "id_rsa.pub")], "Yes, send id_rsa.pub"), /inside \.ssh/);
   assert.throws(() => sendList([join(HOME, "work", "a;b.jpg")], "Yes, send a;b.jpg"), /plain file name/);
   assert.deepEqual(sendList([], undefined), []);
+  // The whole name, not a piece of a longer one.
+  assert.throws(() => sendList([join(HOME, "work", "a.jpg")], "Yes, upload banana.jpg"), /does not name a.jpg/);
+  assert.throws(() => sendList([join(HOME, "work", "1.jpg")], "Yes, upload 11.jpg"), /does not name 1.jpg/);
+  for (const [said, name, named] of [
+    ["Yes, upload 1598.jpg.", "1598.jpg", true], ["1598.JPG, masks", "1598.jpg", true], ['"1598.jpg"', "1598.jpg", true],
+    ["upload my photo 1.jpg now", "my photo 1.jpg", true], ["1598.jpg and 1601.jpg", "1601.jpg", true],
+    ["upload banana.jpg", "a.jpg", false], ["upload 11.jpg", "1.jpg", false], ["upload 1.jpg.bak", "1.jpg", false],
+    ["x1598.jpg", "1598.jpg", false], ["1598.jpg-old", "1598.jpg", false], ["upload 1598xjpg", "1598.jpg", false], ["", "1598.jpg", false],
+  ]) assert.equal(namedIn(said, name), named, `${name} in "${said}"`);
 });
 
 test("arguments are checked before anything runs", () => {
@@ -88,6 +97,13 @@ test("the output folder cannot be a root, the home folder, a secret place or a p
   assert.match(at(resolve("/home"))[0], /home folder/);
   for (const secret of [".claude", ".codex", ".secrets", ".ssh", ".stack-atlas"]) assert.match(at(join(HOME, secret, "x"))[0], new RegExp(`inside \\${secret}`), secret);
   assert.match(at(join(HOME, "project", ".claude", "out"))[0], /inside \.claude/);
+  // A results folder inside a repository is fine; one inside its .git, CI or hook folders is not.
+  assert.deepEqual(at(join(HOME, "repo", "jobs", "13", "out")), []);
+  for (const run of [join(".git", "hooks"), join(".github", "workflows"), ".depot", ".husky", ".vscode", join("node_modules", "x")]) {
+    assert.match(at(join(HOME, "repo", run))[0], /whose files are run or obeyed/, run);
+  }
+  assert.match(at(join(HOME, "repo", ".GIT", "hooks"))[0], /inside \.GIT/);
+  assert.ok(RUN_FOLDERS.includes(".git"));
   const repo = join(HOME, "repo");
   const exists = (p) => p === join(repo, ".git");
   assert.match(at(repo, { exists })[0], /repository or project root/);
@@ -99,7 +115,7 @@ test("the child session is limited on its command line and by its settings", () 
   const yes = "Yes, 1598.jpg to my account, masks, 0 credits";
   const o = run("--allow", "font_search,image_select_subject", "--owner-yes", yes, "--send", PHOTO);
   const debug = join(HOME, "tmp", "debug.log");
-  const { argv, settings, prompt, system, out, control, stage, paths } = buildRun(o, "Make a subject mask of 1598.jpg.\n", debug);
+  const { argv, settings, prompt, system, out, control, stage, results, paths } = buildRun(o, "Make a subject mask of 1598.jpg.\n", debug);
   assert.equal(argv[0], "-p");
   assert.equal(after(argv, "--setting-sources"), "");
   assert.equal(after(argv, "--permission-mode"), "dontAsk");
@@ -111,10 +127,15 @@ test("the child session is limited on its command line and by its settings", () 
   assert.ok(!argv.some((a) => /Bash|PowerShell/.test(a) && a !== system));
   const allowed = argv.slice(argv.indexOf("--allowedTools") + 1, argv.indexOf("--permission-mode"));
   assert.deepEqual(allowed, [
-    "ToolSearch", `Read(${rulePath(out)}/**)`, `Edit(${rulePath(out)}/**)`,
+    "ToolSearch", `Read(${rulePath(stage)}/**)`, `Edit(${rulePath(results)}/**)`,
     `${TOOL_PREFIX}font_search`, `${TOOL_PREFIX}image_select_subject`,
   ]);
-  // No rule allows a read, search or write outside --out, and nothing adds a folder.
+  // The child reads the staging folder only, whatever else --out holds, and nothing adds a folder.
+  // It gets no rule on --out itself: a write rule on a folder also lets it read that folder.
+  for (const rule of [`Read(${rulePath(out)}/**)`, `Edit(${rulePath(out)}/**)`]) assert.ok(!allowed.includes(rule), rule);
+  // Its only writable place is a folder made new for the run, inside --out, named like the log.
+  assert.equal(results, join(out, `run-${paths.log.slice(control.length + 1).replace(/.jsonl$/, "")}`));
+  assert.ok(prompt.includes(`Output folder, the only place you can write: ${results}`));
   for (const open of ["Read", "Glob", "Grep", "Write", "Edit"]) assert.ok(!allowed.includes(open), open);
   assert.ok(!argv.includes("--add-dir"));
   for (const never of ["bypassPermissions", "--dangerously-skip-permissions", "acceptEdits"]) assert.ok(!argv.includes(never));
@@ -128,6 +149,8 @@ test("the child session is limited on its command line and by its settings", () 
   for (const p of [paths.settings, paths.log]) assert.ok(p.startsWith(`${control}`) && !p.startsWith(join(out, "x").slice(0, -1)), p);
   assert.equal(paths.debug, debug);
   assert.equal(after(argv, "--settings"), paths.settings);
+  // Each run has its own settings file, named like its log.
+  assert.equal(paths.settings.replace(/\.settings\.json$/, ""), paths.log.replace(/\.jsonl$/, ""));
   assert.equal(after(argv, "--debug-file"), debug);
   // The yes and the list of files are in the system prompt, which the brief cannot write to.
   assert.equal(after(argv, "--append-system-prompt"), system);
@@ -150,10 +173,11 @@ test("without a yes the system prompt says that nothing is sent and nothing is l
 test("the staging folder holds exactly the files of this run", () => {
   const stage = join(OUT, STAGE);
   const made = [];
-  const fs = (present) => ({
+  const fs = (present, real = (p) => p) => ({
     existsSync: () => present.length > 0,
     readdirSync: () => present,
-    statSync: (p) => ({ isFile: () => !p.endsWith("folder") }),
+    lstatSync: (p) => ({ isFile: () => !p.endsWith("folder") && !p.endsWith("link.jpg") }),
+    realpathSync: real,
     mkdirSync: (p) => made.push(`mkdir ${p}`),
     copyFileSync: (from, to) => made.push(`${from} -> ${to}`),
   });
@@ -164,10 +188,22 @@ test("the staging folder holds exactly the files of this run", () => {
   stageFiles(stage, send, fs(["1598.JPG"]));
   assert.throws(() => stageFiles(stage, send, fs(["1598.jpg", "1601.jpg"])), /holds files this run does not send \(1601\.jpg\)/);
   assert.throws(() => stageFiles(stage, [], fs(["1601.jpg"])), /holds files this run does not send/);
-  assert.throws(() => stageFiles(stage, [{ from: join(HOME, "folder"), name: "folder" }], fs([])), /not a file/);
+  assert.throws(() => stageFiles(stage, [{ from: join(HOME, "folder"), name: "folder" }], fs([])), /not a plain file/);
+  // A link is refused, and so is a file that is really inside a secret folder (a linked folder on the way).
+  assert.throws(() => stageFiles(stage, [{ from: join(HOME, "work", "link.jpg"), name: "link.jpg" }], fs([])), /a link or a folder is refused/);
+  assert.throws(() => stageFiles(stage, send, fs([], () => join(HOME, ".ssh", "id_rsa"))), /really inside .ssh/);
+  // Nothing was copied by the refused runs; with nothing to send the folder is still made: the child starts in it.
   made.length = 0;
   stageFiles(stage, [], fs([]));
-  assert.deepEqual(made, []);
+  assert.deepEqual(made, [`mkdir ${stage}`]);
+});
+
+test("the output folder is checked again as the file system has it", () => {
+  const fs = (real) => ({ mkdirSync: () => {}, realpathSync: () => real });
+  assert.equal(realOut(OUT, fs(OUT), checks), OUT);
+  assert.throws(() => realOut(OUT, fs(join(HOME, ".ssh")), checks), /is really .*inside .ssh/);
+  assert.throws(() => realOut(OUT, fs(join(HOME, "repo", ".git", "hooks")), checks), /whose files are run or obeyed/);
+  assert.throws(() => realOut(OUT, fs(HOME), checks), /home folder/);
 });
 
 test("a file rule path is in the form Claude Code matches", () => {

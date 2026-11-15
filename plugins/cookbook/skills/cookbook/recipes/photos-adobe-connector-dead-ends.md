@@ -17,6 +17,13 @@ clears them has happened.
   scope; the subagent then found the token (it is stored by server name and configuration).
 - **The plugin's own server** (`plugin:adobe-for-creativity:Adobe`) is the same direct address,
   so it is refused the same way. It stays denied and the plugin disabled.
+- **A prompt sent at once.** The connector reaches a new session a moment after it starts: a
+  session that got its prompt at once had no ToolSearch and no Adobe tool, and gave up with
+  exit code 0. The script holds the prompt back until the debug log shows the connector
+  connected, and stops after 90 seconds without.
+- **A write rule on the whole output folder.** A rule that lets the child write a folder also
+  lets it read that folder, so it would see every file already there. It writes a folder made
+  new for the run instead.
 - **An allow list.** `allowedMcpServers` naming `claude.ai Adobe` blocked that connector too,
   so the child session denies the other connectors by name instead.
 - **One project or one subagent only.** No way was found to give a claude.ai connector to one

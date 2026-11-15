@@ -15,10 +15,11 @@ grab it if you need it?". This pull request is that, and it removes no stop.
   the stops, what the first job taught), `recipes/photos-adobe-connector-setup.md` (the child
   session and its limits) and `recipes/photos-adobe-connector-dead-ends.md`.
 - `scripts/adobe-session.mjs` in the skill's folder starts a child session that loads only this
-  connector, in `dontAsk` mode and without a shell: it reads and writes its output folder and
-  calls the Adobe tools named on its command line; tests in `scripts/adobe-session.test.mjs`.
-  The only files of the owner's it can see are the ones named with `--send`, and each must be
-  named in `--owner-yes`; a tool that is not read-only needs that yes too. The upload gate of
+  connector, in `dontAsk` mode and without a shell: it reads the files staged for it, writes
+  in a folder made new for the run, and calls the Adobe tools named on its command line; tests
+  in `scripts/adobe-session.test.mjs`. The only files of the owner's it can see are the ones
+  named with `--send`, and each must be named in `--owner-yes` by its whole file name; a tool
+  that is not read-only needs that yes too. The upload gate of
   `recipes/photos.md` is unchanged and is repeated on the new page.
 - On this PC nothing in `~/.claude/settings.json` changed: `claude.ai Adobe` and the plugin's
   server stay denied and the plugin stays disabled, so an ordinary session loads no Adobe tool.
@@ -27,9 +28,11 @@ grab it if you need it?". This pull request is that, and it removes no stop.
 
 **Proved** (15 November 2026, Claude Code 2.1.325). One run of the script with three read-only
 tools: `adobe_mandatory_init`, `get_account_type` and `font_search` answered; no file was sent
-and nothing was created. Limits measured with the final script: denied were an Adobe tool not
-on the list, a read and a Glob outside the output folder, the script's own settings file and
-a write outside the output folder; a shell command had no tool to run in. A one-minute time
+and nothing was created. Limits measured with the final script: allowed were a read of the
+staged file and a write and a read in the run's own folder; denied were an Adobe tool not on
+the list, an older file in the output folder, a Glob of it, the staged file's original, the
+script's own files and a write anywhere but the run's folder; a shell command had no tool to
+run in. A one-minute time
 limit stopped a long run with exit code 3. An earlier version that could be given a shell rule
 for curl also ran `whoami` and `node --version` (Claude Code runs commands it reads as
 read-only once a shell is on), which is one reason the shell is gone. An ordinary headless
@@ -49,6 +52,16 @@ the files that could be sent, and the log kept every event word for word. Fixed 
 commit by taking away rather than adding: no extra folders and no shell at all, the files to
 send are named with `--send` and must each be named in the yes, and the log keeps tool names,
 denials and cost only. The session's debug log is deleted after it has been read.
+
+**Review round 2.** The AI review: the child could read everything in an output folder that
+already held files; the yes was matched as a piece of text, so `a.jpg` passed on a yes for
+`banana.jpg`; and a link could be sent as its target. Graphify: the output folder could be
+inside `.git`, and two runs shared one settings file. Fixed in the fourth commit. A live test
+then showed that a write rule on a folder also lets the child read it, so the child has no
+rule on the output folder at all: it reads `to-adobe` and writes a folder made new for the
+run. The yes must name each file by its whole name; a link is refused; the output folder is
+checked again with links followed; `.git`, CI and hook folders are refused; every run has
+its own settings file.
 
 **Dead ends.**
 - A subagent with the server defined inline in an agent file (`mcpServers`). The mechanism
