@@ -32,7 +32,7 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
 - **Visual check of a live site: being built.** Screenshots at desktop and phone size, judged
   against the intended design by an agent that did not build the change. Candidates for the
   screenshots: the `browse` CLI, Stagehand, the built-in browser. The recipe arrives from the
-  chat "Visual check for the WeCare Wix site".
+  chat that builds the check.
 - **Agent configuration: AgentShield.** A security scan of permissions, hooks and MCP servers
   on a sanitized copy. Weighed: reading the settings by hand (no baseline to compare with).
 - **The Claude setup and its instructions: doctor-plus.** It audits the instruction files

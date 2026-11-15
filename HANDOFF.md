@@ -38,8 +38,8 @@ is fixed or goes to the owner; "answered" never clears one.
 
 **Outstanding.**
 - The owner's answer on the tools the map leaves without a job (nothing was uninstalled).
-- The visual-check row is "being built": its recipe arrives from the chat "Visual check for
-  the WeCare Wix site".
+- The visual-check row is "being built": its recipe arrives from the chat that builds the
+  visual check for live sites.
 - The tstack comparison, then one edit of the map row and `options/ship.md`.
 - `dispatch-profiles.md` and `connector-register.md` (10.7 KB each) are still read in ranges.
 - Unproven: a T3 scheduled task bound to a thread with a cheaper model.
