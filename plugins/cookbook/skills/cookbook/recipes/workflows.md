@@ -20,7 +20,8 @@ opinions, and an agent budget. Exceeding a budget needs a stated reason (`budget
 - A finding without a failing test, a CI run, a CodeQL alert, a Semgrep finding, a Graphify
   result or a line of code never blocks.
 - `merge: true` when the merge condition in [ci-releases.md](ci-releases.md) holds and no stop applies. A workflow
-  still stops and asks for: a paid service, a first publication, an access change, an uninstall,
+  still stops and asks for: a paid service, a first publication, a message to other people, an
+  access change, an uninstall,
   a major-version update, deleting data that cannot be restored, a customer-visible change on a
   live Wix or Shopify site that has not passed the site's visual check, anything that dismisses,
   accepts or suppresses a security finding, and any change that loosens one of these stops or

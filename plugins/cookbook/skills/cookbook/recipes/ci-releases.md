@@ -7,6 +7,10 @@
   `review unavailable`, and each high or medium finding in it is fixed or answered in the pull
   request. A high finding still disputed after two replies goes to the owner. Never skip, weaken
   or reword a check to get through.
+- **A security finding is fixed, never answered away.** "Answered" is for a finding that is not
+  about security. A security finding, from the review or a scanner, is fixed in the pull
+  request; one Claude would dispute, dismiss or accept goes to the owner before any merge. A
+  model's judgement never clears one.
 - **From a finished change to a merged pull request:** `sa-release` with `merge: true`, and T3's
   `watch_pull_request` to wait for checks. The watch also wakes for older commits: check the head
   commit on each wake-up. Whether tstack's `full-send` takes over this step is decided after the

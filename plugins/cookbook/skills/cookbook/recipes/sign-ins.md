@@ -4,11 +4,8 @@ The owner added both on 12 and 13 November 2026, as a trial, so that Claude can 
 without the owner doing it each time. A token or a CLI is still the first route to any service; this
 is for the sites that only have a web login.
 
-- **The vault:** the Proton Pass vault "Claude" holds only the logins Claude may use. Claude
-  adds a login for a user made for Claude itself (`pass-cli item create login --vault-name
-  Claude --title … --email … --generate-password --url …`, with the output discarded so the
-  password is never shown). A login that is the owner's own is added by the owner, never typed
-  in chat. The Proton Pass CLI (`pass-cli`) is
+- **The vault:** the Proton Pass vault "Claude" holds only the logins Claude may use. The owner
+  puts them there; Claude never adds, edits or moves an item. The Proton Pass CLI (`pass-cli`) is
   signed in as the agent
   `claude-pc`, which sees that vault and nothing else.
 - **Never read a credential into the conversation.** Do not run `pass-cli item view` on an item,

@@ -32,8 +32,9 @@ named `<recipe>-<part>.md`. The Skill tool is not cut, which is why `SKILL.md` l
   map row says "decided after the comparison"; `sa-release` owns the step until then.
 
 **Aligned with "How we work" (owner, 15 November 2026).** The ground rules, the workflow
-stops, the Cloudflare deploy line, the design-approval lines and the vault line now say what
-the global rules say: no approval for a spec, plan, design, merge or deploy; the stops stay.
+stops, the Cloudflare deploy line and the design-approval lines now say what the global rules
+say: no approval for a spec, plan, design, merge or deploy; the stops stay. A security finding
+is fixed or goes to the owner; "answered" never clears one.
 
 **Outstanding.**
 - The owner's answer on the tools the map leaves without a job (nothing was uninstalled).
@@ -42,4 +43,7 @@ the global rules say: no approval for a spec, plan, design, merge or deploy; the
 - The tstack comparison, then one edit of the map row and `options/ship.md`.
 - `dispatch-profiles.md` and `connector-register.md` (10.7 KB each) are still read in ranges.
 - Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+- `recipes/sign-ins.md` still says Claude never adds an item to the vault; the owner's global
+  rules (14 November 2026) say Claude adds logins for users made for Claude. Changing the
+  page widens what a rule file allows, so it needs the owner's yes: left unchanged here.
 - Next job: the diet of the global `CLAUDE.md` and of the memory index.
