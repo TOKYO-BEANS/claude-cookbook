@@ -9,13 +9,10 @@ day, not assumed.
 - **Compaction: Jev compaction.** Checked: it is the one that compacts, in T3 Code too (40
   compactions in 8 days, 32 by Jev, 8 handed to the built-in compactor, which is the
   fallback). Weighed: the built-in compactor alone (a summary written by the model, slower
-  and less exact about tool calls); self-compact-claude (does not compact: it carries a note
-  across a compaction, which the compactor's kept state and `ctx_resume` already do).
+  and less exact about tool calls).
 - **Memory: `HANDOFF.md` and auto-memory.** Project state lives with the project and is
   reviewed in pull requests; the owner's preferences live in auto-memory, one fact per file.
-  Weighed: claude-reflect (checked: it saves a correction as a CLAUDE.md rule, the job
-  auto-memory does; its one save went to `C:\.claude\CLAUDE.md`, which nothing reads);
-  Graphify notes and Parallel memory (shared stores for a single user); Mem0 and similar
+  Weighed: Graphify notes and Parallel memory (shared stores for a single user); Mem0 and similar
   memory services (a hosted copy of private context).
 - **Scheduled scripts: Windows Task Scheduler.** Checked: `stack-updates-daily` runs there
   every day with no model. It reaches the DPAPI store and the pinned CLIs. Weighed: a
@@ -36,7 +33,6 @@ day, not assumed.
   scheduled tasks around the Claude Code harness. Weighed: the Claude desktop app (its Code
   tab; still home to three scheduled tasks and to Claude Design); a plain terminal (the
   fallback).
-- **Prompt cache and status rows: nothing owns this in T3 Code.** cache-tax and prompt-band
-  draw rows above the prompt of a terminal or desktop session. A T3 Code session is headless
-  to mods (the router's log says so), so nothing shows them there; this is inferred, not
-  tested.
+- **Prompt cache and status rows: nothing owns this.** A mod can draw a row above the prompt
+  of a terminal or desktop session. A T3 Code session is headless to mods (the compaction log
+  calls it `headless-or-sdk`), so no row would show there; this is inferred, not tested.

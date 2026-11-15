@@ -8,12 +8,9 @@ fair trial; they never pick an owner.
   the `sa-*` workflows are built on it. Weighed: GitHub Spec Kit (a spec reviewed at
   each stage: the owner sets outcomes and approves no specs); Claude Code's plan mode (a plan,
   no test-first or debugging discipline); tstack (starts where the code is finished: see
-  "ship"); be-ambitious and gauntlet-loop (they rewrite a prompt and own no step of the work:
-  brainstorming already sets the bar).
+  "ship").
 - **Several agents: the `sa-*` workflows.** One implementer and one reviewer per task, an agent
-  budget, evidence over opinions, and the stops written in. Weighed: savvy-flow with
-  savvy-progress (the same job as `sa-build`, outside those budgets and stops, and it runs
-  `git init` in a new folder); ad hoc Workflow scripts (no budget); T3 `delegate_task` (right
+  budget, evidence over opinions, and the stops written in. Weighed: ad hoc Workflow scripts (no budget); T3 `delegate_task` (right
   for another provider's model, heavier for the same one).
 - **One side piece: the Cookbook dispatch profiles.** A fixed model, effort and tool list per
   kind of piece. Weighed: an untyped subagent (inherits every tool and the session's model); a
@@ -33,11 +30,8 @@ fair trial; they never pick an owner.
   Express (posters and social graphics, not product screens).
 - **Photos: Adobe Firefly.** Sharpest on real faces in the side-by-side test, without
   redrawing them. Weighed: Nero AI Unblur (half the sharpness score), Upscayl (no gain),
-  Topaz Photo AI (not tested; a paid desktop app), the Adobe for creativity connector (no
-  sharpening tool among its 116).
+  Topaz Photo AI (not tested; a paid desktop app).
 - **Skills: Superpowers `writing-skills`.** It tests a skill the way code is tested. Weighed:
-  skill-creator-plus (an audit checklist; where they disagree Superpowers already wins) and
   the bundled `skill-creator` (the fallback: it ships with the app).
-- **Model per turn: the thread's setting.** Jev Router picks a model per prompt, but only in a
-  terminal or the desktop app: it skips a T3 Code session as headless (checked in its
-  decision log). No router that works inside T3 Code was found.
+- **Model per turn: the thread's setting.** No router that works inside T3 Code was found: a
+  mod sees a T3 Code session as headless and skips it.

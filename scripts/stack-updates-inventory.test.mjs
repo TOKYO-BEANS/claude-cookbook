@@ -106,7 +106,6 @@ test("every table entry runs a bare command name and matches its own sample outp
     "boat/cli": ["boat 1.0.97\n", "1.0.97"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
     "google-workspace-cli/cli": ["gws 0.22.5\nThis is not an officially supported Google product.\n", "0.22.5"],
-    "jev-router/pinned": ["38da6b84ea01241bfc41fbddc0928d0f40a703f0\n", "38da6b84ea01241bfc41fbddc0928d0f40a703f0"],
   };
   assert.deepEqual(Object.keys(VERSION_COMMANDS).sort(), Object.keys(samples).sort());
   for (const [key, { argv, pattern }] of Object.entries(VERSION_COMMANDS)) {
@@ -172,7 +171,7 @@ const catalog = {
 const mcpOut = [
   "Checking MCP server health…",
   "",
-  "claude.ai Adobe: https://adobe.example/mcp - ✔ Connected",
+  "claude.ai Example: https://connector.example/mcp - ✔ Connected",
   "plugin:superpowers:thing: https://x/mcp (HTTP) - ✔ Connected",
   "firecrawl: https://mcp.firecrawl.dev/v2/mcp (HTTP) - ✔ Connected",
   "newserver: node C:/x/server.js - ✔ Connected",
@@ -185,7 +184,7 @@ test("findUnlisted: reports only what no part and no ignored entry names", async
   assert.deepEqual(keys, [
     "bin:odd-tool",
     "marketplace:stray-market",
-    "mcp:claude.ai Adobe",
+    "mcp:claude.ai Example",
     "mcp:newserver",
     "pinned:other-tool",
     "plugin:onlyproject@market-a",
@@ -215,20 +214,10 @@ test("command: {share} in the table argv becomes <home>/.local/share", async () 
   assert.ok(!run.calls[0].argv.join(" ").includes("{share}"));
 });
 
-test("command: a 40-character hex capture is a commit, not a version", async () => {
-  const sha = "38da6b84ea01241bfc41fbddc0928d0f40a703f0";
-  const run = fakeRun({ git: { code: 0, stdout: `${sha}\n`, stderr: "" } });
-  const r = await readInstalled({ kind: "command" }, "jev-router/pinned", deps({ run }));
-  assert.deepEqual(r, { state: "read", commit: sha });
-  // The upstream commit the local patches sit on, not the local HEAD (13 November 2026:
-  // HEAD was four local patch commits on top of upstream 38da6b8).
-  assert.deepEqual(run.calls[0].argv, ["git", "-C", join(home, ".local", "share", "jev-router"), "merge-base", "HEAD", "origin/HEAD"]);
-});
-
 test("findUnlisted: a claude.ai connector is listed by the hosted part that names it as its server", async () => {
   const cat = {
     version: 1, ignored: [],
-    tools: [{ id: "adobe-for-creativity", name: "Adobe for creativity", parts: [part("connector", { kind: "hosted", server: "Adobe" })] }],
+    tools: [{ id: "example-connector", name: "Example connector", parts: [part("connector", { kind: "hosted", server: "Example" })] }],
   };
   const { items } = await findUnlisted(cat, { home: tempHome(), run: fakeRun({ claude: { code: 0, stdout: mcpOut, stderr: "" } }) });
   const mcp = items.filter((i) => i.kind === "mcp").map((i) => i.name).sort();

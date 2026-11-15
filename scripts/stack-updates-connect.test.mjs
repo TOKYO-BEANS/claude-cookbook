@@ -122,7 +122,7 @@ test("claude mcp list: each hosted part's server is matched against its Connecte
   const listing = [
     "Checking MCP server health…",
     "",
-    "claude.ai Adobe: https://adobe-creativity.adobe.io/mcp - ✔ Connected",
+    "claude.ai Example: https://connector.example/mcp - ✔ Connected",
     "plugin:parallel:parallel-search: https://search.parallel.ai/mcp (HTTP) - ✔ Connected",
     "graphify: https://api.graphify.com/mcp (HTTP) - ! Needs authentication",
     "firecrawl: https://mcp.firecrawl.dev/v2/mcp (HTTP) - ✗ Failed to connect",
@@ -133,7 +133,7 @@ test("claude mcp list: each hosted part's server is matched against its Connecte
     tool("parallel", "Parallel", "active", hosted("parallel-search")),
     tool("graphify", "Graphify", "active", hosted("graphify")),
     tool("firecrawl", "Firecrawl", "active", hosted("firecrawl")),
-    tool("adobe-for-creativity", "Adobe for creativity", "trial", hosted("Adobe")),
+    tool("example-connector", "Example connector", "trial", hosted("Example")),
     tool("openseo", "OpenSEO", "active", hosted("openseo")),
   );
   const calls = [];
@@ -141,7 +141,7 @@ test("claude mcp list: each hosted part's server is matched against its Connecte
   const r = await runChecks(cat, { run, home, now: NOW, checks: {} });
   assert.equal(calls.length, 1, "one claude mcp list run for all servers");
   assert.deepEqual(calls[0], ["claude", "mcp", "list"]);
-  assert.deepEqual(r.working.sort(), ["Adobe for creativity", "Parallel"]);
+  assert.deepEqual(r.working.sort(), ["Example connector", "Parallel"]);
   assert.deepEqual(r.broken.map((b) => b.service).sort(), ["Firecrawl", "Graphify", "OpenSEO"]);
   assert.match(r.broken.find((b) => b.service === "Graphify").error, /Needs authentication/);
   assert.match(r.broken.find((b) => b.service === "OpenSEO").error, /not listed/);
@@ -168,40 +168,44 @@ test("a tool with a check and a server is working only when both answer", async 
 function writeJevLog(lines) {
   const dir = join(home, ".claude", "vendor", "compaction", "state");
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "jev-turn-router-decisions.jsonl"), lines);
+  writeFileSync(join(dir, "jev-compaction-decisions.jsonl"), lines);
 }
 const jevCat = catalogOf(tool("jev", "TypeSafe / Jev", "active", [{ name: "models", installed: { kind: "hosted" } }]));
 const noRun = async () => { throw new Error("Jev gets no call of its own"); };
-const entry = (ts, outcome) => JSON.stringify({ ts, outcome, reason: "r" });
+const entry = (ts, outcome, kind = "compact") => JSON.stringify({ ts, kind, outcome, reason: "r" });
 const jevState = async () => runChecks(jevCat, { run: noRun, home, now: NOW, checks: {} });
 
 test("Jev: only a real answer counts, and only within 48 hours", async () => {
-  assert.ok(JEV_LOG.endsWith("jev-turn-router-decisions.jsonl"));
-  assert.deepEqual([...JEV_ANSWER_OUTCOMES], ["routed"]);
+  assert.ok(JEV_LOG.endsWith("jev-compaction-decisions.jsonl"));
+  assert.deepEqual([...JEV_ANSWER_OUTCOMES], ["jev"]);
   rmSync(join(home, ".claude"), { recursive: true, force: true });
   assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "no log");
-  writeJevLog(entry("2026-11-13T08:00:00Z", "routed") + "\n");
+  writeJevLog(entry("2026-11-13T08:00:00Z", "jev") + "\n");
   let r = await jevState();
   assert.deepEqual(r.working, ["TypeSafe / Jev"]);
   assert.deepEqual(r.unchecked, []);
-  writeJevLog([entry("2026-11-14T03:00:00Z", "routed"), entry("2026-11-14T06:30:00Z", "skipped")].join("\n") + "\n");
-  assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "newest line skipped, answer 4 hours earlier");
-  writeJevLog([entry("2026-11-14T05:00:00Z", "skipped"), entry("2026-11-14T06:00:00Z", "skipped")].join("\n") + "\n");
-  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "only skipped lines");
-  writeJevLog([entry("2026-11-12T05:59:00Z", "routed"), entry("2026-11-14T06:00:00Z", "skipped")].join("\n") + "\n");
+  writeJevLog([entry("2026-11-14T03:00:00Z", "jev"), entry("2026-11-14T06:30:00Z", "builtin")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "newest compaction went to the built-in compactor, Jev answered 4 hours earlier");
+  writeJevLog([entry("2026-11-14T05:00:00Z", "builtin"), entry("2026-11-14T06:00:00Z", "builtin")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "only compactions the built-in compactor did");
+  writeJevLog([entry("2026-11-14T05:00:00Z", undefined, "load"), entry("2026-11-14T06:00:00Z", "jev", "load"), entry("2026-11-14T06:00:00Z", "jev", "postcompact")].join("\n") + "\n");
+  assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "a row that is not a compaction records no call");
+  writeJevLog([entry("2026-11-12T05:59:00Z", "jev"), entry("2026-11-14T06:00:00Z", "builtin")].join("\n") + "\n");
   assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "a real answer 49 hours old");
-  writeJevLog([entry("2026-11-13T06:00:00Z", "routed"), "not json {"].join("\n") + "\n");
+  writeJevLog([entry("2026-11-13T06:00:00Z", "jev"), "not json {"].join("\n") + "\n");
   assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "an unparsable last line is ignored");
   writeJevLog([entry("2026-11-14T06:00:00Z", "error"), entry("2026-11-14T06:00:00Z", "timeout")].join("\n") + "\n");
   assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "error and timeout outcomes are not answers");
-  writeJevLog(JSON.stringify({ outcome: "routed" }) + "\n");
+  writeJevLog(JSON.stringify({ kind: "compact", outcome: "jev" }) + "\n");
   assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"], "no timestamp");
 });
 
 test("Jev: only the last 200 lines are read", async () => {
-  const filler = Array.from({ length: 200 }, () => entry("2026-11-14T06:00:00Z", "skipped"));
-  writeJevLog([entry("2026-11-14T05:00:00Z", "routed"), ...filler].join("\n") + "\n");
+  const filler = Array.from({ length: 200 }, () => entry("2026-11-14T06:00:00Z", undefined, "load"));
+  writeJevLog([entry("2026-11-14T05:00:00Z", "jev"), ...filler].join("\n") + "\n");
   assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"]);
+  writeJevLog([...filler.slice(1), entry("2026-11-14T05:00:00Z", "jev"), filler[0]].join("\n") + "\n");
+  assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "the same answer inside the last 200 lines counts");
 });
 
 const withDate = (on) => catalogOf(tool("t", "T", "active", undefined, { dates: [{ label: "L", on }] }));
@@ -310,12 +314,12 @@ test("a cmd.exe path holding a shell character or a space does not run", async (
 });
 
 test("an MCP line matches a part by its server name, not by the tool's name", async () => {
-  const listing = "claude.ai Adobe: https://adobe-creativity.adobe.io/mcp - ✔ Connected\n";
+  const listing = "claude.ai Example: https://connector.example/mcp - ✔ Connected\n";
   const run = async () => ({ code: 0, stdout: listing, stderr: "" });
   const hosted = (server) => [{ name: "connector", installed: { kind: "hosted", server } }];
-  const r = await runChecks(catalogOf(tool("adobe-firefly", "Adobe Firefly", "trial", hosted("firefly-boards")), tool("adobe", "Adobe for creativity", "trial", hosted("Adobe"))), { run, home, now: NOW, checks: {} });
-  assert.deepEqual(r.working, ["Adobe for creativity"]);
-  assert.deepEqual(r.broken.map((b) => b.service), ["Adobe Firefly"]);
+  const r = await runChecks(catalogOf(tool("example-boards", "Example Boards", "trial", hosted("example-boards")), tool("example", "Example connector", "trial", hosted("Example"))), { run, home, now: NOW, checks: {} });
+  assert.deepEqual(r.working, ["Example connector"]);
+  assert.deepEqual(r.broken.map((b) => b.service), ["Example Boards"]);
   assert.match(r.broken[0].error, /not listed/);
 });
 
@@ -324,11 +328,11 @@ test("runChecks needs the home folder", async () => {
 });
 
 test("Jev: a timestamp more than 5 minutes ahead is not an answer", async () => {
-  writeJevLog([entry("2026-11-13T06:00:00Z", "routed"), entry("2026-11-14T07:10:00Z", "routed")].join("\n") + "\n");
+  writeJevLog([entry("2026-11-13T06:00:00Z", "jev"), entry("2026-11-14T07:10:00Z", "jev")].join("\n") + "\n");
   assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "the older real answer still counts");
-  writeJevLog(entry("2026-11-14T07:10:00Z", "routed") + "\n");
+  writeJevLog(entry("2026-11-14T07:10:00Z", "jev") + "\n");
   assert.deepEqual((await jevState()).unchecked, ["TypeSafe / Jev"]);
-  writeJevLog(entry("2026-11-14T07:03:00Z", "routed") + "\n");
+  writeJevLog(entry("2026-11-14T07:03:00Z", "jev") + "\n");
   assert.deepEqual((await jevState()).working, ["TypeSafe / Jev"], "3 minutes ahead is clock drift");
 });
 

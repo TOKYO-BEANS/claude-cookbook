@@ -3,8 +3,8 @@
 // `runChecks` makes one real call per service from the fixed table
 // CONNECTION_CHECKS (free and read-only, plus one tiny paid Parallel search),
 // one after another with a 30-second timeout each, and runs `claude mcp list`
-// once for every hosted part that names a server. Jev gets no call: the newest
-// line of the router's decision log is read instead. The result keeps no account
+// once for every hosted part that names a server. Jev gets no call: the
+// Jev compaction plugin's decision log is read instead. The result keeps no account
 // detail: service names, and for a failure an error of at most 200 characters
 // with anything key-shaped removed. A service with no check is "unchecked",
 // never working. The script holds no key: tools that need one run through their
@@ -20,20 +20,19 @@ const OUTPUT_LIMIT = 100_000; // `boat limits` alone prints about 6 KB of JSON
 const ERROR_LIMIT = 200;
 const LIB = dirname(fileURLToPath(import.meta.url));
 
-// The Jev router's decision log, relative to the home folder. Its newest line's
-// `ts` is the proof Jev answered.
-export const JEV_LOG = join(".claude", "vendor", "compaction", "state", "jev-turn-router-decisions.jsonl");
+// The Jev compaction plugin's decision log, relative to the home folder. The `ts` of
+// the newest compaction Jev did is the proof Jev answered.
+export const JEV_LOG = join(".claude", "vendor", "compaction", "state", "jev-compaction-decisions.jsonl");
 export const JEV_TOOL_ID = "jev";
 const JEV_MAX_AGE_MS = 48 * 3_600_000;
 const JEV_MAX_FUTURE_MS = 5 * 60_000;
 const JEV_LOG_LINES = 200;
 const JEV_LOG_BYTES = 262_144;
-// The outcomes of the log that record an answer from Jev. Seen on 13 November 2026:
-// "routed" (Jev answered; reasons jev, low-confidence-no-downgrade and
-// downgrade-not-worth-cache-rebuild) and "skipped" (no call: not-a-prompt,
-// not-opus, headless). The log has shown no error or timeout outcome; anything
-// not listed here is not an answer.
-export const JEV_ANSWER_OUTCOMES = Object.freeze(["routed"]);
+// The outcomes of a `kind: "compact"` row that record an answer from Jev. Seen on
+// 15 November 2026: "jev" (Jev compacted) and "builtin" (the built-in compactor ran:
+// Jev's call failed, or would have removed too little). The other kinds of row (load,
+// precompact, postcompact) record no call. Anything not listed here is not an answer.
+export const JEV_ANSWER_OUTCOMES = Object.freeze(["jev"]);
 
 // ---- error text ------------------------------------------------------------
 
@@ -121,7 +120,7 @@ const hasHostedPart = (tool) => (Array.isArray(tool.parts) ? tool.parts : []).so
 
 // ---- Jev -------------------------------------------------------------------
 
-// The newest real answer in the last 200 lines of the log (a bounded read from the
+// The newest compaction Jev did in the last 200 lines of the log (a bounded read from the
 // end of the file) must be within 48 hours of now. Lines that do not parse are ignored.
 async function jevAnswered(home, now) {
   let fh;
@@ -135,7 +134,7 @@ async function jevAnswered(home, now) {
     for (const line of lines.reverse()) {
       let o;
       try { o = JSON.parse(line); } catch { continue; }
-      if (!JEV_ANSWER_OUTCOMES.includes(o?.outcome)) continue;
+      if (o?.kind !== "compact" || !JEV_ANSWER_OUTCOMES.includes(o?.outcome)) continue;
       const at = Date.parse(o.ts);
       if (!Number.isFinite(at)) continue;
       if (at - now > JEV_MAX_FUTURE_MS) continue; // a clock error is not an answer

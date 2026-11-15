@@ -86,7 +86,7 @@ test("the stack-updates skill's update table names recipe pages by their exact t
   for (const n of named) assert.ok(titles.has(n), `"${n}" is not the title of a page in recipes/`);
   // The steps are on the page the row names: an update row never points at a page without them.
   const body = (title) => pages.find((p) => p.text.startsWith(`# ${title}\n`) || p.text.startsWith(`# ${title}\r\n`)).text;
-  for (const n of named.filter((x) => /setup|mods|terminal proxy/.test(x))) assert.match(body(n), /update/i, n);
+  for (const n of named.filter((x) => /setup|add-ons|^Compaction$/.test(x))) assert.match(body(n), /update/i, n);
 });
 
 test("pages: each fits one Read, has its own title and a plain name; SKILL.md stays an index", () => {
@@ -234,7 +234,7 @@ test("version commands: every key names a command part and every command part ha
 test("self-updating tools: each id names a tool in the catalog", () => {
   assert.ok(Object.isFrozen(SELF_UPDATING_TOOLS));
   const names = SELF_UPDATING_TOOLS.map((id) => catalog.tools.find((t) => t.id === id)?.name);
-  assert.deepEqual(names.sort(), ["Adobe for creativity", "Claude Code", "Wix"]);
+  assert.deepEqual(names.sort(), ["Claude Code", "Wix"]);
   assert.deepEqual(errors({ selfUpdating: [...SELF_UPDATING_TOOLS] }), []);
   assert.ok(errors({ selfUpdating: [...SELF_UPDATING_TOOLS, "ghost"] }).some((e) => /self-updating tools: ghost names no tool/.test(e)));
 });
@@ -368,7 +368,7 @@ test("the stack-updates skill's 'After an update': what it says needs nothing ne
     assert.ok(parts.length, name);
     for (const p of parts) assert.ok(!needsRecord(p), `"${name}" is said to need nothing, but ${t.id}/${p.name} needs a record`);
   }
-  assert.match(section, /`jev-router\/plugin`[^.]*`record`/);
+  assert.match(section, /`jev\/compaction`[^.]*`record`/);
 });
 
 test("argv patterns: a literal dot before cmd, and no shell metacharacter or whitespace in any element", () => {

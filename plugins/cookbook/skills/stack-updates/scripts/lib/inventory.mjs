@@ -237,8 +237,6 @@ async function readCommand(key, run, home) {
   const stdout = String(result.stdout ?? "").slice(0, OUTPUT_LIMIT);
   const m = entry.pattern.exec(stdout);
   const version = m ? normalizeVersion(m[1] ?? m[0]) : "";
-  // A 40-character hex id is a git commit, not a version.
-  if (/^[0-9a-f]{40}$/.test(m?.[1] ?? "")) return { state: "read", commit: m[1] };
   return version ? { state: "read", version } : unreadable(`no version found in the output of ${entry.argv[0]}`);
 }
 

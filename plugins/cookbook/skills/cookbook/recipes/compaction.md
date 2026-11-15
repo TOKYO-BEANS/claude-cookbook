@@ -13,10 +13,13 @@ One compactor, checked on 15 November 2026 in
 - **It sends transcript content to TypeSafe**, on the `jev-compaction` DPAPI key. It runs in
   every project (owner decision, 2 October 2026); a project is left out through the plugin's
   `privateRoots` option. Never go back to version 0.3.0: it checked only the current folder.
-- **`self-compact-claude` does not compact.** It adds the tool `note_to_self`: near the limit
-  it asks for a note, and hands that note back after the next compaction, whichever compactor
-  ran. The compactor already keeps a state block, so the note is a second copy of the same
-  job.
+- **Updates:** the plugin is a pinned copy in the local `claude-local` marketplace
+  (`~/.claude/vendor/compaction/local-marketplace/fast-jev-compaction-atlas`), with a
+  `PROVENANCE.json` that names the upstream commit and the local changes. Refresh it only
+  after reading the upstream diff: update the copy, re-apply the listed changes, update
+  `PROVENANCE.json`, run `claude plugin marketplace update claude-local` and `claude plugin
+  update fast-jev-compaction-atlas@claude-local`, then record the commit with the
+  `stack-updates` skill's `updates.mjs record jev/compaction <commit>`.
 - **After a compaction or a resumed session:** `ctx_resume` (context-mode) gives the last
   task, changed files and open errors. Read it before repeating earlier work.
 - **When compaction looks wrong:** read the log first. `kind: "compact"` rows carry the
