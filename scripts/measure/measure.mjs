@@ -70,7 +70,7 @@ export function summarizeStream(lines, model) {
       s.peakContext = Math.max(s.peakContext, c);
     } else if (e.type === "result") {
       s.result = {
-        subtype: e.subtype, isError: Boolean(e.is_error), text: e.result ?? "", turns: e.num_turns, durationMs: e.duration_ms, costUsd: e.total_cost_usd ?? 0,
+        subtype: e.subtype, isError: Boolean(e.is_error), text: e.result ?? "", turns: e.num_turns, durationMs: e.duration_ms, costUsd: e.total_cost_usd ?? 0, costReported: Number.isFinite(e.total_cost_usd),
         input: e.usage?.input_tokens ?? 0, cacheWrite: e.usage?.cache_creation_input_tokens ?? 0, cacheRead: e.usage?.cache_read_input_tokens ?? 0, output: e.usage?.output_tokens ?? 0,
         denials: (e.permission_denials ?? []).length, models: Object.keys(e.modelUsage ?? {}),
       };
@@ -165,14 +165,17 @@ export function runProblem(s, exitCode, model) {
   if (!s.result) return `no result (exit ${exitCode})`;
   if (s.result.isError || s.result.subtype !== "success") return `the run ended as "${s.result.subtype}"`;
   if (!s.calls) return `a result but no request of the session's model (${s.init?.model ?? model}) was counted`;
+  if (!s.result.costReported) return "the run reported no cost";
   return null;
 }
 
 // A run that is not scored has still spent money. Its row is kept as `discarded`, so the batch
 // stop counts it, and it is left out of the resume check and the report. A run with no result
-// reports no cost: it is counted at the full cap, the most it can have spent.
-export const discardedRow = ({ set, model, task, side, rep, problem, result, cap }) =>
-  ({ set, model, task, side, rep, discarded: problem, costUsd: result ? result.costUsd : cap, costKnown: Boolean(result) });
+// or a result that reports no cost is counted at the full cap, the most it can have spent.
+export const discardedRow = ({ set, model, task, side, rep, problem, result, cap }) => {
+  const costKnown = Boolean(result) && result.costReported !== false && Number.isFinite(result.costUsd);
+  return { set, model, task, side, rep, discarded: problem, costUsd: costKnown ? result.costUsd : cap, costKnown };
+};
 export const scoredRows = (rows) => rows.filter((r) => !r.discarded);
 export const spentSoFar = (rows) => rows.reduce((a, r) => a + (Number.isFinite(r.costUsd) ? r.costUsd : 0), 0);
 
@@ -277,8 +280,8 @@ export function aggregate(rows) {
 
 function report(opts) {
   const all = readSummaries(resolve(opts.out));
+  if (all.length) refuseForeign(all, all[0].set, all.find((r) => r.model !== undefined)?.model, resolve(opts.out));
   const rows = scoredRows(all);
-  if (rows.length) refuseForeign(rows, rows[0].set, rows.find((r) => r.model !== undefined)?.model, resolve(opts.out));
   const agg = aggregate(rows);
   const lines = ["| Task | Side | Input tokens (range) | First request | Largest request | Output | Turns | Seconds | USD | Checks |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"];
   for (const a of agg) lines.push(`| ${a.task} | ${a.side} | ${a.input} (${a.inputMin} to ${a.inputMax}) | ${a.firstContext} | ${a.peakContext} | ${a.output} | ${a.turns.toFixed(1)} | ${a.seconds.toFixed(1)} | ${a.costUsd.toFixed(3)} | ${a.passed}/${a.of} |`);

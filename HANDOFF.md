@@ -11,7 +11,10 @@ commit (two low findings, left for this pull request because #56's three rounds 
   and keeps the run as a `discarded` row, so its cost counts against the batch limit (a run
   with no result at all is counted at the full cap) while the report leaves it out and names
   it. The AI review's first round (medium) asked for the cost to count: without it, a task
-  that kept hitting the cap could have passed the limit across reruns. Scored, such a run would have counted as wrong answers. None of the
+  that kept hitting the cap could have passed the limit across reruns. Round 2 (two low): a
+  result that reports no cost is also counted at the cap, and a run that succeeds without a
+  cost is not scored; `report` applies its check for another task set or model to every row,
+  the discarded ones included. Scored, such a run would have counted as wrong answers. None of the
   48 runs of the first measurement was one (every row: exit 0, `isError` false, `success`).
 - `--side` must be `before` or `after`; any other name stops the command before a run. A row
   under another name would have cost money and been left out of the report.

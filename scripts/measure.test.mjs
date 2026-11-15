@@ -131,7 +131,8 @@ test("a run that ended in an error, has no result or no counted request is not s
     { type: "assistant", message: { id: "a", model: "m", usage: { input_tokens: 5 }, content: [] } },
     ...(result ? [{ type: "result", ...result }] : []),
   ].map((e) => JSON.stringify(e)), "m");
-  assert.equal(runProblem(stream({ subtype: "success", result: "TOOL: x" }), 0, "m"), null);
+  assert.equal(runProblem(stream({ subtype: "success", result: "TOOL: x", total_cost_usd: 0.1 }), 0, "m"), null);
+  assert.match(runProblem(stream({ subtype: "success", result: "TOOL: x" }), 0, "m"), /reported no cost/);
   assert.match(runProblem(stream({ subtype: "error_max_budget_usd", is_error: true }), 0, "m"), /error_max_budget_usd/);
   assert.match(runProblem(stream({ subtype: "error_during_execution" }), 1, "m"), /error_during_execution/);
   assert.match(runProblem(stream({ subtype: "success", is_error: true }), 0, "m"), /ended as/);
@@ -150,6 +151,10 @@ test("a run that is not scored still counts against the batch limit, and is not 
   assert.deepEqual(scoredRows([cut]), [], "the task runs again");
   assert.deepEqual(foreignRows([cut], "s", "m"), []);
   assert.equal(spentSoFar([{ costUsd: undefined }, { costUsd: 0.5 }]), 0.5);
+  const noCost = summarizeStream([JSON.stringify({ type: "result", subtype: "error_during_execution", is_error: true })], "m").result;
+  assert.deepEqual([noCost.costUsd, noCost.costReported], [0, false]);
+  const charged = discardedRow({ ...base, problem: "x", result: noCost });
+  assert.deepEqual([charged.costUsd, charged.costKnown], [1, false], "an error result without a cost counts at the cap");
 });
 
 test("a side is before or after, nothing else", () => {
