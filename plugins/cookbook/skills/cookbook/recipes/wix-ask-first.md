@@ -4,7 +4,10 @@
   - publish, release or create a site. One exception, the owner's (15 November 2026: "Name
     the exception"): releasing the code build that passed the site's visual check, that
     build and nothing else with it, where the check and the owner's yes to it are recorded
-    in the project's `CLAUDE.md` ([visual-check.md](visual-check.md)). Every other publish
+    in the project's `CLAUDE.md` ([visual-check.md](visual-check.md)). If the check run
+    after that release fails, the owner's rule holds ("A failed release check means: roll
+    back to the last good version first"): put back the version that was live before it,
+    nothing else, and tell the owner at once. Every other publish
     (the editor, the dashboard, anything that also puts other waiting edits live) and
     creating a site always ask;
   - install an app on a live site;

@@ -18,7 +18,11 @@ that project's `CLAUDE.md` and the owner has said yes to it once, always ask."
   with nothing added after the run and nothing else going live with it. Then tell the owner
   what went live, with the evidence folder.
 - **After the release** run it the other way round: what was judged before, the live site
-  after. A difference means roll back first, then fix through a new pull request.
+  after. A difference is a failed release check, and the owner's rule for one holds (global
+  rules, and [ci-releases.md](ci-releases.md)): "A failed release check means: roll back to
+  the last good version first, then fix through a new pull request." Roll back to the
+  version that was live before this release, to nothing else, and tell the owner at once
+  with the evidence.
 - **What a pass does not cover**, so these still ask: what the check cannot see (a page not on
   its route list, hover, focus and motion, what needs a real phone); anything outside the
   pages it photographs (prices, products, booking rules, a host's dashboard); a person's

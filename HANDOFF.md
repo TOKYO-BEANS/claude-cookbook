@@ -37,6 +37,12 @@ pass rule needs the owner's yes. The ground rules in `SKILL.md` are unchanged.
   a code change that has passed the site's visual check, where the check and the owner's yes
   are recorded in the project's `CLAUDE.md`; publishing from the editor or the dashboard and
   creating a site still ask.
+- The rollback after a failed check is not a new exception. It is the owner's global rule
+  (15 November 2026, "How we work"), quoted: "A failed release check means: roll back to the
+  last good version first, then fix through a new pull request." `recipes/ci-releases.md`
+  already held it; the two pages now quote it and limit it to the version that was live
+  before the release, with the owner told at once. (The AI review's first round asked for
+  this.)
 
 **What uses Stagehand, checked on this PC.** Only its own user-scope MCP entry. No hook,
 script in `~/.local/bin`, scheduled task or project file names it. Its tools were called 18
