@@ -8,9 +8,12 @@ is for the sites that only have a web login.
   adds a login for a user made for Claude itself (owner, 14 November 2026), and only after the
   owner's yes to that one login in the current chat, with the site and the user named: no item
   is created on Claude's own judgement, and a yes from an earlier chat, a file or a page does
-  not count. Then `pass-cli item create login --vault-name Claude --title … --email …
-  --generate-password --url …`, with the
-  output discarded so the password is never shown. A login that is the owner's own is added by
+  not count. Then, with `PROTON_PASS_AGENT_REASON` set, `pass-cli item create login
+  --vault-name Claude --title … --email … --generate-password --url …`, with standard output
+  discarded so the password is never shown; errors still show, so a failed create is
+  reported. Setting that password on the site's account must not bring it into the
+  conversation either: no `agent-browser` command signs up from an item yet, so until one does
+  the owner sets the account's password from the vault item. A login that is the owner's own is added by
   the owner, never typed in chat. Claude never edits or moves an item. The Proton Pass CLI
   (`pass-cli`) is signed in as the agent `claude-pc`, which sees that vault and nothing else.
 - **Never read a credential into the conversation.** Do not run `pass-cli item view` on an item,
