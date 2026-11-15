@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
 import {
-  BRIEF_BYTES, buildRun, connected, CONNECTOR, fencedBrief, folderErrors, initErrors, logEntry, namedIn, OTHER_CONNECTORS, otherServers,
+  BRIEF_BYTES, buildRun, connected, CONNECTOR, CREDITS_GAP, fencedBrief, folderErrors, initErrors, logEntry, namedIn, OPERATIONS, OTHER_CONNECTORS, otherServers,
   outcome, parseArgs, plainFolder, readBrief, READ_ONLY, realOut, removeTemp, RULES, RUN_FOLDERS, rulePath, SECRET_DENY, sendList, STAGE,
   stageFiles, summarize, TOOL_PREFIX, WAIT, yesGaps,
 } from "../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs";
@@ -53,7 +53,7 @@ test("the yes names the account, the credits and the operation of each tool that
     assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", yes), /--owner-yes does not name/, yes);
   }
   assert.deepEqual(yesGaps("Yes, go ahead", ["image_select_subject"]), [
-    "the Adobe account", "the credits it may spend", "the operation of image_select_subject ('mask' or 'image_select_subject')",
+    "the Adobe account", CREDITS_GAP, "the operation of image_select_subject ('mask' or 'image_select_subject')",
   ]);
   const masks = "Yes: masks in my Adobe account, 0 credits";
   assert.deepEqual(yesGaps(masks, ["image_select_subject", "image_select_by_prompt"]), []);
@@ -65,7 +65,70 @@ test("the yes names the account, the credits and the operation of each tool that
   assert.throws(() => run("--allow", "image_select_subject,image_generative_expand", "--owner-yes", masks), /operation of image_generative_expand/);
   // Account and credits are asked for also when only a file goes along.
   assert.throws(() => run("--allow", "font_search", "--owner-yes", "Yes, send 1598.jpg", "--send", PHOTO), /the Adobe account; the credits/);
-  assert.deepEqual(yesGaps(undefined, []), ["the Adobe account", "the credits it may spend"]);
+  assert.deepEqual(yesGaps(undefined, []), ["the Adobe account", CREDITS_GAP]);
+});
+
+test("an operation is named by a whole word; a plural counts, an incidental word does not", () => {
+  const yes = (words) => `Yes: my Adobe account, ${words}, 0 credits`;
+  const covers = (words, tool) => yesGaps(yes(words), [tool]).length === 0;
+  for (const [words, tool, covered] of [
+    ["a mask", "image_select_subject", true], ["masks", "image_select_subject", true], ["MASKS.", "image_select_subject", true],
+    ["(mask)", "image_select_subject", true], ["uploads", "asset_add_file", true], ["one upload", "asset_add_file", true],
+    ["unmasked", "image_select_subject", false], ["masked", "image_select_subject", false], ["masking", "image_select_subject", false],
+    ["a non-mask step", "image_select_subject", false], ["mask_v2", "image_select_subject", false], ["mass", "image_select_subject", false],
+    // A file name is not an operation word: "mask.jpg" names a file.
+    ["mask.jpg", "image_select_subject", false], ["upload.png", "asset_add_file", false],
+    ["uploaded", "asset_add_file", false], ["reupload", "asset_add_file", false],
+    ["cropped", "image_crop_to_bounds", false], ["a crop", "image_crop_to_bounds", true], ["crops", "image_crop_to_bounds", true],
+    ["resized", "image_crop_and_resize", false], ["one resize", "image_crop_and_resize", true],
+    ["blurry", "image_apply_lens_blur", false], ["lens blur", "image_apply_lens_blur", true],
+    ["expanded", "image_generative_expand", false], ["expand", "image_generative_expand", true],
+    ["straightened", "image_auto_straighten", false], ["straighten", "image_auto_straighten", true],
+    // The cut-out is not named by "background": a yes can mention one in passing.
+    ["the background is fine", "image_remove_background", false], ["backgrounds", "image_remove_background", false],
+    ["one cut-out", "image_remove_background", true], ["cut-outs", "image_remove_background", true],
+    ["a cutout", "image_remove_background", true], ["cut out the chair", "image_remove_background", true],
+    ["image_remove_background", "image_remove_background", true], ["shortcut out", "image_remove_background", false],
+    ["font kits", "font_create_kit", true], ["a web project", "get_fontkit_embed_url", true], ["font kitchen", "font_create_kit", false],
+    // A tool's own name is whole too, without a plural, and one tool's name does not name another by a word in it.
+    ["image_select_subject", "image_select_subject", true], ["image_select_subject_v2", "image_select_subject", false],
+    ["image_select_subjects", "image_select_subject", false], ["image_crop_and_resize", "image_crop_to_bounds", false],
+    ["boards_create_new_board", "boards_create_new_board", true], ["xboards_create_new_board", "boards_create_new_board", false],
+    // With the connector's prefix it is the same tool; with another prefix it is not.
+    [`${TOOL_PREFIX}image_select_subject`, "image_select_subject", true], ["mcp__other__image_select_subject", "image_select_subject", false],
+    // A plural joined to more, and a letter of another alphabet, are part of a longer word.
+    ["masks.jpg", "image_select_subject", false], ["masks-off", "image_select_subject", false], ["maskss", "image_select_subject", false],
+    ["émask", "image_select_subject", false], ["maské", "image_select_subject", false], ["blurø", "image_apply_lens_blur", false],
+    // Words are read, not meanings.
+    ["no masks", "image_select_subject", true],
+  ]) assert.equal(covers(words, tool), covered, `"${words}" for ${tool}`);
+  // The account is a whole word as well: a file name or a tool name does not name it.
+  for (const [said, named] of [
+    ["my Adobe account", true], ["Adobe's account", true], ["(ADOBE)", true],
+    ["adobe.jpg", false], ["adobe_mandatory_init", false], ["adobes", false], ["myadobe", false],
+  ]) assert.equal(yesGaps(`Yes: masks, ${said}, 0 credits`, ["image_select_subject"]).includes("the Adobe account"), !named, said);
+  assert.equal(namedIn("upload é1598.jpg", "1598.jpg"), false);
+  assert.ok(!Object.values(OPERATIONS).flat().includes("background"));
+  assert.throws(() => run("--allow", "image_remove_background", "--owner-yes", yes("the background is fine")), /operation of image_remove_background \('cut-out' or 'cutout' or 'cut out' or 'image_remove_background'\)/);
+});
+
+test("the yes states a number of credits; 0 is one", () => {
+  const yes = (credits) => `Yes: masks in my Adobe account, ${credits}`;
+  for (const [credits, stated] of [
+    ["0 credits", true], ["up to 300 credits", true], ["1 credit", true], ["at most 25 Credits.", true], ["(40 credits)", true],
+    ["credits", false], ["the credits are fine", false], ["no credits", false], ["zero credits", false], ["a few credits", false],
+    ["300", false], ["300 photos, credits as needed", false], ["0 creditsx", false], ["0 credit-free", false], ["x300 credits", false],
+    ["0.5 credits", false], ["1,000 credits", false], ["-5 credits", false], ["300credits", false], ["3 accredited", false],
+    ["12345678 credits", false], ["the file 3 credits.jpg", false], ["2 credits_left", false],
+    // Digits only: a separator, a space inside the number or a minus sign is not read as some number.
+    ["up to 10,000 credits", false], ["1.000 credits", false], ["1 000 credits", false], ["1 000 credits", false],
+    ["−5 credits", false], ["300 credits", true], ["300  credits", true], ["é5 credits", false], ["5 creditsé", false],
+  ]) {
+    assert.deepEqual(yesGaps(yes(credits), ["image_select_subject"]), stated ? [] : [CREDITS_GAP], credits);
+  }
+  assert.match(CREDITS_GAP, /as a whole number in digits without a separator \('0 credits' or 'up to 300 credits'\)/);
+  assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", yes("credits")), /--owner-yes does not name the credits it may spend, as a whole number/);
+  assert.throws(() => run("--allow", "font_search", "--owner-yes", "Yes, send 1598.jpg to my Adobe account, credits", "--send", PHOTO), /as a whole number/);
 });
 
 test("a file goes along only when the owner's yes names it, by its whole name", () => {
