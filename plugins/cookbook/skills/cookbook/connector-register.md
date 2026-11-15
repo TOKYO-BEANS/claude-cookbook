@@ -1,7 +1,7 @@
 # Connector and skill register
 
 What loads into every Claude Code session, what each item is for, how much it is used, and the
-route it gets from the order in "Connecting a new app or service" (SKILL.md): this Cookbook first,
+route it gets from the order in "Connecting a new app or service" (`recipes/connecting.md`): this Cookbook first,
 then the maker's official connector or CLI, a community CLI, the API from a small script, and an MCP
 server last. An MCP server that only some projects need goes in project scope, not user scope.
 

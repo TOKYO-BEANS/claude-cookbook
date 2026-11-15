@@ -1,0 +1,42 @@
+# Options weighed: keep healthy
+
+Chosen by fit for the job on 15 November 2026. Each "checked" below was read from this PC that
+day, not assumed.
+
+- **Big output: context-mode.** It cuts any tool result over 4,096 bytes and indexes the rest
+  locally, so no project has to remember to do it. Weighed: ranged reads and `rg` by hand (the
+  fallback); a subagent per large read (a whole context for one answer).
+- **Compaction: Jev compaction.** Checked: it is the one that compacts, in T3 Code too (40
+  compactions in 8 days, 32 by Jev, 8 handed to the built-in compactor, which is the
+  fallback). Weighed: the built-in compactor alone (a summary written by the model, slower
+  and less exact about tool calls); self-compact-claude (does not compact: it carries a note
+  across a compaction, which the compactor's kept state and `ctx_resume` already do).
+- **Memory: `HANDOFF.md` and auto-memory.** Project state lives with the project and is
+  reviewed in pull requests; the owner's preferences live in auto-memory, one fact per file.
+  Weighed: claude-reflect (checked: it saves a correction as a CLAUDE.md rule, the job
+  auto-memory does; its one save went to `C:\.claude\CLAUDE.md`, which nothing reads);
+  Graphify notes and Parallel memory (shared stores for a single user); Mem0 and similar
+  memory services (a hosted copy of private context).
+- **Scheduled scripts: Windows Task Scheduler.** Checked: `stack-updates-daily` runs there
+  every day with no model. It reaches the DPAPI store and the pinned CLIs. Weighed: a
+  Cloudflare Cron Trigger (right for a hosted product's own periodic work, cannot reach this
+  PC); a scheduled agent session (about 300,000 tokens on a quiet day for a job a script
+  does).
+- **Scheduled agent runs: T3 Code scheduled tasks.** Checked: a one-off task ran on time in
+  its own thread and worktree. The run shows up where the owner works, can be started by a
+  webhook, and has the pull request tools. Weighed: Claude Desktop scheduled tasks (the
+  fallback: a model per task, but results land in an app the owner no longer works in; three
+  tasks still run there); Claude Code cloud routines (no access to this PC's keys and CLIs);
+  a Windows task that starts `claude -p` (right for one bounded read inside a script, not for
+  a run that opens pull requests).
+- **Updates: the `stack-updates` skill.** A script decides what is routine; a model only
+  reads release notes, with no tools. Weighed: Dependabot and Renovate (repositories only,
+  not the tools on this PC); each tool's self-update (unvetted, and it writes into AppData).
+- **Where a session runs: T3 Code.** Worktrees per thread, delegates, pull request watches and
+  scheduled tasks around the Claude Code harness. Weighed: the Claude desktop app (its Code
+  tab; still home to three scheduled tasks and to Claude Design); a plain terminal (the
+  fallback).
+- **Prompt cache and status rows: nothing owns this in T3 Code.** cache-tax and prompt-band
+  draw rows above the prompt of a terminal or desktop session. A T3 Code session is headless
+  to mods (the router's log says so), so nothing shows them there; this is inferred, not
+  tested.

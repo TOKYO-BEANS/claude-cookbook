@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { OTHER_TEXTS, checkCookbook } from "./check.mjs";
+import { OTHER_TEXTS, PAGE_READ_LIMIT, SKILL_LIMIT, checkCookbook, readCost, readPages } from "./check.mjs";
 import { CHANGELOG_HOSTS, SELF_UPDATING_TOOLS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -10,7 +10,9 @@ const catalogText = read("plugins/cookbook/catalog.json");
 const skillText = read("plugins/cookbook/skills/cookbook/SKILL.md");
 const catalog = JSON.parse(catalogText);
 const withTools = (fn) => JSON.stringify({ ...catalog, tools: fn(structuredClone(catalog.tools)) });
-const errors = (o = {}) => checkCookbook({ catalogText, skillText, ...o });
+const pages = readPages(new URL("../plugins/cookbook/skills/cookbook/", import.meta.url));
+const errors = (o = {}) => checkCookbook({ catalogText, skillText, pages, ...o });
+const withPage = (name, fn) => pages.map((p) => (p.name === name ? { name, text: fn(p.text) } : p));
 
 test("the real files pass", () => {
   assert.deepEqual(errors(), []);
@@ -27,9 +29,78 @@ test("ids are unique", () => {
   assert.ok(errors({ catalogText: text }).some((e) => /duplicate id/.test(e)));
 });
 
-test("every recipe heading exists", () => {
+test("every recipe heading is the title of a page in recipes/", () => {
   const text = withTools((t) => (t.find((x) => x.id === "parallel").recipe = "No such heading", t));
-  assert.ok(errors({ catalogText: text }).some((e) => /\(parallel\): recipe heading/.test(e)));
+  assert.ok(errors({ catalogText: text }).some((e) => /\(parallel\): recipe heading names no page title/.test(e)));
+  // A title that only an options page carries does not count.
+  const options = withTools((t) => (t.find((x) => x.id === "parallel").recipe = "Options weighed: ship", t));
+  assert.ok(errors({ catalogText: options }).some((e) => /\(parallel\): recipe heading names no page title/.test(e)));
+});
+
+test("the map: a row cannot point to a recipe file that does not exist", () => {
+  const skill = skillText.replace("(recipes/boat.md)", "(recipes/no-such-page.md)");
+  assert.notEqual(skill, skillText);
+  assert.ok(errors({ skillText: skill }).some((e) => e === "SKILL.md: link to recipes/no-such-page.md, which does not exist"));
+  // The same when the page itself is gone.
+  const gone = errors({ pages: pages.filter((p) => p.name !== "recipes/boat.md") });
+  assert.ok(gone.some((e) => e === "SKILL.md: link to recipes/boat.md, which does not exist"));
+});
+
+test("the map: every row has an owner, a fallback and a recipe page, a dash or 'being built'", () => {
+  const row = (r) => skillText.replace("| **Keep healthy** | | | |", `| **Keep healthy** | | | |\n${r}`);
+  assert.deepEqual(errors({ skillText: row("| A new job | someone | — | — |") }), []);
+  assert.deepEqual(errors({ skillText: row("| A new job | someone | — | being built |") }), []);
+  assert.ok(errors({ skillText: row("| A new job | someone | — | see the wiki |") }).some((e) => /row "A new job" names no recipe page/.test(e)));
+  assert.ok(errors({ skillText: row("| A new job | someone | — | |") }).some((e) => /row "A new job" names no recipe page/.test(e)));
+  assert.ok(errors({ skillText: row("| A new job | | — | — |") }).some((e) => /row "A new job" has no owner/.test(e)));
+  assert.ok(errors({ skillText: row("| A new job | someone | | — |") }).some((e) => /row "A new job" has no fallback/.test(e)));
+  assert.ok(errors({ skillText: row("| A new job | someone | — |") }).some((e) => /row "A new job" needs 4 cells/.test(e)));
+  // Only a bold job cell makes a group heading: a job row left blank is reported, not skipped.
+  const blank = errors({ skillText: row("| A new job | | | |") });
+  assert.ok(blank.some((e) => /row "A new job" has no owner/.test(e)) && blank.some((e) => /row "A new job" has no fallback/.test(e)));
+  assert.ok(blank.some((e) => /row "A new job" names no recipe page/.test(e)));
+  assert.deepEqual(errors({ skillText: row("| **A new group** | | | |") }), []);
+  assert.ok(errors({ skillText: row("| A new job | someone | — | [why](options/ship.md) |") }).some((e) => /a recipe page is in recipes\//.test(e)));
+  assert.ok(errors({ skillText: skillText.replace("## The map", "## Choosing") }).some((e) => /no "## The map" section/.test(e)));
+});
+
+test("pages: a link between pages resolves, and every page is reached from SKILL.md", () => {
+  const broken = withPage("recipes/boat.md", (t) => `${t}\nSee [x](missing.md).\n`);
+  assert.ok(errors({ pages: broken }).some((e) => e === "recipes/boat.md: link to missing.md, which does not exist"));
+  const orphan = [...pages, { name: "recipes/orphan.md", text: "# An orphan\n\nNothing links here.\n" }];
+  assert.ok(errors({ pages: orphan }).some((e) => e === "recipes/orphan.md: no map row or page links to it"));
+  // Reached through another page, not only from the map.
+  assert.ok(!skillText.includes("boat-setup.md") && pages.some((p) => p.name === "recipes/boat-setup.md"));
+  // A link out of the skill folder or to another site is not a page link.
+  assert.deepEqual(errors({ pages: withPage("recipes/boat.md", (t) => `${t}\n[doc](https://example.com/a.md)\n`) }), []);
+});
+
+test("the stack-updates skill's update table names recipe pages by their exact titles", () => {
+  const titles = new Set(pages.filter((p) => p.name.startsWith("recipes/")).map((p) => /^# (.+)\r?\n/.exec(p.text)[1].trim()));
+  const skill = read("plugins/cookbook/skills/stack-updates/SKILL.md").replace(/\r/g, "");
+  const table = skill.slice(skill.indexOf("| Kind | What to do | Recipe |"));
+  const rows = table.split("\n").filter((l) => l.startsWith("|")).slice(2);
+  assert.ok(rows.length >= 5);
+  const named = rows.flatMap((r) => [...r.split("|").at(-2).matchAll(/"([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(named.length >= 6);
+  for (const n of named) assert.ok(titles.has(n), `"${n}" is not the title of a page in recipes/`);
+  // The steps are on the page the row names: an update row never points at a page without them.
+  const body = (title) => pages.find((p) => p.text.startsWith(`# ${title}\n`) || p.text.startsWith(`# ${title}\r\n`)).text;
+  for (const n of named.filter((x) => /setup|mods|terminal proxy/.test(x))) assert.match(body(n), /update/i, n);
+});
+
+test("pages: each fits one Read, has its own title and a plain name; SKILL.md stays an index", () => {
+  const long = withPage("recipes/seo.md", (t) => `${t}${"x".repeat(60)}\n`.repeat(40));
+  assert.ok(errors({ pages: long }).some((e) => /^recipes\/seo\.md: \d+ bytes as a Read result, over 4000: split the page$/.test(e)));
+  assert.equal(readCost("ab\ncd\n"), 6 + 9 * 3);
+  for (const p of pages) assert.ok(readCost(p.text.replace(/\r/g, "")) <= PAGE_READ_LIMIT, p.name);
+  assert.ok(errors({ pages: withPage("recipes/seo.md", (t) => t.replace(/^# .+\n/, "")) }).some((e) => /seo\.md: must start with a "# Title" line/.test(e)));
+  const twin = withPage("recipes/seo.md", (t) => t.replace(/^# .+\n/, "# Cloudflare\n"));
+  assert.ok(errors({ pages: twin }).some((e) => /same title as/.test(e)));
+  assert.ok(errors({ pages: [...pages, { name: "notes/Extra.md", text: "# Extra\n" }] }).some((e) => /notes\/Extra\.md: a page is/.test(e)));
+  assert.ok(errors({ pages: withPage("recipes/seo.md", (t) => `${t}\nCosts $5.\n`) }).some((e) => /recipes\/seo\.md line \d+: dollar sign before a digit/.test(e)));
+  const fat = `${skillText}\n${"word ".repeat(SKILL_LIMIT / 5)}`;
+  assert.ok(errors({ skillText: fat }).some((e) => /^SKILL\.md is \d+ bytes, over 14000/.test(e)));
 });
 
 test("field rules", () => {

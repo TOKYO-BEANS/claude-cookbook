@@ -1,0 +1,45 @@
+# Options weighed: reach outside
+
+Chosen by fit for the job on 15 November 2026.
+
+- **Facts and lookups: Parallel Search.** Several queries in one call, and excerpts that
+  usually answer without a fetch. Weighed: native web search (the fallback: no excerpts
+  ranked for the question); Exa, Tavily, Brave and Perplexity (the same job from another
+  vendor).
+- **Pages, PDFs, crawls, developer and paper indexes, typed records: Firecrawl.** One service
+  renders a JS-heavy page, parses a PDF, maps a site and holds the developer and research
+  indexes and Alexandria. Weighed: Parallel `web_fetch` (the fallback for one page); Jina
+  Reader (single pages only); `gh search` (the fallback for public code).
+- **A cited answer from several sources: `sa-research`.** Parallel first, Firecrawl for gaps,
+  inside an agent budget. Weighed: Parallel Task and deep research (one vendor's synthesis,
+  priced per run: the fallback is its quick `web_research`); the bundled deep-research skill
+  (no budget).
+- **Operating a public page: Browserbase through the `browse` CLI.** The page runs in a cloud
+  browser, away from this PC and from any signed-in profile, and the CLI adds nothing to a
+  session. Weighed:
+  - Stagehand (the same cloud browser as an MCP server: several steps in one call, but three
+    tool names and two Node processes in every session, a source build the update check
+    cannot follow, and no job the CLI cannot do with a short script). It stays installed
+    until the visual check is built, and goes if that check does not use it.
+  - the built-in browser (holds the owner's signed-in sessions: keep unknown pages out of it);
+  - Playwright MCP and Chrome DevTools MCP (a local browser on this PC, and a server in every
+    session);
+  - the Chrome extension and computer use (they act in the owner's own browser and desktop).
+- **A site that needs a sign-in: agent-browser with the Proton Pass vault.** Its own local
+  browser profile, a login filled without the secret entering the conversation, and a vault
+  that holds only what Claude may use. Weighed: the built-in browser (the fallback, when only
+  the owner can sign in); a cloud browser (never: a login does not go into a recorded cloud
+  session); 1Password and Bitwarden CLIs (the same job; the owner already uses Proton).
+- **Keys and tokens: the DPAPI store.** Encrypted for this Windows user, handed to one process
+  at run time. Weighed: environment variables and `.env` files (plain text); Windows
+  Credential Manager (readable by any program of the user); a hosted secrets manager (for
+  production secrets, which live in Cloudflare and Depot, not for this PC).
+- **Google accounts: the `google` command with gws.** One consent per account, then
+  short-lived tokens, for any Google API. Weighed: Google's MCP connectors (a server per
+  product); gws's own sign-in (keeps a second copy of the grant, one account only).
+- **Code away from this PC: boat.** A full Ubuntu machine in under a second, billed per
+  second, deleted after the command, from one CLI. Weighed: Cloudflare Sandbox (in the stack,
+  but needs a Worker around it); E2B, Daytona and Modal (the same job behind an SDK); GitHub
+  Codespaces (made for a person's editor); WSL on this PC (not away from this PC).
+- **SEO: OpenSEO.** Keyword, backlink and audit data with Search Console intake, in skills.
+  Weighed: Ahrefs and Semrush (subscriptions for the same data).

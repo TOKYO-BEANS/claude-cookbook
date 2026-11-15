@@ -63,9 +63,9 @@ import { markSeen, readSeen } from "./lib/notice.mjs";
 import { CONNECTION_CHECKS, SELF_UPDATING_TOOLS } from "./lib/tables.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-// The catalog and the Cookbook skill of the plugin version this script belongs to.
+// The catalog and the Cookbook's recipe pages of the plugin version this script belongs to.
 export const CATALOG_PATH = join(HERE, "..", "..", "..", "catalog.json");
-export const COOKBOOK_SKILL_PATH = join(HERE, "..", "..", "cookbook", "SKILL.md");
+export const COOKBOOK_RECIPES_DIR = join(HERE, "..", "..", "cookbook", "recipes");
 export const KEEP_DAYS = 30; // run folders older than this are removed
 export const LOCK_FILE = "run.lock";
 export const LOCK_MAX_AGE_MS = 3 * 60 * 60_000; // an older lock was left by a run that died; no run lasts this long
@@ -331,29 +331,17 @@ function pageOf(ctx, n, day = ctx.today) {
 }
 
 /**
- * The section of the Cookbook skill whose heading is `heading` (any level), up to the
- * next heading of the same or a higher level; headings inside code fences do not
- * count. "" when there is none.
+ * The Cookbook recipe titled `heading`, from `pages` (`[{ name: "boat.md", text }]`, the
+ * files of the Cookbook skill's `recipes/` folder): the one page whose first line is
+ * `# <heading>`. "" when there is none. Only that page goes into the read request: it says
+ * how the stack uses the tool. A recipe's further pages (`boat-setup.md` for `boat.md`)
+ * hold this PC's paths, key names and evidence, which the request does not need.
  */
-export function recipeSection(skillText, heading) {
-  if (typeof skillText !== "string" || typeof heading !== "string" || !heading.trim()) return "";
-  const lines = skillText.split(/\r?\n/);
-  let fence = false, start = -1, level = 0;
-  for (let i = 0; i < lines.length; i++) {
-    if (/^\s{0,3}(```|~~~)/.test(lines[i])) {
-      fence = !fence;
-      continue;
-    }
-    if (fence) continue;
-    const m = /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(lines[i]);
-    if (!m) continue;
-    if (start >= 0 && m[1].length <= level) return lines.slice(start, i).join("\n").trim();
-    if (start < 0 && m[2] === heading.trim()) {
-      start = i;
-      level = m[1].length;
-    }
-  }
-  return start >= 0 ? lines.slice(start).join("\n").trim() : "";
+export function recipeText(pages, heading) {
+  if (!Array.isArray(pages) || typeof heading !== "string" || !heading.trim()) return "";
+  const usable = pages.filter((p) => isObject(p) && typeof p.name === "string" && typeof p.text === "string");
+  const title = (text) => /^#\s+(.*?)\s*$/.exec(text.split(/\r?\n/, 1)[0])?.[1];
+  return usable.find((p) => title(p.text) === heading.trim())?.text.trim() ?? "";
 }
 
 // The page of release `to` for a change already installed: the feed's newest source
@@ -543,15 +531,16 @@ async function stageConnect(ctx) {
 
 const textFileName = (key) => `${String(key).replaceAll("/", "-").replace(/[^A-Za-z0-9._-]/g, "_").replace(/^\./, "_")}.txt`;
 
-function skillText(ctx) {
-  if (ctx.skillText === undefined) {
+function recipePages(ctx) {
+  if (ctx.recipePages === undefined) {
     try {
-      ctx.skillText = readFileSync(COOKBOOK_SKILL_PATH, "utf8");
+      ctx.recipePages = readdirSync(COOKBOOK_RECIPES_DIR).filter((f) => f.endsWith(".md")).sort()
+        .map((name) => ({ name, text: readFileSync(join(COOKBOOK_RECIPES_DIR, name), "utf8") }));
     } catch {
-      ctx.skillText = ""; // the request then says the Cookbook has no recipe
+      ctx.recipePages = []; // the request then says the Cookbook has no recipe
     }
   }
-  return ctx.skillText;
+  return ctx.recipePages;
 }
 
 // owner/name, or exactly https://github.com/<owner>/<name> with an optional trailing
@@ -638,7 +627,7 @@ async function stageRead(ctx) {
       continue;
     }
     const tool = ctx.toolById.get(c.tool) ?? { id: c.tool };
-    const recipe = typeof tool.recipe === "string" ? recipeSection(skillText(ctx), tool.recipe) : "";
+    const recipe = typeof tool.recipe === "string" ? recipeText(recipePages(ctx), tool.recipe) : "";
     const done = await readChange(c, tool, recipe, texts.get(c), { run: ctx.run, home: ctx.home });
     if (isObject(done.answers)) {
       reads.count += 1;
@@ -970,7 +959,7 @@ function parseArgs(argv) {
  * `main(argv, deps?) -> exit code`. `deps` (all optional, for tests): `home`,
  * `fetcher`, `gh` (`(args) -> { code, stdout, stderr }`), `run` (inventory.mjs's
  * shape), `now` (the real clock: the local date and the paid check's day), `catalog`,
- * `skillText`, `stdout`, `stderr` (write functions).
+ * `recipePages` (`[{ name, text }]`), `stdout`, `stderr` (write functions).
  */
 export async function main(argv, deps = {}) {
   const stdout = deps.stdout ?? ((s) => process.stdout.write(s));
@@ -999,7 +988,7 @@ export async function main(argv, deps = {}) {
       fetcher: deps.fetcher ?? globalThis.fetch,
       gh: deps.gh ?? ((args) => defaultRun(["gh", ...args], { home, timeoutMs: GH_TIMEOUT_MS, maxBytes: RESPONSE_LIMIT + 1 })),
       run: deps.run ?? defaultRun,
-      skillText: deps.skillText,
+      recipePages: deps.recipePages,
     };
     if (command === "record") {
       stdout((await record(ctx, rest[0], rest[1])).printed);
