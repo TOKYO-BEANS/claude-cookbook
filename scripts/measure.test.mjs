@@ -103,6 +103,17 @@ test("rows of another task set or model in the folder are found; a row from befo
   assert.deepEqual(foreignRows(rows.slice(0, 2), "a", "m"), []);
 });
 
+test("requests are counted for the model the session reports, also when --model was an alias", () => {
+  const lines = [
+    { type: "system", subtype: "init", model: "claude-x-1" },
+    { type: "assistant", message: { id: "a", model: "claude-x-1", usage: { input_tokens: 7 }, content: [] } },
+    { type: "assistant", message: { id: "h", model: "claude-small", usage: { input_tokens: 99 }, content: [] } },
+  ].map((e) => JSON.stringify(e));
+  const s = summarizeStream(lines, "x");
+  assert.deepEqual([s.calls, s.firstContext, s.peakContext], [1, 7, 7]);
+  assert.equal(summarizeStream(lines.slice(1), "x").calls, 0);
+});
+
 test("the report takes the mean of the repeats and keeps the range of the input", () => {
   const row = (side, input, passed) => ({ task: "T", group: "g", side, input, cacheWrite: 0, cacheRead: 0, output: 10, turns: 2, durationMs: 1000, costUsd: 0.1, firstContext: 5, peakContext: 9, passed, of: 3 });
   const [before, after] = aggregate([row("before", 100, 3), row("before", 300, 2), row("after", 50, 3)]);

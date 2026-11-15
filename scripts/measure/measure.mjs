@@ -8,7 +8,7 @@
 // By default a run leaves numbers only in --out: counts, cost, the tools called, which checks passed.
 // The model's text can quote the rules file it was given, so the full stream of a run (and what the
 // run printed on stderr) is written only with `--transcripts yes`. Keep such a folder out of a repository.
-// The rules for scripted runs are in recipes/scripted-runs.md.
+// The rules for scripted runs are in recipes/scripted-runs.md and recipes/scripted-runs-rules.md.
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -46,7 +46,9 @@ export function scoreAnswer(task, text) {
 const context = (u) => (u?.input_tokens ?? 0) + (u?.cache_creation_input_tokens ?? 0) + (u?.cache_read_input_tokens ?? 0);
 const short = (p) => String(p ?? "").replace(/\\/g, "/").split("/").slice(-2).join("/");
 
-// One run's stream-json lines, reduced to the numbers and the tool calls.
+// One run's stream-json lines, reduced to the numbers and the tool calls. Requests are counted for
+// the model the session itself reports (its init event): `--model` may be an alias such as `opus`,
+// which no message carries. `model` is used only when a stream has no init event.
 export function summarizeStream(lines, model) {
   const s = { calls: 0, firstContext: 0, peakContext: 0, toolCalls: [], init: null, result: null };
   const seen = new Set();
@@ -59,7 +61,7 @@ export function summarizeStream(lines, model) {
       for (const b of e.message.content ?? []) {
         if (b.type === "tool_use") s.toolCalls.push(b.name === "Read" ? `Read ${short(b.input?.file_path)}` : b.name === "Skill" ? `Skill ${b.input?.skill}` : b.name);
       }
-      if (seen.has(e.message.id) || (model && e.message.model !== model) || e.parent_tool_use_id) continue;
+      if (seen.has(e.message.id) || ((s.init?.model ?? model) && e.message.model !== (s.init?.model ?? model)) || e.parent_tool_use_id) continue;
       seen.add(e.message.id);
       const c = context(e.message.usage);
       s.calls += 1;
@@ -182,6 +184,7 @@ async function run(opts) {
         }
         const s = summarizeStream(res.out.split("\n"), model);
         if (!s.result) { console.log(`${name}: NO RESULT (exit ${res.code})${transcripts ? `; see ${name}.err` : "; run it again with --transcripts yes to keep its output"}`); return; }
+        if (!s.calls) { console.log(`${name}: a result but no request of the session's model (${s.init?.model ?? model}) was counted; stopped, nothing recorded`); return; }
         const score = scoreAnswer(task, s.result.text);
         const row = { set, model, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
         delete row.text;

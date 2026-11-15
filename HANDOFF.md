@@ -68,7 +68,7 @@ into `<side>/plugin`, the rules file as `<side>/work/CLAUDE.md`), then `probe`, 
 `report`. Results compare within one task set only: a changed task or check takes a new
 `set` name.
 
-**Verification.** `npm test` passes (339 tests, 12 of them in `scripts/measure.test.mjs`). The 48
+**Verification.** `npm test` passes (340 tests, 13 of them in `scripts/measure.test.mjs`). The 48
 stored answers were scored again from the raw streams after the last change to the parser:
 152 of 152, none moved.
 
@@ -85,7 +85,9 @@ quote the rules file it was given. The stream, the run's stderr and the probe's 
 written only with `--transcripts yes`, and a search is recorded without its pattern; by
 default the folder holds numbers, tool names and which checks passed. The first measurement
 was made before this, so its folder holds every stream; it is on this PC only, in no
-repository.
+repository. Round 3, the last: requests are counted for the model the session reports, so an
+alias in `--model` no longer leaves the request columns at 0, and a run with a result but no
+counted request stops the batch; the header comment names both scripted-runs pages.
 
 **Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`
 (`RESULT.md`, `runs/report.md`, `runs/summary.jsonl`, one stream per run, both sides in
