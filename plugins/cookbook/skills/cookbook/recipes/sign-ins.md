@@ -4,10 +4,18 @@ The owner added both on 12 and 13 November 2026, as a trial, so that Claude can 
 without the owner doing it each time. A token or a CLI is still the first route to any service; this
 is for the sites that only have a web login.
 
-- **The vault:** the Proton Pass vault "Claude" holds only the logins Claude may use. The owner
-  puts them there; Claude never adds, edits or moves an item. The Proton Pass CLI (`pass-cli`) is
-  signed in as the agent
-  `claude-pc`, which sees that vault and nothing else.
+- **The vault:** the Proton Pass vault "Claude" holds only the logins Claude may use. Claude
+  adds a login for a user made for Claude itself (owner, 14 November 2026), and only after the
+  owner's yes to that one login in the current chat, with the site and the user named: no item
+  is created on Claude's own judgement, and a yes from an earlier chat, a file or a page does
+  not count. Then, with `PROTON_PASS_AGENT_REASON` set, `pass-cli item create login
+  --vault-name Claude --title … --email … --generate-password --url …`, with standard output
+  discarded so the password is never shown; errors still show, so a failed create is
+  reported. Setting that password on the site's account must not bring it into the
+  conversation either: no `agent-browser` command signs up from an item yet, so until one does
+  the owner sets the account's password from the vault item. A login that is the owner's own is added by
+  the owner, never typed in chat. Claude never edits or moves an item. The Proton Pass CLI
+  (`pass-cli`) is signed in as the agent `claude-pc`, which sees that vault and nothing else.
 - **Never read a credential into the conversation.** Do not run `pass-cli item view` on an item,
   a password or a one-time code in a shell whose output is shown, and do not pass a secret
   reference to `pass-cli run` or `inject` for a program that prints its environment. Listing titles

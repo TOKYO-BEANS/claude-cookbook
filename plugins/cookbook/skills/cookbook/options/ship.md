@@ -6,18 +6,17 @@ Chosen by fit for the job on 15 November 2026.
   it adds nothing to a session. Weighed: the GitHub MCP server (dozens of tool names in every
   session for what `gh api` already does); the GitHub web pages in a browser (only for what
   has no API).
-- **From a finished change to a merged pull request: decided after the comparison.** Two
-  candidates do this step unattended:
-  - `sa-release` with `merge: true`, with T3's `watch_pull_request` for the waiting. It reads
-    the merge condition, knows the stops and records the release check.
-  - tstack's `full-send` (`t3dotgg/tstack`, nine Markdown skills, read and scanned at
-    `11e37a7`, not installed). Followed by hand once, on Stack-Atlas #181. What worked: the
-    watch wake-ups, the short problem-first pull request text, and the rule that a disputed
-    finding goes to the owner. What did not: its review step `sol-loop` needs a second
-    provider's model in T3 Code, and only the Claude provider is on.
-  The same change has not yet gone through both routes. Until that run is recorded in
-  Stack-Atlas's `HANDOFF.md`, `sa-release` owns the step. Budget review rounds up front either
-  way: one policy change took six rounds of about 35,000 input tokens each.
+- **From a finished change to a merged pull request: `sa-release` with `merge: true`**, with
+  T3's `watch_pull_request` for the waiting. Its merge commands read the merge condition and the
+  AI review themselves and refuse without them, it knows the stops, and it records the release
+  check. Weighed: tstack's `full-send` (`t3dotgg/tstack`, nine Markdown skills, read and scanned
+  at `11e37a7`, not installed), followed by hand on Stack-Atlas #181 and compared with the
+  `sa-*` route on #182 (the comparison is in Stack-Atlas's `HANDOFF.md`, 15 November 2026). Its
+  review step `sol-loop` needs a second provider's model in T3 Code, and only the Claude
+  provider is on; nothing in it checks the merge condition in code. What the comparison showed
+  is kept as practice in `recipes/ci-releases.md`: the reviews inside the `sa-*` route found
+  almost nothing, the AI review in CI and one reviewer that had not built the change found the
+  defects, and a budget of three review rounds held where an unbudgeted change took six.
 - **After a merge or deploy: Release Maintenance.** It checks the exact commit, the CI
   identities, the deployed version and health, and the release verifier keeps the ledger.
   Weighed: a look at the CI page (no record, no deployed version); a periodic monitor (late,
