@@ -8,12 +8,15 @@ No plugin file changes, so the plugin stays 0.31.1.
 commit (two low findings, left for this pull request because #56's three rounds were spent):
 - `run` does not score a run that ended in an error (`is_error`, or a subtype other than
   `success`, such as a run cut off by the spend cap): it prints the subtype, stops the batch
-  and records nothing. Scored, such a run would have counted as wrong answers. None of the
+  and keeps the run as a `discarded` row, so its cost counts against the batch limit (a run
+  with no result at all is counted at the full cap) while the report leaves it out and names
+  it. The AI review's first round (medium) asked for the cost to count: without it, a task
+  that kept hitting the cap could have passed the limit across reruns. Scored, such a run would have counted as wrong answers. None of the
   48 runs of the first measurement was one (every row: exit 0, `isError` false, `success`).
 - `--side` must be `before` or `after`; any other name stops the command before a run. A row
   under another name would have cost money and been left out of the report.
 
-**Verification.** `npm test` passes (343 tests, 16 of them in `scripts/measure.test.mjs`).
+**Verification.** `npm test` passes (344 tests, 17 of them in `scripts/measure.test.mjs`).
 No paid run was made for this pull request.
 
 **From #56** (the entry below). It merged as `187cfc2`. The release check

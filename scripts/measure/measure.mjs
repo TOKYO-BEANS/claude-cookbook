@@ -168,6 +168,14 @@ export function runProblem(s, exitCode, model) {
   return null;
 }
 
+// A run that is not scored has still spent money. Its row is kept as `discarded`, so the batch
+// stop counts it, and it is left out of the resume check and the report. A run with no result
+// reports no cost: it is counted at the full cap, the most it can have spent.
+export const discardedRow = ({ set, model, task, side, rep, problem, result, cap }) =>
+  ({ set, model, task, side, rep, discarded: problem, costUsd: result ? result.costUsd : cap, costKnown: Boolean(result) });
+export const scoredRows = (rows) => rows.filter((r) => !r.discarded);
+export const spentSoFar = (rows) => rows.reduce((a, r) => a + (Number.isFinite(r.costUsd) ? r.costUsd : 0), 0);
+
 async function run(opts) {
   const { cap, limit, reps, model, transcripts } = parseLimits(opts);
   const { suffix, tasks, set } = loadTasks();
@@ -185,8 +193,8 @@ async function run(opts) {
       for (const side of sides) {
         const done = readSummaries(outDir);
         refuseForeign(done, set, model, outDir);
-        if (done.some((r) => r.task === task.id && r.side === side && r.rep === rep)) continue;
-        const spent = done.reduce((a, r) => a + r.costUsd, 0);
+        if (scoredRows(done).some((r) => r.task === task.id && r.side === side && r.rep === rep)) continue;
+        const spent = spentSoFar(done);
         if (spent + cap > limit) { console.log(`STOPPED: ${spent.toFixed(2)} spent, the next run could pass the limit of ${limit}`); return; }
         const sideDir = join(sidesDir, side);
         const name = `${side}-${task.id}-r${rep}`;
@@ -199,7 +207,12 @@ async function run(opts) {
         }
         const s = summarizeStream(res.out.split("\n"), model);
         const problem = runProblem(s, res.code, model);
-        if (problem) { console.log(`${name}: ${problem}; stopped, nothing recorded${transcripts ? `; see ${name}.jsonl` : "; run it again with --transcripts yes to keep its output"}`); return; }
+        if (problem) {
+          const lost = discardedRow({ set, model, task: task.id, side, rep, problem, result: s.result, cap });
+          appendFileSync(join(outDir, "summary.jsonl"), `${JSON.stringify(lost)}\n`);
+          console.log(`${name}: ${problem}; stopped, not scored; USD ${lost.costUsd.toFixed(3)}${lost.costKnown ? "" : " (no cost reported: the full cap)"} counted against the limit${transcripts ? `; see ${name}.jsonl` : "; run it again with --transcripts yes to keep its output"}`);
+          return;
+        }
         const score = scoreAnswer(task, s.result.text);
         const row = { set, model, task: task.id, group: task.group, side, rep, exit: res.code, wallMs, ...s.result, calls: s.calls, firstContext: s.firstContext, peakContext: s.peakContext, toolCalls: s.toolCalls, passed: score.passed, of: score.of, failed: score.checks.filter((c) => !c.pass).map((c) => c.label), login: s.init?.login, plugins: s.init?.plugins, tools: s.init?.tools, mcp: s.init?.mcp, version: s.init?.version };
         delete row.text;
@@ -263,7 +276,8 @@ export function aggregate(rows) {
 }
 
 function report(opts) {
-  const rows = readSummaries(resolve(opts.out));
+  const all = readSummaries(resolve(opts.out));
+  const rows = scoredRows(all);
   if (rows.length) refuseForeign(rows, rows[0].set, rows.find((r) => r.model !== undefined)?.model, resolve(opts.out));
   const agg = aggregate(rows);
   const lines = ["| Task | Side | Input tokens (range) | First request | Largest request | Output | Turns | Seconds | USD | Checks |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |"];
@@ -273,6 +287,8 @@ function report(opts) {
     if (!rs.length) continue;
     lines.push(`| ALL (sum of ${rs.length} runs) | ${side} | ${rs.reduce((a, r) => a + totalIn(r), 0)} | | | ${rs.reduce((a, r) => a + r.output, 0)} | ${rs.reduce((a, r) => a + r.turns, 0)} | ${(rs.reduce((a, r) => a + r.durationMs, 0) / 1000).toFixed(0)} | ${rs.reduce((a, r) => a + r.costUsd, 0).toFixed(2)} | ${rs.reduce((a, r) => a + r.passed, 0)}/${rs.reduce((a, r) => a + r.of, 0)} |`);
   }
+  const lost = all.filter((r) => r.discarded);
+  if (lost.length) lines.push("", `Not scored: ${lost.length} run(s), USD ${spentSoFar(lost).toFixed(2)} (${lost.map((r) => `${r.side} ${r.task} r${r.rep}: ${r.discarded}`).join("; ")}).`);
   const text = `${lines.join("\n")}\n`;
   writeFileSync(join(resolve(opts.out), "report.md"), text);
   writeFileSync(join(resolve(opts.out), "report.json"), `${JSON.stringify(agg, null, 2)}\n`);

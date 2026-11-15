@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { resolve } from "node:path";
-import { aggregate, buildPrompt, claudeArgs, foreignRows, loadTasks, parseAnswer, parseFlags, parseLimits, probeVerdict, readRule, runProblem, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
+import { aggregate, buildPrompt, claudeArgs, discardedRow, foreignRows, loadTasks, parseAnswer, parseFlags, parseLimits, probeVerdict, readRule, runProblem, scoredRows, spentSoFar, runSettings, scoreAnswer, summarizeStream, TOOLS } from "./measure/measure.mjs";
 
 const { tasks, suffix, set } = loadTasks();
 const task = (id) => tasks.find((t) => t.id === id);
@@ -137,6 +137,19 @@ test("a run that ended in an error, has no result or no counted request is not s
   assert.match(runProblem(stream({ subtype: "success", is_error: true }), 0, "m"), /ended as/);
   assert.match(runProblem(stream(null), 3, "m"), /no result \(exit 3\)/);
   assert.match(runProblem(summarizeStream([JSON.stringify({ type: "result", subtype: "success" })], "m"), 0, "m"), /no request/);
+});
+
+test("a run that is not scored still counts against the batch limit, and is not taken as done", () => {
+  const base = { set: "s", model: "m", task: "T", side: "before", rep: 1, cap: 1 };
+  const cut = discardedRow({ ...base, problem: "the run ended as \"error_max_budget_usd\"", result: { costUsd: 0.75 } });
+  const silent = discardedRow({ ...base, problem: "no result (exit 1)", result: null });
+  assert.deepEqual([cut.costUsd, cut.costKnown, silent.costUsd, silent.costKnown], [0.75, true, 1, false]);
+  const rows = [{ ...base, costUsd: 0.25, passed: 3, of: 3 }, cut, silent];
+  assert.equal(spentSoFar(rows), 2);
+  assert.deepEqual(scoredRows(rows), [rows[0]]);
+  assert.deepEqual(scoredRows([cut]), [], "the task runs again");
+  assert.deepEqual(foreignRows([cut], "s", "m"), []);
+  assert.equal(spentSoFar([{ costUsd: undefined }, { costUsd: 0.5 }]), 0.5);
 });
 
 test("a side is before or after, nothing else", () => {
