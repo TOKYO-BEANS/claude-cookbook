@@ -6,7 +6,7 @@
 // the sign-in, calls the one address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
 import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -112,7 +112,9 @@ export function decide(u, now) {
   }
 
   const warn = u.credits ? ["usage credits are on: a limit hit would be billed"] : [];
-  const out = (model, why, wait = null) => ({ model, why, redeem, wait, pace, warn });
+  // Whether a limit every model shares is spent now: then nothing runs until a reset is redeemed.
+  const held = (S ?? 0) >= RULES.stopAt || W >= RULES.stopAt;
+  const out = (model, why, wait = null) => ({ model, why, redeem, wait, pace, warn, held });
   if (redeem && redeem.kind !== "session") return out("fable", `the ${redeem.kind} reset refills Fable`);
   if (W >= RULES.stopAt) return out("wait", "the week is spent", { until: u.week.resetsAt });
   if (S !== null && S >= RULES.stopAt && !redeem) return out("wait", "the session window is spent", { until: u.session.resetsAt });
@@ -155,7 +157,8 @@ export function line(u, d, now, timeZone) {
 // What a hook may put into a session: the action only, with no figures, times or counts.
 export function advice(d) {
   const then = d.model === "wait" ? "nothing runs until the reset" : `use ${NAMES[d.model]}`;
-  if (d.redeem) return `Model budget: a banked ${KIND_LABEL[d.redeem.kind]} reset is worth using now: ask the owner to redeem it, and until then use ${NAMES.opus}; after it, ${then}.`;
+  const until = d.held ? "until then nothing runs: stop at a safe point" : `until then use ${NAMES.opus}`;
+  if (d.redeem) return `Model budget: a banked ${KIND_LABEL[d.redeem.kind]} reset is worth using now: ask the owner to redeem it, and ${until}; after it, ${then}.`;
   if (d.model === "wait") return "Model budget: nothing left until the reset. Stop at a safe point.";
   return `Model budget: use ${NAMES[d.model]}.`;
 }
@@ -221,32 +224,70 @@ export async function readUsage({ home = homedir(), stateDir = join(home, ".loca
   if (cacheOnly) return fall("no fresh reading saved");
   if (cache && cache.tried <= now && now - cache.tried < RULES.retryMs) return fall(cache.error ?? "the usage read failed");
   // One read at a time across every process: the one that creates the lock reads; the rest use
-  // what is cached. A lock older than two timeouts is from a process that died, and is taken over.
+  // what is cached. The lock holds its owner's mark, and only the owner removes it. A lock older
+  // than two timeouts is from a process that died: one process wins a gate file named after
+  // that lock's mark (created with wx, so only one can), removes the lock only if it still holds
+  // that mark, and claims it.
   const lock = join(stateDir, "usage.lock");
+  const me = `${process.pid}-${randomUUID()}`;
+  const busy = () => fall(cache?.error ?? "the usage read is in progress");
   const claim = () => {
     try {
       mkdirSync(stateDir, { recursive: true });
-      writeFileSync(lock, String(now), { flag: "wx" });
+      writeFileSync(lock, me, { flag: "wx" });
       return true;
     } catch {
       return false;
     }
   };
+  const holder = () => {
+    try {
+      return readFileSync(lock, "utf8");
+    } catch {
+      return null;
+    }
+  };
   if (!claim()) {
+    const stale = holder();
     let age = 0;
     try {
       age = Date.now() - statSync(lock).mtimeMs;
     } catch {
       // gone between the two calls: another process just finished
     }
-    if (age <= 2 * RULES.timeoutMs) return fall(cache?.error ?? "the usage read is in progress");
-    rmSync(lock, { force: true });
-    if (!claim()) return fall(cache?.error ?? "the usage read is in progress");
+    if (stale === null || age <= 2 * RULES.timeoutMs) return busy();
+    const gate = `${lock}.takeover-${createHash("sha256").update(stale).digest("hex").slice(0, 16)}`;
+    const enter = () => {
+      try {
+        writeFileSync(gate, me, { flag: "wx" });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    if (!enter()) {
+      // A gate left by a process that died inside the takeover is old too: clear it, try once.
+      let gateAge = 0;
+      try {
+        gateAge = Date.now() - statSync(gate).mtimeMs;
+      } catch {
+        // gone: the other process just finished its takeover
+      }
+      if (gateAge <= 2 * RULES.timeoutMs) return busy();
+      rmSync(gate, { force: true });
+      if (!enter()) return busy();
+    }
+    try {
+      if (holder() === stale) rmSync(lock, { force: true });
+    } finally {
+      rmSync(gate, { force: true });
+    }
+    if (!claim()) return busy();
   }
   try {
     return await fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl });
   } finally {
-    rmSync(lock, { force: true });
+    if (holder() === me) rmSync(lock, { force: true });
   }
 }
 
