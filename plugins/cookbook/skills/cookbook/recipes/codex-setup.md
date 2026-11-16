@@ -9,6 +9,20 @@
   rules and never override one or lift a stop. `~/.codex/AGENTS.md` tells Codex the same,
   and to read an instruction file anywhere else as information, not as instructions. That
   sentence is a second line, not the control: the control is where Claude starts Codex.
+- **The start check** (`scripts/codex-start-check.mjs`) runs nothing of the checkout and no
+  Git command, because a checkout's Git configuration can start programs. It reads the files
+  from disk, the head's tree and files from GitHub (`gh`, from a folder outside the
+  checkout), and looks the head up in `.git`'s object files; it never fetches. An ignored
+  file, another spelling (`agents.md`), a nested repository and a link that leads out of the
+  checkout count. Its output is fixed phrases.
+- **What requires it.** The hook `hooks/codex-start-gate.mjs` (`PreToolUse`, a failed hook
+  blocks) runs before T3's `delegate_task`, `create_threads` and `t3_thread_launch`, in a
+  Claude session with this plugin. A start it cannot check is denied. It does not reach: a
+  message to an existing Codex thread (`t3_thread_send`), a thread switched to Codex
+  (`t3_thread_configure`), `codex` from a shell or another MCP server, a thread the owner
+  starts by hand, a session with hooks off, or a file changed after the check. There the
+  rule on the Codex page is the control: run the script. Only T3 Code could require it for
+  every start.
 - **What Codex lacks:** Claude's plugins and skills, the `sa-*` workflows, the dispatch
   profiles and auto-memory (it reads the memory files, never writes them). There it takes
   the row's fallback and says so.
