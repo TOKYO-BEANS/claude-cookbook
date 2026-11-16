@@ -16,8 +16,12 @@
 // Each run therefore holds its prompt back until the session's debug log shows every expected
 // server connected or failed, and records which did. The debug log lives in a temporary folder
 // that is deleted after the run; --out keeps numbers and tool, server and plugin names only.
-// The run can call nothing: `dontAsk` with no allow rule. It is on the Claude plan login, with a
-// spend cap per run and a stop for the batch. Rules: recipes/scripted-runs.md and -rules.md.
+// The run loads the user's own settings (they are what is measured), and with them the user's
+// allow rules, which `dontAsk` would honour. So every arm's settings add a PreToolUse hook that
+// refuses every tool call: a hook is not part of the model's context, so the measurement is
+// the same. A run in which the model tried a tool anyway is not counted. The run is on the
+// Claude plan login, with a spend cap per run and a stop for the batch. Rules:
+// recipes/scripted-runs.md and scripted-runs-rules.md.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -88,8 +92,11 @@ export function deferConfig(name, userConfig, deferrable = {}) {
 }
 
 // Settings lists merge, so `deniedMcpServers` here adds to the user's own deny list.
-export function armSettings({ denied, pluginOff }) {
-  const s = {};
+// A hook that ends with exit code 2 blocks the call it was asked about, whatever rule allows
+// it. It is started by its full path: a hook may run with a short PATH.
+export const blockCommand = (node = process.execPath) => `"${node.replaceAll("\\", "/")}" -e "process.exit(2)"`;
+export function armSettings({ denied, pluginOff }, node = process.execPath) {
+  const s = { hooks: { PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: blockCommand(node) }] }] } };
   if (denied.length) s.deniedMcpServers = denied.map((serverName) => ({ serverName }));
   if (pluginOff) s.enabledPlugins = { [pluginOff]: false };
   return s;
@@ -143,6 +150,7 @@ export function buildRow({ arm, rep, model, cap, expected, states, all, waitMs, 
     : !r ? "no result"
     : r.isError || r.subtype !== "success" ? `ended as ${r.subtype}`
     : !s.firstContext ? "no request counted"
+    : s.toolCalls.length ? `the model tried a tool: ${[...new Set(s.toolCalls.map((t) => t.split(" ")[0]))].join(", ")}`
     : missing.length ? `not connected: ${missing.join(", ")}`
     : unexpected.length ? `connected though left out: ${unexpected.join(", ")}`
     : null;
@@ -150,7 +158,7 @@ export function buildRow({ arm, rep, model, cap, expected, states, all, waitMs, 
     arm, rep, requested: model, model: s.init?.model ?? model, version: s.init?.version ?? null, planLogin: s.init?.login === "plan",
     firstContext: s.firstContext, requests: s.calls, waitMs, exit,
     costUsd: r && r.costReported ? r.costUsd : cap, costReported: Boolean(r?.costReported),
-    tools: s.init ? toolsByServer(s.init.tools, all) : null, plugins: s.init?.plugins ?? null, skills: s.init?.skills ?? null,
+    toolCalls: s.toolCalls.length, tools: s.init ? toolsByServer(s.init.tools, all) : null, plugins: s.init?.plugins ?? null, skills: s.init?.skills ?? null,
     connected: expected.filter((n) => states.expected[n] === "connected"), problem,
   };
 }

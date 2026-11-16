@@ -18,6 +18,10 @@
   15 November 2026: a run named both rules files). A run that must not load it passes `--settings`
   with `claudeMdExcludes` naming that file; one cheap run that lists its instruction files proves it
   (`scripts/measure/measure.mjs probe` in the Cookbook repository).
+- `dontAsk` honours every allow rule it loads: a run that keeps the user settings can call
+  what they allow, with no `--allowedTools` at all. To let such a run call nothing without
+  changing what the model sees, add a PreToolUse hook that exits 2 in its `--settings` (a deny
+  rule or `--tools ""` takes the tools out of the context). `scripts/measure/servers.mjs` does it.
 - Limits: `--setting-sources project,local` and `--strict-mcp-config` narrow what loads but do not
   isolate the run. Claude Code still writes its own files under the user profile (`~/.claude.json`
   backups, session-env folders). `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` was set on every run, but no run

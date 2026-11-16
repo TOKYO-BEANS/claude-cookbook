@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { test } from "node:test";
-import { aggregate, armSettings, deferConfig, entryFingerprint, buildRow, claudeArgs, expectedServers, loadServers, makeTemp, otherModel, parseArm, parseFlags, parseLimits, plainHelper, plainUrl, removeTemp, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
+import { aggregate, armSettings, blockCommand, deferConfig, entryFingerprint, buildRow, claudeArgs, expectedServers, loadServers, makeTemp, otherModel, parseArm, parseFlags, parseLimits, plainHelper, plainUrl, removeTemp, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
 
 test("a run's temporary folder is private, its debug log exists before the session, and it is deleted after", () => {
   const root = mkdtempSync(join(tmpdir(), "measure-servers-test-"));
@@ -73,9 +73,19 @@ test("an arm is read strictly: an unknown server, plugin or kind stops the comma
 });
 
 test("an arm's settings deny its servers by name or switch its plugin off, and nothing else", () => {
-  assert.deepEqual(armSettings(parseArm("all", catalog)), {});
-  assert.deepEqual(armSettings(parseArm("without:stagehand", catalog)), { deniedMcpServers: [{ serverName: "stagehand" }] });
-  assert.deepEqual(armSettings(parseArm("plugin-off:cloudflare@cloudflare", catalog)), { enabledPlugins: { "cloudflare@cloudflare": false } });
+  const rest = ({ hooks, ...others }) => others;
+  assert.deepEqual(rest(armSettings(parseArm("all", catalog))), {});
+  assert.deepEqual(rest(armSettings(parseArm("without:stagehand", catalog))), { deniedMcpServers: [{ serverName: "stagehand" }] });
+  assert.deepEqual(rest(armSettings(parseArm("plugin-off:cloudflare@cloudflare", catalog))), { enabledPlugins: { "cloudflare@cloudflare": false } });
+});
+
+test("every arm's settings block every tool call with a hook, and allow nothing", () => {
+  for (const arm of ["all", "none", "without:firecrawl", "plugin-off:openseo@openseo", "defer:firecrawl"]) {
+    const s = armSettings(parseArm(arm, catalog), "C:\\Program Files\\nodejs\\node.exe");
+    assert.deepEqual(s.hooks, { PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "\"C:/Program Files/nodejs/node.exe\" -e \"process.exit(2)\"" }] }] }, arm);
+    assert.equal(s.permissions, undefined, arm);
+  }
+  assert.ok(blockCommand().endsWith(" -e \"process.exit(2)\""));
 });
 
 test("the servers a run waits for leave out the denied one and a disabled plugin's own", () => {
@@ -95,7 +105,14 @@ test("a run is settled when every expected server has connected or failed, by it
   assert.ok(settled("", []));
 });
 
-test("the run can call nothing and keeps no transcript", () => {
+test("a run in which the model tried a tool is not counted, and the row names the tool without its argument", () => {
+  const row = rowOf({ summary: summary({ toolCalls: ["Read work/x.txt", "Bash", "Read work/y.txt"] }) });
+  assert.equal(row.problem, "the model tried a tool: Read, Bash");
+  assert.equal(row.toolCalls, 3);
+  assert.equal(rowOf().toolCalls, 0);
+});
+
+test("the command line allows nothing and keeps no transcript", () => {
   const a = claudeArgs({ settings: "s.json", model: "m", cap: 1, debug: "d.log" });
   assert.deepEqual(a.slice(a.indexOf("--permission-mode"), a.indexOf("--permission-mode") + 2), ["--permission-mode", "dontAsk"]);
   assert.ok(a.includes("--no-session-persistence"));
@@ -108,7 +125,7 @@ test("tools are counted per server by the name Claude Code gives them", () => {
   assert.deepEqual(c, { builtIn: 2, otherMcp: 1, "plugin:openseo:openseo": 1, "claude.ai Claude Docs": 1, "cloudflare-docs": 1 });
 });
 
-const summary = (over = {}) => ({ firstContext: 60000, calls: 1, init: { tools: ["Read"], plugins: ["cookbook"], skills: 3, login: "plan", model: "m", version: "2.1.325" }, result: { subtype: "success", isError: false, costUsd: 0.2, costReported: true }, ...over });
+const summary = (over = {}) => ({ firstContext: 60000, calls: 1, toolCalls: [], init: { tools: ["Read"], plugins: ["cookbook"], skills: 3, login: "plan", model: "m", version: "2.1.325" }, result: { subtype: "success", isError: false, costUsd: 0.2, costReported: true }, ...over });
 const rowOf = (over = {}) => buildRow({ arm: "all", rep: 1, model: "m", cap: 1, expected: ["graphify"], all: ["graphify", "stagehand"], waitMs: 5000, exit: 0, stopped: null, states: { expected: { graphify: "connected" }, other: {} }, summary: summary(), ...over });
 
 test("a row counts only when the run ended well with every expected server and no other", () => {

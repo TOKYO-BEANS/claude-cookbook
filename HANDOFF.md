@@ -59,7 +59,7 @@ the three ways out of a session start), linked from `connecting.md`; one bullet 
 - Start-up probes without a prompt (no cost): OpenSEO connects in both site folders and not
   in an empty one. In a child session (`--setting-sources "" --plugin-dir <cache folder>`) it
   connects with its stored sign-in.
-- `npm test` passes (361 tests with `main` taken in, 15 of them in `scripts/measure-servers.test.mjs`).
+- `npm test` passes (363 tests with `main` taken in, 17 of them in `scripts/measure-servers.test.mjs`).
 
 **AI review round 1** (of three): three low findings, all fixed. A limit that was reached
 ended the session again on every tick: it now runs once, and where a signal can be ignored a
@@ -95,7 +95,19 @@ an hour before, with the same servers, tool, skill and plugin counts. The cause 
 known (the other chat had installed Cookbook 0.31.2 in between; a server may also have
 changed its own text). So compare arms within one sitting only.
 
-**Spend.** USD 8.13 at list prices, on the plan login: 32 measuring runs (7.54, limit 15) and
+**Review round 3**, the last of the three. The AI review of `63d97dc`, one low: the script
+said a run "can call nothing", but a run loads the user's own settings, and `dontAsk`
+honours their allow rules (24 on this PC, for Bash and MCP tools). Every arm's settings now
+add a PreToolUse hook that refuses every tool call, and a run in which the model tried a
+tool is not counted. A deny rule or `--tools ""` was not used: either would change what is
+measured. Proved with two capped runs (`checks/hook-blocks-tools.json`): with the hook a
+Read of a file in the run's folder was refused, without it the Read worked. A measuring run
+with the hook gave 55,035 tokens against 55,030 without, so the hook is not in the context.
+None of the 32 measuring runs before it called a tool (each made one request). The rule is
+on `recipes/scripted-runs-rules.md`.
+
+**Spend.** USD 8.32 at list prices, on the plan login: 33 measuring runs (7.71, limit 15), the
+hook proof (0.02) and
 the Firecrawl call (0.59, and four Firecrawl credits).
 
 **Not proved.** An OpenSEO call from a child session (it connected; no call was made, since
