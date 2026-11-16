@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { readInstalled, findUnlisted, normalizeVersion } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
+import { readInstalled, findUnlisted, normalizeVersion, projectRepository } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
 import { CONNECTION_CHECKS, VERSION_COMMANDS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const home = fileURLToPath(new URL("./fixtures/stack-updates/home", import.meta.url));
@@ -125,21 +125,47 @@ test("skill: read when the folder holds SKILL.md, version is a content hash", as
   assert.deepEqual(r, { state: "read", version: hash });
 });
 
-test("project: version from the repository's lockfile through gh", async () => {
+// The catalog is public, so a project part names a key; `projects.json` in the fixture
+// home (on a PC: ~/.local/share/stack-updates) maps the key to the repository.
+test("project: the key is mapped to its repository, then the lockfile is read through gh", async () => {
   const lock = JSON.stringify({ packages: { "node_modules/wix-cli": { version: "3.2.1" } } });
+  const file = { code: 0, stdout: JSON.stringify({ type: "file", encoding: "base64", content: Buffer.from(lock).toString("base64") }), stderr: "" };
   const calls = [];
   const gh = async (args) => {
     calls.push(args);
-    return { code: 0, stdout: JSON.stringify({ type: "file", encoding: "base64", content: Buffer.from(lock).toString("base64") }), stderr: "" };
+    return file;
   };
-  const r = await readInstalled({ kind: "project", repository: "TOKYO-BEANS/WeCare-Wix", package: "wix-cli" }, "wix/cli", deps({ gh }));
+  const r = await readInstalled({ kind: "project", project: "site-one", package: "wix-cli" }, "wix/cli", deps({ gh }));
   assert.deepEqual(r, { state: "read", version: "3.2.1" });
-  assert.deepEqual(calls[0], ["api", "repos/TOKYO-BEANS/WeCare-Wix/contents/package-lock.json"]);
+  assert.deepEqual(calls, [["api", "repos/example-owner/site-one/contents/package-lock.json"]]);
 
-  const failing = await readInstalled({ kind: "project", repository: "a/b", package: "p" }, "wix/cli", deps({ gh: async () => ({ code: 1, stdout: "", stderr: "HTTP 404" }) }));
+  const failing = await readInstalled({ kind: "project", project: "site-one", package: "p" }, "wix/cli", deps({ gh: async () => ({ code: 1, stdout: "", stderr: "HTTP 404" }) }));
   assert.equal(failing.state, "unreadable");
-  const absent = await readInstalled({ kind: "project", repository: "a/b", package: "other" }, "wix/cli", deps({ gh: async () => ({ code: 0, stdout: JSON.stringify({ type: "file", encoding: "base64", content: Buffer.from(lock).toString("base64") }), stderr: "" }) }));
+  const absent = await readInstalled({ kind: "project", project: "site-one", package: "other" }, "wix/cli", deps({ gh: async () => file }));
   assert.equal(absent.state, "not-found");
+});
+
+test("project: no map, an unknown key or a bad value is unreadable with its reason, and gh is never called", async () => {
+  const read = (installed, over) => readInstalled({ kind: "project", package: "p", ...installed }, "x/dep", deps(over));
+  const unknown = await read({ project: "site-two" });
+  assert.deepEqual(unknown, { state: "unreadable", message: "site-two is not in ~/.local/share/stack-updates/projects.json" });
+  assert.match((await read({ project: "constructor" })).message, /^constructor is not in /);
+  assert.deepEqual(await read({ project: "bad-value" }), { state: "unreadable", message: "bad-value in ~/.local/share/stack-updates/projects.json must be owner/name" });
+  const noFile = await read({ project: "site-one" }, { home: join(home, "no-such-home") });
+  assert.equal(noFile.state, "unreadable");
+  assert.match(noFile.message, /projects\.json does not exist/);
+  // A repository written into the catalog is not read: the key is the only way in.
+  for (const installed of [{ repository: "a/b" }, { project: "a/b" }, { project: "Site One" }, { project: "" }]) {
+    const r = await read(installed);
+    assert.equal(r.state, "unreadable", JSON.stringify(installed));
+    assert.match(r.message, /the project must be a key/);
+  }
+});
+
+test("projectRepository: the mapped repository for the report, or null", async () => {
+  assert.equal(await projectRepository({ kind: "project", project: "site-one", package: "p" }, home), "example-owner/site-one");
+  for (const [installed, h] of [[{ project: "site-two" }, home], [{ project: "bad-value" }, home], [{ project: "site-one" }, join(home, "no-such-home")], [{ repository: "a/b" }, home], [undefined, home]])
+    assert.equal(await projectRepository(installed, h), null, JSON.stringify(installed));
 });
 
 test("hosted and none have no version", async () => {

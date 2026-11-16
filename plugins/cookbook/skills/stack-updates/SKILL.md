@@ -155,7 +155,7 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json` 
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
 | `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit. No sandbox run; say so in the report | "Claude Code add-ons" (Updates) |
-| `project` | The version pull request Dependabot opens in that repository | "Security in a repository" |
+| `project` | The version pull request Dependabot opens in that repository (the one `~/.local/share/stack-updates/projects.json` names for the part's `project` key) | "Security in a repository" |
 | The standard's own pins (Semgrep in CI, Safe Chain) | Nothing on this PC. Semgrep's CI pin is not followed here; a Safe Chain release is reported for information only. A pin moves when Stack Atlas bumps the standard, decided there, never because of this report | "Security in a repository" |
 
 A recipe that names the old version is updated in the same pull request. Claude Code updates

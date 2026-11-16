@@ -34,6 +34,7 @@ that project's `CLAUDE.md` and the owner has said yes to it once, always ask."
 - **A site with no check:** build one ([how](visual-check-build.md)), prove it with one pass
   and one fail, record it in the project's `CLAUDE.md`, then ask the owner once: "May a pass
   of this check lift the stop for this site?" Until the yes is recorded, always ask.
-- **The first one:** wecarestudio.dk, `scripts/check-visual.mjs` in `TOKYO-BEANS/WeCare-Wix`
-  (15 November 2026). Copy its shape, not its settings. Whether its pass lifts that site's
-  stop is in that project's `CLAUDE.md`, not here.
+- **The first one:** `scripts/check-visual.mjs` in the first site's repository (15 November
+  2026). Which repository that is stays in memory on this PC: this file is public. Copy its
+  shape, not its settings. Whether its pass lifts that site's stop is in that project's
+  `CLAUDE.md`, not here.
