@@ -89,13 +89,15 @@ test("the error text never holds an Authorization header or a token-looking valu
   assert.ok(!text.includes(secret.slice(0, 20)), text);
   assert.ok(!/authorization/i.test(text), text);
   assert.ok(text.length <= 200);
-  assert.ok(!scrub(`Bearer ${secret}`).includes("abcDEF"));
+  // No six characters in a row of the value are left.
+  const noPart = (out) => { for (let i = 0; i + 6 <= secret.length; i++) assert.ok(!out.includes(secret.slice(i, i + 6)), out); };
+  noPart(scrub(`Bearer ${secret}`));
   assert.equal(scrub("exit 1: not signed in"), "exit 1: not signed in");
   assert.equal(scrub("\x1b[31mERROR\x1b[0m no session"), "ERROR no session", "colour codes are removed");
   assert.equal(scrub("[31mERROR[0m no session"), "ERROR no session", "colour codes are removed");
   // The secret is removed before the text is cut, so half a token cannot survive the cut.
   const edge = `${"y".repeat(170)} token=${secret}`;
-  assert.ok(!scrub(edge).includes("abcDEF"));
+  noPart(scrub(edge));
 });
 
 test("a table argv has its tokens expanded to this PC's folders", async () => {
