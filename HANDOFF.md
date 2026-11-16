@@ -15,8 +15,9 @@ one read-only question to Codex through T3 `delegate_task`, as advice.
 - `recipes/consult.md` (new): when to consult and when not, the call
   (`providerInstanceId: "codex"`, model `gpt-6-astra`; from a Codex session, Claude), the
   brief, the three-round limit, what a consult does not replace (the `ai-review` job, the
-  merge condition, a security finding, a stop), and the model and cost limits. There is no
-  fallback: without a second provider, say that no second opinion was had.
+  merge condition, a security finding, a stop). `recipes/consult-limits.md` (new): what may be
+  sent, the model and cost limits. There is no fallback: without a second provider, say that
+  no second opinion was had.
 - The map: a new row "A second opinion from another provider's model (a consult)"; the
   fallback of "One bounded side piece" now names Codex.
 - `catalog.json`: a new tool, Codex (active, recipe: the consult page); T3 Code's purpose
@@ -59,9 +60,22 @@ checks the merge condition in code, and the review of a pull request keeps its o
   `ignored` note on `codex-chat-import` contradicted the new Codex tool. After the first
   consult the commit that followed held only this change's ten files.
 
+- GitHub's security review of the second commit: two findings on `recipes/consult.md`.
+  (1) Excessive agency (discussion 4584893393): a session may start a consult on its own
+  judgement, which sends repository code to another provider; the review asked for the
+  owner's confirmation before every consult. Put to the owner with the question tool, three
+  options. Answer: "Standing yes, with limits (Recommended)". The new page
+  `recipes/consult-limits.md` carries it: a consult on the session's own judgement is
+  allowed for code in the owner's own repositories; secrets, customer data, personal data and
+  files outside the repository are never sent; anything else is asked first, naming the
+  provider, the model and what would be sent. (2) Disclosure (discussion 4584893402): the
+  page told an agent to report a refusal with a line of Codex's configuration file. Fixed: a
+  refusal is reported with the model tried and the exact refusal text only, and the contents
+  of a configuration file are never pasted.
+- The limits moved to `recipes/consult-limits.md`, since `recipes/consult.md` had reached the
+  page size limit.
+
 **Outstanding.**
-- `recipes/consult.md` is at its size limit (3,974 of 4,000 bytes as a Read result): a further
-  rule goes on a `consult-<part>.md` page.
 - A consult from a Codex session to Claude has not been run. Owner: Claude. Clears with the
   first real call from a Codex session; until then the page marks it as not proven.
 - Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the

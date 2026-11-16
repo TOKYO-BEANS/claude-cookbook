@@ -1,17 +1,20 @@
 # Consult: a second provider's opinion
 
-A consult is one question to a model from another provider, read-only by its brief. Since 16 November 2026
-Codex is on in T3 Code as the second provider, signed in with the owner's ChatGPT account. A
-Claude session asks Codex; a Codex session asks Claude. The answer is advice: the session that
-asked checks each point against the code and decides.
+A consult is one question to a model from another provider, read-only by its brief. Since
+16 November 2026 Codex is on in T3 Code as the second provider, signed in with the owner's
+ChatGPT account. A Claude session asks Codex; a Codex session asks Claude. The answer is
+advice: the session that asked checks each point against the code and decides. What may be
+sent, and the model and cost limits: [consult-limits](consult-limits.md). Read it before the
+first consult of a session.
 
 - **When.** Before building on a choice that is costly to reverse (a data model, a migration,
   a security-sensitive design, two real options); when a diagnosis has failed twice; before a
   reply to a review finding you dispute; when the owner says "consult" or "ask Codex".
 - **Not for.** What a test or a check can decide; a public fact (research); routine edits; a
   second look by the same provider (`cookbook:review`). Never one on every pull request.
-- **How.** Call `orchestrator_capabilities` once per thread: Codex must show
-  `canRunChildTask: true`. Then one `delegate_task` with
+- **How.** First check what would be sent against the limits page: outside its standing yes,
+  ask the owner before the call. Call `orchestrator_capabilities` once per thread: Codex must
+  show `canRunChildTask: true`. Then one `delegate_task` with
   `target: { providerInstanceId: "codex", model: "gpt-6-astra" }` and `role: "review"`; add
   `mode: "wait"` only when this turn needs the answer. Leave `serviceTier` alone. From a Codex
   session the target is `{ providerInstanceId: "claudeAgent" }` (not yet proven by a real call).
@@ -37,14 +40,3 @@ asked checks each point against the code and decides.
   to the owner as before.
 - It never clears a security finding, a failed check or one of the stops.
 - tstack's `sol-loop` and `council` are not in use: see [ship](../options/ship.md).
-
-## Limits
-
-- **Model.** With the ChatGPT sign-in only `gpt-6-astra` answered (16 November 2026).
-  `gpt-6-luna` and `gpt-6.1-sol` were refused ("model is not supported when using Codex with a
-  ChatGPT account"), although the capabilities list shows them. On a refusal, stop that consult
-  and report it with the `model` line of `~/.codex/config.toml`: never switch model unasked.
-- **Cost.** A consult draws on the allowance of the owner's ChatGPT plan. An API key, bought
-  credits, a faster tier or another plan is spending: ask the owner.
-- **No second provider.** Off, refusing or at its usage limit: say that no second opinion was
-  had and carry on. No fallback: T3's rule is never to fall back unasked.
