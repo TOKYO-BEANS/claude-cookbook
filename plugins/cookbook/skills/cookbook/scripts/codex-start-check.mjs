@@ -9,8 +9,8 @@
 // of the name, is byte for byte (line endings aside) the file at GitHub's default head of
 // TOKYO-BEANS/<repo>, and the checkout's object files name that head. The same holds for every
 // file under a folder named .codex or .agents, where Codex can find project settings, hooks
-// and skills. It also compares the plugin version of the marketplace clone Codex reads the
-// Cookbook from with main's.
+// and skills. It also compares the commit of the marketplace clone Codex reads the Cookbook
+// from with main's head: the plugin has no version number, its commit is its version.
 //
 // The checkout may be hostile, so nothing of it is run and its Git is never asked: no `git`
 // command (a checkout's Git configuration can run programs), and `gh` is taken from an
@@ -27,8 +27,8 @@ import { fileURLToPath } from "node:url";
 
 const OWNER = "TOKYO-BEANS";
 const COOKBOOK = "claude-cookbook";
-const PLUGIN_JSON = "plugins/cookbook/.claude-plugin/plugin.json";
-const CLONE = [".claude", "plugins", "marketplaces", COOKBOOK, ...PLUGIN_JSON.split("/")];
+const CLONE = [".claude", "plugins", "marketplaces", COOKBOOK];
+const MAX_PACKED_REFS = 1024 * 1024;
 const INSTRUCTION_FILES = new Set(["agents.md", "agents.override.md", "claude.md"]);
 const SETTINGS_FOLDERS = new Set([".codex", ".agents"]);
 const MAX_FOLDERS = 200_000;
@@ -57,7 +57,7 @@ export const REASONS = {
   "head-missing": "GitHub's default head is not in the checkout's object files; after git fetch origin there, check again",
   differs: "an instruction file on disk is not the one at GitHub's default head",
   "compare-failed": "the instruction files could not be compared",
-  "cookbook-unread": "the Cookbook's version could not be read, in the clone or on main",
+  "cookbook-unread": "the Cookbook's commit could not be read, in the clone or on main",
   "too-slow": "the check ran out of time",
   failed: "the check could not run",
 };
@@ -131,14 +131,6 @@ const no = (reason) => ({ start: false, reason });
 const text = (r) => r.stdout.toString("utf8");
 const sameText = (a, b) => a.toString("latin1").replace(/\r\n/g, "\n") === b.toString("latin1").replace(/\r\n/g, "\n");
 
-function versionOf(json) {
-  try {
-    const { version } = JSON.parse(json);
-    return typeof version === "string" && /^\d{1,6}\.\d{1,6}\.\d{1,6}$/.test(version) ? version : null;
-  } catch {
-    return null;
-  }
-}
 
 // The folder that holds `.git`, from `folder` upwards: where Codex starts reading instruction
 // files.
@@ -172,6 +164,32 @@ function plainFile(file) {
 function smallFile(file) {
   if (plainFile(file).size > 4096) throw new Error("too large");
   return readFileSync(file, "utf8");
+}
+
+// The commit a plain clone is on, read from its files without Git: HEAD, then the branch's
+// own file, then packed-refs. null when the files do not say. Only a branch under
+// refs/heads with plain name parts is followed, so a HEAD cannot point this at another file.
+function headOf(top) {
+  const gitDir = join(top, ".git");
+  if (!lstatSync(gitDir).isDirectory()) return null;
+  const head = smallFile(join(gitDir, "HEAD")).trim();
+  if (HEX.test(head)) return head;
+  const ref = /^ref: (refs\/heads\/[A-Za-z0-9_][A-Za-z0-9._-]*(?:\/[A-Za-z0-9_][A-Za-z0-9._-]*)*)$/.exec(head)?.[1];
+  if (!ref) return null;
+  let own = null;
+  try {
+    own = smallFile(join(gitDir, ...ref.split("/"))).trim();
+  } catch {
+    own = null; // not a loose ref: look in packed-refs
+  }
+  if (own !== null) return HEX.test(own) ? own : null;
+  const packed = join(gitDir, "packed-refs");
+  if (plainFile(packed).size > MAX_PACKED_REFS) return null;
+  for (const line of readFileSync(packed, "utf8").split(/\r?\n/)) {
+    const [sha, name, ...more] = line.split(" ");
+    if (name === ref && more.length === 0) return HEX.test(sha) ? sha : null;
+  }
+  return null;
 }
 
 // The folder a pointer in `.git` names, or null for one on another machine (\\host\share):
@@ -384,13 +402,13 @@ function inner({ repo, checkout, home, gh, path, now, maxMs }) {
 
   let clone = null;
   try {
-    clone = versionOf(readFileSync(join(home, ...CLONE), "utf8"));
+    clone = headOf(join(home, ...CLONE));
   } catch {
     clone = null;
   }
-  const remote = api(`${COOKBOOK}/contents/${PLUGIN_JSON}?ref=main`, RAW);
-  const main = remote.status === 0 ? versionOf(text(remote)) : null;
-  if (clone === null || main === null) return no("cookbook-unread");
+  const remote = api(`${COOKBOOK}/commits/main`, ["--jq", ".sha"]);
+  const main = remote.status === 0 ? text(remote).trim() : "";
+  if (clone === null || !HEX.test(main)) return no("cookbook-unread");
   return { start: true, cookbook: clone === main ? "same" : "differs" };
 }
 

@@ -407,3 +407,19 @@ test("the handoff: HANDOFF.md is closed, and an entry is a dated file in handoff
   }
   assert.ok(HANDOFF_ENTRY_NAME.test("2026-11-16-parallel-chats.md"));
 });
+
+test("the plugin has no version number: none in the manifest, none in the marketplace entry", async () => {
+  const { MARKETPLACE, PLUGIN_MANIFEST, versionErrors } = await import("./check.mjs");
+  const manifestText = read(PLUGIN_MANIFEST), marketplaceText = read(MARKETPLACE);
+  assert.deepEqual(versionErrors({ manifestText, marketplaceText }), []);
+  // A pull request that merges main and keeps its old version line fails here.
+  const numbered = JSON.stringify({ ...JSON.parse(manifestText), version: "0.41.0" });
+  assert.match(versionErrors({ manifestText: numbered, marketplaceText })[0], /plugin\.json has a version: .*its commit is its version.*parallel-chats\.md.*take the line out/);
+  for (const version of ["", null, 0]) assert.equal(versionErrors({ manifestText: JSON.stringify({ name: "cookbook", version }), marketplaceText }).length, 1, JSON.stringify(version));
+  const market = JSON.parse(marketplaceText);
+  const entry = JSON.stringify({ ...market, plugins: market.plugins.map((p) => ({ ...p, version: "1.0.0" })) });
+  assert.match(versionErrors({ manifestText, marketplaceText: entry })[0], /marketplace\.json: the entry cookbook has a version/);
+  // A file that cannot be read as an object is said, not passed.
+  assert.deepEqual(versionErrors({ manifestText: "[]", marketplaceText: "{" }), [`${PLUGIN_MANIFEST} is not a JSON object`, `${MARKETPLACE} is not a JSON object`]);
+  assert.deepEqual(versionErrors({ manifestText, marketplaceText: "{}" }), [`${MARKETPLACE} lists no plugins`]);
+});

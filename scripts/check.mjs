@@ -391,6 +391,36 @@ export function handoffErrors({ closedText, entryNames, pinned = HANDOFF_CLOSED_
   return errors;
 }
 
+// The plugin has no version number (recipes/parallel-chats.md): with none in the manifest and
+// none in the marketplace entry, Claude Code installs by commit and takes every merge as an
+// update. A number would be one line that every pull request sets, and two that set the same
+// one merge with no conflict and no update.
+export const PLUGIN_MANIFEST = "plugins/cookbook/.claude-plugin/plugin.json";
+export const MARKETPLACE = ".claude-plugin/marketplace.json";
+export function versionErrors({ manifestText, marketplaceText }) {
+  const errors = [];
+  const fix = "the plugin has no version number, its commit is its version (recipes/parallel-chats.md): take the line out";
+  const parse = (name, text) => {
+    try {
+      const value = JSON.parse(text);
+      if (value !== null && typeof value === "object" && !Array.isArray(value)) return value;
+    } catch {
+      // said below
+    }
+    errors.push(`${name} is not a JSON object`);
+    return null;
+  };
+  const manifest = parse(PLUGIN_MANIFEST, manifestText);
+  if (manifest && Object.hasOwn(manifest, "version")) errors.push(`${PLUGIN_MANIFEST} has a version: ${fix}`);
+  const market = parse(MARKETPLACE, marketplaceText);
+  if (market && !Array.isArray(market.plugins)) errors.push(`${MARKETPLACE} lists no plugins`);
+  for (const entry of market && Array.isArray(market.plugins) ? market.plugins : []) {
+    if (entry !== null && typeof entry === "object" && Object.hasOwn(entry, "version"))
+      errors.push(`${MARKETPLACE}: the entry ${String(entry.name).slice(0, 60)} has a version: ${fix}`);
+  }
+  return errors;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = new URL("../", import.meta.url);
   const handoff = handoffErrors({
@@ -404,6 +434,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: readFileSync(new URL(p, root), "utf8") })),
   });
   errors.push(...handoff);
+  errors.push(...versionErrors({
+    manifestText: readFileSync(new URL(PLUGIN_MANIFEST, root), "utf8"),
+    marketplaceText: readFileSync(new URL(MARKETPLACE, root), "utf8"),
+  }));
   for (const e of errors) console.error(e);
   console.log(errors.length ? `${errors.length} problem(s)` : "Cookbook check passed.");
   process.exitCode = errors.length ? 1 : 0;
