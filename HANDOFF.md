@@ -37,6 +37,29 @@ nothing.
 - The Codex start check as a tested script that validates the repository name (the open
   security thread on #64) and compares the clone's version with `main`. Owner: Claude, as the
   next Cookbook job.
+## 16 November 2026 (afternoon): model budget follow-up (0.35.1)
+
+**Why.** The low findings of #67's AI review, moved here under the review-round budget.
+
+**What changed.** The usage lock holds its owner's mark and only the owner removes it; a dead
+lock is taken over through a gate file created with `wx`, so one process wins. With a limit
+every model shares spent, the advice for a reset says to stop at a safe point, not to use
+Opus. A session whose saved reading is over an hour old is told "unknown" once.
+
+**Verification.** 46 tests in `scripts/model-budget.test.mjs`. #67 merged as `f8be85b`, release
+event `verified` (execution 1557); plugin 0.35.0 installed. Its first live read answered 429
+(T3 Code reads the same endpoint with the same sign-in), and the hook said "unknown" as
+designed.
+
+**Owner decision, 16 November 2026.** A banked reset is not redeemed automatically: when the
+budget says it is worth using, the session asks the owner each time (the owner chose this over
+a script calling the undocumented reset endpoint).
+
+**Outstanding (Claude, next chat).** The usage endpoint kept answering 429 `rate_limit_error`
+(retry-after 0) from 13:20 to 13:45 UTC on 16 November 2026, whatever the User-Agent; it
+answered 200 at 12:42 and 12:52. While it does, the budget is "unknown" and threads keep their
+model. Clears when a second source of the reading is found (T3 Code holds one for its Usage
+page) or the limit's window is known and the cache is lengthened to fit.
 
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 
