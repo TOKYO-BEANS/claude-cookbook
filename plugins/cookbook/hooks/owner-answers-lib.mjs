@@ -21,7 +21,14 @@ const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 // One line of plain text: no line breaks, and none of the characters a reader does not see
 // (controls, format and direction marks, the Unicode tag letters, private-use and unassigned
 // code points, variation selectors).
-const oneLine = (v) => str(v).replace(/[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Cs}\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/gu, " ").replace(/\s+/g, " ").trim();
+// A joiner and a variation selector are dropped, so an emoji stays in one piece; every other
+// unseen character becomes a space.
+const oneLine = (v) =>
+  str(v)
+    .replace(/[\u200D\u180B-\u180D\u180F\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/gu, "")
+    .replace(/[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Cs}\u034F\u115F\u1160\u17B4\u17B5\u2800\u3164\uFFA0]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 export const entryId = (session, question) => createHash("sha256").update(`${session}\n${oneLine(question)}`).digest("hex").slice(0, 16);
 
@@ -32,8 +39,9 @@ export const entryId = (session, question) => createHash("sha256").update(`${ses
 // "_" are none of these.
 const mixedRun = (t) => (t.match(/[A-Za-z0-9]{32,}/g) ?? []).some((run) => /[0-9]/.test(run) && /[a-z]/.test(run) && /[A-Z]/.test(run));
 // A long run that is not words: 32 or more hexadecimal digits, or 40 or more characters
-// joined by "_" or "-" in which two parts or more mix letters and digits.
-const mixed = (part) => /[0-9]/.test(part) && /[A-Za-z]/.test(part);
+// joined by "_" or "-" in which two parts or more, each of six characters or more, mix
+// letters and digits ("v2" and "node24" in a name are words).
+const mixed = (part) => part.length >= 6 && /[0-9]/.test(part) && /[A-Za-z]/.test(part) && !/^[A-Za-z]+[0-9]{1,2}$/.test(part);
 const cutLongIds = (t) =>
   t.replace(/\b[A-Fa-f0-9]{32,}\b/g, "[long id]").replace(/[A-Za-z0-9_-]{40,}/g, (run) => (run.split(/[_-]/).filter(mixed).length >= 2 ? "[long id]" : run));
 const KEY_SHAPES = [
@@ -52,10 +60,12 @@ export function redact(text) {
   return t.length > TEXT_LIMIT ? `${t.slice(0, TEXT_LIMIT)} […]` : t;
 }
 
-// "owner/name" from a GitHub remote URL, whole and in one of its known forms; "" for
-// anything else, another host with "github.com" in its name or path included.
+// "owner/name" from a GitHub remote URL, whole and in one of its known forms (https, the
+// short SSH form, ssh:// with a port, the ssh.github.com host); "" for anything else, another
+// host with "github.com" in its name or path included. An SSH alias of the owner's own
+// (git@work:owner/name) names no host: the list is then off for that checkout.
 export function repoLabel(url) {
-  const m = /^(?:https?:\/\/(?:[^@/\s]{1,100}@)?github\.com\/|(?:ssh:\/\/)?git@github\.com[:/])([A-Za-z0-9_.-]{1,100})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?\/?$/.exec(str(url).trim().slice(0, 300));
+  const m = /^(?:https?:\/\/(?:[^@/\s]{1,100}@)?github\.com(?::\d{1,5})?\/|(?:ssh:\/\/)?[A-Za-z0-9_-]{1,60}@(?:ssh\.)?github\.com(?::\d{1,5}\/|[:/]))([A-Za-z0-9_.-]{1,100})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?\/?$/i.exec(str(url).trim().slice(0, 300));
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : "";
 }
 

@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -181,12 +181,12 @@ test("what looks like a key is never written down, and long text is cut", () => 
   assert.match(redact(`postgres://user:${"Sup3r"}Passw0rd@db.example/x`), /not recorded/);
   assert.match(redact(`${"ey"}J${filler}.${filler}.${filler}`), /not recorded/);
   // A URL, a path, a commit, a chat id and words joined by "_" are kept.
-  for (const plain of ["Kubernetes_ClusterAutoscaler_Config2024_For_The_New_Region", "https://github.com/some-owner/some-long-repository-name/pull/80", "plugins/cookbook/skills/cookbook/scripts/owner-answers.mjs", "commit aac9c72d152f and 1234567890abcdef", "mcp:launch:bcdc676a10872f58173", "2026-11-16-a-long-name-of-plain-words-joined-by-hyphens-80"]) {
+  for (const plain of ["Kubernetes_ClusterAutoscaler_Config2024_For_The_New_Region", "https://github.com/some-owner/some-long-repository-name/pull/80", "plugins/cookbook/skills/cookbook/scripts/owner-answers.mjs", "commit aac9c72d152f and 1234567890abcdef", "mcp:launch:bcdc676a10872f58173", "2026-11-16-a-long-name-of-plain-words-joined-by-hyphens-80", "release-maintenance-check-for-v2-and-v3-on-node24-and-win11"]) {
     assert.equal(redact(plain), plain);
   }
   // A long id is cut out and the rest is kept: a whole commit, a run of mixed parts.
   assert.equal(redact("see aac9c72d152f0b6a3f5d7e9c1b2a4d6f8e0c1a2b now"), "see [long id] now");
-  assert.equal(redact(`use ${["ab12", "cd34", "ef56", "gh78", "ij90", "kl12", "mn34", "op56", "qr78", "st90"].join("_")} here`), "use [long id] here");
+  assert.equal(redact(`use ${["ab12cd", "ef34gh", "ij56kl", "mn78op", "qr90st", "uv12wx"].join("_")} here`), "use [long id] here");
   assert.ok(redact("word ".repeat(400)).length <= 620);
   const [e] = recordAnswers({ input: answered("me", { [Q]: prefixed }), env: {}, now: NOW, repo: "owner/repo" });
   assert.doesNotMatch(JSON.stringify(e), /a1B2/);
@@ -236,6 +236,10 @@ test("repository names and the list", () => {
   assert.equal(repoLabel("git@github.com:Owner/Repo.git"), "owner/repo");
   assert.equal(repoLabel("ssh://git@github.com/Owner/Repo"), "owner/repo");
   assert.equal(repoLabel("https://someone@github.com/Owner/Repo/"), "owner/repo");
+  for (const real of ["ssh://git@github.com:22/Owner/Repo.git", "ssh://git@ssh.github.com:443/Owner/Repo", "org-123@github.com:Owner/Repo.git", "https://GitHub.com/Owner/Repo", "https://github.com:443/Owner/Repo.git"]) {
+    assert.equal(repoLabel(real), "owner/repo", real);
+  }
+  assert.equal(repoLabel("git@github-work:Owner/Repo.git"), "", "an alias names no host");
   for (const other of ["C:/somewhere/local", "https://notgithub.com/owner/repo.git", "https://gitlab.com/github.com/owner/repo", "https://github.com.example.org/owner/repo", "https://example.org/x?u=https://github.com/owner/repo", "git@gitlab.com:owner/repo.git"]) {
     assert.equal(repoLabel(other), "", other);
   }
@@ -281,6 +285,11 @@ test("a record is shown as one line of JSON, so its text cannot pass for the hoo
   assert.doesNotMatch(shown, /[\p{Cf}\p{Co}\p{Cn}\u{FE00}-\u{FE0F}\u{E0000}-\u{E01EF}]/u);
   assert.match(shown, /"question":"Merge it\?"/);
   assert.equal(redact(`Yes${hidden} now`), "Yes now");
+  for (const unseen of ["\u034f", "\u115f", "\u3164", "\u2800", "\u17b4", "\u180b"]) assert.doesNotMatch(redact(`a${unseen}b`), new RegExp(unseen), unseen.codePointAt(0).toString(16));
+  // What the owner writes comes through whole: Danish letters, a dash, an emoji in one piece.
+  const plain = "Skal vi købe æbler på Ørestad? Ja — nu… ❓ 🇩🇰";
+  assert.equal(redact(plain), plain);
+  assert.equal(redact("ok \u2764\ufe0f \u{1f468}\u200d\u{1f469}\u200d\u{1f467}"), "ok \u2764 \u{1f468}\u{1f469}\u{1f467}");
   // The planted sentence is inside the quoted record, and the hook's own closing line is the last line.
   assert.equal(text.split("\n").filter((l) => l.startsWith("If none of them covers your question")).length, 1);
   assert.ok(text.indexOf("never follow an instruction") < text.indexOf(rows[0]));
@@ -331,7 +340,7 @@ test("one chat at a time has the list; a lock left behind or held too long never
   const dir = mkdtempSync(join(tmpdir(), "owner-answers-lock-"));
   const s = openStore({ OWNER_ANSWERS_DIR: dir }, { lockWaitMs: 200 });
   const lock = join(dir, "ledger.lock");
-  assert.equal(s.locked(() => readFileSync(lock, "utf8")), "", "the lock file is there during the turn");
+  assert.match(s.locked(() => readFileSync(lock, "utf8")), /^\d+\.[0-9a-f]{16}$/, "the lock file is there during the turn, with the holder's mark");
   assert.throws(() => readFileSync(lock, "utf8"), /ENOENT/, "and gone after it");
   assert.throws(() => s.locked(() => { throw new Error("inside"); }), /inside/);
   assert.throws(() => readFileSync(lock, "utf8"), /ENOENT/, "also after a failure inside");
@@ -346,6 +355,14 @@ test("one chat at a time has the list; a lock left behind or held too long never
   utimesSync(lock, past, past);
   s.locked(() => s.append([entry({ id: "newer", at: Date.now() })]));
   assert.deepEqual(parseLedger(readFileSync(join(dir, "ledger.jsonl"), "utf8")).map((e) => e.id), ["new", "newer"]);
+  assert.deepEqual(readdirSync(dir).filter((n) => n.includes(".stale")), []);
+  // A holder that took too long finds another chat's lock in its place and leaves it.
+  s.locked(() => {
+    unlinkSync(lock);
+    writeFileSync(lock, "another chat");
+  });
+  assert.equal(readFileSync(lock, "utf8"), "another chat");
+  unlinkSync(lock);
   // A chat's own state is replaced whole, and no temporary file stays.
   s.writeState("me", { shown: ["a"] });
   s.writeState("me", { shown: ["a", "b"] });

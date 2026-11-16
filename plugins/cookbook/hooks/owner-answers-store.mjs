@@ -1,7 +1,7 @@
 // Where the owner-answers hooks keep their list (recipes/parallel-chats.md): one folder on
 // this PC, outside every repository and outside ~/.claude. The hook and the command share it.
-import { createHash } from "node:crypto";
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { WINDOW_MS, parseLedger, repoLabel } from "./owner-answers-lib.mjs";
@@ -91,14 +91,23 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
     locked(fn) {
       mkdirSync(dir, { recursive: true });
       const until = Date.now() + lockWaitMs;
+      // The lock holds a mark of its own, so a chat removes only the lock it took.
+      const mark = `${process.pid}.${randomBytes(8).toString("hex")}`;
       let fd = null;
       while (fd === null) {
         try {
           fd = openSync(lock, "wx");
+          writeSync(fd, mark);
         } catch (e) {
           if (e?.code !== "EEXIST") break;
           try {
-            if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) unlinkSync(lock);
+            // A lock left by a hook that died is moved aside under a name of this chat's own,
+            // then removed: of two chats that see it, one moves it and the other finds it gone.
+            if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) {
+              const aside = `${lock}.${mark}.stale`;
+              renameSync(lock, aside);
+              unlinkSync(aside);
+            }
           } catch {
             // gone in the meantime: try again
           }
@@ -112,11 +121,11 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
       } finally {
         if (fd !== null) {
           held = false;
-          closeSync(fd);
           try {
-            unlinkSync(lock);
+            closeSync(fd);
+            if (readFileSync(lock, "utf8") === mark) unlinkSync(lock);
           } catch {
-            // already removed as stale
+            // taken away as stale: the lock there now is another chat's
           }
         }
       }

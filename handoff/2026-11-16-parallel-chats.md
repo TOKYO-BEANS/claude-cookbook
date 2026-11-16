@@ -72,6 +72,14 @@ verified by it. All five were acted on in the second push:
   ahead without it, so the hook still never stops a session.
 - Its coupling note on `decideAsk` (six callees) is left: a small pure function.
 
+**The hand reviewer's last read before the second push** passed the commit with six low
+findings, all acted on: plain hyphenated names are no longer cut as ids; a few more unseen
+characters are removed; a joiner and a variation selector are dropped, not spaced, so an
+emoji stays whole; GitHub's other real remote forms (a port, `ssh.github.com`, any case)
+are read; the lock holds its holder's mark and a chat removes only its own. Known and left:
+an SSH alias of the owner's own names no host, so the list is off in such a checkout; the
+lock was not tried against a real antivirus stall on Windows.
+
 **Decisions that were mine.**
 - No model in the hook. A word match would miss a reworded question, and a second Jev
   question would need its own measurement. The cost is one short turn when another chat has
@@ -85,8 +93,9 @@ verified by it. All five were acted on in the second push:
 - The list is outside `~/.claude` and outside every repository.
 
 **Verification.** See the pull request for the checks of its head. Before the push:
-- `node --test scripts/owner-answers.test.mjs`: 16 tests, one of them the hook file and the
-  command end to end on a folder of their own; then `npm test` on this PC.
+- `node --test scripts/owner-answers.test.mjs`, one test of it the hook file and the command
+  end to end on a folder of their own; then `npm test` on this PC (582 tests, none failed,
+  one skipped, before the first push).
 - A `cookbook:review` subagent that did not write the change read the commit before the
   push. One medium finding, fixed with a test: a chat that had been shown a question as open
   was never shown its answer (the "seen" mark held the id alone, now the id and the state).
