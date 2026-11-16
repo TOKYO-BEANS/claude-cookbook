@@ -117,11 +117,14 @@ const OPTIONAL = ["dates"];
 // names kinds and constants only: never a command line or a pattern.
 const INSTALLED_FIELDS = Object.freeze({
   plugin: ["id"], pinned: ["folder", "package"], command: [], skill: ["folder"],
-  project: ["repository", "package"], hosted: ["server"], none: [],
+  project: ["project", "package"], hosted: ["server"], none: [],
 });
 const INSTALLED_REQUIRED = Object.freeze({
-  plugin: ["id"], pinned: ["folder", "package"], skill: ["folder"], project: ["repository", "package"],
+  plugin: ["id"], pinned: ["folder", "package"], skill: ["folder"], project: ["project", "package"],
 });
+// This file is public: a project part names a key, never a repository. The update
+// check maps the key on the PC (`~/.local/share/stack-updates/projects.json`).
+const PROJECT_KEY = /^[a-z0-9-]{1,40}$/;
 const FEED_FIELDS = Object.freeze({
   npm: ["package", "tag"], github: ["repository"], marketplace: ["repository", "plugin"],
   commit: ["repository", "path"], changelog: ["url"], gitForWindows: [], jevModels: [], nodeDist: [], none: ["reason"],
@@ -160,7 +163,7 @@ function installedErrors(inst, at) {
   if ("id" in inst && !PLUGIN_ID.test(String(inst.id))) errors.push(`${at}: installed id must be plugin@marketplace`);
   if ("folder" in inst && !FOLDER.test(String(inst.folder))) errors.push(`${at}: installed folder must be a plain folder name`);
   if ("package" in inst && !NPM.test(String(inst.package))) errors.push(`${at}: installed package`);
-  if ("repository" in inst && !REPO.test(String(inst.repository))) errors.push(`${at}: installed repository must be owner/name`);
+  if ("project" in inst && !(typeof inst.project === "string" && PROJECT_KEY.test(inst.project))) errors.push(`${at}: installed project must be a key (lower-case letters, digits, hyphens), not a repository`);
   if ("server" in inst && !SERVER.test(String(inst.server))) errors.push(`${at}: installed server`);
   return errors;
 }

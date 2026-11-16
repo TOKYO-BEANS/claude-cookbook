@@ -18,7 +18,7 @@ delegation cannot skip.
   every `AGENTS.md`, `AGENTS.override.md` and `CLAUDE.md` on disk, at any depth and in any
   spelling of the name, is the file at that head, line endings aside. It then compares the
   clone's plugin version with `main`'s. Exit 0: yes. Exit 3: yes, and the clone is not on
-  `main`'s version. Exit 1: no, with one of nine fixed reasons. A step that fails or cannot
+  `main`'s version. Exit 1: no, with one of ten fixed reasons. A step that fails or cannot
   run is a no. The output is fixed phrases: nothing from the checkout, the brief or GitHub is
   printed.
 - **It does not do it the way the page did, on purpose.** The page compared through the
@@ -146,8 +146,18 @@ is now not read, and the setup page says where the session may run the fetch a m
 asks for. Answered: `onFailure` is in Claude Code's hook reference ("Block the action when a
 hook fails", 2.1.295 or later) and in the installed 2.1.325; the Node path was already stated.
 
-**Verification.** `npm test`: 547 tests, 546 pass, 0 fail, 1 skipped (an older symbolic-link
-test that Windows skips). Of these, 46 are new (`scripts/codex-start-check.test.mjs`), on
+**The review in CI, round three, and a merge that did not happen.** The review of the third
+push had two low findings. The gate allowed the merge (all checks passed, no security review
+thread, Graphify's check "No PR-changed functions were verified" set aside), but `main` had
+moved in the same minute and the merge failed on a conflict: nothing merged. `main` was
+merged into the branch, and the two findings were fixed in that push instead of a follow-up.
+A `create_threads` or `delegate_task` call with a key the hook does not know is not taken to
+run in this thread's own checkout. And the check has one time limit of 100 seconds, below
+the hook's 150: out of time is a no with its own fixed reason ("the check ran out of time",
+the tenth), and each `gh` call gets what is left, 20 seconds at most.
+
+**Verification.** `npm test` on the last push, with `main` merged in: 553 tests, 552 pass, 0
+fail, 1 skipped (an older symbolic-link test that Windows skips). Of these, 49 are new (`scripts/codex-start-check.test.mjs`), on
 real Git repositories with a stand-in for GitHub; the first run of the file failed before the
 script existed. Six deliberate breakages of the script (links not followed, `.git` skipped at
 any depth, the head not required, other spellings ignored, a cut-short tree accepted, `gh`
@@ -155,10 +165,61 @@ from the checkout) each failed a test. Run for real on this repository's worktre
 checkout is a yes (exit 3 while the clone was behind `main`), another repository's name, a
 name with shell characters, a planted `Agents.MD` and a planted `.codex/config.toml` are each
 a no; the hook program denied the Codex call with the planted file, let it through clean, also
-with a minimal `PATH`, and printed nothing for a Claude call. `main` moved four times during
+with a minimal `PATH`, and printed nothing for a Claude call. `main` moved five times during
 the job; once the script answered "not in the checkout's object files" until the fetch.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/real-runs.txt`.
+
+## 16 November 2026 (night): the first site's name out of the files; a project part names a key (0.36.3)
+
+**Why.** #75 took a customer's site name out of `options/check.md`. The same site, and the
+name of its private repository, were still in eight other places on `main`. This repository
+is public: no project or client names. None of the eight was there on the owner's word.
+
+**What changed.**
+- **Prose.** `recipes/visual-check.md` and `recipes/visual-check-build.md` say "the first
+  site's repository"; four lines of older entries below say "the first site" (and one path
+  inside that project is now described, not spelled out). Which site and repository are
+  meant is a reference note in memory on this PC.
+- **The catalog names a key, not a repository.** The ts-rust trial entry held the
+  repository's full name, and the update check used it to read that repository's lockfile.
+  A `project` part now reads `{ "kind": "project", "project": "first-site", "package": … }`;
+  `~/.local/share/stack-updates/projects.json` on the PC, outside every repository, maps
+  the key: `{ "<key>": "owner/name" }`. `readInstalled` resolves the key there and reads the
+  lockfile through `gh api` as before. No file, an unknown key or a value that is not
+  owner/name is "unreadable" with its reason ("could not check" in the report), and `gh` is
+  not called. The report on this PC still names the repository (`projectRepository`).
+- **The catalog check keeps it out.** `scripts/check.mjs` refuses `repository` on a
+  `project` part and anything but a key (lower-case letters, digits, hyphens) in `project`.
+- The inventory test's fixture is a made-up repository; the fixture home has its own
+  `projects.json`. `recipes/update-check.md` and the `stack-updates` skill say where the map
+  is.
+
+**Verification.** Tests first: with the implementation taken out, 3 of the 95 tests in the
+three changed test files failed (the inventory file on the missing export, the catalog check,
+the end-to-end run); with it, all pass. `npm test` in a boat sandbox: 504 tests, 503 passed,
+1 skipped (no Gitleaks there). The Windows job of CI is the check for this PC's platform.
+Live on this PC, with the map written: the installed plugin (0.36.2, repository in the
+catalog) and the new code (key in the catalog) gave the same answer for two packages in
+that repository's lockfile, one read with its version and one "not in the lockfile"; with no
+map file the answer is "unreadable" and says which file is missing. Log:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-project-key/live-read.log` (the
+repository's name is replaced in it).
+
+**Outstanding.**
+- **Git history keeps the old text.** The names are in earlier commits of `main` and in the
+  merged pull requests' diffs. History is not rewritten here (no force-push): this is known
+  and left as it is.
+- A PC without `projects.json` reports the ts-rust part as "could not check" until the file
+  is written by hand. This PC has it.
+- The ts-rust trial package is not in that repository's lockfile today, so the update check
+  reports the part as missing; it did before this change too (the state file has had no
+  installed version since 14 November 2026). Whether the trial is still on is a question
+  for that project, not this one.
+- One more name is in two places and was not part of this job: the owner's own product, in
+  `recipes/sign-ins-mail-and-access.md` (a site key of the site login, in use) and in one
+  line of an older entry here. The owner, asked on 16 November 2026: take it out. A job of
+  its own, opened as a new chat once this pull request is merged.
 
 ## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.2)
 
@@ -201,6 +262,12 @@ with `BOAT-RUN: not started: no result (boat limits did not answer in time)`, ex
 whose child holds the pipes (the key helper around boat) came back in 531 ms at a limit of
 500. Logs: `~/.local/share/claude-cookbook/evidence/2026-11-16-boat-run-followup/`.
 
+**Merged.** #75 merged as db475dc through `sa-release` on the first run (review gate allowed,
+no review threads), release event verified, execution 1573, plugin 0.36.2 installed; evidence
+`~/.local/share/claude-cookbook/evidence/2026-11-16-boat-run-followup/release-cookbook-75-merge.log`.
+The squash commit's title says 0.36.1; the plugin version is 0.36.2 (#74 took 0.36.1 while
+#75 was open).
+
 **Outstanding.**
 - The slow call is the key helper on this PC, not boat. Of ten `boat limits` calls in a
   row, eight took 1.4 to 1.7 seconds, one 32 seconds and one over 90; in both slow ones
@@ -216,8 +283,8 @@ whose child holds the pipes (the key helper around boat) came back in 531 ms at 
   double count between "created" and "ready"). It is "not started": run it again.
 - The same site, and its repository, are still named in eight other places: two recipe
   pages, three lines of older entries here, one catalog entry (in use: the update check
-  reads that repository's lockfile) and one test. A job of its own, opened as a new chat on
-  16 November 2026.
+  reads that repository's lockfile) and one test. Done in 0.36.3, the entry above (the count
+  of older lines was four, not three).
 ## 16 November 2026 (evening): the model budget leaves T3 Code's reset list out (0.36.1)
 
 **Why.** #72 merged as `aaf25de` (release event `verified`, execution 1570; merged by hand on
@@ -1696,8 +1763,8 @@ says "being built". Its owner is the site's own check script, in the site's repo
 fallback is to ask the owner; its page is `recipes/visual-check.md` (when a pass lifts the
 stop, how to use a check, what a pass never covers), with `recipes/visual-check-build.md`
 (how a site gets one: the four layers, the capture traps, the proofs, the record). Both are
-general. What is specific to wecarestudio.dk stays in that project (`CLAUDE.md`, section
-"Visual check", and `jobs/25-visuelt-tjek/FINDINGS.md`), where the check was built and
+general. What is specific to the first site stays in that project (`CLAUDE.md`, section
+"Visual check", and the findings file of the job that built it), where the check was built and
 proved on 15 November 2026.
 
 **The stop is not loosened.** The page quotes the owner's global rule (15 November 2026,
@@ -1735,7 +1802,7 @@ pass rule needs the owner's yes. The ground rules in `SKILL.md` are unchanged.
 
 **What uses Stagehand, checked on this PC.** Only its own user-scope MCP entry. No hook,
 script in `~/.local/bin`, scheduled task or project file names it. Its tools were called 18
-times, all in the WeCare project on 14 and 15 November (the screenshot trial of job 25).
+times, all in the first site's project on 14 and 15 November (the screenshot trial of job 25).
 
 **Verification.** `npm test` passes. Three review rounds were set before the first push.
 Before it, a `cookbook:review` subagent that did not write the change read the diff: no stop
@@ -1749,8 +1816,8 @@ owner's yes"). Evidence of the Stagehand check and the owner's answers:
 commit is `verified` (execution 1528; `sa-release` itself ended `unknown` for the skipped
 `ai-review` job, as on every merge commit). Plugin 0.30.1 was installed the same evening.
 Its numbers are now the final ones, and its "dead end" is corrected: a workspace ID for the
-`anthropic-api` key can be read with `depot ci vars list --repo TOKYO-BEANS/WeCare-Wix`
-(variable `ANTHROPIC_WORKSPACE_ID_REVIEW`), as the WeCare check does.
+`anthropic-api` key can be read with `depot ci vars list --repo <the first site's repository>`
+(variable `ANTHROPIC_WORKSPACE_ID_REVIEW`), as that site's check does.
 
 **Outstanding** is carried in the entry above.
 

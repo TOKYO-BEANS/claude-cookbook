@@ -128,7 +128,13 @@ test("installed: only known kinds and each kind's own fields", () => {
   assert.ok(part({ installed: { kind: "script" } }).some((e) => /installed kind/.test(e)));
   assert.ok(part({ installed: { kind: "command", run: "x --version" } }).some((e) => /installed field run is not allowed/.test(e)));
   assert.ok(part({ installed: { kind: "pinned", folder: "../x", package: "x" } }).some((e) => /installed folder/.test(e)));
-  assert.ok(part({ installed: { kind: "project", repository: "a/b" } }).some((e) => /installed package/.test(e)));
+  assert.ok(part({ installed: { kind: "project", project: "site-one" } }).some((e) => /installed package is missing/.test(e)));
+  assert.ok(part({ installed: { kind: "project", package: "p" } }).some((e) => /installed project is missing/.test(e)));
+  // This file is public: a project part names a key, never a repository.
+  assert.ok(part({ installed: { kind: "project", repository: "a/b", package: "p" } }).some((e) => /installed field repository is not allowed for project/.test(e)));
+  for (const project of ["a/b", "Site-One", "", 7])
+    assert.ok(part({ installed: { kind: "project", project, package: "p" } }).some((e) => /installed project must be a key/.test(e)), String(project));
+  assert.deepEqual(part({ installed: { kind: "project", project: "site-one", package: "p" } }).filter((e) => /installed (field|project|package)/.test(e)), []);
 });
 test("feed: known kinds, own fields, changelog host on the allow list", () => {
   assert.ok(part({ feed: { kind: "pypi" } }).some((e) => /feed kind/.test(e)));
