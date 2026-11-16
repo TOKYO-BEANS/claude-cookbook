@@ -2,9 +2,10 @@
 // Hook of the Cookbook plugin (SessionStart, UserPromptSubmit, PostToolUse): tells a session
 // which model the budget asks for, and nothing about the account's usage (the figures are
 // printed only when the script is run). A session start gets the advice; later events are silent
-// until the advice changes, so a long turn hears it while it can still switch. It reads the
-// shared reading (at most one usage read per ten minutes for all sessions), writes only its
-// own state folder, and never fails a session: any error ends in silence and exit code 0.
+// until the advice changes, so a long turn hears it while it can still switch. Only a session
+// start may read over the network (one read per ten minutes for all sessions); every other
+// event uses a saved reading, the script's own or T3 Code's. It writes only its own state
+// folder, and never fails a session: any error ends in silence and exit code 0.
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -37,7 +38,7 @@ try {
       // first event of this session
     }
     const now = Date.now();
-    // Only a session start may read over the network; a prompt or a tool event uses the saved reading.
+    // Only a session start may read over the network; a prompt or a tool event uses a saved reading.
     const r = await readUsage({ now, cacheOnly: event !== "SessionStart" });
     let text = "";
     // Only the advice goes into the session: no usage figures, times, counts or error text.
