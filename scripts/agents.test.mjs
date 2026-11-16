@@ -9,7 +9,39 @@ const edit = (name, fn) => real.files.map((f) => (f.name === name ? { ...f, text
 
 test("the real files pass", () => {
   assert.deepEqual(errors(), []);
-  assert.deepEqual(real.files.map((f) => f.name).sort(), ["mechanical", "research", "review"]);
+  assert.deepEqual(real.files.map((f) => f.name).sort(), ["mechanical", "reader", "reader-graph", "research", "review"]);
+});
+
+// The reviewer steps of the sa-* workflows read text other people wrote. Their limit is this
+// list, so a change to it is a deliberate change to this test.
+test("the reader profiles list read tools only, each by name", () => {
+  const tools = (name) => real.files.find((f) => f.name === name)?.text.match(/^tools: (.*)$/m)?.[1];
+  assert.equal(tools("reader"), "Read, Grep, Glob");
+  assert.equal(
+    tools("reader-graph"),
+    "Read, Grep, Glob, mcp__graphify__graphify_find, mcp__graphify__graphify_callers, mcp__graphify__graphify_impact, mcp__graphify__graphify_trace",
+  );
+  for (const name of ["reader", "reader-graph"]) {
+    const text = real.files.find((f) => f.name === name)?.text ?? "";
+    assert.match(text, /^description: .*no shell, no file write, no tool search, no subagent/m, name);
+    assert.doesNotMatch(text, /^disallowedTools:/m, `${name}: a closed list needs no second list`);
+  }
+});
+
+test("what a description promises, the tool list keeps", () => {
+  const add = (name, tool) => errors({ files: edit(name, (t) => t.replace(/^tools: (.*)$/m, `tools: $1, ${tool}`)) });
+  for (const tool of ["Bash", "PowerShell"]) assert.ok(add("reader", tool).some((e) => e.includes(`reader: the description says "no shell", but tools lists ${tool}`)), tool);
+  for (const tool of ["Write", "Edit", "NotebookEdit"]) assert.ok(add("reader", tool).some((e) => e.includes(`reader: the description says "no file write", but tools lists ${tool}`)), tool);
+  assert.ok(add("reader", "ToolSearch").some((e) => e.includes('reader: the description says "no tool search", but tools lists ToolSearch')));
+  assert.ok(add("reader", "Agent").some((e) => e.includes('reader: the description says "no subagent", but tools lists Agent')));
+  // "no file writes" in the research profile is the same promise.
+  assert.ok(add("research", "Bash").some((e) => e.includes('research: the description says "no shell", but tools lists Bash')));
+  assert.ok(add("research", "Write").some((e) => e.includes('research: the description says "no file write", but tools lists Write')));
+  // A wildcard takes every tool its server has or adds: not in a list that promises no tool search.
+  assert.ok(add("reader-graph", "mcp__graphify__*").some((e) => e.includes('reader-graph: the description says "no tool search", but tools lists mcp__graphify__*')));
+  assert.ok(add("reader", "*").some((e) => e.includes("reader: * is not a tool name")));
+  // A profile that promises nothing of the kind keeps its shell.
+  assert.deepEqual(add("mechanical", "PowerShell"), []);
 });
 
 test("model and effort are required and known", () => {
@@ -34,6 +66,8 @@ test("unknown fields and names that differ from the file are caught", () => {
 test("the description is one short line", () => {
   const long = "x".repeat(201);
   assert.ok(errors({ files: edit("review", (t) => t.replace(/^description: .*$/m, `description: ${long}`)) }).some((e) => /review: description/.test(e)));
+  for (const yaml of ["Reads only: no shell.", "Reads only #1."])
+    assert.ok(errors({ files: edit("review", (t) => t.replace(/^description: .*$/m, `description: ${yaml}`)) }).some((e) => /review: description must not contain/.test(e)), yaml);
 });
 
 test("every MCP server in a tool list is in the connector register", () => {

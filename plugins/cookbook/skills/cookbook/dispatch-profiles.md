@@ -30,6 +30,18 @@ settings: the review proof sent `high` under a user `xhigh` for Opus.
 | mechanical | `cookbook:mechanical` | haiku | low | Read, Edit, Write, Bash, Glob, Grep | every MCP server and connector, web tools, Skill, Agent |
 | research | `cookbook:research` | sonnet | medium | Read, Grep, Glob, the Parallel Search MCP, the hosted Firecrawl MCP | shell, file writes, Firecrawl crawl, agent, interact, parse (a local-file upload) and monitor changes, every other MCP server |
 | review | `cookbook:review` | opus | high | Read, Grep, Glob, Bash, the Graphify MCP | Edit, Write, NotebookEdit, Graphify `remember` and `set_workspace`, web tools, every other MCP server |
+| reader | `cookbook:reader` | sonnet | medium | Read, Grep, Glob | shell, file writes, ToolSearch, every MCP server and connector, web tools, Skill, Agent |
+| reader-graph | `cookbook:reader-graph` | sonnet | medium | Read, Grep, Glob, Graphify `find`, `callers`, `impact` and `trace` | shell, file writes, ToolSearch, every other Graphify tool, every other MCP server and connector, web tools, Skill, Agent |
+
+- **A step that reads text other people wrote runs on reader or reader-graph** (16 November
+  2026): a diff, evidence, a brief, finding titles. Such text can ask for a command, and a
+  profile with a shell can run it; in review and mechanical only the prompt says not to. The two
+  reader profiles have no tool that runs, writes or fetches, so there the limit is the list.
+  What they cannot do, they cannot check: a test run, a command's output and git history reach
+  them as evidence gathered before the step, or are reported as not checked. Their `maxTurns` is
+  300 because a large diff is read about 40 lines at a time.
+- A Workflow step takes a profile as `agent(prompt, { agentType: "cookbook:<profile>" })` and then
+  has that profile's tools, plus `StructuredOutput` when the step has a schema.
 
 - Two mechanical pieces that may touch the same files each get `isolation: "worktree"` on the Agent
   call; each then comes back with its own branch for the main chat to merge. A single piece edits
@@ -41,6 +53,7 @@ settings: the review proof sent `high` under a user `xhigh` for Opus.
 - None of the profiles has the Agent tool, so none can start subagents of its own.
 - What the tool list does not limit: Bash can do whatever the shell can, so mechanical's and
   review's shell rules live in their prompts, beside the permission rules that still apply.
+  reader and reader-graph have no shell, so nothing of theirs rests on a prompt rule of that kind.
   `CLAUDE.md` still loads. No profile has the Skill tool, so none loads skills.
 - Proved on 3 November 2026 with `claude -p` (CLI 2.1.316): a Haiku parent in `dontAsk` mode made
   one Agent call per profile, with this plugin loaded by `--plugin-dir` and the installed copy
@@ -59,9 +72,24 @@ settings: the review proof sent `high` under a user `xhigh` for Opus.
   and connector servers loaded), a user-level copy of the research profile's frontmatter got the
   same research tools and nothing else, on Sonnet at medium, in the background.
 
+- Proved on 16 November 2026 for a Workflow step, with the research profile (the reader profiles
+  did not exist yet; Stack-Atlas keeps the evidence). A step started with
+  `agentType: "cookbook:research"` had exactly the tools its file lists plus `StructuredOutput`:
+  no Bash, PowerShell, Write, Edit, ToolSearch or Agent. Asked to write a file, it made none and
+  still returned its schema answer. The same prompt on the default workflow subagent wrote the
+  file four ways: Bash, PowerShell, Write and context-mode's `ctx_execute`. An `agentType` that
+  is not registered makes `agent()` throw ("agent type '...' not found. Available agents: ...")
+  and starts no agent, so a step never falls back to the default subagent unnoticed.
+- Not proved yet: a run of reader or reader-graph themselves. That comes with the Stack-Atlas
+  pull request that uses them. A workflow can name only the agent types of the installed plugin
+  version, so the plugin is updated on the PC first (`claude plugin update
+  cookbook@claude-cookbook`).
+
 - A plugin agent ignores `hooks`, `mcpServers` and `permissionMode` in its file. These profiles use
-  none of them: they name MCP servers by wildcard in `tools`. Every server named there must be in
-  `connector-register.md`; `npm test` checks it.
+  none of them: they name MCP servers by wildcard in `tools`, and reader-graph names its four
+  Graphify tools one by one. Every server named there must be in `connector-register.md`, and a
+  description's "no shell", "no file write", "no tool search" and "no subagent" must hold for
+  the tool list; `npm test` checks both.
 
 ## Side-chat profiles
 
@@ -118,7 +146,8 @@ Before working, a side chat runs its profile's checks and puts any gap first in 
 ## The brief and the report
 
 Both kinds get the same brief and end in the same report, so the main chat can check every piece
-the same way.
+the same way. One exception: a reader or reader-graph step that is given an answer shape (a
+workflow step's schema) answers in that shape and adds no report.
 
 ```text
 Profile: <profile>. Dispatch: <dispatch id>, piece <n> of <total>.

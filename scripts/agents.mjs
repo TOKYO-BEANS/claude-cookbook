@@ -15,6 +15,14 @@ const MODELS = ["haiku", "sonnet", "opus"];
 const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 const MODES = ["default", "acceptEdits", "plan", "auto", "bypassPermissions", "inherit"];
 const SIDE_CHATS = ["code", "design", "ops-deploy"];
+// What a description promises, and the entries in `tools` that would break it. The description is
+// what the main chat reads when it picks a profile, so the list must keep its word.
+const PROMISES = [
+  ["no shell", /\bno shell\b/, ["Bash", "PowerShell"]],
+  ["no file write", /\bno file writes?\b/, ["Write", "Edit", "NotebookEdit"]],
+  ["no tool search", /\bno tool search\b/, ["ToolSearch"]],
+  ["no subagent", /\bno subagent\b/, ["Agent"]],
+];
 const BUILT_IN = /^[A-Z][A-Za-z]+$/;
 const MCP = /^mcp__([A-Za-z0-9_-]+?)__(\*|[A-Za-z0-9_-]+)$/;
 const MODEL_ID = /^claude-(fable|opus|sonnet|haiku)-\d+(-\d+)*$/;
@@ -78,6 +86,9 @@ export function checkAgents({ files, registerText, profilesText }) {
     for (const k of Object.keys(f)) if (!FIELDS.includes(k)) errors.push(`${at}: unknown field ${k.replace(/^\?/, "")}`);
     if (f.name !== name) errors.push(`${at}: name must equal the file name`);
     if (!f.description || f.description.length > 200) errors.push(`${at}: description must be one line of at most 200 characters`);
+    // Claude Code reads the frontmatter as YAML, where an unquoted value with ": " or " #" in it is
+    // a mapping or a comment, not the text.
+    if (/: | #/.test(f.description ?? "")) errors.push(`${at}: description must not contain ": " or " #" (YAML would not read it as text)`);
     if (!MODELS.includes(f.model)) errors.push(`${at}: model must be haiku, sonnet or opus`);
     if (!EFFORTS.includes(f.effort)) errors.push(`${at}: effort must be one of ${EFFORTS.join(", ")}`);
     if ("maxTurns" in f && !/^[1-9]\d{0,2}$/.test(f.maxTurns)) errors.push(`${at}: maxTurns must be a whole number`);
@@ -89,6 +100,13 @@ export function checkAgents({ files, registerText, profilesText }) {
         errors.push(`${at}: ${tool} is not a built-in tool that a background subagent keeps (a typo, or dropped in the background)`);
     for (const tool of list(f.disallowedTools))
       if (BUILT_IN.test(tool) && ![...BACKGROUND, ...OTHER_BUILT_INS].includes(tool)) errors.push(`${at}: ${tool} is not a built-in tool`);
+    for (const [promise, says, breaks] of PROMISES) {
+      if (!says.test(f.description ?? "")) continue;
+      // A server wildcard takes every tool the server has or adds later, so a list that promises
+      // no tool search names each tool.
+      const broken = list(f.tools).filter((t) => breaks.includes(t) || (promise === "no tool search" && t.endsWith("__*")));
+      for (const tool of broken) errors.push(`${at}: the description says "${promise}", but tools lists ${tool}`);
+    }
     if (!text.replace(/\r/g, "").replace(/^---\n[\s\S]*?\n---\n/, "").trim()) errors.push(`${at}: no instructions after the frontmatter`);
     const row = subagentRows.get(name);
     if (!row) errors.push(`${at}: no row in the subagent table of dispatch-profiles.md`);

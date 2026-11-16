@@ -29,4 +29,8 @@ opinions, and an agent budget. Exceeding a budget needs a stated reason (`budget
   accepts or suppresses a security finding, a change by hand to `.depot/**` or
   `.github/workflows/**`, and any change that loosens one of these stops or
   weakens a check, a ruleset or a CI job.
+- The reviewer steps of `sa-review`, `sa-build` and `sa-triage` read text other people wrote, so
+  they are meant to run without a shell, on `cookbook:reader` (the `sa-triage` triager on
+  `cookbook:reader-graph`), from the Stack-Atlas pull request that uses them
+  ([dispatch](dispatch.md)).
 - Record each completed run as Stack-Atlas's `workflows/README.md` "After a run" says.

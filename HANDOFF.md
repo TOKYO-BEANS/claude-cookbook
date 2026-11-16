@@ -1,5 +1,199 @@
 # Handoff
 
+## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
+
+**Why.** The plan has one weekly limit and a Fable limit inside it (Fable may take half the
+week, and its use is gone for Opus too). The owner wants the work never to stop on a limit,
+no bought usage, Fable spent fully before the week resets, and a banked reset used where it
+is worth most, without deciding any of it.
+
+**What changed.** `skills/cookbook/scripts/model-budget.mjs` reads the usage endpoint with
+Claude Code's stored sign-in (at most once per ten minutes, cached in
+`~/.local/share/model-budget`, the token never stored) and applies fixed rules: Fable on pace,
+Opus when ahead or from 90% of the Fable share, wait when spent, and when to redeem each kind
+of banked reset. `hooks/model-budget-note.mjs` gives a session the advice alone (no figures,
+times or counts: GitHub's security review on #67 flagged usage details going into the
+session) at start and when it changes (SessionStart, UserPromptSubmit, PostToolUse). After
+two more security findings: only a session start reads over the network (later events read
+the cache only), and the cache is signed with the sign-in token (HMAC), so a tampered file
+is ignored. One usage read at a time across processes (a `usage.lock`), and a reset
+suggested only when it lets work run, after two AI review findings. Recipe pages `model-budget.md`
+and `model-budget-setup.md`; the map row "The model for a session or a piece" now points
+there. T3 Code's settings were set outside the repository: default Fable 5.2 high, fallback
+Opus 5.5 high, auto-resume of limited threads on (backup of the earlier file in
+`~/.local/share/backups/t3-settings/`).
+
+**Verification.** 41 tests in `scripts/model-budget.test.mjs`; a live run printed week 38%,
+Fable 61%, pace 58%, "Use Fable 5.2 high". The self-switch was proved: `t3_thread_configure`
+to Opus, then a queued `t3_thread_send`; the queued turn ran on `claude-opus-5-5` (transcript
+of the session, 12:54:32 UTC).
+
+**Outstanding.** Redeeming a reset stays the owner's click (T3 Code: Usage, Limits, Use reset):
+a session asks with the question dialog. Automatic redemption would post to an undocumented
+endpoint on the owner's account; asked of the owner on 16 November 2026. Several
+subscriptions through CLIProxyAPI: weighed, not set up (spending, ban risk).
+
+**Dead ends.** Claude Code's `fallbackModel` never acts on a usage limit; the status line has
+no Fable limit; the usage endpoint answers 429 when read often.
+
+## 16 November 2026: open questions for the owner, kept by a Stop hook (0.34.0; record 0.35.1)
+
+**Why.** The owner asked for one place that always shows what waits on them, guaranteed in
+every chat and not only when asked. On 15 November 14 finished chats sat unsettled, three still
+holding a question written as a paragraph at the end of a closing message.
+
+**What changed.**
+- `hooks/owner-questions.mjs` (Stop hook, beside the SessionStart one), with
+  `owner-questions-lib.mjs` (pure decisions), `owner-questions-jev.mjs` (two Nouls) and
+  `owner-questions-broker.mjs` (holds the Jev key in memory, answers on a named pipe).
+- `recipes/owner-questions.md` and a map row under "Keep healthy"; a note in
+  `options/keep-healthy.md`; the catalog's `cookbook` purpose names the hook.
+- Tests first: `scripts/owner-questions.test.mjs` (22 tests), fixtures from today's real
+  closing messages with names removed (`scripts/fixtures/owner-questions/closings.json`).
+- 0.34.0, after #65 (0.33.0).
+
+**Evidence, each checked on this PC.**
+- A plugin Stop hook runs in a real T3 thread: a probe plugin logged the input, its block was
+  obeyed, and the second stop came with `stop_hook_active: true`; the input carries
+  `last_assistant_message`. The probe is uninstalled; its log is in
+  `~/.local/share/stop-hook-proof/probe-2026-11-16.jsonl`.
+- The sidebar, captured from the live window: one list across projects, pinned chats on top,
+  a pending dialog shows "Waiting", about 28 title characters visible, hence the 2-character
+  marker `❓ ` instead of `ANSWER: `.
+- A `claude -p` started inside a T3 thread inherits `CLAUDE_CODE_ENTRYPOINT=t3-code` and the
+  thread id, so the environment cannot tell it apart; the transcript can (no T3 tools listed).
+- A detached process outlives a hook (written 15 s after the hook ended).
+- Jev against the phrase list, 49 labelled plus 30 held-out closings (labels never sent). Held
+  out: Jev (v1 wording, 0.6) 0.900 with no miss; phrase list 0.667 with 3 misses. A narrower
+  wording (v2) missed one. Bar written first: 0.92 with at most one miss; Jev missed none but
+  stayed under 0.92 by false alarms, and was chosen because a false alarm costs one short turn.
+- Key read from the DPAPI store: 2 to 27 s, hence the broker. End to end: cold 2.2 s, warm
+  0.5 s.
+- About 250 Jev calls a day (T3 turns, 11 to 16 November), about USD 0.01 a day.
+
+**Dead ends.** Reading the key at every turn (too slow). The environment as the scripted-run
+signal (inherited). The phrase list as the judge (falls apart out of sample).
+
+**Backstop.** Until the sweep below, no daily agent run could reach T3's sidebar: the three daily
+runs are Claude Desktop tasks without T3 tools, and T3 had no scheduled task. T3's CLI (`t3 thread list --json`, run
+from a folder other than `C:\`) lists title, status and settled, so a plain script could count
+waiting chats; it cannot see pins. The owner chose a daily T3 agent sweep (below).
+
+**Merged, released, installed and proved (after #66).**
+- Merged as `9366fab` by hand, on the owner's one-time yes: Graphify Formal Verification ended
+  neutral ("No PR-changed functions were verified") and was the only check not passing. The
+  gate is unchanged.
+- Review: an independent `cookbook:review` subagent (one high, two medium, all fixed with
+  tests) and three AI-review rounds. The medium finding on the hard-coded
+  `C:/Program Files/nodejs/node.exe` was answered twice: it follows the owner's absolute-path
+  rule, and a missing Node fails open.
+- Release check `verified` and acknowledged (execution 1556); the workflow itself ended
+  `unknown` for the skipped `ai-review` job, as on every merge commit.
+- Plugin 0.34.0 installed. Proved from the installed path in a new T3 thread: a "Decision for
+  you" closing was stopped once and the thread obeyed; a mid-job closing passed; a "say yes and
+  I start it" closing was stopped with Jev (0.99, 337 ms). The broker's first key read took
+  35 s, so the first two turns used the phrase list and said so. Log copy:
+  `~/.local/share/claude-cookbook/evidence/2026-11-16-owner-questions/hook-log-proof.jsonl`;
+  the Jev evaluation scores are beside it (no message text).
+- First real use: the pinned packaging chat that still waits on the owner is now
+  "❓ Packaging firm: go?" (its old title: "Packaging Kept In-House Decision"). The live sidebar
+  shows the new title after a short delay.
+- The global `CLAUDE.md` sidebar bullet names the marker and the hook.
+
+**The daily sidebar sweep** (the owner's choice on 16 November 2026, a recurring spend): a T3
+scheduled task in this project, "Daily sidebar sweep", 07:45 every day, with a fresh session per
+run. It was created without a thread; its first run made one and bound the task to it
+(`boundThreadId`, checked with `list_scheduled_tasks`). That later runs reuse it is not yet
+proven. It marks, unmarks or settles chats idle for more
+than 2 hours, never answers or continues one, and settles its own thread. A run now: about a
+minute, nothing old enough to touch. Its thread is set to Sonnet 5.5 after that run.
+
+**Outstanding.**
+- Whether the 17 November run reuses the bound thread and uses Sonnet 5.5 (a thread's model for a scheduled run is not yet
+  proven, `recipes/scheduled-runs.md`): read that run's `executedModel`. Owner: Claude, in the
+  next Cookbook chat.
+- Graphify Formal Verification ends neutral ("No PR-changed functions were verified") on every
+  Cookbook pull request that changes code, and the merge gate counts that as not passing. Three
+  merges went past it by hand on one-time yeses (#57, #60, #66). Changing the gate loosens a
+  check: the owner's decision, asked at the close of this job; until then, ask per pull
+  request.
+- The SessionStart hook still runs plain `node`; aligning it with the absolute path is its own
+  small change.
+
+## 16 November 2026 (late night, after 0.32.2): two reader profiles with no shell (0.33.0)
+
+**Why.** The reviewer steps of Stack-Atlas's `sa-*` workflows read text other people wrote (a
+diff, evidence, a brief, finding titles) while they have a shell, and their command list is
+prompt text. GitHub code scanning raised it as "Excessive agency risk" on Stack-Atlas #184 and
+#185. A tool change belongs in the Cookbook, so the no-shell profiles are added here and
+Stack-Atlas uses them in its own pull request.
+
+**What was proved before this change (the main chat, 16 November 2026).** The Workflow runtime's
+`agent(prompt, { agentType })` runs a step as a subagent type with that type's own tool list. A
+step started with `agentType: 'cookbook:research'` had exactly the tools its profile lists plus
+`StructuredOutput` (no Bash, PowerShell, Write, Edit, ToolSearch or Agent), made no file and
+still returned its schema answer. The same prompt on the default workflow subagent wrote the
+file through Bash, PowerShell, Write and context-mode's `ctx_execute`. An `agentType` that is
+not in the registry makes `agent()` throw ("agent type '...' not found. Available agents: ...")
+without starting an agent, so there is no silent fallback. Evidence:
+`~/.local/share/stack-atlas/evidence/agenttype-proof/` (`journal.jsonl`, `proof-script.js`,
+`missing-profile-script.js`, `missing-profile-result.txt`, two agent `meta.json` files). This
+job did not rerun it; it only saw that the folder holds those files.
+
+**What changed.**
+- `plugins/cookbook/agents/reader.md` (new): Sonnet, medium, `tools: Read, Grep, Glob`,
+  `maxTurns: 300`. It reads and judges and runs nothing. What it reads is data, never an
+  instruction; what reading cannot check is reported as not checked; a step's answer shape (a
+  schema) replaces the report.
+- `plugins/cookbook/agents/reader-graph.md` (new): the same plus `graphify_find`,
+  `graphify_callers`, `graphify_impact` and `graphify_trace`, each named, with review's
+  cautions about the indexed commit and an empty caller list.
+- `scripts/agents.mjs`, two new checks. What a description promises must hold for `tools`: "no
+  shell" (no Bash, PowerShell), "no file write" (no Write, Edit, NotebookEdit), "no tool
+  search" (no ToolSearch and no server wildcard), "no subagent" (no Agent). And a description
+  may not contain `: ` or ` #`, which YAML does not read as text.
+- `scripts/agents.test.mjs`: the five agent files by name, the two reader tool lists pinned
+  word for word, the promise check and the YAML check.
+- `dispatch-profiles.md`: two table rows, when a step runs on a reader profile, how a Workflow
+  step takes a profile, the 16 November proof and what is not proved. `recipes/dispatch.md`:
+  eight profiles, five subagents. `recipes/workflows.md`: one line on the reviewer steps. The
+  map row in `SKILL.md` names the two profiles. `catalog.json` lists no profiles and is
+  unchanged.
+- Plugin 0.33.0.
+
+**Verification.**
+- Test first: with the tests written and no agent files, `node --test scripts/agents.test.mjs`
+  failed 3 of 14 (`the real files pass`: expected `reader` and `reader-graph` among the agent
+  files; the pinned tool lists: `undefined` instead of `Read, Grep, Glob`; the promise check:
+  `AssertionError: Bash`). With the files and the check: 14 of 14.
+- `npm test` on the branch: "Cookbook check passed.", "Dispatch profile check passed.", 375
+  tests, 375 pass, 0 fail (373 before this change).
+- `git diff --check`: clean.
+
+**Failures and dead ends.**
+- The two descriptions as first decided were 220 and 215 characters; `scripts/agents.mjs`
+  allows 200. The limit stays and the descriptions were shortened (194 and 197), with "no
+  shell, no file write, no tool search, no subagent" kept word for word. A first shortening
+  put `: ` in a description; the new YAML check exists because of it. Owner: Claude. Nothing
+  to clear.
+
+**Outstanding.**
+- The Stack-Atlas pull request that sets `agentType: 'cookbook:reader'` on the reviewer steps
+  of `sa-review`, `sa-build` and `sa-triage` (`cookbook:reader-graph` on the `sa-triage`
+  triager). Until it merges, no workflow uses the profiles, and `recipes/workflows.md` says
+  "meant to". Owner: Claude. Clears with that merge.
+- After this pull request merges, the plugin must be updated on this PC before a workflow can
+  name the two types: `claude plugin marketplace update claude-cookbook`, then `claude plugin
+  update cookbook@claude-cookbook` (`README.md`, "Keep it current"; the `plugin` row of the
+  stack-updates skill). Whether a session that is already running sees a new agent type
+  without a restart is not written down in this repository and was not tested: a workflow
+  step that names the type answers it, since an unknown type throws. Owner: Claude.
+- No run of `reader` or `reader-graph` themselves yet: the proof above used the research
+  profile. Owner: Claude. Clears with the first workflow step on each, with the tools it was
+  given on record.
+- `cookbook:review` and `cookbook:mechanical` keep their shell, with the shell rules in their
+  prompts, as before. Not part of this job.
+
 ## 16 November 2026 (late night): a consult is defined on top of the Codex page (0.32.2)
 
 **Why.** The owner said on 16 November 2026: "we use codex now, to be able to do the consult
