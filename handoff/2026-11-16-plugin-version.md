@@ -54,9 +54,10 @@ a PC is named by its 12 characters.
 - The update check follows what Claude Code does, so the Cookbook's plugin reads "behind"
   after any merge until the two update commands have run, also after a merge that changed
   nothing in the plugin.
-- Nothing became looser in "install without asking": commit subjects are not release notes,
-  so a plugin installed by commit is never a routine update. Before this, the Cookbook's 0.x
-  steps counted as major and asked as well. The review of the first head found the one way
+- Nothing became looser in "install without asking": a plugin installed by commit has no
+  release notes, so it is never a routine update. Before this, the Cookbook's 0.x steps asked
+  as well: a step of the second number counted as major, and a step of the third had only
+  commit subjects, which are not release notes. The review of the first head found the one way
   round that: when the feed's text could not be read, `notesFor` in `updates.mjs` fell back
   to the repository's GitHub releases, which two commits do not bound, so every release on
   the page counted as clean notes. Fixed in the same pull request: a commit-shaped change
