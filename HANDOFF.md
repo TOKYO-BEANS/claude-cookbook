@@ -55,7 +55,7 @@ https://github.com/TOKYO-BEANS/claude-cookbook/pull/57#discussion_r4582883218
   names: why it was switched off)" (`connector-register.md`), "its server is the direct
   one that Adobe refuses" (the dead-ends page), and "so ask with a yes that says all four"
   (now "refuses one that does not name all four").
-- Tests: nine new ones in `scripts/adobe-session.test.mjs`: when a window is needed, what
+- Tests: ten new ones in `scripts/adobe-session.test.mjs`: when a window is needed, what
   it is given to show, how each answer ends the run, the window's process and its file,
   that nothing skips it (flags, the script's own text, and `main` run in a temporary
   folder with a stand-in window and session), the dry run, and the checks without the copy.
@@ -151,9 +151,18 @@ is really in was read when the window opened and not again in a way that held it
 in the path turned to another place during the five minutes would have been copied from
 there. The real place is now read once before the window (`pinned`), shown, compared after
 the click (a file that is somewhere else by then ends the run, nothing copied) and used
-for the copy.
+for the copy. GitHub's security review of that commit: no new comment.
 
-**Proved for this pull request.** `npm test` passes (372 tests with `main` taken in). `--dry-run` of a run with
+**Review round 3**, the last, on `e2efa4a`. The AI review: one low finding, fixed. Only the
+place of a file was held, not its content: a file written over in place while the window
+was open would have been sent. `pinned` now also takes the SHA-256 of each file before the
+window; after the copy a staged file with other content is taken out again, with every
+other copy of that run, and the run ends. GitHub's security review of that commit: no new
+comment. The three rounds are used: a low finding on the next commit goes into a
+follow-up pull request; a high or medium one, or any security finding, still blocks the
+merge and goes to the owner.
+
+**Proved for this pull request.** `npm test` passes (373 tests with `main` taken in). `--dry-run` of a run with
 a file and `image_select_subject` printed `"opens": true` and the window's text and made
 no folder; a read-only one printed `"opens": false`. The trial above. No upload was made,
 and no `--owner-yes` was passed to a real run.

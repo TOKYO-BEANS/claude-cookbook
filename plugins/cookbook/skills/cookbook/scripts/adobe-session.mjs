@@ -69,7 +69,7 @@
 // quoting one impossible.
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { copyFileSync, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -434,7 +434,17 @@ export function summarize(events) {
   };
 }
 
-const FS = { existsSync, lstatSync, realpathSync, mkdirSync, readdirSync, copyFileSync };
+// The SHA-256 of a file's content, read in pieces: a film does not fit in memory.
+function hashFile(path) {
+  const hash = createHash("sha256");
+  const file = openSync(path, "r");
+  try {
+    const piece = Buffer.alloc(1 << 20);
+    for (let read = readSync(file, piece, 0, piece.length, null); read > 0; read = readSync(file, piece, 0, piece.length, null)) hash.update(piece.subarray(0, read));
+  } finally { closeSync(file); }
+  return hash.digest("hex");
+}
+const FS = { existsSync, lstatSync, realpathSync, mkdirSync, readdirSync, copyFileSync, rmSync, hashFile };
 
 // A folder this script uses is a real folder where its path says it is: one that is a
 // link (a junction counts) would send its files somewhere else. A missing one is fine.
@@ -471,13 +481,26 @@ export function stageFiles(stage, send, fs = FS) {
   checkStage(stage, send, fs);
   fs.mkdirSync(stage, { recursive: true });
   for (const s of send) fs.copyFileSync(s.real ?? s.from, join(stage, s.name));
+  // A copy whose content is not what the file held when the window opened is not sent:
+  // every copy of this run is taken out again and the run ends.
+  const changed = send.filter((s) => s.sha256 !== undefined && fs.hashFile(join(stage, s.name)) !== s.sha256);
+  if (changed.length) {
+    for (const s of send) fs.rmSync(join(stage, s.name), { force: true });
+    throw fail(`--send ${changed.map((s) => s.from).join(", ")}: the content changed while the owner's window was open. Nothing is sent: start the run again`);
+  }
 }
 
 // The files to send, each with the place it really is (`real`, links in its path
-// followed), read once before the owner's window. The window shows that place, the checks
-// after the click refuse a file that is somewhere else by then, and the copy is made from
-// it: what the owner saw is what is copied, however long the window stayed open.
-export const pinned = (send, fs = FS) => send.map((s) => ({ ...s, real: fs.realpathSync(s.from) }));
+// followed) and the SHA-256 of its content, read once before the owner's window. The
+// window shows that place; after the click the checks refuse a file that is somewhere
+// else by then, the copy is made from that place, and a copy with other content is taken
+// out again. So the file that was there when the window opened is the file that is sent,
+// however long the window stayed open. The window shows a name and a folder, not the
+// picture: what is in the file is the owner's to know.
+export const pinned = (send, fs = FS) => send.map((s) => {
+  const real = fs.realpathSync(s.from);
+  return { ...s, real, sha256: fs.hashFile(real) };
+});
 
 export function checkStage(stage, send, fs = FS) {
   plainFolder(stage, fs);

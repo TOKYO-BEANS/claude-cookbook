@@ -767,6 +767,22 @@ test("nothing skips the window: no flag, no environment variable, no file", asyn
   assert.equal(printed.mock.calls.at(-1).arguments[0], "window: it could not be shown");
 });
 
+test("on a real disk: a file written over while the window is open is not left in the staging folder", (t) => {
+  const folder = mkdtempSync(join(tmpdir(), "adobe-session-test-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const photo = join(folder, "1598.jpg");
+  const stage = join(folder, "out", STAGE);
+  mkdirSync(join(folder, "out"));
+  writeFileSync(photo, "the photo the owner was shown");
+  const held = pinned([{ from: photo, name: "1598.jpg" }]);
+  assert.match(held[0].sha256, /^[0-9a-f]{64}$/);
+  stageFiles(stage, held);
+  assert.equal(readFileSync(join(stage, "1598.jpg"), "utf8"), "the photo the owner was shown");
+  writeFileSync(photo, "other content, written while the window was open");
+  assert.throws(() => stageFiles(stage, held), /the content changed while the owner's window was open/);
+  assert.equal(existsSync(join(stage, "1598.jpg")), false);
+});
+
 test("a dry run opens no window and says that a real run would", () => {
   const gated = dryRun(gatedRun(), "Make a subject mask of 1598.jpg.");
   assert.deepEqual(Object.keys(gated), ["argv", "settings", "system", "prompt", "window"]);
@@ -784,6 +800,7 @@ test("the checks of the staging folder alone make and copy nothing", () => {
   const fs = {
     existsSync: () => false, lstatSync: () => ({ isFile: () => true, isDirectory: () => true }), realpathSync: (path) => path,
     mkdirSync: (path) => made.push(path), readdirSync: () => [], copyFileSync: (from, to) => made.push(to),
+    hashFile: () => "content-1", rmSync: (path) => made.push(`removed ${path}`),
   };
   checkStage(stage, send, fs);
   assert.deepEqual(made, []);
@@ -795,7 +812,7 @@ test("the checks of the staging folder alone make and copy nothing", () => {
   const elsewhere = join(HOME, "private", "1598.jpg");
   const linkedFs = { ...fs, realpathSync: (path) => (path === PHOTO ? elsewhere : path) };
   const held = pinned(send, linkedFs);
-  assert.deepEqual(held, [{ from: PHOTO, name: "1598.jpg", real: elsewhere }]);
+  assert.deepEqual(held, [{ from: PHOTO, name: "1598.jpg", real: elsewhere, sha256: "content-1" }]);
   assert.ok(windowText({ command: "run", send: held, allow: ["font_search"], ownerYes: YES }).body.includes(`    1598.jpg    from ${dirname(elsewhere)}    (given as ${dirname(PHOTO)})`));
   const copied = [];
   stageFiles(stage, held, { ...linkedFs, copyFileSync: (from, to) => copied.push([from, to]) });
@@ -805,6 +822,20 @@ test("the checks of the staging folder alone make and copy nothing", () => {
   assert.throws(() => stageFiles(stage, held, swapped), (error) => error.usage === true && /it was in .*private when the owner's window opened and is in .*other now\. Nothing was copied/.test(error.message));
   assert.equal(copied.length, 1);
   assert.throws(() => stageFiles(stage, pinned(send, fs), linkedFs), /when the owner's window opened/);
+  // The content is held as well: a file written over in place while the window is open is
+  // copied, found different, taken out of the staging folder again, and the run ends.
+  const two = pinned([...send, { from: join(HOME, "work", "photos", "1601.jpg"), name: "1601.jpg" }], fs);
+  const steps = [];
+  const rewritten = {
+    ...fs, mkdirSync: () => {}, copyFileSync: (from, to) => steps.push(`copied ${basename(to)}`),
+    hashFile: (path) => (basename(path) === "1601.jpg" ? "content-2" : "content-1"), rmSync: (path, options) => steps.push(`removed ${basename(path)} ${options.force}`),
+  };
+  assert.throws(() => stageFiles(stage, two, rewritten), (error) => error.usage === true && /1601\.jpg: the content changed while the owner's window was open\. Nothing is sent/.test(error.message) && !/1598\.jpg/.test(error.message));
+  assert.deepEqual(steps, ["copied 1598.jpg", "copied 1601.jpg", "removed 1598.jpg true", "removed 1601.jpg true"]);
+  // Unchanged content is staged and left in place.
+  steps.length = 0;
+  stageFiles(stage, two, { ...rewritten, hashFile: () => "content-1" });
+  assert.deepEqual(steps, ["copied 1598.jpg", "copied 1601.jpg"]);
   // main pins the files between the checks and the window.
   const source = readFileSync(SCRIPT, "utf8");
   const at = ["checkStage(run.stage, o.send);", "o.send = pinned(o.send);", "await ownerClick(o, show)"].map((line) => source.indexOf(line));
