@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { POWERSHELL_TIMEOUT_MS, keyPath, loadFfi, main, readKey, runPowerShell } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
+import { POWERSHELL_TIMEOUT_MS, exitCode, keyPath, loadFfi, main, readKey, runPowerShell } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scripts = join(here, "..", "plugins", "cookbook", "skills", "cookbook", "scripts");
@@ -145,6 +145,42 @@ test("a value the caller already had under the variable's name is not passed on 
     await main(["absent", "SOME_KEY", "prog"], { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell, env: { PATH: "p", SOME_KEY: "stale" },
       say: () => {}, start: (program, args, env) => { started.push(env); return 0; } });
     assert.deepEqual(started, [{ PATH: "p" }]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("on Windows a value under the variable's name in another letter case goes too, read or not", async () => {
+  const dir = home({ "k.dpapi": "00" });
+  const run = async (name, platform, env, runPowerShell) => {
+    const started = [];
+    await main([name, "SOME_KEY", "prog"], { home: dir, platform, arch: "x64", loadFfi: noFfi, runPowerShell, env,
+      say: () => {}, start: (program, args, childEnv) => { started.push(childEnv); return 0; } });
+    return started[0];
+  };
+  try {
+    // Windows reads variable names without regard to case: `some_key` is SOME_KEY there.
+    assert.deepEqual(await run("absent", "win32", { PATH: "p", some_key: "stale", Some_Key: "stale" }, noPowerShell), { PATH: "p" });
+    assert.deepEqual(await run("k", "win32", { PATH: "p", some_key: "stale" }, () => headers("synthetic-key")), { PATH: "p", SOME_KEY: "synthetic-key" });
+    // Elsewhere they are different variables, and not the launcher's to remove.
+    assert.deepEqual(await run("absent", "linux", { PATH: "p", some_key: "other", SOME_KEY: "stale" }, noPowerShell), { PATH: "p", some_key: "other" });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a child ended by a signal gives 128 plus the signal's number, not 1", () => {
+  assert.equal(exitCode(0, null), 0);
+  assert.equal(exitCode(3, null), 3);
+  assert.equal(exitCode(null, "SIGTERM"), 143);
+  assert.equal(exitCode(null, "SIGKILL"), 137);
+  assert.equal(exitCode(null, "SIGINT"), 130);
+  assert.equal(exitCode(null, "SIGNOSUCH"), 1, "a signal with no number is still a failure");
+  assert.equal(exitCode(null, null), 0);
+});
+
+test("the launcher as a process ends with 143 when SIGTERM ends its child", { skip: windows && "Windows has no signals: a killed child ends with a code" }, () => {
+  const dir = home();
+  try {
+    const run = spawnSync(process.execPath, [launcher, "absent", "SYN_KEY", process.execPath, "-e", "process.kill(process.pid, 'SIGTERM'); setTimeout(() => {}, 5000)"],
+      { env: { ...process.env, HOME: dir, USERPROFILE: dir }, encoding: "utf8", timeout: 60000 });
+    assert.equal(run.status, 143, run.stderr);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

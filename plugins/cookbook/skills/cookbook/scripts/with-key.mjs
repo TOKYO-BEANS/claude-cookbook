@@ -2,10 +2,18 @@
 // agent-key.ps1 keeps in ~/.secrets) placed in its environment only. Stdio is inherited, so
 // this works as an MCP stdio server launcher.
 //   node with-key.mjs <key-name> <ENV_VAR> <program> [args...]
-// It prints no key: the key goes to the program's environment and nowhere else.
+// It prints no key: the key goes to the program's environment and nowhere else. (The one
+// helper that prints a key, for an MCP client's headers helper, is key-header.mjs.)
 //
-// A copy of this file lives at ~/.local/bin/with-key.mjs, the path every caller uses. Copy
-// it again when this file changes (recipes/keys.md).
+// The launcher ends with the program's own exit code; 128 plus the signal's number when a
+// signal ended the program; 127 when the program could not be started; 2 for wrong usage.
+// A key that cannot be read does not stop the program: it starts without the variable, and
+// one line on stderr says why. That is on purpose: a server started this way has to start
+// to be able to answer "no key" (the owner-questions broker does exactly that).
+//
+// A copy of this file lives at ~/.local/bin/with-key.mjs, the path every caller uses, and
+// key-header.mjs, firecrawl-secure.mjs and parallel-secure.mjs beside it import it. Copy
+// them again when one changes (recipes/keys.md).
 //
 // The key is read in this process: Node calls Windows' CryptUnprotectData itself, through
 // node:ffi. No PowerShell starts. That matters on a PC whose security software scans every
@@ -14,7 +22,7 @@
 // 1). PowerShell is the fallback only, where node:ffi is missing, and it has a time limit.
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
-import { homedir } from "node:os";
+import { constants, homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,7 +85,7 @@ function unprotect(ffi, hex) {
 }
 
 // What may be said about a failure: our own message, or else only the error's code or name.
-const reason = (e) => (e instanceof KeyError ? e.message : String(e?.code ?? e?.name ?? "error"));
+export const reason = (e) => (e instanceof KeyError ? e.message : String(e?.code ?? e?.name ?? "error"));
 
 // Reads one key. Returns { key, route } and, after a fallback, a note saying why the
 // direct route was not used. Throws a KeyError that holds no key.
@@ -119,7 +127,16 @@ export async function readKey(name, deps = {}) {
 // code and one line on stderr, not with a stack trace.
 export const NOT_STARTED = 127;
 
-function startProgram(program, args, env) {
+// The launcher's exit code for the way its program ended. A signal gives 128 plus its
+// number, as a shell reports it (SIGTERM: 143), so a caller can tell it from a failure.
+export function exitCode(code, signal) {
+  if (code !== null && code !== undefined) return code;
+  if (!signal) return 0;
+  const number = constants.signals[signal];
+  return number ? 128 + number : 1;
+}
+
+export function startProgram(program, args, env) {
   const failed = (e) => { process.stderr.write(`with-key: could not start ${program} (${String(e?.code ?? "error")})\n`); return NOT_STARTED; };
   let child;
   try { child = spawn(program, args, { env, stdio: "inherit", windowsHide: true }); } catch (e) { return failed(e); }
@@ -129,21 +146,28 @@ function startProgram(program, args, env) {
   process.on("SIGTERM", () => process.exit(143));
   return new Promise((done) => {
     child.on("error", (e) => done(failed(e)));
-    child.on("exit", (code, signal) => done(code ?? (signal ? 1 : 0)));
+    child.on("exit", (code, signal) => done(exitCode(code, signal)));
   });
 }
 
+// Takes a variable out of an environment. Windows reads a variable's name without regard
+// to letter case, so there `some_key` is SOME_KEY and every spelling goes.
+function dropVariable(env, name, platform) {
+  const wanted = platform === "win32" ? name.toUpperCase() : name;
+  for (const key of Object.keys(env)) if ((platform === "win32" ? key.toUpperCase() : key) === wanted) delete env[key];
+}
+
 export async function main(argv, deps = {}) {
-  const { say = (line) => process.stderr.write(line), start = startProgram, env: base = process.env } = deps;
+  const { say = (line) => process.stderr.write(line), start = startProgram, env: base = process.env, platform = process.platform } = deps;
   const [name, envVar, program, ...args] = argv;
   if (!name || !envVar || !program) { say(USAGE); return 2; }
   const env = { ...base };
+  // A value the caller already had under this name goes first, in every case: a stale or
+  // foreign one is never passed on as if it were the stored key, read or not.
+  dropVariable(env, envVar, platform);
   try {
     env[envVar] = (await readKey(name, deps)).key;
   } catch (e) {
-    // "Without" holds for a value the caller already had under this name, too: a stale
-    // or foreign one is never passed on as if it were the stored key.
-    delete env[envVar];
     say(`with-key: could not read key "${name}" (${reason(e)}); continuing without ${envVar}\n`);
   }
   return start(program, args, env);
@@ -151,9 +175,9 @@ export async function main(argv, deps = {}) {
 
 // Run only as a program, not when a test imports this file. Node gives the script's full
 // path in argv[1]; Windows paths differ in case and in links, so both sides are resolved.
-function isMain() {
+export function isMain(url = import.meta.url) {
   try {
-    return realpathSync(process.argv[1]).toLowerCase() === realpathSync(fileURLToPath(import.meta.url)).toLowerCase();
+    return realpathSync(process.argv[1]).toLowerCase() === realpathSync(fileURLToPath(url)).toLowerCase();
   } catch { return false; }
 }
 if (isMain()) process.exit(await main(process.argv.slice(2)));
