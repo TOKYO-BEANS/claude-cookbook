@@ -7,21 +7,22 @@
 - Proved on a business website's photos (10 November 2026): 26 masks (subject on every photo,
   skin on 8, window on 6) under a yellow-cast fix on 14 photos, straighten kept on 21 of 29, lens
   blur on 14, expand on 4 and one cut-out.
-- An ordinary session does not load it (109 tool names: why it was switched off). A
+- An ordinary session does not load it. A
   task brings it in with a child session that loads this connector and nothing else:
   `node <skill folder>/scripts/adobe-session.mjs run --brief <file> --out <folder> --allow
   <tool>,<tool> [--send <file>]`. Name each Adobe tool the piece needs; `tools --out <folder>`
   lists them. The child has no shell and sees no file of the owner's but the ones named with
   `--send`: [setup](photos-adobe-connector-setup.md). No photo has gone through the script
   yet: the first job used the connector in an ordinary session.
-- The upload gate and the personal-data check in [photos.md](photos.md) hold here unchanged: no
+- The upload gate and the personal-data check in [photos.md](photos.md) hold here: no
   photo or film goes to Adobe without the owner's yes in the current chat naming the files, the
   Adobe account, the operation and the credits. Pass that yes word for word as `--owner-yes`:
-  the script refuses a yes that does not name each file, the Adobe account, the operation as a
-  whole word ("masks" counts, "unmasked" does not) and a number of credits ("0 credits" is
-  one), so ask with a yes that says all four. It cannot know what the owner said:
-  quoting a yes the owner did not give in this chat is breaking the gate. An upload stays in
-  the owner's Creative Cloud: say so in the request.
+  the script refuses one that does not name all four, the operation as a whole word ("masks"
+  counts, "unmasked" does not) and the credits as a number ("0 credits" is one). It cannot
+  know what the owner said: quoting a yes the owner did not give in this chat breaks the
+  gate. The run then waits for the owner's click in a
+  [window](photos-adobe-connector-window.md): say so first. An upload stays in the owner's
+  Creative Cloud: say so in the request.
 - Ask first, each time, for anything that stays in the owner's Adobe account: a Creative Cloud
   folder or file, a font kit or web project (`font_create_kit` and `get_fontkit_embed_url` both
   create one), a Firefly board, a Stock licence. Say afterwards what was left there; removing

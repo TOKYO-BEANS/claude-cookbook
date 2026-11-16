@@ -5,10 +5,10 @@ repository's `scripts/adobe-session.test.mjs`). Proved on 15 November 2026, Clau
 
 - **What stays off.** `claude.ai Adobe` and `plugin:adobe-for-creativity:Adobe` stay in
   `deniedMcpServers` in `~/.claude/settings.json`, and the plugin `adobe-for-creativity@synced`
-  stays disabled. Terminal and T3 Code sessions therefore load no Adobe tool. Do not remove
-  those entries, and do not enable the plugin: its server is the direct one that Adobe refuses.
-- **What must stay on.** The connector stays connected in claude.ai (Settings, Connectors). The
-  child session gets it from there. Disconnecting it there ends this route and the fallback.
+  stays disabled: terminal and T3 Code sessions load no Adobe tool. Do not remove those
+  entries or enable the plugin.
+- **What must stay on.** The connector stays connected in claude.ai (Settings, Connectors):
+  the child session and the fallback both get it from there.
 - **The child session.** `claude -p` with `--setting-sources ""`, so the user settings and their
   deny list do not apply, in `dontAsk` mode: a call no rule allows is denied. It may read
   `<out>/to-adobe`, read and write `<out>/run-<time>` (made new for the run), call the Adobe
@@ -29,18 +29,18 @@ repository's `scripts/adobe-session.test.mjs`). Proved on 15 November 2026, Clau
 - **Measured.** Allowed: a read of a staged file, a write and a read in the run's folder, the
   listed Adobe tool. Denied: an older file in `--out`, a Glob of it, the file's original, a
   write elsewhere, the script's own files, an unlisted Adobe tool. A shell command: no tool.
-- **The script cannot know what the owner said.** It checks that the yes names every file,
-  the Adobe account, a number of credits (0 is one; it cannot hold a run to it) and, as a
-  whole word, the operation of each tool that is not read-only.
-  Whether the owner gave it in this chat is the gate ([photos.md](photos.md)).
+- **The yes and the owner's window.** The script reads the yes for words and cannot know
+  who said it. So a run with a `--send` file or a tool that is not read-only starts only on
+  a click in a window on the owner's screen: [window](photos-adobe-connector-window.md).
+  That does not stop an agent that controls the desktop, which can click it, or one that
+  starts a session without the script: a second channel, not a proof of identity.
 - **Exit codes.** 0: the session ended well and called an Adobe tool (or wrote the list).
-  1: it failed or did nothing. 2: the arguments were refused. 3: stopped or not to be
-  trusted: the time limit, no connector in 90 seconds, a debug log left behind, or another
-  server connected (add that connector to `OTHER_CONNECTORS`).
+  1: it failed or did nothing. 2: the arguments were refused, or the window gave no go-ahead.
+  3: stopped or not to be trusted: the time limit, no connector in 90 seconds, a debug log
+  left behind, or another server connected (add that connector to `OTHER_CONNECTORS`).
 - **After a run.** The script prints the calls made, the denied calls and the session's
-  report. Check the calls and the files, not the status line. Its log beside `--out`
-  (`<out>.adobe-session`) keeps the allow list, the model, tool
-  names, denials, counts and cost: no prompt, file name, argument or result text. The yes
-  reaches the child in a file that is deleted after the run, not on a command line.
+  report: check the calls and the files, not the status line. Its log (`<out>.adobe-session`)
+  keeps the allow list, the model, tool names, denials, counts and cost: no prompt, file
+  name, argument or result text. The yes reaches the child in a file deleted after the run.
 
 Routes that were tried and do not work: [dead ends](photos-adobe-connector-dead-ends.md).

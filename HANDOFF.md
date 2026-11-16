@@ -1,5 +1,187 @@
 # Handoff
 
+## 16 November 2026 (later): the owner clicks in a window before a gated Adobe run (0.31.4)
+
+**Why.** GitHub's security review on the last commit of #57 (comment 4582851565) said that
+the yes in `--owner-yes` is self-attested: an agent that runs `scripts/adobe-session.mjs`
+can write a yes that passes, and nothing independent confirms that a person said it. It
+proposed a `--confirm` code worked out from the inputs. That was not added: the script
+would print the code, so the same agent could copy it. Put to the owner with the question
+tool, four options. Answer: "Merge, window as next job (Recommended)". This pull request is
+that window. Reply on #57:
+https://github.com/TOKYO-BEANS/claude-cookbook/pull/57#discussion_r4582883218
+
+**What changed.**
+- A run with a `--send` file or a tool outside `READ_ONLY` opens a window on the owner's
+  screen, after every existing check has passed and before anything is copied or started. It
+  shows each file by name and folder, every Adobe tool in `--allow` (marked read-only or
+  not), the yes as the child session will get it, and the credits that yes states. Only a
+  click on "Go ahead" starts the run. "Stop", a closed window, five minutes without a click,
+  or no window (not Windows, no desktop, the window's file missing, a window that broke)
+  ends the run with exit code 2: nothing is copied and no session starts. A read-only run
+  and `tools` open no window.
+- The checks of `--owner-yes` are unchanged: the window is added and nothing is removed.
+  `stageFiles` is split into its checks (`checkStage`, made before the window and again
+  after the click) and the copy; what it accepts and refuses is the same.
+- Nothing skips the window: no flag and no environment variable, no file switches it off,
+  and a click is not remembered. The script's own text reads no environment variable
+  (`claude` and `taskkill` are still found through `PATH`, and the temporary and home
+  folders through the system's variables, as before; none of that decides about the
+  window). The window's process is Windows PowerShell by its fixed path with a fixed
+  environment (`SystemRoot` and nothing of the caller's); the text goes in on standard
+  input, not on a command line. Its answer counts as a go-ahead only with a clean exit and
+  a random mark made for that one run. The session checks the click again itself
+  (`clickHeld`).
+- The window is `scripts/adobe-window.ps1` beside the script: Windows Forms through Windows
+  PowerShell 5.1, no dependency. Only the mouse presses "Go ahead": the button answers a
+  left mouse button let go over it, has no place in the Tab order, and is off for the first
+  two seconds. "Stop" has the focus and takes Enter and Esc. Only ASCII, Latin letters and
+  punctuation show as they are; every other character is written out (`<U+202E>`).
+- `--dry-run` opens no window and prints, under `window`, whether a real run would and the
+  text it would show. A new command, `window`, shows the window alone with sample text and
+  starts nothing: the trial below. Its button is "It works (trial)"; "Go ahead" is on a
+  real run's window only, and that window's first line says that it is a real run.
+- What the window does not stop is said in the script's header, on the setup page and on
+  the new page: an agent that controls the desktop can click it, an agent that can change
+  the script or the window's file can change what they do, an agent with a shell can start
+  a session of its own without the script, and an agent can ask the owner to click. It is
+  a second, independent channel, not a proof of identity.
+- Pages. `recipes/photos-adobe-connector.md` and `recipes/photos-adobe-connector-setup.md`
+  say that such a run waits for the click, and the setup page says what the window does not
+  stop. Both were within 30 bytes of the 4,000 limit of `scripts/check.mjs` and the full
+  text went about 500 over, so it has a page of its own, linked from both:
+  `recipes/photos-adobe-connector-window.md`. Moved to it from the setup page: what the
+  script reads in the yes. Cut to make room, each still recorded elsewhere: "(109 tool
+  names: why it was switched off)" (`connector-register.md`), "its server is the direct
+  one that Adobe refuses" (the dead-ends page), and "so ask with a yes that says all four"
+  (now "refuses one that does not name all four").
+- Tests: ten new ones in `scripts/adobe-session.test.mjs`: when a window is needed, what
+  it is given to show, how each answer ends the run, the window's process and its file,
+  that nothing skips it (flags, the script's own text, and `main` run in a temporary
+  folder with a stand-in window and session), the dry run, and the checks without the copy.
+- Plugin 0.31.4 (#59 took 0.31.3, below).
+
+**Tried by hand, 16 November 2026**, with the owner told first each time (question tool,
+"Open it now (Recommended)" three times). `node scripts/adobe-session.mjs window`:
+- First try: no window appeared, and the command ended after five minutes with "timeout"
+  and started nothing. Failure, found by a probe: the script starts the window's process
+  with its console hidden (`windowsHide`), and Windows then hides the first showing of the
+  process's window as well (no visible window handle; without `windowsHide` the window was
+  there). Fix in `adobe-window.ps1`: the window is shown once, hidden, and shown again;
+  the second showing is seen. A test holds that order in the file.
+- Dead end: a blank first form to take the hidden showing. Reason: it had no title bar, and
+  the real window stayed hidden. Owner: nobody; the fix above replaced it.
+- Second try, after the fix: the window appeared, the owner clicked "Go ahead", and the
+  command printed `window: shown, and it ended with "go". Nothing was started`, exit 0,
+  five seconds after it started (the trial's button was still called "Go ahead" then).
+- Third try, after the review's fixes (the mouse-only button, the trial's own button; the
+  owner told first again, "Open it now (Recommended)"): the owner clicked with the mouse and
+  the command printed `window: shown, and it ended with a click on "It works (trial)".
+  Nothing was started`, exit 0, six seconds after it started.
+- Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-adobe-owner-window/`
+  (`window-trial.txt`, `window-trial-mouse.txt`, `window-hidden-probe.txt`,
+  `mouse-probe.txt`, `dry-run-gated.json`).
+- Not tried by hand: "Stop", the close button, a key on the window, and the window of a
+  real run. The tests cover how the script reads each answer, the probe covers the keys,
+  and the first try above showed the time limit ending a window nobody could click.
+
+**From #59** (the entry below, the servers measured, from another chat). It merged as
+`2ee5882` on 16 November 2026 while this pull request was open and took 0.31.3, so this one
+is 0.31.4; this branch took `main` in by a merge commit (`HANDOFF.md` was the only
+conflict). Its release check and install are that chat's to report: not known here.
+
+**From #57** (two entries below), after it merged. This answers what the entry below says
+is still owed for #57. #57 merged as `c004774` on 16 November
+2026, by `gh pr merge --squash --match-head-commit a8e1b2c`, not through `sa-release`: its
+run `cookbook-57-merge` had ended `failed` on the neutral `Graphify Formal Verification`
+check, and the owner answered "Merge #57 once (Recommended)". On the merged head `a8e1b2c`
+that check was again the only one not passing ("0/2 PR-changed function(s) verified · 2
+not verified (1 vacuous, 1 unsupported)").
+- Review round 2 of #57 (`6175fbc`): one low finding from the AI review (grouped numbers
+  such as "1'000 credits" passed), fixed in `a8e1b2c`. The AI review of `a8e1b2c`: no
+  findings. Two of the three rounds were used.
+- GitHub's security review on `a8e1b2c`: the comment under **Why** above.
+- Release check of `c004774`: `verified` and acknowledged (execution 1535). The `sa-release`
+  run `cookbook-57-release` (kind `merge`) ended `unknown` for the skipped `ai-review` job,
+  as on every merge commit. Both runs are recorded in
+  `~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-yes-whole-words/release/`
+  (`progress.md`, `summary-*.json`, `release-*.log`).
+- Plugin 0.31.2 was installed on this PC (from 0.31.1) and proved from the installed path:
+  `--dry-run` refused "credits are fine" and "the background is fine" for the cut-out
+  (`proof-installed-0.31.2/dry-run-refusals.txt` in that evidence folder), and one real run
+  with `--allow adobe_mandatory_init,get_account_type,font_search`, no `--send` and no yes,
+  made those three calls, sent no file, was denied nothing and exited 0
+  (`proof-installed-0.31.2/run-output.txt`, `out/`, `out.adobe-session/`). USD 0.18 of plan
+  usage as Claude Code reports it; the connector's calls report no cost: unsettled.
+
+**Reviewed before the first push** by a `cookbook:review` subagent that did not build it
+and was told not to open the window. Nothing high. It found no way for a run started from
+the command line to reach the session without a go-ahead, and the checks of the yes
+unchanged. One medium, fixed: once "Go ahead" switched on, Tab or an arrow key could move
+the focus to it and Enter or Space pressed it (the button answered `Click`); it answers the
+mouse alone now, and a probe on an off-screen copy of the window showed `PerformClick`,
+`Click`, a right button, a left button outside the button and a switched-off button all
+leaving the answer at "closed", and a left button over it giving "go"
+(`mouse-probe.txt` in the evidence folder). Four low, all taken: the wording on files and
+environment variables claimed more than the code does (both above); the rule for
+characters that do not show listed what may not show and missed fillers and
+right-to-left letters, and now lists what may; the trial had the same "Go ahead" button as
+a real run, so an owner could be asked to click it "as a test"; and the session's own
+check of the click was tested by its text alone. Also taken from its notes: the page says
+to give the command more time than the window's five minutes.
+
+**Review rounds.** Three, set before the first push.
+
+**Review round 1**, on `59e020a` (the commit that took `main` in). The AI review: one low
+finding, fixed. The window showed the folder a `--send` file was given in; with a folder in
+that path that is a link to another place, it showed the link's harmless name while the
+copy came from the other place. It now shows the folder the file is really in, and the
+given one beside it when they differ. Graphify's review: no issues by static checks, and
+three notes on coupling (`parseArgs`, `windowText` and `main` call more functions than
+before), which are not findings about behaviour and were left. GitHub's security review:
+one comment (4583768687), fixed. `main` is exported with a window and a session that the
+tests can replace, so a program that imported the script could give it a window of its
+own that answers "go" and reach the real session. `main` now refuses a stand-in window
+unless the session is a stand-in too (`realWindowOnly`): only the real window's go-ahead
+starts the real session. `Graphify Formal Verification` on that commit: neutral ("0/3
+PR-changed function(s) verified · 3 not verified (2 vacuous, 1 unsupported)").
+
+**Review round 2**, on `93be055`. The AI review: one low finding, fixed. The folder a file
+is really in was read when the window opened and not again in a way that held it: a link
+in the path turned to another place during the five minutes would have been copied from
+there. The real place is now read once before the window (`pinned`), shown, compared after
+the click (a file that is somewhere else by then ends the run, nothing copied) and used
+for the copy. GitHub's security review of that commit: no new comment.
+
+**Review round 3**, the last, on `e2efa4a`. The AI review: one low finding, fixed. Only the
+place of a file was held, not its content: a file written over in place while the window
+was open would have been sent. `pinned` now also takes the SHA-256 of each file before the
+window; after the copy a staged file with other content is taken out again, with every
+other copy of that run, and the run ends. GitHub's security review of that commit: no new
+comment. The three rounds are used: a low finding on the next commit goes into a
+follow-up pull request; a high or medium one, or any security finding, still blocks the
+merge and goes to the owner.
+
+**Proved for this pull request.** `npm test` passes (373 tests with `main` taken in). `--dry-run` of a run with
+a file and `image_select_subject` printed `"opens": true` and the window's text and made
+no folder; a read-only one printed `"opens": false`. The trial above. No upload was made,
+and no `--owner-yes` was passed to a real run.
+
+**Outstanding.**
+- The first photo run through the script: it needs the owner's yes and now the owner's
+  click, and will show which asset tools an upload takes and which steps (a PUT to a
+  presigned link, a download) the calling chat does itself, since the child has no shell.
+- The Adobe plan started as a 7-day trial on 10 November 2026 and turns paid on day 7.
+  Keeping or cancelling it is the owner's decision.
+- The merge commit, the release check, the install and the proof run of this pull request
+  go into the next Cookbook pull request.
+- The merge gate and a `Graphify Formal Verification` that ran and ended neutral (two
+  entries below): a Stack Atlas job, and the owner's yes, since it changes a check. That check
+  arrives about four minutes after a push; #55 and #58 merged before it did.
+- The window is Windows only. On another system a run that needs it ends with exit code 2;
+  a window for another system is not built.
+- The rest of the outstanding lists of the two entries below stands.
+
 ## 16 November 2026: each MCP server measured; Firecrawl deferred, OpenSEO in its projects only (0.31.3)
 
 **Why.** After the Adobe connector came back "on demand only" (#55) the owner asked: "shouldnt
