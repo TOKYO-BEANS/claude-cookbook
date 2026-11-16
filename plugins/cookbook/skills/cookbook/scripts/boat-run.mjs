@@ -73,10 +73,10 @@ const count = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
 export function gate(run, plan) {
   const p = plan;
   if (!p || typeof p !== "object" || !count(p.activeSandboxes) || !count(p.subscriptionQuotaSeconds) || !count(p.subscriptionRemainingSeconds)
-    || typeof p.keepGoing?.enabled !== "boolean" || !count(p.wallet?.balanceDollars)) {
+    || typeof p.keepGoing?.enabled !== "boolean" || !count(p.wallet?.balanceDollars) || typeof p.canStart !== "boolean") {
     return "no result (the plan could not be read from boat limits)";
   }
-  if (p.canStart === false) return "boat says this account cannot start a sandbox now";
+  if (!p.canStart) return "boat says this account cannot start a sandbox now";
   if (p.keepGoing.enabled) return "extra starts are on, so a start could bill past the plan: the owner turns them off or says yes";
   if (p.wallet.balanceDollars > 0) return "the wallet holds money, so use past the plan would spend it: the owner's yes first";
   const cost = run.timeout * RATE[run.type];
@@ -314,8 +314,10 @@ function boatRun(argv) {
   });
 }
 
-const STATE = process.env.BOAT_RUN_STATE || join(homedir(), ".local", "share", "boat-run");
-const UPLOAD_LIST = join(STATE, "upload-allowed.txt");
+// One fixed place on the PC. No environment variable moves it: whoever starts the script
+// could otherwise bring a list and an empty count of their own.
+export const STATE = join(homedir(), ".local", "share", "boat-run");
+export const UPLOAD_LIST = join(STATE, "upload-allowed.txt");
 
 const REAL = {
   limits: () => {

@@ -4,8 +4,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { generateKeyPairSync } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { DATA_SHAPED, LIMITS, NOT_STARTED, boatArgv, dataFiles, gate, listEntry, main, normalKey, onList, parseArgs, repoKey, runEnd, scan, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
@@ -70,7 +71,7 @@ test("no run while something could bill past the plan, or while the plan cannot 
   assert.match(gate(run, plan({ keepGoing: { enabled: true } })), /extra starts/);
   assert.match(gate(run, plan({ wallet: { balanceDollars: 5 } })), /wallet/);
   assert.match(gate(run, plan({ canStart: false })), /cannot start/);
-  for (const broken of [null, {}, "text", plan({ subscriptionQuotaSeconds: "many" }), plan({ activeSandboxes: undefined }), plan({ keepGoing: undefined }), plan({ wallet: undefined })]) {
+  for (const broken of [null, {}, "text", plan({ subscriptionQuotaSeconds: "many" }), plan({ activeSandboxes: undefined }), plan({ keepGoing: undefined }), plan({ wallet: undefined }), plan({ canStart: undefined }), plan({ canStart: "yes" }), plan({ canStart: 1 })]) {
     assert.match(gate(run, broken), /no result/);
   }
 });
@@ -180,9 +181,9 @@ test("the scan passes a plain copy and stops on a key, naming the rule and file 
     mkdirSync(dir);
     writeFileSync(join(dir, "app.js"), "console.log(1);\n");
     assert.deepEqual(scan(dir, tmp), { ok: true });
-    // Put together here, from made-up text, so that no scanner reads this test file as a leak.
-    const body = "MIIEpAIBAAKCAQEA7bq98Q2n1x0Jw3kPz5m4Vt8sYcLr6uHdEoGf";
-    const key = [["-----BEGIN", "RSA PRIVATE KEY-----"].join(" "), ...Array(6).fill(body), ["-----END", "RSA PRIVATE KEY-----"].join(" "), ""].join("\n");
+    // A key made for this run and thrown away with the folder: the source holds none.
+    const key = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" });
+    const body = key.split("\n")[1];
     writeFileSync(join(dir, "deploy.pem"), key);
     const first = scan(dir, tmp);
     assert.equal(first.ok, false);
@@ -199,11 +200,11 @@ test("the scan passes a plain copy and stops on a key, naming the rule and file 
     assert.ok(!r.reason.includes(body));
     // Nor does a comment in the file that asks the scanner to look away.
     rmSync(join(dir, "deploy.pem"));
-    const value = ["ABCDEFGHIJ0123456789", "abcdefghij0123456789"].join("");
-    writeFileSync(join(dir, "config.js"), `const secret = "${value}"; // ${["gitleaks", "allow"].join(":")}\n`);
+    rmSync(join(dir, ".gitleaksignore"));
+    writeFileSync(join(dir, "commented.pem"), key.trimEnd() + " # gitleaks:allow\n");
     const quiet = scan(dir, tmp);
     assert.equal(quiet.ok, false);
-    assert.match(quiet.reason, /^1 finding \(generic-api-key in shop\/config\.js\)/);
+    assert.match(quiet.reason, /^1 finding \(private-key in shop\/commented\.pem\)/);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -218,6 +219,24 @@ test("without gitleaks the scan has no result", async () => {
   } finally {
     process.env.PATH = path;
     rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test("the upload list and the count of runs are in one fixed place: no environment variable moves them", async () => {
+  const before = process.env.BOAT_RUN_STATE;
+  const elsewhere = mkdtempSync(join(tmpdir(), "boat-run-state-"));
+  try {
+    writeFileSync(join(elsewhere, "upload-allowed.txt"), "github.com/some-org/shop data: customers.csv\n");
+    process.env.BOAT_RUN_STATE = elsewhere;
+    // A fresh copy of the script, loaded with the variable set.
+    const fresh = await import(`../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs?state=${Date.now()}`);
+    assert.equal(fresh.STATE, join(homedir(), ".local", "share", "boat-run"));
+    assert.equal(fresh.UPLOAD_LIST, join(homedir(), ".local", "share", "boat-run", "upload-allowed.txt"));
+    assert.ok(!readFileSync(new URL("../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs", import.meta.url), "utf8").includes("process.env.BOAT_RUN"));
+  } finally {
+    if (before === undefined) delete process.env.BOAT_RUN_STATE;
+    else process.env.BOAT_RUN_STATE = before;
+    rmSync(elsewhere, { recursive: true, force: true });
   }
 });
 

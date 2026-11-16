@@ -30,7 +30,7 @@ In its first week boat had run for 223 seconds in all.
   on or the wallet holds money or the plan cannot be read. `--push` sends a copy: tracked
   files with their uncommitted edits (`git stash create`, `git archive`), no untracked
   file, no symbolic link, and only after Gitleaks passed it with its default rules.
-  36 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
+  37 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
   allowance; the owner can change them.
 - After the next review round on the script itself: `--keep` is gone (a kept sandbox ran on
   outside the limits); each run holds a file of its own and counts the others, so two that
@@ -49,6 +49,11 @@ In its first week boat had run for 223 seconds in all.
 - After the sixth: a run that did not start exits 75, not 2 (a command's own exit 2 looked
   the same); boat's own last line is read, and a run that ends without "deleted" gets its
   sandbox deleted or a warning. boat deletes on a timeout itself (exit 124, seen live).
+- After the eighth: an environment variable could move the upload list and the count of
+  runs to a folder of the caller (it was there for a live proof); the place is fixed now,
+  with a test. A plan without a readable `canStart` is "no result". The scan test makes
+  its key when it runs (`generateKeyPairSync`): no key-shaped text is put together from
+  parts anywhere in the tests.
 - `scripts/stack-updates-connect.test.mjs`: Gitleaks flagged three key-shaped strings as
   `generic-api-key` on the first upload of this repository, and the script rightly refused
   the run. I first joined them when the test runs; the AI review called that a model
