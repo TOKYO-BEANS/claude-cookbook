@@ -4,9 +4,11 @@
 //
 // This is the one helper that prints a key. A headers helper has no other way to hand it
 // over: the client reads the helper's stdout and sends the header itself. So: never run it
-// in a shell whose output is shown, and never from a script that keeps what it printed. It
-// refuses a terminal, and it prints only the keys listed below. Everything else gets a key
-// through with-key.mjs, which prints none.
+// in a shell whose output is shown, and never from a script that keeps what it printed.
+// It refuses a terminal, which catches a console window only: an agent's shell is a pipe,
+// as a client is, and the helper cannot tell them apart. That rule is the caller's to keep.
+// It prints only the keys listed below. Everything else gets a key through with-key.mjs,
+// which prints none.
 //
 // The key is read as with-key.mjs reads it: in this process, with no PowerShell (a script
 // scan by the security software can hold a PowerShell read for 30 seconds and more, longer

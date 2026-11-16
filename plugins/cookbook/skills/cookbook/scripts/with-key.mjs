@@ -152,7 +152,7 @@ export function startProgram(program, args, env) {
 
 // Takes a variable out of an environment. Windows reads a variable's name without regard
 // to letter case, so there `some_key` is SOME_KEY and every spelling goes.
-function dropVariable(env, name, platform) {
+export function dropVariable(env, name, platform) {
   const wanted = platform === "win32" ? name.toUpperCase() : name;
   for (const key of Object.keys(env)) if ((platform === "win32" ? key.toUpperCase() : key) === wanted) delete env[key];
 }

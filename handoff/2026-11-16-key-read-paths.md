@@ -57,19 +57,32 @@
   thread's other idea, a variable that switches printing on, was left out: whoever starts
   the helper can set it, so it stops nothing.
 - From Graphify's review of the first push (medium, not verified by it; checked here against
-  the pinned CLI's `--help`): the Firecrawl CLI also takes its address from an `--api-url`
-  argument, so the launcher reads that too, and any address that is not the hosted one
-  means no stored key. And six of the CLI's commands set up credentials or integrations,
-  or write the key to a file (`env` puts it in a `.env` file): `env`, `init`, `setup`,
-  `make`, `config` and `login` start without the stored key. What the last five do with
-  a key was not tried; they are left out because the store is this PC's setup.
+  the pinned CLI's `--help`): the CLI also takes its address from an `--api-url` argument,
+  and `env` writes the key into a `.env` file. First fixed with a list of setup commands
+  that get no key.
+- From the fallback review (a reviewer that did not write the change; three medium, two
+  low): that list was too weak. A saved address in the CLI's credentials file was a third
+  source; the hidden option `--enable <feature>` made the parser take its value for the
+  command, so `--enable alexandria env` got the key; and `launch`, which starts an agent
+  that inherits the key, was not on it. The launcher was turned round: a list of the
+  commands that do get the key, and no unknown option before the command. The two low
+  ones: the pages said the terminal check does more than it does (an agent's shell is a
+  pipe, like a client), and three sentences in `recipes/keys.md` were not exact.
+- Not listed, so without the stored key: `env`, `init`, `setup`, `make`, `config`, `login`,
+  `logout`, `launch`, `doctor`, `view-config`, `update`. What each would do with
+  a key was not tried. The CLI's short forms with a scrape option before the address
+  (`firecrawl -u <url>`) get none either: write `firecrawl scrape <url> ...`.
 - Graphify's other note, advisory: `main()` in `with-key.mjs` has more callers now (the
   two launchers). That is the design: one entry point reads the key and starts the program.
 - `firecrawl-secure.mjs` and `parallel-secure.mjs` are in `skills/cookbook/scripts` and
   read through `with-key.mjs` in their own process: no PowerShell, one process less each.
-  The Firecrawl launcher hands the stored key to `https://api.firecrawl.dev` only: it
-  compares the host and the scheme, where the old one looked for the name anywhere in the
-  address.
+- The Firecrawl launcher decides narrowly who gets the stored key (the old one handed it to
+  every call unless `FIRECRAWL_API_URL` lacked the hosted name anywhere in it): only a
+  command on its list, only with options it knows before the command, and only for
+  `https://api.firecrawl.dev` (host and scheme compared, in the variable and in every
+  `--api-url` argument). On that path it sets `FIRECRAWL_API_URL` itself, which outranks
+  an address saved in the CLI's own credentials file. Any other call starts with the
+  caller's environment as it is, and a refused command gets one line on stderr.
 - `with-key.mjs`, the low finding of #78's last review: on Windows a value under the
   variable's name in another letter case is removed too, before the read, so neither a
   failed read nor a good one leaves a stale spelling for the program.
@@ -89,7 +102,8 @@
   terminal, usage, the
   helper as a process with a synthetic DPAPI key, and the two launchers with a stand-in
   CLI: no saved key, a self-hosted address, an address that only contains the hosted
-  name, an `--api-url` argument, a setup command). Each was seen failing first.
+  name, an `--api-url` argument, commands and options that get no key). Each was seen
+  failing first.
 - Both files on this PC: 35 tests, 33 pass, 2 skip (no right to make a link; no signals on
   Windows). On Linux with Node 24, in a sandbox, at the first push: 26
   pass, 6 skip (the Windows ones); the SIGTERM test runs there and gives 143.
@@ -97,7 +111,9 @@
   failure, in a test that was not changed: "a key saved by agent-key.ps1 reads the same by
   both routes" starts real PowerShell, and that call was ended at the test's 140-second
   limit while a sandbox run and another PowerShell call ran beside the suite. It is the
-  scan stall this work is about.
+  scan stall this work is about. A third run, after the fallback review: 621 tests, 616
+  pass, 4 skipped, and the same one failure at 140 seconds while other chats worked on
+  the PC; run alone straight after, that test passed in 44 seconds.
 - The helper's command line for a client, with a key name that is not saved, so nothing
   can be printed: it starts and answers the same through `cmd.exe /Q /D /C "..."` (how
   Codex starts a helper, read in its source; it waits 10 seconds) and through a POSIX
@@ -116,6 +132,9 @@
   compares the header it receives with the stored key by SHA-256, and the burst from
   `storm-compare.mjs`); `servers.mjs fingerprint --server firecrawl` against
   `scripts/measure/servers.json`, which this pull request already sets to the new entry.
+- After an update of the pinned Firecrawl CLI: read its `--help` (hidden options are in
+  `dist/index.js`) against the two lists in `firecrawl-secure.mjs`. Owner: Claude, with
+  the update. A new command gets no key until then, which shows as "not authenticated".
 - Key reads through PowerShell in other repositories, each a job there. Owner: Claude.
   - The sign-in tools' `google` launcher reads its keys with `agent-key.ps1` on every
     call. Cleared by importing `readKey` from `~/.local/bin/with-key.mjs`; saving and
@@ -133,5 +152,5 @@
 - The `ai-review` job still answers `review unavailable` (no API credit); the fallback
   review reads each pull request until it is back. Owner: the owner (it is spending).
 - Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-key-read-paths/`
-  (`mcp-header-probe.mjs`, both `npm test` logs); #78's is in
+  (`mcp-header-probe.mjs`, the three `npm test` logs); #78's is in
   `~/.local/share/claude-cookbook/evidence/2026-11-16-with-key-stall/`.
