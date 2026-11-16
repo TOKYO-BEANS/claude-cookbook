@@ -36,9 +36,16 @@ const link = (target, at) => {
   symlinkSync(target, at, "junction");
 };
 
-// A checkout with three reviewed instruction files, and a home whose marketplace clone holds
-// the given plugin version. The repository is made once and copied for each test.
-const CLONE_FILE = ".claude/plugins/marketplaces/claude-cookbook/plugins/cookbook/.claude-plugin/plugin.json";
+// A checkout with three reviewed instruction files, and a home whose marketplace clone is on
+// the given commit (the plugin has no version number: its commit is its version). The
+// repository is made once and copied for each test.
+const CLONE_GIT = ".claude/plugins/marketplaces/claude-cookbook/.git";
+const MAIN = "c0ffee".padEnd(40, "1"), OLDER = "c0ffee".padEnd(40, "0");
+// The clone as `git clone` leaves it: HEAD names the branch, the branch's file names the commit.
+const cloneAt = (home, sha) => {
+  put(home, `${CLONE_GIT}/HEAD`, "ref: refs/heads/main\n");
+  put(home, `${CLONE_GIT}/refs/heads/main`, `${sha}\n`);
+};
 let template = null;
 function made() {
   if (template) return template;
@@ -55,19 +62,19 @@ function made() {
   template = { dir, sha: git(dir, "rev-parse", "HEAD") };
   return template;
 }
-function scene(t, { clone = "1.2.3" } = {}) {
+function scene(t, { clone = MAIN } = {}) {
   const root = tmp(t);
   const checkout = join(root, "checkout");
   const home = join(root, "home");
   cpSync(made().dir, checkout, { recursive: true });
-  if (clone !== null) put(home, CLONE_FILE, JSON.stringify({ name: "cookbook", version: clone }));
+  if (clone !== null) cloneAt(home, clone);
   return { root, checkout, home, sha: made().sha };
 }
 
 // GitHub's stand-in: the head is `sha`, and the tree and the files are those of the
 // repository in `origin` (the template unless a test says otherwise). It takes gh's arguments
 // and records them.
-function github({ sha, origin, main = "1.2.3", headStatus = 0, mainStatus = 0, treeStatus = 0, blobStatus = 0, tree } = {}) {
+function github({ sha, origin, main = MAIN, headStatus = 0, mainStatus = 0, treeStatus = 0, blobStatus = 0, tree } = {}) {
   const calls = [];
   const fn = (args) => {
     calls.push(args);
@@ -89,7 +96,8 @@ function github({ sha, origin, main = "1.2.3", headStatus = 0, mainStatus = 0, t
       const r = spawnSync("git", ["cat-file", "blob", /\/git\/blobs\/([0-9a-f]{40})$/.exec(path)[1]], { cwd: from });
       return { status: blobStatus || r.status, stdout: r.stdout };
     }
-    return { status: mainStatus, stdout: Buffer.from(typeof main === "string" && !main.startsWith("{") ? JSON.stringify({ name: "cookbook", version: main }) : String(main)) };
+    if (path === "repos/TOKYO-BEANS/claude-cookbook/commits/main") return { status: mainStatus, stdout: Buffer.from(`${main}\n`) };
+    return { status: 1, stdout: Buffer.from("") };
   };
   fn.calls = calls;
   return fn;
@@ -131,8 +139,9 @@ test("GitHub is asked for the head, its whole tree and each instruction file, th
     "repos/TOKYO-BEANS/claude-cookbook/git/blobs/<id>",
     "repos/TOKYO-BEANS/claude-cookbook/git/blobs/<id>",
     "repos/TOKYO-BEANS/claude-cookbook/git/blobs/<id>",
-    "repos/TOKYO-BEANS/claude-cookbook/contents/plugins/cookbook/.claude-plugin/plugin.json?ref=main",
+    "repos/TOKYO-BEANS/claude-cookbook/commits/main",
   ]);
+  assert.deepEqual(hub.calls.at(-1), ["api", "repos/TOKYO-BEANS/claude-cookbook/commits/main", "--jq", ".sha", "--hostname", "github.com"]);
 });
 
 test("run passes arguments as they are: no shell reads them", () => {
@@ -162,7 +171,7 @@ test("gh is taken from an absolute folder of PATH, never from the checkout or th
   assert.equal(locate("no-such-program-codex-start", { path: path(good) }), null);
 });
 
-test("a clean checkout whose clone has main's version may start", (t) => {
+test("a clean checkout whose clone is on main's commit may start", (t) => {
   const s = scene(t);
   const r = check(s);
   assert.deepEqual({ start: r.start, cookbook: r.cookbook }, { start: true, cookbook: "same" });
@@ -177,8 +186,8 @@ test("a subfolder of the checkout answers for the whole checkout", (t) => {
   refused(check(s, { checkout: join(s.checkout, "src") }), "differs");
 });
 
-test("a clone that is not on main's version is said, and the start is still allowed", (t) => {
-  const s = scene(t, { clone: "1.2.2" });
+test("a clone that is not on main's commit is said, and the start is still allowed", (t) => {
+  const s = scene(t, { clone: OLDER });
   const r = check(s);
   assert.deepEqual({ start: r.start, cookbook: r.cookbook }, { start: true, cookbook: "differs" });
   assert.equal(exitCode(r), 3);
@@ -466,18 +475,47 @@ test("a folder that is not in a Git checkout: do not start", (t) => {
   refused(outside(""), "checkout");
 });
 
-test("a Cookbook version that cannot be read on either side: do not start", (t) => {
+test("a Cookbook commit that cannot be read on either side: do not start", (t) => {
   const s = scene(t, { clone: null });
   refused(check(s), "cookbook-unread");
-  for (const text of ['{"version":"1.2.3; echo"}', '{"version":123}', "not json", "{}"]) {
-    put(s.home, CLONE_FILE, text);
+  // A branch file that is not a commit id, whatever else it holds.
+  for (const text of ["1.2.3", `${MAIN}; echo`, MAIN.slice(0, 12), MAIN.toUpperCase(), "", "ref: refs/heads/other"]) {
+    cloneAt(s.home, text);
     refused(check(s), "cookbook-unread");
   }
-  put(s.home, CLONE_FILE, '{"version":"1.2.3"}');
+  cloneAt(s.home, MAIN);
   assert.equal(check(s).start, true);
+  // A HEAD that names anything but a branch with plain name parts is not followed.
+  put(s.home, "secret.txt", `${MAIN}\n`);
+  for (const head of ["ref: ../../../../../secret.txt", "ref: refs/heads/../../../../../../secret.txt", "ref: refs/heads/.hidden", "ref: refs/tags/v1", "ref: refs/heads/main extra", "refs/heads/main", "not a head"]) {
+    put(s.home, `${CLONE_GIT}/HEAD`, `${head}\n`);
+    refused(check(s), "cookbook-unread");
+  }
+  cloneAt(s.home, MAIN);
   refused(check(s, {}, { mainStatus: 1 }), "cookbook-unread");
-  refused(check(s, {}, { main: "{not json" }), "cookbook-unread");
-  refused(check(s, {}, { main: '{"version":"latest"}' }), "cookbook-unread");
+  for (const main of ["", "1.2.3", MAIN.slice(0, 12), `${MAIN} x`, '{"sha":"x"}']) refused(check(s, {}, { main }), "cookbook-unread");
+});
+
+test("the clone's commit is read from a detached HEAD and from packed-refs too", (t) => {
+  const s = scene(t, { clone: null });
+  // Detached: HEAD is the commit.
+  put(s.home, `${CLONE_GIT}/HEAD`, `${MAIN}\n`);
+  assert.equal(check(s).cookbook, "same");
+  put(s.home, `${CLONE_GIT}/HEAD`, `${OLDER}\n`);
+  assert.equal(check(s).cookbook, "differs");
+  // Packed: the branch has no file of its own. The remote's branch of the same name is not it.
+  put(s.home, `${CLONE_GIT}/HEAD`, "ref: refs/heads/main\n");
+  put(s.home, `${CLONE_GIT}/packed-refs`, `# pack-refs with: peeled fully-peeled sorted \n${OLDER} refs/remotes/origin/main\n`);
+  refused(check(s), "cookbook-unread");
+  put(s.home, `${CLONE_GIT}/packed-refs`, `# pack-refs with: peeled fully-peeled sorted \n${OLDER} refs/remotes/origin/main\n${MAIN} refs/heads/main\n`);
+  assert.equal(check(s).cookbook, "same");
+  // The branch's own file wins over a packed line, as it does for Git.
+  put(s.home, `${CLONE_GIT}/refs/heads/main`, `${OLDER}\n`);
+  assert.equal(check(s).cookbook, "differs");
+  // A clone whose .git is a pointer file is not a plain clone: not read.
+  const other = scene(t, { clone: null });
+  put(other.home, CLONE_GIT, "gitdir: ../elsewhere\n");
+  refused(check(other), "cookbook-unread");
 });
 
 test("the whole check has one time limit: out of time is a refusal with its own reason", (t) => {

@@ -55,4 +55,5 @@ never edit the same lines. Here `HANDOFF.md` is closed and `npm test` fails when
 a pull request that still has an entry there moves it to a file. Reading the handoff means
 the newest files in `handoff/`, then a search of `HANDOFF.md` for what is older.
 
-The `version` in `plugin.json` still collides: merge `main` in and take the next free number.
+The plugin has no version number, so no pull request sets one:
+[the plugin's version is its commit](plugin-version.md).

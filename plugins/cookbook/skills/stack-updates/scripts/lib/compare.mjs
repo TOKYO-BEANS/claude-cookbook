@@ -333,6 +333,11 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     const feedId = feedFingerprint(p.feed);
     if (ps.feed !== null ? ps.feed !== feedId : ps.latest !== null && !fitsFeed(p.feed, ps.latest))
       ps = { ...emptyPart(), installedCommit: ps.installedCommit, applyFailed: ps.applyFailed }; // a failed install stays failed
+    // A marketplace plugin can go from a version to its commit, or back, with the same feed:
+    // a stored value of the other kind is never compared with the new one. A new baseline.
+    if (p.feed?.kind === "marketplace" && lat.ok && ps.latest !== null && (str(lat.version) ?? str(lat.commit)) !== null
+      && COMMIT.test(ps.latest) !== (str(lat.version) === null))
+      ps = { ...emptyPart(), installedCommit: ps.installedCommit, applyFailed: ps.applyFailed };
     ps.feed = feedId;
     next.parts[key] = ps;
     const firstMissing = Object.hasOwn(prev.missing, key) ? prev.missing[key] : null;
@@ -371,9 +376,15 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     ps.feedErrorShown = null;
 
     const lv = str(lat.version) ?? str(lat.commit) ?? str(lat.hash);
-    const iv = inst.state === "read" ? (str(inst.version) ?? str(inst.commit)) : null;
+    // A marketplace plugin with no version is installed by commit, and Claude Code's registry
+    // records the very commit this feed reads: the head of the source. So the disk says where
+    // the copy is, an unequal commit is behind, and a commit a session recorded is not used.
+    const exact = p.feed?.kind === "marketplace" && !str(lat.version) && COMMIT.test(String(lat.commit))
+      && inst.state === "read" && COMMIT.test(String(inst.commit));
+    const at = exact ? { ...ps, installedCommit: inst.commit } : ps;
+    const iv = inst.state !== "read" ? null : exact ? inst.commit : (str(inst.version) ?? str(inst.commit));
     const self = selfUpdating.has(t.id) && inst.state === "read";
-    const behind = behindOf(inst, lat, ps);
+    const behind = behindOf(inst, lat, at);
     const baseline = firstRun || ps.latest === null; // this part has no release seen before
 
     // A self-updating tool moved by itself; a version already reported (a rollback undone) is not news.
@@ -385,10 +396,10 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     let reportedNew = false;
     const isNew = !baseline && lv !== null && lv !== ps.latest && newer(lv, ps.latest) && lv !== ps.reported;
     if (isNew && !self && behind !== false) {
-      changes.push(changeOf(t, p, key, "new-release", fromOf(inst, lat, ps), lv, lat, refsOf(inst, lat, ps)));
+      changes.push(changeOf(t, p, key, "new-release", fromOf(inst, lat, at), lv, lat, refsOf(inst, lat, at)));
       ps.reported = lv;
       reportedNew = true;
-    } else if (isNew && !self && behind === false && atRelease(inst, lat, ps)) {
+    } else if (isNew && !self && behind === false && atRelease(inst, lat, at)) {
       // Installed before the check first saw it: still news once, as already installed.
       const from = knownBefore(lv, lat, ps);
       const refs = COMMIT.test(String(lat.commit)) ? { ...(COMMIT.test(String(from)) ? { fromRef: from } : {}), toRef: lat.commit } : {};
@@ -405,7 +416,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     } else ps.behindSince = null;
     if (ps.behindSince !== null && lv !== null && !reportedNew) {
       if (mondaySections || baseline)
-        stillBehind.push({ key, installed: str(lat.version) ? inst.version : (ps.installedCommit ?? iv), latest: lv, since: ps.behindSince });
+        stillBehind.push({ key, installed: str(lat.version) ? inst.version : (at.installedCommit ?? iv), latest: lv, since: ps.behindSince });
       else suppressed.stillBehind += 1;
     }
 
@@ -421,7 +432,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
     // Every part known to be behind, every day: what apply.mjs decides about.
     if (ps.behindSince !== null && lv !== null) {
       behindAll.push({
-        key, installed: str(lat.version) ? inst.version : (ps.installedCommit ?? iv), latest: lv,
+        key, installed: str(lat.version) ? inst.version : (at.installedCommit ?? iv), latest: lv,
         since: ps.behindSince, latestSince: ps.latestSince, applyFailed: ps.applyFailed,
       });
     }
