@@ -58,6 +58,15 @@
   refused before a read, and neither an argument nor the environment widens the list. The
   thread's other idea, a variable that switches printing on, was left out: whoever starts
   the helper can set it, so it stops nothing.
+- From Graphify's review of the first push (medium, not verified by it; checked here against
+  the pinned CLI's `--help`): the Firecrawl CLI also takes its address from an `--api-url`
+  argument, so the launcher reads that too, and any address that is not the hosted one
+  means no stored key. And six of the CLI's commands set up credentials or integrations,
+  or write the key to a file (`env` puts it in a `.env` file): `env`, `init`, `setup`,
+  `make`, `config` and `login` start without the stored key. What the last five do with
+  a key was not tried; they are left out because the store is this PC's setup.
+- Graphify's other note, advisory: `main()` in `with-key.mjs` has more callers now (the
+  two launchers). That is the design: one entry point reads the key and starts the program.
 - `firecrawl-secure.mjs` and `parallel-secure.mjs` are in `skills/cookbook/scripts` and
   read through `with-key.mjs` in their own process: no PowerShell, one process less each.
   The Firecrawl launcher hands the stored key to `https://api.firecrawl.dev` only: it
@@ -76,15 +85,15 @@
   helper's entry removed).
 
 **Verification.**
-- 13 new tests: three in `scripts/with-key.test.mjs` (the letter case, the exit code for a
-  signal, the launcher as a process ended by SIGTERM) and ten in the new
+- 15 new tests: three in `scripts/with-key.test.mjs` (the letter case, the exit code for a
+  signal, the launcher as a process ended by SIGTERM) and twelve in the new
   `scripts/key-header.test.mjs` (the header's form, a failed read, the list of keys, a
   terminal, usage, the
   helper as a process with a synthetic DPAPI key, and the two launchers with a stand-in
   CLI: no saved key, a self-hosted address, an address that only contains the hosted
-  name). Each was seen failing first.
-- Both files on this PC: 33 tests, 31 pass, 2 skip (no right to make a link; no signals on
-  Windows). On Linux with Node 24, in a sandbox, before the list of keys was added: 26
+  name, an `--api-url` argument, a setup command). Each was seen failing first.
+- Both files on this PC: 35 tests, 33 pass, 2 skip (no right to make a link; no signals on
+  Windows). On Linux with Node 24, in a sandbox, at the first push: 26
   pass, 6 skip (the Windows ones); the SIGTERM test runs there and gives 143.
 - `npm test` on this PC, second run: 597 tests, 594 pass, 3 skipped. The first run had one
   failure, in a test that was not changed: "a key saved by agent-key.ps1 reads the same by

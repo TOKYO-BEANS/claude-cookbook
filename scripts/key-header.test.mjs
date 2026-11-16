@@ -151,15 +151,43 @@ test("firecrawl launcher: a self-hosted API gets no stored key and keeps the cal
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("firecrawl launcher: an --api-url argument for another host gets no stored key either", () => {
+  const dir = firecrawlHome();
+  try {
+    for (const args of [["scrape", "https://example.test", "--api-url", "https://example.test"], ["--api-url=http://localhost:3002", "scrape", "x"], ["scrape", "x", "--api-url"],
+      ["--api-url", "https://api.firecrawl.dev", "scrape", "x", "--api-url=https://example.test"]]) {
+      const got = firecrawl(dir, { FIRECRAWL_API_KEY: "own" }, args);
+      assert.equal(got.status, 4, got.stderr);
+      assert.deepEqual(JSON.parse(got.stdout), { args, key: "own" });
+      assert.equal(got.stderr, "", `${args.join(" ")}: no key read is tried`);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("firecrawl launcher: a command that sets up credentials or writes the key to a file gets no stored key", () => {
+  const dir = firecrawlHome();
+  try {
+    for (const args of [["env"], ["env", "--file", "x.env"], ["--api-url", "https://api.firecrawl.dev", "env"], ["-k", "scrape", "init"], ["setup"], ["make", "x"], ["config"], ["login"]]) {
+      const got = firecrawl(dir, {}, args);
+      assert.equal(got.status, 4, got.stderr);
+      assert.equal(JSON.parse(got.stdout).key, null);
+      assert.equal(got.stderr, "", `${args.join(" ")}: no key read is tried`);
+    }
+    // The word as something else than the command is no reason: a search for "env" reads the key.
+    assert.match(firecrawl(dir, {}, ["search", "env"]).stderr, /with-key: could not read key "firecrawl"/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("Windows: the firecrawl launcher hands the stored key to the hosted API only", needsFfi, () => {
   const value = "synthetic-firecrawl-key";
   const dir = firecrawlHome({ "firecrawl.dpapi": protect(value) });
   try {
-    for (const extra of [{}, { FIRECRAWL_API_URL: "https://api.firecrawl.dev/v2" }]) {
-      const got = firecrawl(dir, extra);
+    for (const [extra, args] of [[{}], [{ FIRECRAWL_API_URL: "https://api.firecrawl.dev/v2" }], [{}, ["scrape", "x", "--api-url", "https://api.firecrawl.dev"]], [{}, ["search", "env"]]]) {
+      const got = firecrawl(dir, extra, args);
       assert.equal(JSON.parse(got.stdout).key, value, got.stderr);
       assert.equal(got.stderr, "");
     }
+    for (const args of [["scrape", "x", "--api-url=https://example.test"], ["env"]]) assert.equal(JSON.parse(firecrawl(dir, {}, args).stdout).key, null, args.join(" "));
     assert.equal(JSON.parse(firecrawl(dir, { FIRECRAWL_API_URL: "https://example.test/api.firecrawl.dev" }).stdout).key, null);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
