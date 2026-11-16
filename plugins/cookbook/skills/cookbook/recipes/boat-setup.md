@@ -31,3 +31,5 @@
   `small` sandbox in 13 seconds with the upload (about 150 seconds on this PC) and found a
   test that depended on the machine's sort order; five sandboxes ran at once; a `large` one
   reported 8 CPUs; `boat list --all` was empty afterwards. The lot cost under USD 0.01.
+  `boat-run.mjs` refused its first upload on three Gitleaks findings (made-up test values,
+  since rewritten), then sent 176 tracked files and passed the tests in 22 seconds.

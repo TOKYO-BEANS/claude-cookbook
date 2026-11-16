@@ -10,17 +10,30 @@ In its first week boat had run for 223 seconds in all.
 **The owner's two answers (question dialog, 16 November 2026).**
 - How many sandboxes: "set an allowance, use your own judgment to decide how much for each
   individual parallel work or job; the plan allows 100 and has a 20$ budget a month". So
-  Claude sizes each job inside the plan's limits. My own guard, not the owner's words: a job
-  that would take more than a tenth of the month's included time is said first, because the
-  daily vetting needs time left.
+  Claude sizes each job, inside an allowance held by a script (below). The allowance's
+  numbers are my own, not the owner's words.
 - Private code: "Standing yes, code only". The code of the owner's own repositories may be
   pushed, with `--no-env`; customer data and credentials still need a yes per task.
 
 **What changed.**
+- `skills/cookbook/scripts/boat-run.mjs`, the one route to a sandbox for a job, after two
+  findings of GitHub's security review on #70 (an upload of the folder with no safeguard;
+  sizing left to a model with no hard limit). The limits are numbers in the script: 10
+  sandboxes at once (the plan's count, and 10 slot files for runs started together), an hour
+  of the plan's time per run, a fifth of the month kept back, nothing while extra starts are
+  on or the wallet holds money or the plan cannot be read. `--push` sends a copy: tracked
+  files with their uncommitted edits (`git stash create`, `git archive`), no untracked
+  file, no symbolic link, and only after Gitleaks passed it with its default rules.
+  21 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
+  allowance; the owner can change them.
+- `scripts/stack-updates-connect.test.mjs`: three made-up key-shaped strings are now joined
+  when the test runs. Gitleaks flagged them as `generic-api-key` on the first upload of this
+  repository, and the script rightly refused the run. They were test values (alphabet runs),
+  already public on `main`.
 - `recipes/boat.md`: used by default (tests on Linux before a push, a CI-only or Linux-only
-  failure, long and parallel jobs, beside the vetting step); the two answers; what still
-  needs a yes now names everything that can bill past the plan and sharing a snapshot.
-  `boat cp` was wrong (no such command): `boat push` and `boat scp`.
+  failure, long and parallel jobs, beside the vetting step); the script, the two answers,
+  tests that need an install (AI review, low); what still needs a yes now names everything
+  that can bill past the plan and sharing a snapshot. `boat cp` was wrong (no such command).
 - `recipes/boat-setup.md`: the plan as `boat limits --json` printed it, the trial text gone,
   the API key's end date, today's proofs.
 - `recipes/debugging.md`: a failure only in CI or on Linux is reproduced in a sandbox.
@@ -33,12 +46,16 @@ In its first week boat had run for 223 seconds in all.
 **Verification.** On the paid plan: `npm test` in a `small` sandbox, 13 seconds with the
 upload (one failure, the test above; green after the fix); five sandboxes at once
 (`boat list` showed 5); `large` reported 8 CPUs and 15 GB; `boat list --all` empty after.
+Through `boat-run.mjs`: the first run was refused on the three Gitleaks findings, the next
+uploaded 176 tracked files and passed `npm test` in 22 seconds, no slot file was left.
 `npm test` on this PC passed. Logs: `~/.local/share/claude-cookbook/evidence/2026-11-16-boat-paid-plan/`.
 
 **Outstanding.**
 - What happens when the month's time runs out was read from boat's terms, not tested.
-- The standing yes covers code only. A repository that keeps customer data or a key in its
-  folder is not pushed without a yes for that task.
+- The standing yes covers code only. Gitleaks finds key-shaped text, not customer data: a
+  repository that tracks customer data is not uploaded without a yes for that task.
+- The vetting scripts keep their own fixed `boat run` command and do not go through
+  `boat-run.mjs`; a kept sandbox (`--keep`) is counted by the plan's count only.
 - Saved snapshots (10 in the plan) are unused: a snapshot with a repository's dependencies
   installed would start faster. Worth it only for a repository whose install is slow.
 
