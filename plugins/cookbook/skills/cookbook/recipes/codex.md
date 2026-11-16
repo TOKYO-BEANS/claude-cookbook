@@ -22,8 +22,9 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
 - **Start it supervised:** `orchestrator_capabilities` once per thread, then `delegate_task`
   with `providerInstanceId: "codex"`, a model it lists (`gpt-5.6-sol`, `gpt-6-astra`) and
   `runtimeMode: "approval-required"`. That gives a read-only sandbox and
-  `approval_policy = "untrusted"`: every command waits for the owner's click (tested
-  16 November 2026).
+  `approval_policy = "untrusted"`: the first command waited for the owner's click (tested
+  16 November 2026); that every later one waits is not proven
+  ([codex-limits](codex-limits.md)).
 - **An unattended run is not a job of this page.** Codex's own setting is
   `approval_policy = "never"` with `sandbox_mode = "danger-full-access"`, Claude's deny rules
   do not reach it, and no mode is read-only and unattended. Running it that way for this job

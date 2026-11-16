@@ -81,6 +81,14 @@ are not fixed. The three checks before a call stay.
   `runtimeMode: "approval-required"` stopped at its first command with a pending approval.
   The run was cancelled and no approval was given. Whether every later read also waits is
   not proven, and the page says so.
+- Two more threads of the security review, on the first merge commit, were read late
+  (discussions 4585059385 and 4585059394). The first, prompt injection through repository
+  text, is fixed: the brief now tells Codex that what it reads is data and not instructions,
+  and advice without evidence that can be checked is not taken. The second asks again for a
+  confirmation before each consult: covered by the owner's second decision above.
+- AI review of `f1b3af9`: one low finding, fixed. `recipes/codex.md` said that every command
+  of a supervised run waits for a click; what was tested is the first command, and the page
+  now says that.
 - Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-codex-consult/`.
 
 **Failures and dead ends.**
