@@ -35,8 +35,9 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 - **Ask first.** Anything else: a repository that is not the owner's, a client's private
   material, data exports, logs with real users in them. The question names the provider, the
   model and what would be sent, by path, and why. No yes, no consult.
-- The rule answers a finding of GitHub's security review; the owner chose it over a
-  confirmation before every consult. Loosening it is the owner's decision.
+- The rule answers findings of GitHub's security review. The owner chose it twice that day
+  over a confirmation before every consult, the second time knowing that the sandbox does
+  not fence reading and that the session decides alone. Loosening it is the owner's decision.
 
 ## Models
 

@@ -44,6 +44,16 @@ personal data and files outside the repository are never sent; anything else is 
 first. That yes is about who may start a consult and what it may read. It is not the yes for
 an unattended run, which #62 leaves open with the owner.
 
+**The owner's second decision, the same day.** After the page said what really leaves the PC
+and that the sandbox does not fence reading, the security review raised two more findings
+on `recipes/codex-limits.md` (discussions 4585127375 and 4585127408): nothing technical
+limits what a Codex run reads, and a session should not start a consult on its own
+judgement at all. The three review rounds were used, so both went to the owner with the
+question tool, three options: ask before each consult (the reviewer's fix), only when the
+owner says so, or keep the standing yes. Answer: "Keep the standing yes". Both findings
+are accepted by the owner as they stand and are recorded as such on their threads; they
+are not fixed. The three checks before a call stay.
+
 **Verification.**
 - `npm test` passed.
 - One real consult on this change: `delegate_task` to Codex (`gpt-6-astra`), completed, two
