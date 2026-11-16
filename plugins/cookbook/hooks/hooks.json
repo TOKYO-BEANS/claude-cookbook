@@ -1,5 +1,5 @@
 {
-  "description": "Cookbook: at session start, says when a daily update report is waiting (reads ~/.local/share/stack-updates only); at session start, on a prompt and after a tool, says which model the usage budget asks for (reads the Claude usage at a session start, at most once per ten minutes, and the reading T3 Code saves when that read is refused; writes ~/.local/share/model-budget only); at a turn's end, stops once a closing message that leaves an owner question unasked or a finished T3 chat unsettled (recipes/owner-questions.md).",
+  "description": "Cookbook: at session start, says when a daily update report is waiting (reads ~/.local/share/stack-updates only); at session start, on a prompt and after a tool, says which model the usage budget asks for (reads the Claude usage at a session start, at most once per ten minutes, and the reading T3 Code saves when that read is refused; writes ~/.local/share/model-budget only); before a T3 tool starts an agent that is not Claude, runs the Codex start check and denies a start it refuses or cannot check (recipes/codex.md); at a turn's end, stops once a closing message that leaves an owner question unasked or a finished T3 chat unsettled (recipes/owner-questions.md).",
   "hooks": {
     "SessionStart": [
       {
@@ -29,6 +29,19 @@
             "type": "command",
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-note.mjs\"",
             "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.+__(delegate_task|create_threads|t3_thread_launch)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"C:/Program Files/nodejs/node.exe\" \"${CLAUDE_PLUGIN_ROOT}/hooks/codex-start-gate.mjs\"",
+            "timeout": 150,
+            "onFailure": "block"
           }
         ]
       }
