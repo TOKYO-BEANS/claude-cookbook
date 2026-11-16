@@ -138,6 +138,42 @@ test("the launcher hands the key to the program in the named variable only", asy
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("a value the caller already had under the variable's name is not passed on when the read fails", async () => {
+  const dir = home();
+  const started = [];
+  try {
+    await main(["absent", "SOME_KEY", "prog"], { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell, env: { PATH: "p", SOME_KEY: "stale" },
+      say: () => {}, start: (program, args, env) => { started.push(env); return 0; } });
+    assert.deepEqual(started, [{ PATH: "p" }]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("a missing agent-key.ps1 is named, not reported as a PowerShell exit code", async () => {
+  const dir = home({ "k.dpapi": "00" });
+  try {
+    await assert.rejects(readKey("k", { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: () => { throw Object.assign(new Error("x"), { status: 1 }); } }),
+      /the PowerShell route failed \(no agent-key\.ps1 at .*agent-key\.ps1\); direct route: ERR_UNKNOWN_BUILTIN_MODULE/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("loading node:ffi leaves the process's warning handling as it was", async () => {
+  const emit = process.emitWarning; const listeners = process.listeners("warning");
+  await loadFfi().catch(() => null);
+  await loadFfi().catch(() => null);
+  assert.equal(process.emitWarning, emit);
+  assert.deepEqual(process.listeners("warning"), listeners);
+});
+
+test("a program that cannot start ends the launcher with code 127 and one line, no stack trace", () => {
+  const dir = home();
+  try {
+    const run = spawnSync(process.execPath, [launcher, "absent", "SYN_KEY", "no-such-program-for-with-key-test"], { env: { ...process.env, USERPROFILE: dir, HOME: dir }, encoding: "utf8", timeout: 60000 });
+    assert.equal(run.status, 127, run.stderr);
+    assert.match(run.stderr, /with-key: could not start no-such-program-for-with-key-test \(ENOENT\)\n$/);
+    assert.doesNotMatch(run.stderr, /^\s+at /m);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("usage: too few arguments end with code 2", async () => {
   const lines = [];
   assert.equal(await main(["k", "SOME_KEY"], { say: (l) => lines.push(l), start: noPowerShell }), 2);

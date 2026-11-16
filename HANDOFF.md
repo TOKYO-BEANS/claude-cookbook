@@ -32,9 +32,16 @@ start, each scan can wait about 30 seconds. `with-key.mjs` read a key by startin
   15 seconds and the launcher says why. A failure message holds only the launcher's own
   words or an error code, never what PowerShell printed.
 - `recipes/keys.md` (new; the map row links it); `catalog.json` notes for the two copies.
+- From the reviews: a program that cannot start ends the launcher with code 127 and one
+  line, not a stack trace (Graphify); a failed read removes a value the caller already had
+  under the variable's name; loading `node:ffi` leaves the process's warning handling as it
+  was; a missing `agent-key.ps1` is named (`sa-review`, three low findings).
+- GitHub's security review wrote two threads. "Prints a key" was the `--headers` mode:
+  taken out. "Starts any program it is given" is the launcher's purpose: the owner's yes
+  (16 November 2026) is in the thread.
 
 **Verification.**
-- 16 tests in `scripts/with-key.test.mjs` (15 pass, the link test skips on this PC: no right
+- 20 tests in `scripts/with-key.test.mjs` (19 pass, the link test skips on this PC: no right
   to make a link). On Windows they read a synthetic DPAPI key by the direct route with
   PowerShell forbidden, start the launcher as a process by five spellings of its path, and
   save a key with `agent-key.ps1` and read it by both routes. CI runs on Linux with Node 24:
@@ -60,9 +67,11 @@ start, each scan can wait about 30 seconds. `with-key.mjs` read a key by startin
   temporary home now has `AppData\Local`, which keeps the cache there. The squash merge
   leaves it out of `main`; it stays readable in the pull request's first commit.
 - `with-key.mjs` still starts the program without its variable when the key cannot be read
-  (the owner-questions broker relies on it), still ends with code 1 when a signal kills its
-  child, and has no handler for a child that cannot start. Unchanged here: one fault per
-  pull request. Owner: Claude.
+  (the owner-questions broker relies on it) and still ends with code 1 when a signal kills
+  its child. Unchanged here. Owner: Claude.
+- The `ai-review` job answered `review unavailable` from the second push on: the review
+  key's credit balance is too low. `sa-review` reviewed instead. Until the credits are
+  back, every pull request needs that fallback. Owner: the owner (it is spending).
 - `node:ffi` is experimental. If a Node update changes it, reads fall back to PowerShell and
   can stall again, for at most 15 seconds, with the reason on stderr.
 - A recommendation for whoever manages the security software, not acted on: its script scan

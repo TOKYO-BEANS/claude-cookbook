@@ -13,7 +13,7 @@
 // read through agent-key.ps1 crosses several (measured 16 November 2026: 61 seconds against
 // 1). PowerShell is the fallback only, where node:ffi is missing, and it has a time limit.
 import { execFileSync, spawn } from "node:child_process";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,16 +32,20 @@ export function keyPath(name, home = homedir()) {
   return join(home, ".secrets", `${name}.dpapi`);
 }
 
-// node:ffi says on stderr, at each load, that it is experimental. That line is dropped;
-// every other warning still prints.
+// node:ffi says on stderr, at each load, that it is experimental. That one line is dropped
+// while the module loads; the process's warning handling is as it was afterwards.
 export async function loadFfi() {
-  const printers = process.listeners("warning");
-  process.removeAllListeners("warning");
-  process.on("warning", (w) => {
-    if (w?.name === "ExperimentalWarning" && /FFI/i.test(String(w.message))) return;
-    for (const print of printers) print(w);
-  });
-  return (await import("node:ffi")).default;
+  const emit = process.emitWarning;
+  process.emitWarning = function quiet(warning, ...rest) {
+    const type = typeof rest[0] === "string" ? rest[0] : rest[0]?.type;
+    if (type === "ExperimentalWarning" && /FFI/i.test(String(warning?.message ?? warning))) return;
+    return emit.call(this, warning, ...rest);
+  };
+  try {
+    return (await import("node:ffi")).default;
+  } finally {
+    process.emitWarning = emit;
+  }
 }
 
 export function runPowerShell(args, timeoutMs, { exe = "powershell.exe", env = process.env } = {}) {
@@ -101,6 +105,7 @@ export async function readKey(name, deps = {}) {
   } catch (e) {
     const what = e?.code === "ETIMEDOUT"
       ? `the PowerShell route did not answer in ${POWERSHELL_TIMEOUT_MS / 1000} seconds and was ended (a script scan by the security software stalls it while many processes start)`
+      : !existsSync(script) ? `the PowerShell route failed (no agent-key.ps1 at ${script})`
       : `the PowerShell route failed (${String(e?.code ?? (typeof e?.status === "number" ? `exit ${e.status}` : "error"))})`;
     throw new KeyError(`${what}; direct route: ${note}`);
   }
@@ -110,13 +115,22 @@ export async function readKey(name, deps = {}) {
   return { key, route: "powershell", note };
 }
 
+// A program that cannot be started (not found, not allowed) ends the launcher with this
+// code and one line on stderr, not with a stack trace.
+export const NOT_STARTED = 127;
+
 function startProgram(program, args, env) {
-  const child = spawn(program, args, { env, stdio: "inherit", windowsHide: true });
+  const failed = (e) => { process.stderr.write(`with-key: could not start ${program} (${String(e?.code ?? "error")})\n`); return NOT_STARTED; };
+  let child;
+  try { child = spawn(program, args, { env, stdio: "inherit", windowsHide: true }); } catch (e) { return failed(e); }
   const stop = () => { if (child.exitCode === null) child.kill(); };
   process.on("exit", stop);
   process.on("SIGINT", () => process.exit(130));
   process.on("SIGTERM", () => process.exit(143));
-  return new Promise((done) => { child.on("exit", (code, signal) => done(code ?? (signal ? 1 : 0))); });
+  return new Promise((done) => {
+    child.on("error", (e) => done(failed(e)));
+    child.on("exit", (code, signal) => done(code ?? (signal ? 1 : 0)));
+  });
 }
 
 export async function main(argv, deps = {}) {
@@ -127,6 +141,9 @@ export async function main(argv, deps = {}) {
   try {
     env[envVar] = (await readKey(name, deps)).key;
   } catch (e) {
+    // "Without" holds for a value the caller already had under this name, too: a stale
+    // or foreign one is never passed on as if it were the stored key.
+    delete env[envVar];
     say(`with-key: could not read key "${name}" (${reason(e)}); continuing without ${envVar}\n`);
   }
   return start(program, args, env);
