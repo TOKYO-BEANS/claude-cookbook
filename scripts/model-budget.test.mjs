@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -331,6 +331,59 @@ test("readUsage with cacheOnly never calls the network", async (t) => {
   assert.equal(stale.source, "stale");
 });
 
+test("readUsage: the lock is removed only by its owner, and a dead lock is taken over by one process", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  const lock = join(stateDir, "usage.lock");
+  let calls = 0;
+  // Another process's lock appears while this read runs: this read must leave it in place.
+  const fetchImpl = async () => { calls++; writeFileSync(lock, "other-process"); return answer(200, raw()); };
+  assert.equal((await readUsage({ home, stateDir, now: NOW, fetchImpl })).source, "live");
+  assert.equal(readFileSync(lock, "utf8"), "other-process");
+  // That lock is now old: two reads started together take it over once, and one reads.
+  const { utimesSync } = await import("node:fs");
+  const past = new Date(Date.now() - 60000);
+  utimesSync(lock, past, past);
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const slow = async () => { calls++; await gate; return answer(200, raw()); };
+  const later = NOW + RULES.cacheMs + 1;
+  const first = readUsage({ home, stateDir, now: later, fetchImpl: slow });
+  const second = await readUsage({ home, stateDir, now: later, fetchImpl: slow });
+  assert.equal(second.source, "stale", "the second process uses the saved reading");
+  release();
+  assert.equal((await first).source, "live");
+  assert.equal(calls, 2);
+  assert.ok(!existsSync(lock), "the owner removed its own lock");
+  assert.deepEqual(readdirSync(stateDir).filter((n) => n.includes("takeover")), [], "no gate file is left");
+});
+
+test("readUsage: a takeover gate left by a dead process does not block the takeover for good", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  mkdirSync(stateDir, { recursive: true });
+  seedHome(home);
+  const { utimesSync } = await import("node:fs");
+  const { createHash } = await import("node:crypto");
+  const lock = join(stateDir, "usage.lock");
+  const gate = `${lock}.takeover-${createHash("sha256").update("dead-process").digest("hex").slice(0, 16)}`;
+  const past = new Date(Date.now() - 60000);
+  writeFileSync(lock, "dead-process");
+  utimesSync(lock, past, past);
+  writeFileSync(gate, "dead-taker");
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return answer(200, raw()); };
+  // A gate that is fresh belongs to a takeover in progress: this read stands back.
+  assert.match((await readUsage({ home, stateDir, now: NOW, fetchImpl })).error, /in progress/);
+  assert.equal(calls, 0);
+  // The same gate, old: it is cleared and the takeover goes through.
+  utimesSync(gate, past, past);
+  assert.equal((await readUsage({ home, stateDir, now: NOW, fetchImpl })).source, "live");
+  assert.equal(calls, 1);
+  assert.deepEqual(readdirSync(stateDir).filter((n) => n.includes("takeover") || n === "usage.lock"), []);
+});
+
 test("readUsage: no sign-in, or an answer it cannot read, is an error and never a reading", async (t) => {
   const home = tmp(t);
   const none = await readUsage({ home, stateDir: join(home, "state"), now: NOW, fetchImpl: async () => { throw new Error("must not be called"); } });
@@ -366,6 +419,13 @@ test("hook: a session start gets the advice and no usage figures, times or count
   assert.doesNotMatch(text, /\d+%|\d{1,2}:\d{2}|week|share|pace|Banked|g9|expires/);
 });
 
+test("advice: with a shared limit spent, nothing runs until the reset is redeemed", () => {
+  const sess = grant({ id: "s1", gives_back_weekly: false, type: "session", clears: ["five_hour"] });
+  assert.equal(advice(pick({ session: 100, grants: [sess] })), "Model budget: a banked session reset is worth using now: ask the owner to redeem it, and until then nothing runs: stop at a safe point; after it, use Fable 5.2 high.");
+  const weekly = grant({ id: "w1", gives_back_weekly: false, type: "weekly" });
+  assert.match(advice(pick({ week: 99, fable: 100, grants: [weekly] })), /until then nothing runs: stop at a safe point/);
+});
+
 test("advice names the action only", () => {
   assert.equal(advice(pick()), "Model budget: use Fable 5.2 high.");
   assert.equal(advice(pick({ fable: 70 })), "Model budget: use Opus 5.5 high.");
@@ -393,6 +453,30 @@ test("hook: a subagent's event is not told and does not use up the change", (t) 
   assert.equal(sub.stdout, "");
   const main = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-6" }, { cache: spent });
   assert.match(main.context.additionalContext, /^Model budget changed\./);
+});
+
+test("hook: a session told to use Opus until a reset is redeemed is told to stop when the limit is spent", (t) => {
+  const home = tmp(t);
+  const weekly = grant({ id: "w1", gives_back_weekly: false, type: "weekly" });
+  const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-8" }, { cache: live({ week: 96, fable: 100, grants: [weekly] }) });
+  assert.match(start.context.additionalContext, /until then use Opus 5\.5 high/);
+  const spent = live({ week: 99, fable: 100, grants: [weekly] });
+  const told = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-8" }, { cache: spent });
+  assert.match(told.context.additionalContext, /^Model budget changed\. .*until then nothing runs: stop at a safe point/);
+  const again = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-8" }, { cache: spent });
+  assert.equal(again.stdout, "");
+});
+
+test("hook: when a session's saved reading goes stale it says unknown once", (t) => {
+  const home = tmp(t);
+  runHook(home, { hook_event_name: "SessionStart", session_id: "s-7" });
+  const old = Date.now() - RULES.staleMs - 1000;
+  const stale = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-7" }, { cachedAt: old });
+  assert.equal(stale.context.additionalContext, "Model budget: unknown. Keep this thread's model.");
+  const again = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-7" }, { cachedAt: old });
+  assert.equal(again.stdout, "");
+  const back = runHook(home, { hook_event_name: "UserPromptSubmit", session_id: "s-7" });
+  assert.match(back.context.additionalContext, /^Model budget changed. Model budget: use /);
 });
 
 test("hook: a session it has not seen gets the line on its first event", (t) => {
