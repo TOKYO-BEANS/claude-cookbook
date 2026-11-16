@@ -19,6 +19,11 @@
 // - Nothing starts while the plan cannot be read, while something could bill past it, or
 //   past the limits. "BOAT-RUN: not started: <why>" and exit 75, a code commands rarely
 //   use; otherwise the exit code is the command's own.
+// - A run takes its place among this PC's runs first and asks boat after. boat's count of
+//   sandboxes and the runs here that have none yet are counted together, so runs that
+//   arrive together cannot each see room beside sandboxes started elsewhere.
+// - `boat limits` and `boat delete` get 60 seconds. A hung `limits` is "no result"; a hung
+//   `delete` is a sandbox that may still exist.
 // - boat deletes the sandbox when the command ends, a timeout included, and says so on its
 //   last line. A run that ends without that line gets its sandbox deleted here, or a
 //   warning when that cannot be done.
@@ -69,9 +74,12 @@ export function parseArgs(argv) {
 
 const count = (v) => typeof v === "number" && Number.isFinite(v) && v >= 0;
 
-// null when the run may start, else the reason it may not. `plan` is `boat limits --json`.
-export function gate(run, plan) {
+// null when the run may start, else the reason it may not. `plan` is `boat limits --json`,
+// read once this run holds its place; `waiting` is how many other runs from this PC hold a
+// place and have no sandbox yet (takeSlot).
+export function gate(run, plan, waiting = 0) {
   const p = plan;
+  if (!count(waiting)) return "no result (the count of runs under way could not be read)";
   if (!p || typeof p !== "object" || !count(p.activeSandboxes) || !count(p.subscriptionQuotaSeconds) || !count(p.subscriptionRemainingSeconds)
     || typeof p.keepGoing?.enabled !== "boolean" || !count(p.wallet?.balanceDollars) || typeof p.canStart !== "boolean") {
     return "no result (the plan could not be read from boat limits)";
@@ -83,7 +91,13 @@ export function gate(run, plan) {
   if (cost > LIMITS.runSeconds) {
     return `one run takes at most ${LIMITS.runSeconds} seconds of the plan's time (${run.type}: a timeout of ${Math.floor(LIMITS.runSeconds / RATE[run.type])}); more needs the owner's yes`;
   }
-  if (p.activeSandboxes >= LIMITS.active) return `${LIMITS.active} sandboxes are running already; more at once needs the owner's yes`;
+  // boat counts a sandbox once it exists. A run that holds a place and has none yet is not
+  // in that figure, so the two are counted together: runs that arrive together beside
+  // sandboxes started elsewhere would otherwise each see room.
+  if (p.activeSandboxes + waiting >= LIMITS.active) {
+    if (waiting === 0) return `${LIMITS.active} sandboxes are running already; more at once needs the owner's yes`;
+    return `${p.activeSandboxes} sandboxes are running and ${waiting} more ${waiting === 1 ? "is" : "are"} about to start from this PC: ${LIMITS.active} at once is the most; more needs the owner's yes`;
+  }
   // boat's figure does not yet hold what the runs under way will take: count every other
   // place as taken by a run of the full hour.
   const underWay = (LIMITS.active - 1) * LIMITS.runSeconds;
@@ -188,23 +202,42 @@ function scanCopy(dir, tmp) {
 // first and counts the others after: two that arrive together at the last place may both be
 // refused, and never both pass. Names are never reused, so clearing a dead run's file
 // cannot remove a live one's.
+// `waiting` is how many of the others have no sandbox yet, counted at the same moment: boat's
+// own count does not hold them, so the gate adds them to it. A run calls `up` when boat has
+// said its sandbox is ready; from then on it is in boat's count and its file says so. A run
+// seen in both for a moment is counted twice, never left out.
+const UP = ".up";
 export function takeSlot(dir, { pid = process.pid, alive = isAlive, max = LIMITS.active, token = randomUUID() } = {}) {
   mkdirSync(dir, { recursive: true });
   const mine = `run-${pid}-${token}`;
-  writeFileSync(join(dir, mine), "", { flag: "wx" });
+  const file = join(dir, mine);
+  writeFileSync(file, "", { flag: "wx" });
   let others = 0;
+  let waiting = 0;
   for (const name of readdirSync(dir)) {
     const holder = /^run-([1-9][0-9]*)-/.exec(name);
     if (!holder || name === mine) continue;
-    if (alive(Number(holder[1]))) others += 1;
-    else rmSync(join(dir, name), { force: true });
+    if (!alive(Number(holder[1]))) {
+      rmSync(join(dir, name), { force: true });
+      continue;
+    }
+    others += 1;
+    if (!name.endsWith(UP)) waiting += 1;
   }
-  const release = () => rmSync(join(dir, mine), { force: true });
+  const release = () => {
+    rmSync(file, { force: true });
+    rmSync(file + UP, { force: true });
+  };
   if (others >= max) {
     release();
     return null;
   }
-  return { file: join(dir, mine), release };
+  const up = () => {
+    try {
+      renameSync(file, file + UP);
+    } catch { /* not renamed: the run stays counted as waiting, the safe side */ }
+  };
+  return { file, waiting, up, release };
 }
 
 // How a repository is named on the upload list: its origin without the scheme, the user
@@ -279,9 +312,31 @@ function boatCommand(argv) {
   return { file: local ? process.execPath : "boat", args: local ? [key, "boat", "BOAT_API_KEY", exe, ...argv] : argv, env: { ...process.env, BOAT_NO_UPDATE: "1" } };
 }
 
+// A boat call that only asks or deletes answers in a second or two. One that hangs would
+// hold the run, and its place, for good: it is ended after this long.
+export const CALL_SECONDS = 60;
+
+export function call(file, args, options = {}, ms = CALL_SECONDS * 1000) {
+  return spawnSync(file, args, { ...options, timeout: ms, killSignal: "SIGKILL" });
+}
+
 function boat(argv, options) {
   const c = boatCommand(argv);
-  return spawnSync(c.file, c.args, { ...options, env: c.env });
+  return call(c.file, c.args, { ...options, env: c.env });
+}
+
+// `boat limits --json`, or an error: no answer in time is no result, like any other failure.
+export function readLimits(ask = boat) {
+  const r = ask(["limits", "--json"], { encoding: "utf8" });
+  if (r.error?.code === "ETIMEDOUT") throw new Error("boat limits did not answer in time");
+  if (r.error || r.status !== 0) throw new Error(`boat limits ${r.error ? "did not run" : `exit ${r.status}`}`);
+  return JSON.parse(r.stdout);
+}
+
+// True only when boat said the sandbox is deleted: a call that failed or hung may have left it.
+export function removeSandbox(id, ask = boat) {
+  const r = ask(["delete", id, "--yes"], { encoding: "utf8" });
+  return !r.error && r.status === 0;
 }
 
 // What boat's own lines say about a run: the sandbox's id from the "ready" line, which
@@ -296,17 +351,25 @@ export function runEnd(head, tail) {
   return { id, deleted: Boolean(gone) && (id === null || gone[1] === id) };
 }
 
-// boat run with its output passed on as it comes; boat's own lines are on stderr.
-function boatRun(argv) {
+// boat run with its output passed on as it comes; boat's own lines are on stderr. `ready`
+// is called once, when boat's "ready" line has come: the sandbox exists from then on.
+function boatRun(argv, ready = () => {}) {
   return new Promise((done, failed) => {
     const c = boatCommand(argv);
     const child = spawn(c.file, c.args, { env: c.env, stdio: ["inherit", "inherit", "pipe"] });
     let head = "";
     let tail = "";
+    let told = false;
     child.stderr.on("data", (chunk) => {
       process.stderr.write(chunk);
       const text = chunk.toString("latin1");
-      if (head.length < 2000) head += text.slice(0, 2000 - head.length);
+      if (head.length < 2000) {
+        head += text.slice(0, 2000 - head.length);
+        if (!told && runEnd(head, "").id !== null) {
+          told = true;
+          ready();
+        }
+      }
       tail = (tail + text).slice(-4000);
     });
     child.on("error", () => failed(new Error("boat did not run")));
@@ -320,11 +383,7 @@ export const STATE = join(homedir(), ".local", "share", "boat-run");
 export const UPLOAD_LIST = join(STATE, "upload-allowed.txt");
 
 const REAL = {
-  limits: () => {
-    const r = boat(["limits", "--json"], { encoding: "utf8" });
-    if (r.error || r.status !== 0) throw new Error(`boat limits ${r.error ? "did not run" : `exit ${r.status}`}`);
-    return JSON.parse(r.stdout);
-  },
+  limits: () => readLimits(),
   slot: () => takeSlot(join(STATE, "slots")),
   permit: (folder) => {
     const key = repoKey(folder);
@@ -339,10 +398,7 @@ const REAL = {
   dataFiles,
   scan,
   boat: boatRun,
-  remove: (id) => {
-    const r = boat(["delete", id, "--yes"], { encoding: "utf8" });
-    return !r.error && r.status === 0;
-  },
+  remove: (id) => removeSandbox(id),
   say: (line) => console.error(line),
 };
 
@@ -353,14 +409,8 @@ export async function main(argv, deps = REAL) {
   };
   const run = parseArgs(argv);
   if (run.error) return stop(run.error);
-  let plan;
-  try {
-    plan = deps.limits();
-  } catch (e) {
-    return stop(`no result (${oneLine(e?.message)})`);
-  }
-  const refusal = gate(run, plan);
-  if (refusal) return stop(refusal);
+  // The place first, boat's count after: a run that asked boat before it held a place could
+  // pass beside others that had asked at the same moment.
   let slot;
   try {
     slot = deps.slot();
@@ -370,6 +420,14 @@ export async function main(argv, deps = REAL) {
   if (!slot) return stop(`${LIMITS.active} runs from this PC are under way; more at once needs the owner's yes`);
   let staged = null;
   try {
+    let plan;
+    try {
+      plan = deps.limits();
+    } catch (e) {
+      return stop(`no result (${oneLine(e?.message)})`);
+    }
+    const refusal = gate(run, plan, slot.waiting);
+    if (refusal) return stop(refusal);
     if (run.push !== null) {
       const permit = deps.permit(run.push);
       if (!permit.ok) {
@@ -386,7 +444,7 @@ export async function main(argv, deps = REAL) {
       const result = deps.scan(staged.dir, staged.tmp);
       if (!result.ok) return stop(`the secret scan of the upload: ${result.reason}`);
     }
-    const end = await deps.boat(boatArgv(run, staged ? staged.dir : null));
+    const end = await deps.boat(boatArgv(run, staged ? staged.dir : null), () => slot.up());
     if (!end.deleted) {
       const id = end.id ? oneLine(end.id) : null;
       if (id && deps.remove(id)) deps.say(`BOAT-RUN: boat did not say the sandbox was deleted: ${id} is deleted now`);

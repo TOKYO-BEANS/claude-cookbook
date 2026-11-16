@@ -8,7 +8,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { DATA_SHAPED, LIMITS, NOT_STARTED, boatArgv, dataFiles, gate, listEntry, main, normalKey, onList, parseArgs, repoKey, runEnd, scan, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
+import { CALL_SECONDS, DATA_SHAPED, LIMITS, NOT_STARTED, boatArgv, call, dataFiles, gate, readLimits, removeSandbox, listEntry, main, normalKey, onList, parseArgs, repoKey, runEnd, scan, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
 // The plan as `boat limits --json` printed it on 16 November 2026, without the unused keys.
 const plan = (over = {}) => ({
@@ -57,6 +57,17 @@ test("at most ten sandboxes at once", async () => {
   assert.equal(LIMITS.active, 10);
   assert.equal(gate(args("--timeout", "60", "--", "x"), plan({ activeSandboxes: 9 })), null);
   assert.match(gate(args("--timeout", "60", "--", "x"), plan({ activeSandboxes: 10 })), /10 sandboxes/);
+});
+
+test("boat's count and the runs from this PC that have no sandbox yet are counted together", async () => {
+  const run = args("--timeout", "60", "--", "x");
+  assert.equal(gate(run, plan({ activeSandboxes: 9 }), 0), null);
+  assert.match(gate(run, plan({ activeSandboxes: 9 }), 1), /^9 sandboxes are running and 1 more is about to start from this PC: 10 at once is the most; more needs the owner's yes$/);
+  assert.equal(gate(run, plan({ activeSandboxes: 4 }), 5), null);
+  assert.match(gate(run, plan({ activeSandboxes: 5 }), 5), /^5 sandboxes are running and 5 more are about to start/);
+  assert.equal(gate(run, plan(), 9), null);
+  // A count that is not a count is no result, never "nobody else".
+  for (const broken of [null, NaN, -1, "2"]) assert.match(gate(run, plan(), broken), /no result/);
 });
 
 test("a fifth of the month's time is kept back for the vetting step, with the other nine places counted as full", async () => {
@@ -283,6 +294,34 @@ test("two runs that arrive together at the last place: never both pass", async (
   }
 });
 
+test("a place tells how many other runs have no sandbox yet; one whose sandbox is ready is in boat's count", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "boat-run-slots-"));
+  try {
+    const live = new Set([301, 302, 303, 304]);
+    const take = (pid, max) => takeSlot(dir, { pid, alive: (p) => live.has(p), max });
+    const a = take(301);
+    assert.equal(a.waiting, 0);
+    const b = take(302);
+    assert.equal(b.waiting, 1);
+    a.up();
+    a.up(); // a second time changes nothing
+    assert.equal(listed(dir).filter((n) => n.startsWith("run-301-")).length, 1);
+    const c = take(303);
+    assert.equal(c.waiting, 1, "only the run without a sandbox");
+    // It still holds its place: the count of runs from this PC is unchanged.
+    assert.equal(take(304, 3), null);
+    a.release();
+    assert.ok(!listed(dir).some((n) => n.startsWith("run-301-")), "released after its sandbox was ready");
+    // A run that died with its sandbox ready leaves nothing behind either.
+    b.up();
+    live.delete(302);
+    assert.equal(take(304).waiting, 1);
+    assert.ok(!listed(dir).some((n) => n.startsWith("run-302-")));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the upload list names a repository by its origin, in one spelling", async () => {
   for (const url of ["https://github.com/Some-Org/Shop.git", "git@github.com:Some-Org/Shop.git", "ssh://git@github.com/some-org/shop", "https://user:pass@github.com/some-org/shop/", " github.com/some-org/shop "]) {
     assert.equal(normalKey(url), "github.com/some-org/shop", url);
@@ -357,7 +396,7 @@ function world(over = {}) {
   const released = [];
   const deps = {
     limits: () => plan(),
-    slot: () => ({ release: () => released.push("slot") }),
+    slot: () => ({ waiting: 0, up: () => calls.push(["up"]), release: () => released.push("slot") }),
     permit: (folder) => { calls.push(["permit", folder]); return { ok: true, key: "github.com/some-org/shop", list: "/state/upload-allowed.txt", data: ["fixtures/prices.csv"] }; },
     dataFiles: (dir) => { calls.push(["data", dir]); return ["fixtures/prices.csv"]; },
     stage: (folder) => { calls.push(["stage", folder]); return { dir: "/tmp/s/shop", remove: () => removed.push("/tmp/s/shop") }; },
@@ -399,12 +438,119 @@ test("a refused gate or bad arguments start nothing, and say why on one line", a
   assert.equal(await main(["--timeout", "120", "--push", ".", "--", "npm", "test"], full.deps), NOT_STARTED);
   assert.deepEqual(full.calls, []);
   assert.match(full.out.join("\n"), /^BOAT-RUN: not started: 10 sandboxes/);
+  assert.deepEqual(full.released, ["slot"]);
   const bad = world();
   assert.equal(await main(["--", "npm", "test"], bad.deps), NOT_STARTED);
   assert.deepEqual(bad.calls, []);
+  assert.deepEqual(bad.released, [], "bad arguments take no place");
   const unread = world({ limits: () => { throw new Error("boat limits answered 401"); } });
   assert.equal(await main(["--timeout", "120", "--", "x"], unread.deps), NOT_STARTED);
   assert.match(unread.out.join("\n"), /no result/);
+  assert.deepEqual(unread.released, ["slot"]);
+});
+
+test("the place is taken first and boat is asked after: the count of the others goes to the gate", async () => {
+  const order = [];
+  const w = world({
+    slot: () => { order.push("slot"); return { waiting: 3, up: () => order.push("up"), release: () => order.push("release") }; },
+    limits: () => { order.push("limits"); return plan({ activeSandboxes: 7 }); },
+  });
+  assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);
+  assert.deepEqual(order, ["slot", "limits", "release"]);
+  assert.deepEqual(w.out, ["BOAT-RUN: not started: 7 sandboxes are running and 3 more are about to start from this PC: 10 at once is the most; more needs the owner's yes"]);
+  // With no place free, boat is not asked at all.
+  const none = world({ slot: () => null, limits: () => { throw new Error("not asked"); } });
+  assert.equal(await main(["--timeout", "120", "--", "x"], none.deps), NOT_STARTED);
+  assert.match(none.out.join("\n"), /10 runs from this PC/);
+});
+
+test("a run marks its place when boat says its sandbox is ready, and not before", async () => {
+  const quiet = world();
+  assert.equal(await main(["--timeout", "120", "--", "x"], quiet.deps), 0);
+  assert.ok(!quiet.calls.some((c) => c[0] === "up"), "a boat that never said 'ready' leaves the place as it was");
+  const w = world({ boat: async (argv, ready) => { w.calls.push(["boat"]); ready(); return { code: 0, id: "bx_1abcd", deleted: true }; } });
+  assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), 0);
+  assert.deepEqual(w.calls, [["boat"], ["up"]]);
+});
+
+test("nine sandboxes from elsewhere and two runs that arrive together: never both start", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "boat-run-slots-"));
+  try {
+    const argv = ["--timeout", "120", "--", "x"];
+    const started = [];
+    const arrival = (pid, over = {}) => world({
+      slot: () => takeSlot(dir, { pid, alive: () => true }),
+      limits: () => plan({ activeSandboxes: 9 }),
+      boat: async () => { started.push(pid); return { code: 0, id: "bx_1abcd", deleted: true }; },
+      ...over,
+    });
+    // The second run arrives while the first is asking boat: each has read "9" before
+    // either has a sandbox.
+    const second = arrival(402);
+    let other;
+    const first = arrival(401, { limits: () => { other = main(argv, second.deps); return plan({ activeSandboxes: 9 }); } });
+    const codes = [await main(argv, first.deps), await other];
+    assert.deepEqual(started, [401]);
+    assert.deepEqual(codes, [0, NOT_STARTED]);
+    assert.deepEqual(second.out, ["BOAT-RUN: not started: 9 sandboxes are running and 1 more is about to start from this PC: 10 at once is the most; more needs the owner's yes"]);
+    assert.deepEqual(listed(dir), [], "both places are free again");
+
+    // A run whose sandbox is ready is in boat's figure, and is not counted a second time:
+    // eight from elsewhere and this PC's one make nine, and the next run starts.
+    const during = [];
+    const next = (pid, tell) => arrival(pid, {
+      limits: () => plan({ activeSandboxes: 8 }),
+      boat: async (_, ready) => {
+        started.push(pid);
+        if (tell) ready();
+        during.push(await main(argv, arrival(pid + 1).deps));
+        return { code: 0, id: "bx_1abcd", deleted: true };
+      },
+    });
+    assert.equal(await main(argv, next(411, true).deps), 0);
+    assert.deepEqual(during, [0]);
+    // Until boat has said "ready" the run counts beside boat's figure: the safe side.
+    assert.equal(await main(argv, next(421, false).deps), 0);
+    assert.deepEqual(during, [0, NOT_STARTED]);
+    assert.deepEqual(started, [401, 411, 412, 421]);
+    assert.deepEqual(listed(dir), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a boat call that only asks or deletes gets 60 seconds: a hung one is ended", async () => {
+  assert.equal(CALL_SECONDS, 60);
+  const began = Date.now();
+  const hung = call(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { encoding: "utf8" }, 300);
+  assert.equal(hung.error?.code, "ETIMEDOUT");
+  assert.ok(Date.now() - began < 30000, "the call came back");
+  const fine = call(process.execPath, ["-e", "console.log('{}')"], { encoding: "utf8" }, 30000);
+  assert.equal(fine.status, 0);
+  assert.equal(fine.stdout.trim(), "{}");
+});
+
+test("boat limits that hangs is no result; a delete that hangs is a sandbox that may still exist", async () => {
+  const asked = [];
+  const hung = (argv, options) => { asked.push(argv); return call(process.execPath, ["-e", "setInterval(() => {}, 1000)"], options, 300); };
+  assert.throws(() => readLimits(hung), /^Error: boat limits did not answer in time$/);
+  assert.equal(removeSandbox("bx_65a9cwb2", hung), false);
+  assert.deepEqual(asked, [["limits", "--json"], ["delete", "bx_65a9cwb2", "--yes"]]);
+  const unread = world({ limits: () => readLimits(hung) });
+  assert.equal(await main(["--timeout", "120", "--", "x"], unread.deps), NOT_STARTED);
+  assert.deepEqual(unread.out, ["BOAT-RUN: not started: no result (boat limits did not answer in time)"]);
+  assert.deepEqual(unread.calls, []);
+  assert.deepEqual(unread.released, ["slot"], "the place is not held by a call that hung");
+  const stuck = world({ boat: async () => ({ code: 1, id: "bx_65a9cwb2", deleted: false }), remove: (id) => removeSandbox(id, hung) });
+  assert.equal(await main(["--timeout", "120", "--", "x"], stuck.deps), 1);
+  assert.deepEqual(stuck.out, ["BOAT-RUN: the sandbox bx_65a9cwb2 may still exist: run 'boat list' and delete what this run left"]);
+  assert.deepEqual(stuck.released, ["slot"]);
+  // An answer in time is read as before.
+  assert.deepEqual(readLimits(() => ({ status: 0, stdout: '{"canStart":true}' })), { canStart: true });
+  assert.throws(() => readLimits(() => ({ status: 1, stdout: "" })), /boat limits exit 1/);
+  assert.throws(() => readLimits(() => ({ error: new Error("ENOENT"), status: null })), /boat limits did not run/);
+  assert.equal(removeSandbox("bx_65a9cwb2", () => ({ status: 0 })), true);
+  assert.equal(removeSandbox("bx_65a9cwb2", () => ({ status: 1 })), false);
 });
 
 test("the staged copy is removed and the slot released when boat itself fails to start", async () => {

@@ -1,22 +1,22 @@
 # Cloud sandboxes (boat)
 
-boat (boat.dev): full Ubuntu virtual machines started from the `boat` CLI, on the owner's paid
-plan since 16 November 2026. No plugin, no MCP server and no skill pack: the CLI is enough.
+boat (boat.dev): Ubuntu virtual machines from the `boat` CLI, on the owner's paid plan since
+16 November 2026. No plugin, MCP server or skill pack: the CLI is enough.
 
 - **Use it by default** for whatever should not, or need not, run on this PC:
   - outside code before an install: a fixed step of every vetting, with its own fixed
     command ([vetting-sandbox.md](vetting-sandbox.md));
   - a repository's tests before a push, on Linux, where CI runs them, in seconds;
   - a failure that shows only on Linux or only in CI, and a Linux-only tool;
-  - a long build, test run or batch, and work that splits: one sandbox per part, side by side.
+  - a long build, test run or batch, and work that splits: one sandbox per part.
   A repository's required checks stay on Depot CI. Hosting stays on Cloudflare.
 - **Every job goes through the script:** `node <this skill's folder>/scripts/boat-run.mjs
   [--type small|default|large] --timeout <seconds> [--push <folder>] -- <command>`.
   It starts a sandbox without the account's stored secrets, runs the command, prints its
-  output and cost, and deletes the sandbox. The exit code is the command's.
+  output and cost, and deletes it. The exit code is the command's.
   `BOAT-RUN: not started: <why>` and exit 75 mean nothing ran: report that, and never go
-  around it with `boat run`. `BOAT-RUN: the sandbox may still exist` means: `boat list`,
-  and delete what that run left.
+  around it with `boat run`; only "did not answer in time" is run again, once.
+  `BOAT-RUN: the sandbox may still exist` means: `boat list`, and delete what that run left.
 - **An upload is a scanned copy of a listed repository.** `--push` sends the files git
   tracks, with their uncommitted edits, and never an untracked file. Gitleaks reads the copy
   first: a finding, or a scan with no result, stops the run, and a finding goes to the owner.

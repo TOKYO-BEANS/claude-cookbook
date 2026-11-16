@@ -32,7 +32,7 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   behaviour); a run on this PC or in WSL (that is the machine being protected).
 - **Visual check of a live site: the site's own script.** The repository's Playwright (its
   own dependency, like a test runner) and a plain Chromium take the pictures; a Claude API request on another model than the builder's
-  judges them. Built for wecarestudio.dk on 15 November 2026. Weighed for the pictures, on
+  judges them. Built for the first site on 15 November 2026. Weighed for the pictures, on
   the same four screenshots: the `browse` CLI and Stagehand (a cloud browser cannot reach a
   local build, and neither emulates a phone) and the built-in browser (a model call per
   step, the visible window only). Weighed for the judge: TypeSafe / Jev (a typed probability
