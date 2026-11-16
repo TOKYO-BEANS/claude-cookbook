@@ -42,7 +42,12 @@ try {
     let text = "";
     // Only the advice goes into the session: no usage figures, times, counts or error text.
     if (!r.usage) {
-      if (event === "SessionStart") text = "Model budget: unknown. Keep this thread's model.";
+      // Said at a session start, and once when a session's saved reading goes stale.
+      if (event === "SessionStart" || seen !== "unknown") {
+        text = "Model budget: unknown. Keep this thread's model.";
+        mkdirSync(sessions, { recursive: true });
+        writeFileSync(seenFile, JSON.stringify({ key: "unknown", at: now }));
+      }
     } else {
       const d = decide(r.usage, now);
       const key = [d.model, d.redeem?.id ?? "", d.wait?.until ?? ""].join("|");

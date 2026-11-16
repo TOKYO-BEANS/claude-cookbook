@@ -1,5 +1,19 @@
 # Handoff
 
+## 16 November 2026 (afternoon): model budget follow-up (0.35.1)
+
+**Why.** The low findings of #67's AI review, moved here under the review-round budget.
+
+**What changed.** The usage lock holds its owner's mark and only the owner removes it; a dead
+lock is taken over through a gate file created with `wx`, so one process wins. With a limit
+every model shares spent, the advice for a reset says to stop at a safe point, not to use
+Opus. A session whose saved reading is over an hour old is told "unknown" once.
+
+**Verification.** 44 tests in `scripts/model-budget.test.mjs`. #67 merged as `f8be85b`, release
+event `verified` (execution 1557); plugin 0.35.0 installed. Its first live read answered 429
+(T3 Code reads the same endpoint with the same sign-in), and the hook said "unknown" as
+designed.
+
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 
 **Why.** The plan has one weekly limit and a Fable limit inside it (Fable may take half the
