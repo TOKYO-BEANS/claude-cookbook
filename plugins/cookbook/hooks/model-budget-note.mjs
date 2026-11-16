@@ -2,10 +2,10 @@
 // Hook of the Cookbook plugin (SessionStart, UserPromptSubmit, PostToolUse): tells a session
 // which model the budget asks for, and nothing about the account's usage (the figures are
 // printed only when the script is run). A session start gets the advice; later events are silent
-// until the advice changes, so a long turn hears it while it can still switch. It uses a saved
-// reading (T3 Code's, or the script's own); only a session start with neither may read over the
-// network. It writes only its own state folder, and never fails a session: any error ends in
-// silence and exit code 0.
+// until the advice changes, so a long turn hears it while it can still switch. Only a session
+// start may read over the network (one read per ten minutes for all sessions); every other
+// event uses a saved reading, the script's own or T3 Code's. It writes only its own state
+// folder, and never fails a session: any error ends in silence and exit code 0.
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";

@@ -25,7 +25,8 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
 - **T3 Code's saved reading.** `~/.t3/caches/claudeAgent.json`, key `usageLimits`: `windows`
   (`seven_day`, `seven_day_fable`, `five_hour` when open, `monthly_spend` when credits are on),
   `resetCredits.options` when resets are banked, `unavailable` when its probe failed. Rewritten
-  every minute and not signed: the script checks every value and stores none. Its figures
+  every minute and not signed: the script uses it only when it has no signed reading and
+  cannot read one, checks every value and stores none. Its figures
   trailed a direct read by one and two points while `checkedAt` was seconds old: `checkedAt`
   is when T3 Code asked, not the age of the figures.
 - **A thread switches itself.** `t3_thread_configure` then `t3_thread_send` with `queue`: the

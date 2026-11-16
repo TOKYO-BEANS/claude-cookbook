@@ -369,43 +369,51 @@ test("parseT3: a file that is odd in any way is no reading", () => {
   assert.deepEqual(r.usage.grants.map((g) => g.id), ["ok-1"]);
 });
 
-test("readUsage takes T3 Code's saved reading when it is fresh: nothing over the network, nothing stored", async (t) => {
+test("readUsage: a signed reading always comes before T3 Code's, which stands in only when there is none", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   seedHome(home);
   seedT3(home, t3());
-  for (const cacheOnly of [false, true]) {
-    const r = await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly });
-    assert.equal(r.source, "t3");
-    assert.equal(r.at, NOW - 60000);
-    assert.equal(r.usage.fable.used, 69);
-  }
-  assert.ok(!existsSync(stateDir), "T3 Code's reading is never copied into the signed cache");
-  // The script's own fresh reading, signed, comes first.
-  mkdirSync(stateDir, { recursive: true });
-  writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at: NOW - 5000, usage: parseUsage(raw()) }));
-  const own = await readUsage({ home, stateDir, now: NOW, fetchImpl: never });
+  // A prompt or a tool event: no network, so T3 Code's reading stands in.
+  const quiet = await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true });
+  assert.equal(quiet.source, "t3");
+  assert.equal(quiet.at, NOW - 60000);
+  assert.equal(quiet.usage.fable.used, 69);
+  assert.ok(!existsSync(stateDir), "T3 Code's reading is never copied into the signed files");
+  // A session start reads first, however fresh T3 Code's reading is; a 429 leaves T3 Code's.
+  let calls = 0;
+  const limited = await readUsage({ home, stateDir, now: NOW, fetchImpl: async () => { calls++; return answer(429, {}); } });
+  assert.equal(limited.source, "t3");
+  assert.equal(calls, 1);
+  assert.deepEqual(readdirSync(stateDir), ["usage-tried.json"]);
+  const paused = await readUsage({ home, stateDir, now: NOW + RULES.retryMs - 1, fetchImpl: never });
+  assert.equal(paused.source, "t3", "no second read inside the pause");
+  // A read that gets through is signed and wins, for as long as it is fresh.
+  const live1 = await readUsage({ home, stateDir, now: NOW + RULES.retryMs + 1, fetchImpl: async () => answer(200, raw()) });
+  assert.equal(live1.source, "live");
+  seedT3(home, t3({ checkedAt: NOW + RULES.retryMs + 2000 }));
+  const own = await readUsage({ home, stateDir, now: NOW + RULES.retryMs + 5000, fetchImpl: never, cacheOnly: true });
   assert.equal(own.source, "cache");
   assert.equal(own.usage.week.used, 37);
 });
 
-test("readUsage: T3 Code's reading over ten minutes old means a read at a session start, and stale without one", async (t) => {
+test("readUsage: with no fresh signed reading the newer of the two saved ones stands in, under an hour old", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
+  mkdirSync(stateDir, { recursive: true });
   seedHome(home);
-  seedT3(home, t3({ checkedAt: NOW - RULES.cacheMs - 1 }));
-  const quiet = await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true });
-  assert.equal(quiet.source, "stale");
-  assert.equal(quiet.usage.week.used, 43);
-  let calls = 0;
-  const limited = await readUsage({ home, stateDir, now: NOW, fetchImpl: async () => { calls++; return answer(429, {}); } });
-  assert.equal(limited.source, "stale", "a 429 falls back to T3 Code's reading while it is under an hour old");
-  assert.equal(calls, 1);
-  const live1 = await readUsage({ home, stateDir, now: NOW + RULES.retryMs + 1, fetchImpl: async () => answer(200, raw()) });
-  assert.equal(live1.source, "live");
+  const sign = (at) => writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at, usage: parseUsage(raw()) }));
+  const read = () => readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true });
+  sign(NOW - 20 * 60000);
+  seedT3(home, t3({ checkedAt: NOW - 30 * 60000 }));
+  assert.equal((await read()).source, "stale", "the script's own older reading is the newer one");
+  seedT3(home, t3({ checkedAt: NOW - 15 * 60000 }));
+  assert.equal((await read()).source, "t3");
+  sign(NOW - RULES.staleMs - 1);
   seedT3(home, t3({ checkedAt: NOW - RULES.staleMs - 1 }));
-  const gone = await readUsage({ home, stateDir: join(home, "state2"), now: NOW, fetchImpl: never, cacheOnly: true });
+  const gone = await read();
   assert.equal(gone.usage, undefined);
+  assert.match(gone.error, /no fresh reading/);
 });
 
 test("readUsage: a T3 Code file that is broken, changed or far too large is ignored", async (t) => {
@@ -603,9 +611,18 @@ test("the script prints the line, and --json the reading and the decision", (t) 
   assert.match(none.stdout, /^Model budget: unknown/);
 });
 
-test("hook: T3 Code's saved reading serves every event, with no read of its own and no figures", (t) => {
-  const home = tmp(t);
+const seedMark = (home) => {
   const stateDir = join(home, ".local", "share", "model-budget");
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(join(stateDir, "usage-tried.json"), sealCache("tok-secret-1", { tried: Date.now(), error: "the usage read answered 429" }));
+  return stateDir;
+};
+
+// As in normal running: the session start's own read was just answered 429, so nothing here reaches the network.
+test("hook: with its own read refused, T3 Code's saved reading gives every event the advice and no figures", (t) => {
+  const home = tmp(t);
+  seedHome(home, { expiresAt: Date.now() + HOUR });
+  const stateDir = seedMark(home);
   const saved = (fable) => seedT3(home, t3({ fable, checkedAt: Date.now() - 60000, reset: Date.now() + 70 * HOUR }));
   saved(59);
   const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-9" }, { cache: null });
@@ -614,12 +631,13 @@ test("hook: T3 Code's saved reading serves every event, with no read of its own 
   const tool = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-9" }, { cache: null });
   assert.match(tool.context.additionalContext, /^Model budget changed\. Model budget: use Opus 5\.5 high\. /);
   for (const r of [start, tool]) assert.doesNotMatch(r.context.additionalContext, /\d+%|\d{1,2}:\d{2}|week|share|pace|Banked|expires|T3/);
-  assert.deepEqual(readdirSync(stateDir), ["sessions"], "nothing was read over the network or saved");
+  assert.deepEqual(readdirSync(stateDir), ["sessions", "usage-tried.json"], "nothing was read over the network or saved");
 });
 
 test("the script says when the line comes from T3 Code's saved reading", (t) => {
   const home = tmp(t);
   seedHome(home);
+  seedMark(home);
   seedT3(home, t3({ checkedAt: Date.now() - 60000, reset: Date.now() + 70 * HOUR }));
   const env = { ...process.env, USERPROFILE: home, HOME: home };
   const plain = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8", env });

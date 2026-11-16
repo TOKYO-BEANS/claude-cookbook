@@ -9,10 +9,11 @@ Opus 5.5 high, and a script chooses.
   prints the week, the Fable share, the pace, the weekly reset, the model to use and the
   banked resets. The plugin's hook gives every session the advice alone (the model, or a
   reset to ask for), with no figures, at its start, and again as "Model budget changed" when
-  it changes. While T3 Code runs, the reading is T3 Code's own saved one (it can trail by a
-  point or two). With none under ten minutes old, a session start reads the usage over the
-  network and saves it, signed with the sign-in so a changed file is ignored; no other event
-  goes over the network. A session says "unknown" once when no reading is under an hour old.
+  it changes. Only a session start reads the usage over the network, once per ten minutes for
+  all sessions, and saves it signed with the sign-in, so a changed file is ignored. While
+  T3 Code runs that read is mostly refused: T3 Code's own saved reading then stands in (not
+  signed; it can trail by a point or two). A session says "unknown" once when no reading is
+  under an hour old.
   Before a long piece of work, run the script for the figures. Follow the advice: it is
   arithmetic, not a view to weigh. A model the owner names in a message wins over it.
 - **The rules** (`RULES` in the script):

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Which model a thread should run on now, and whether a banked limit reset should be
-// redeemed. It takes the owner's Claude usage (the week, the Fable share, the session
-// window, banked resets) from T3 Code's saved reading while T3 Code runs, and otherwise reads
-// it with the sign-in Claude Code already stores. It applies the fixed rules below: the script
+// redeemed. It reads the owner's Claude usage (the week, the Fable share, the session
+// window, banked resets) with the sign-in Claude Code already stores, and takes T3 Code's
+// saved reading when that read gives nothing. It applies the fixed rules below: the script
 // decides, not a model. It only reads. It never prints or stores the sign-in, calls the one
 // address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
@@ -26,9 +26,9 @@ export const RULES = Object.freeze({
   expiryHours: 12, // a reset this close to its end is redeemed at expiryFloor
   expiryFloor: 50,
   stopAt: 99, // % used: nothing runs
-  cacheMs: 10 * 60000, // a reading serves every session for this long
-  retryMs: 2 * 60000, // pause after a failed read: a read that succeeds closes the endpoint for about this long
-  staleMs: 60 * 60000, // with no fresh reading, one younger than this is used and marked stale
+  cacheMs: 10 * 60000, // a signed reading serves every session for this long
+  retryMs: 10 * 60000, // pause after a failed read: with the line above, one read per ten minutes at most
+  staleMs: 60 * 60000, // with no fresh signed reading, one younger than this stands in
   timeoutMs: 4000,
 });
 
@@ -224,10 +224,10 @@ const readToken = (home) => {
 };
 
 // T3 Code's own saved reading, the one behind its Usage page. T3 Code asks Claude Code for the
-// limits every five minutes and rewrites this file every minute, so while it runs the reading
-// is here and nothing has to go over the network. The file is not signed and T3 Code may
-// change its shape: every value is checked, anything odd means "no reading", nothing from it
-// is stored, and all it can change is which of the fixed lines of advice is said.
+// limits every five minutes and rewrites this file every minute. The file is not signed and
+// T3 Code may change its shape: it is used only when no signed reading can be had, every value
+// is checked, anything odd means "no reading", nothing from it is stored, and all it can
+// change is which of the fixed lines of advice is said.
 const T3_RESETS = { "5-hour reset": "session", "Weekly reset": "weekly", "Fable reset": "fable", "Full reset": "full" };
 const T3_MAX_BYTES = 4000000;
 const T3_AHEAD_MS = 5000;
@@ -273,14 +273,16 @@ const readT3 = (file, now) => {
   return null;
 };
 
-// The reading, from the first of these that has one under ten minutes old: the script's own
-// saved reading, then T3 Code's. Only when neither has one does a read go over the network, and
-// never with cacheOnly. A failure is { error }, or a reading under an hour old marked "stale";
-// it is never a made-up reading and never the cause's text.
+// The reading: the script's own signed one while it is under ten minutes old, else a read over
+// the network (never with cacheOnly, and at most one per ten minutes, failed or not). When that
+// gives nothing, a reading under an hour old stands in: the script's own older one ("stale") or
+// T3 Code's ("t3"), whichever is newer. T3 Code's file is not signed, so it is never taken
+// ahead of a signed reading. A failure is { error }; it is never a made-up reading and never
+// the cause's text.
 //
-// No lock: a read that succeeds closes the endpoint to this sign-in for about two minutes, and
-// T3 Code reads it every minute, so while T3 Code runs a read from here mostly answers 429 and
-// is not needed. Without T3 Code, two sessions started in the same second may both read; the
+// A read that succeeds closes the endpoint to this sign-in for about two minutes, and T3 Code
+// reads it every minute: while T3 Code runs, a read from here mostly answers 429 and T3 Code's
+// reading is the one used. No lock: two sessions started in the same second may both read; the
 // second gets the first one's reading or a 429, and no reading is lost.
 export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), t3File = join(home, ".t3", "caches", "claudeAgent.json"), now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
   const file = join(stateDir, "usage.json");
@@ -292,10 +294,11 @@ export async function readUsage({ home = homedir(), stateDir = join(home, ".loca
   // A reading from before the weekly reset says nothing about this week.
   const saved = own && own.at <= now && own.usage.week.resetsAt > now ? own : null;
   if (fresh(saved)) return { ...saved, source: "cache" };
+  // Second best, for when there is no fresh signed reading and none can be read: the newer of
+  // the script's own older reading and T3 Code's, under an hour old.
   const t3 = readT3(t3File, now);
-  if (fresh(t3)) return { ...t3, source: "t3" };
-  const old = [saved, t3].filter((r) => r !== null && now - r.at < RULES.staleMs).sort((a, b) => b.at - a.at)[0];
-  const fall = (error) => (old ? { ...old, source: "stale" } : { error });
+  const old = [saved && { ...saved, source: "stale" }, t3 && { ...t3, source: "t3" }].filter((r) => r && now - r.at < RULES.staleMs).sort((a, b) => b.at - a.at)[0];
+  const fall = (error) => old ?? { error };
   if (cacheOnly) return fall("no fresh reading saved");
   const mark = readMark(markFile, token);
   if (mark && mark.tried <= now && now - mark.tried < RULES.retryMs) return fall(mark.error ?? "the usage read failed");
@@ -337,7 +340,7 @@ if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpath
     process.exitCode = 1;
   } else {
     const decision = decide(r.usage, now);
-    const from = { t3: " Source: T3 Code's saved reading.", stale: " Source: a saved reading over ten minutes old." }[r.source] ?? "";
+    const from = { t3: " Source: T3 Code's saved reading.", stale: " Source: the script's own reading, over ten minutes old." }[r.source] ?? "";
     console.log(json ? JSON.stringify({ source: r.source, at: r.at, usage: r.usage, decision }) : line(r.usage, decision, now) + from);
   }
 }
