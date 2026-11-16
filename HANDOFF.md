@@ -1,5 +1,121 @@
 # Handoff
 
+## 16 November 2026 (night): the model budget keeps T3 Code's reset list (0.38.0)
+
+**Why.** Since 0.36.1 the script read no banked resets ("not read"): no "Redeem" line came,
+and a banked Fable reset did not lift the pace rule. The account held one weekly and one
+Fable reset, and the script said Opus where the rules, with the reset known, say Fable.
+
+**What was found** (16 November 2026, no guess).
+- One timed read by the script with `cedar_ember=1&skip_spend=1` and its own User-Agent
+  (17:12:12 UTC, 200, 119 seconds after T3 Code's last success): `eligible: false`,
+  `ineligible_reason: "surface"`, no grants. So `skip_spend=1` alone does not help.
+- T3 Code's own code (`claudeResetCredits.ts` in its `server.asar`) sends the same sign-in
+  and the same `anthropic-beta` header; the User-Agent `claude-cli/<version> (external, cli)`
+  is the only other difference. The endpoint lists the resets by client, and Claude Code is
+  the client it lists them for.
+- No third source. Claude Code keeps its own reading (`cachedUsageUtilization` in
+  `~/.claude.json`: the limits and Fable's part of the week), with `cedar_ember: null`.
+  T3 Code's other files hold no steadier copy of the list. In T3 Code's file, no
+  `resetCredits` key means its read was refused, and `availableCount: 0` means none.
+- Claude Code renews the sign-in every 8 hours (seen at 17:19 UTC), and every file the
+  script signs is unreadable from then on.
+- T3 Code's reads are not refused every other minute as a rule: from 17:32 to 17:43 UTC
+  each one answered 200 and its file had the list in every minute; from 17:44 on each one
+  answered 429, for over ten minutes, and the file had no list.
+- In T3 Code's file the top `checkedAt` moves with every rewrite, about every minute;
+  `usageLimits.checkedAt` moves only when T3 Code asks for the limits and lagged by two
+  minutes.
+
+**Owner decision (question dialog, 16 November 2026).** Asked which source the script should
+use, with the cost of each: "Keep T3 Code's list (Recommended)" (the script stores what an
+unsigned file said), over "Read as Claude Code" (the script names itself as another client)
+and "Not now".
+
+**What changed.**
+- `parseT3` gives the reset list beside the reading (`resets`: null when the file has no
+  list, an empty list when T3 Code read none), never in it. A list that is not understood
+  in full (a label the script does not know, an odd value, entries that do not add up to
+  the file's count) is null too, so it is never "none" and never replaces a kept list (the
+  AI review's medium finding on #80).
+- `readUsage` keeps the newest list T3 Code's file showed in
+  `~/.local/share/model-budget/resets.json` (signed like the script's other files; only the
+  list and the time it was seen, no figure) and adds it to every reading, whatever the
+  source of the figures. A list last seen over an hour ago is dropped: "not read". The
+  list's time is the file's top `checkedAt` (the AI review's finding on #80: by
+  `usageLimits.checkedAt` a list that changed between two limit probes was not taken). An
+  older copy of T3 Code's file never replaces a newer list. The signed reading (`usage.json`)
+  holds only what the endpoint said.
+- The hook: a change of advice that comes while the list is missing waits five minutes
+  (`GRACE_MS`), unless a limit is spent or the session starts. That covers the minute or two
+  after a renewed sign-in. The session's file keeps whether the list was read at its last
+  event, and since when it is missing, on every event, said or not (the AI review's second
+  finding on #80: a session that started without the list was not held back later).
+- The script run by hand says "The banked resets are the list T3 Code last saved."
+- `recipes/model-budget-resets.md` is new (the source, the cost, what was not chosen);
+  `model-budget.md` and `model-budget-setup.md` point to it.
+
+**Verification.** 64 tests in `scripts/model-budget.test.mjs` (10 new, failing first; the
+grace test fails with the grace set to 0); `npm test`. On T3 Code's real file, with the list
+taken out of a copy in every other reading: one line of advice in 12 readings, where 0.35.4
+gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live with
+`watch-advice.mjs`, for seven minutes and then a longer run: one line of advice, through
+changes of source (T3 Code's reading, a signed one, the signed one over ten minutes old) and
+through the sixteen minutes from 17:44 UTC in which T3 Code's file had no list and three
+more comings and goings of it: "distinct advice lines in 1500 s: 1; states of the reset
+list seen: 2" (`watch-advice-0.37.0-25min.log`; the logs carry the version this change had
+before #76 took 0.37.0).
+
+**Owner decision on the merge (question dialog, 16 November 2026).** Asked as a condition
+before the check came: "Merge #80 once (Recommended)", for a neutral Graphify Formal
+Verification as the only check not passing, on this pull request only.
+
+**The reviews on #80.** Three rounds of the AI review, four findings, three fixed (the
+list's time, the session's knowledge of the list, a list not understood in full) and one
+answered (it objected to the merge decision above being recorded). GitHub's security review
+raised one thread, "stop trusting and persisting unsigned T3 reset lists"; the owner's
+answer on the source ("Keep T3 Code's list") is written in it as the owner's yes, with the
+cost as the question stated it. On the last code commit (`f6119bd`) the AI review job
+answered "review unavailable": the review job's Anthropic API credit balance was too low
+(18:09 UTC). Asked with the question dialog, the owner answered "Merge once on sa-review
+(Recommended)", for #80 only, over adding credit and "Not now". `sa-review` on `f6119bd`
+(run `cookbook-80-review`): `npm test` and Semgrep passed, one reviewer that did not build
+the change read the whole diff, no finding. The commit after it changes this file only.
+
+**Outstanding.**
+- The AI review job has no API credit: every pull request in the repositories on the
+  standard reads "review unavailable" until it has. Owner: the credit is the owner's (the
+  plan's monthly API credits, or a purchase, which the owner has so far ruled out). Clears
+  when a review job answers with a review again. Until then a pull request does not meet
+  the merge condition; `sa-review` is the fallback for the review, and the merge is asked
+  of the owner. A job for Stack Atlas, opened as a new chat on 16 November 2026.
+- Figures: Claude Code's own saved reading (`cachedUsageUtilization` in `~/.claude.json`)
+  has Fable's part of the week, which T3 Code's file lacks. Not used; a possible better
+  stand-in for the figures than T3 Code's file. Owner: Claude. Clears when weighed in a
+  job of its own.
+
+**Limits (known).**
+- Whoever can write T3 Code's file as the owner can have a session told to ask for a reset,
+  or told Fable where the pace rule says Opus. Redeeming stays the owner's click in T3 Code.
+- After a reset is used, the old list stands until T3 Code's next read that gets through.
+- A session started in the minute or two after a renewed sign-in, while T3 Code's file has
+  no list, may be told the other model once.
+- With T3 Code closed for an hour, or its reads refused for an hour on end, the resets are
+  "not read".
+
+**Recorded here, from the job before (#74).** #74 merged by hand as `6dcdf3b` (release event
+`verified`, execution 1572) on the owner's "Merge #74 once", past a neutral Graphify Formal
+Verification titled "0/4 PR-changed function(s) verified". Plugin 0.36.1 was installed; its
+session-start hook gave the advice, and over 200 seconds reading T3 Code's file only, with
+the reset list absent and then present, the advice was one line throughout
+(`watch-advice.mjs`, `watch-advice-0.36.1.log` in the evidence folder of that job). A
+session started before about 17:00 UTC on 16 November 2026 runs an older plugin until it is
+restarted; one on 0.35.4 can still be told to switch model back and forth.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-resets/`:
+`one-read.mjs` and `read-1-skip-spend.json` (the timed read), `toggle-advice.mjs` and
+`.log`, `watch-advice.mjs` and its logs.
+
 ## 16 November 2026 (night): the Codex start check is a script, and a hook requires it (0.37.0)
 
 **Why.** `recipes/codex.md` listed the check of where Claude may start Codex as commands to run
@@ -422,7 +538,7 @@ finding on later pull requests to the model budget script, until the owner says 
 The owner's yes is then written in the thread with these words and this date. Any other
 finding is fixed or asked.
 
-**Outstanding (Claude, next chat).** The script cannot see the banked resets, so the rules for
+**Outstanding (cleared by 0.38.0, the entry at the top).** The script cannot see the banked resets, so the rules for
 when to redeem one never fire and a banked Fable reset does not lift the pace rule. Clears when
 the resets have a source that holds from minute to minute: either the script's read is made
 eligible (the difference from T3 Code's read is the `claude-cli` User-Agent and

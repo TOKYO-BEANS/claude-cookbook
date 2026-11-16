@@ -38,9 +38,9 @@ Opus 5.5 high, and a script chooses.
   the week away. A reset is held when the weekly reset is under 12 hours off, and redeemed
   at half spent when it expires within 12 hours. Redeeming is the owner's click: T3 Code,
   Usage, Limits, "Use reset". On a "Redeem" line, ask with the question dialog, naming the
-  reset and why now, and run on Opus until it is done. Not working yet: the script
-  cannot read the banked resets ("not read"), so no "Redeem" line comes:
-  [why](model-budget-setup.md).
+  reset and why now, and run on Opus until it is done. The list is T3 Code's, kept
+  for an hour; then it is "not read" and no "Redeem" line comes:
+  [source](model-budget-resets.md).
 - **Unknown.** When the line says unknown, keep the thread's model and say so. Unknown is
   never "enough left".
 - New threads and stopped threads are T3 Code's own settings, and the proofs and dead ends

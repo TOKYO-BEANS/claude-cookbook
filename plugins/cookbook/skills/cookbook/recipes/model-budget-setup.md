@@ -22,9 +22,12 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
   T3 Code's next one.
 - **T3 Code's saved reading.** `~/.t3/caches/claudeAgent.json`, key `usageLimits`: `windows`
   (`seven_day`, `seven_day_fable`, `five_hour` when open), `unavailable` when its probe
-  failed. Rewritten every minute, not signed: the script uses it only with no signed reading
-  under an hour old and none to be read, checks every value and stores none. `checkedAt` is
-  when T3 Code asked, not the age of the figures: they trailed a direct read by two points.
+  failed. Rewritten every minute, not signed: the script uses its figures only with no signed
+  reading under an hour old and none to be read, checks every value and stores no figure.
+  `checkedAt` is when T3 Code asked, not the age of the figures: they trailed a direct read
+  by two points.
+- **The banked resets** are the list T3 Code last saved, kept by the script:
+  [model-budget-resets](model-budget-resets.md).
 - **A thread switches itself.** `t3_thread_configure` then `t3_thread_send` with `queue`: the
   queued turn ran on Opus 5.5 with no one at the keyboard.
 
@@ -39,9 +42,6 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
 - **The status line's `rate_limits`.** It has the week and the session window, not the Fable
   limit.
 - **Reading more often, or a retry.** Each read that gets through costs T3 Code its next two.
-- **The banked resets.** To the script's read the endpoint answers `eligible: false`;
-  T3 Code, reading as Claude Code, is shown them, but its file has them only every other
-  minute, and advice built on them changed every minute. The script reads none ("not read").
 - **A lock around the read.** Its takeover after a crash was not race-free. A failed read
   now writes only its own mark file, so it cannot replace a reading.
 
