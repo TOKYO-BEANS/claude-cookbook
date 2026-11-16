@@ -4,23 +4,39 @@ Part of [codex](codex.md) and [codex-consult](codex-consult.md).
 
 ## What leaves this PC
 
-A consult sends the brief and whatever the child reads in the checkout to OpenAI, under the
-owner's ChatGPT sign-in.
+Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 
-- **The standing yes.** The owner decided on 16 November 2026 that a session may start a
-  consult on its own judgement, for code in the owner's own repositories. No question is
-  asked in chat before such a consult. The report afterwards names the model and the
-  repository.
-- **What that yes is not.** It is not the yes for an unattended run: a consult still starts
-  supervised, as the Codex page says.
-- **Never sent.** Secrets, keys and tokens; customer data; personal data; files outside the
-  repository. Do not point the child at them, and do not put them in the brief.
+- **On every run:** its own start-up reading (the Codex page): the global rules file, the
+  Cookbook's pages, the repository's instruction files and the memory files.
+- **For the question:** the brief, and the files the child reads to answer it.
+- **The sandbox is read-only, not fenced.** The child can read any file the owner's account
+  can. The first command of a supervised run waited for the owner's click (seen twice,
+  16 November 2026); that every later read waits is not proven. So the rules below are kept
+  by the session and the checks, not by a wall.
+
+## Before the call: no check, no consult
+
+- **A scan.** Run `gitleaks dir --no-banner --redact <path>` over the checkout. A finding
+  stops the consult and is a security finding of its own. So does a Gitleaks that cannot run.
+- **Ignored files.** `git status --short --ignored` lists what Git ignores. A file there that
+  can hold a secret (`.env`, a key or token file) means: ask the owner first, even after a
+  clean scan.
+- **A narrow brief.** It names the paths the question is about and carries this line: "Read
+  only what this question needs, and nothing outside the repository."
+
+## The owner's decision, 16 November 2026
+
+- **The standing yes.** With the checks above passed, a session may start a consult on its
+  own judgement, for code in the owner's own repositories, without a question in chat. The
+  report afterwards names the model and the repository. It is not the yes for an unattended
+  run: a consult still starts supervised.
+- **Never pointed at.** Secrets, keys and tokens; customer data; personal data; files outside
+  the repository, beyond Codex's own start-up reading.
 - **Ask first.** Anything else: a repository that is not the owner's, a client's private
   material, data exports, logs with real users in them. The question names the provider, the
-  model and exactly what would be sent. No yes, no consult.
-- This rule came from a finding of GitHub's security review on the pull request that added
-  the page; the owner chose it over a confirmation before every consult. Loosening it is the
-  owner's decision.
+  model and what would be sent, by path, and why. No yes, no consult.
+- The rule answers a finding of GitHub's security review; the owner chose it over a
+  confirmation before every consult. Loosening it is the owner's decision.
 
 ## Models
 
@@ -31,12 +47,9 @@ owner's ChatGPT sign-in.
   the exact text of the refusal. Never paste the contents of a configuration file into chat,
   a report or evidence, and never switch model unasked.
 
-## Cost
+## Cost and no Codex
 
 - A consult draws on the allowance of the owner's ChatGPT plan. An API key, bought credits, a
   faster tier or another plan is spending: ask the owner.
-
-## Codex off or refusing
-
-- Say that no second opinion was had. The row's fallback, a `cookbook:review` subagent, is a
-  second look by Claude: name it as that, never as a consult.
+- Codex off or refusing: say that no second opinion was had. The row's fallback, a
+  `cookbook:review` subagent, is a second look by Claude: name it as that, never as a consult.

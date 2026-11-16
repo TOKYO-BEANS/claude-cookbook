@@ -55,9 +55,27 @@ an unattended run, which #62 leaves open with the owner.
 - GitHub's security review, second finding (discussion 4584893402): the page told an agent
   to report a refusal with a line of Codex's configuration file. Fixed: the model tried and
   the exact refusal text only.
+- AI review of the merge commit (`15b912c`): one medium and one low finding, both fixed.
+  Medium: "files outside the repository are never sent" could not hold, since Codex reads the
+  global rules file and the Cookbook's pages at the start of every run and its read-only
+  sandbox can read any file the owner's account can. `recipes/codex-limits.md` now says what
+  leaves on every run, says that the sandbox is not a fence, and puts three checks before
+  the call (a Gitleaks scan, a look at the files Git ignores, a narrow brief): no check, no
+  consult. Low: the fallback of "One bounded side piece" still sent a piece to another
+  provider's model; it now names only a piece that needs its own checkout.
+- GitHub's security review, three more comments (discussions 4584948356, 4584997081,
+  4584997064). Two say that read-only was not enforced: fixed by the supervised start. One
+  says that nothing technical limits what is sent: fixed by the three checks above.
+- The supervised mode, tested by this job: a `delegate_task` with
+  `runtimeMode: "approval-required"` stopped at its first command with a pending approval.
+  The run was cancelled and no approval was given. Whether every later read also waits is
+  not proven, and the page says so.
 - Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-codex-consult/`.
 
 **Failures and dead ends.**
+- The owner's standing yes was asked for with the words "the repository's code" as what
+  leaves the PC. That was too narrow: Codex's start-up reading leaves too. The page is
+  corrected and the owner was told in chat.
 - The consult above ran unattended, in the session's own full-access mode, at about 10:55
   UTC, before #62 and its supervised rule reached the default branch (11:03 UTC). The commit
   that followed held only this change's files and the branch on the remote had not moved.
@@ -69,8 +87,15 @@ an unattended run, which #62 leaves open with the owner.
   one) and is corrected in a later comment there.
 
 **Outstanding.**
-- A supervised consult, with the owner clicking, has not been run by this job; #62 tested the
-  mode. Owner: Claude. Clears with the first consult under the rule.
+- Gitleaks 8.30.1 (`gitleaks dir` over this checkout, the new check before a consult)
+  reports three `generic-api-key` hits in `scripts/stack-updates-connect.test.mjs` (lines 77,
+  281 and 296; on the default branch since #52; they read as made-up strings in the tests of
+  the error scrubber, and GitHub's secret scanning has no open alert). A model's judgement
+  does not clear a finding, so a consult on this repository stops at the scan. Owner: the
+  owner. Clears with the owner's decision: build those strings at run time in a pull
+  request, or accept the three hits.
+- A whole supervised consult, with the owner clicking, has not been run. Owner: Claude.
+  Clears with the first consult under the rule.
 - Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
   Codex provider is switched on". The provider is on and `sol-loop` is still not in use.
   Owner: Claude. Clears with a line in that repository's next pull request.

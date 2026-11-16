@@ -11,7 +11,7 @@ fair trial; they never pick an owner.
   "ship").
 - **Several agents: the `sa-*` workflows.** One implementer and one reviewer per task, an agent
   budget, evidence over opinions, and the stops written in. Weighed: ad hoc Workflow scripts (no budget); T3 `delegate_task` (right
-  for another provider's model, heavier for the same one).
+  for a piece in its own checkout, heavier for one in the same).
 - **One side piece: the Cookbook dispatch profiles.** A fixed model, effort and tool list per
   kind of piece. Weighed: an untyped subagent (inherits every tool and the session's model); a
   T3 delegate (a whole thread for a small piece).

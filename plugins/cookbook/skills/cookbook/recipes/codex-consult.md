@@ -15,16 +15,18 @@ point against the code and decides. What may be sent, the refused models and the
 - **Not for.** What a test or a check can decide; a public fact (research); routine edits; a
   second look by Claude (`cookbook:review`). Never one on every pull request.
 - **The call.** As on the Codex page, with `role: "review"`. First check what would be sent
-  against the limits page: outside its standing yes, ask the owner before the call. Add
+  against the limits page and run its checks: no check, no consult; outside its standing yes,
+  ask the owner before the call. Add
   `mode: "wait"` only when this turn needs the answer. Leave `serviceTier` alone.
 - **The brief.** The child gets no history. Give it the repository path, the base commit or
   the files, the question, what is already ruled out, and this line: "Change no file: do not
   edit, commit, push, comment on a pull request or start subagents." Ask for a verdict,
   findings with file, line and evidence, and what it could not check. No secrets and no
   customer data in a brief.
-- **What keeps it read-only** is the supervised mode's sandbox, not the brief. Note
-  `git status --short` and `git rev-parse HEAD` before all the same; afterwards compare both,
-  and the branch on the remote. Report a change the child made; never keep one unseen.
+- **What keeps it from writing** is the supervised mode's read-only sandbox, not the brief. It
+  does not fence reading: see the limits page. Note `git status --short` and
+  `git rev-parse HEAD` before all the same; afterwards compare both, and the branch on the
+  remote. Report a change the child made; never keep one unseen.
 - **While it runs.** Do not edit the files it reads. A timeout, an error or no reply is not
   agreement. One consult per question; a re-check is a new `delegate_task`, three rounds at most.
 - **Afterwards.** Report what was said, taken and declined, and why.
