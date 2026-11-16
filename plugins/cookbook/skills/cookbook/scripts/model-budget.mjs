@@ -5,7 +5,7 @@
 // rules below: the script decides, not a model. It only reads. It never prints or stores
 // the sign-in, calls the one address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
-import { mkdirSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -186,6 +186,37 @@ export async function readUsage({ home = homedir(), stateDir = join(home, ".loca
   if (cache && cache.tried <= now && now - cache.tried < RULES.retryMs) return fall(cache.error ?? "the usage read failed");
   const token = readToken(home);
   if (!token) return fall("no Claude sign-in found");
+  // One read at a time across every process: the one that creates the lock reads; the rest use
+  // what is cached. A lock older than two timeouts is from a process that died, and is taken over.
+  const lock = join(stateDir, "usage.lock");
+  const claim = () => {
+    try {
+      mkdirSync(stateDir, { recursive: true });
+      writeFileSync(lock, String(now), { flag: "wx" });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (!claim()) {
+    let age = 0;
+    try {
+      age = Date.now() - statSync(lock).mtimeMs;
+    } catch {
+      // gone between the two calls: another process just finished
+    }
+    if (age <= 2 * RULES.timeoutMs) return fall(cache?.error ?? "the usage read is in progress");
+    rmSync(lock, { force: true });
+    if (!claim()) return fall(cache?.error ?? "the usage read is in progress");
+  }
+  try {
+    return await fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl });
+  } finally {
+    rmSync(lock, { force: true });
+  }
+}
+
+async function fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl }) {
   const fail = (error) => {
     writeCache(stateDir, file, { at: kept?.at ?? null, tried: now, usage: kept?.usage ?? null, error });
     return fall(error);

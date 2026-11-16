@@ -18,7 +18,7 @@ there. T3 Code's settings were set outside the repository: default Fable 5.2 hig
 Opus 5.5 high, auto-resume of limited threads on (backup of the earlier file in
 `~/.local/share/backups/t3-settings/`).
 
-**Verification.** 36 tests in `scripts/model-budget.test.mjs`; a live run printed week 38%,
+**Verification.** 37 tests in `scripts/model-budget.test.mjs`; a live run printed week 38%,
 Fable 61%, pace 58%, "Use Fable 5.2 high". The self-switch was proved: `t3_thread_configure`
 to Opus, then a queued `t3_thread_send`; the queued turn ran on `claude-opus-5-5` (transcript
 of the session, 12:54:32 UTC).

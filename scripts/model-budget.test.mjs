@@ -252,6 +252,31 @@ test("readUsage: a failed read falls back to a reading under an hour old, and do
   assert.match(old.error, /429/);
 });
 
+test("readUsage: reads started together call the endpoint once; a dead process's lock is taken over", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  let calls = 0;
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const fetchImpl = async () => { calls++; await gate; return answer(200, raw()); };
+  const first = readUsage({ home, stateDir, now: NOW, fetchImpl });
+  const second = await readUsage({ home, stateDir, now: NOW, fetchImpl });
+  assert.equal(second.usage, undefined);
+  assert.match(second.error, /in progress/);
+  release();
+  assert.equal((await first).source, "live");
+  assert.equal(calls, 1);
+  assert.ok(!existsSync(join(stateDir, "usage.lock")), "the lock is removed after the read");
+  writeFileSync(join(stateDir, "usage.lock"), "old");
+  const { utimesSync } = await import("node:fs");
+  const past = new Date(Date.now() - 60000);
+  utimesSync(join(stateDir, "usage.lock"), past, past);
+  const after = await readUsage({ home, stateDir, now: NOW + RULES.cacheMs + 1, fetchImpl });
+  assert.equal(after.source, "live");
+  assert.equal(calls, 2);
+});
+
 test("readUsage: no sign-in, or an answer it cannot read, is an error and never a reading", async (t) => {
   const home = tmp(t);
   const none = await readUsage({ home, stateDir: join(home, "state"), now: NOW, fetchImpl: async () => { throw new Error("must not be called"); } });
