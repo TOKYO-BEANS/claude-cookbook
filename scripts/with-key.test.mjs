@@ -19,6 +19,10 @@ const ffi = windows ? await loadFfi().catch(() => null) : null;
 function home(files = {}) {
   const dir = mkdtempSync(join(tmpdir(), "with-key-test-"));
   mkdirSync(join(dir, ".secrets"));
+  // A PowerShell started with this folder as USERPROFILE keeps its module cache under
+  // AppData\Local. Without that folder it writes the cache into the working directory:
+  // a stray Microsoft/ folder in the checkout.
+  mkdirSync(join(dir, "AppData", "Local"), { recursive: true });
   for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, ".secrets", name), text);
   return dir;
 }
@@ -137,21 +141,19 @@ test("the launcher hands the key to the program in the named variable only", asy
 test("usage: too few arguments end with code 2", async () => {
   const lines = [];
   assert.equal(await main(["k", "SOME_KEY"], { say: (l) => lines.push(l), start: noPowerShell }), 2);
-  assert.equal(await main(["--headers"], { say: (l) => lines.push(l), start: noPowerShell }), 2);
+  assert.equal(await main(["--headers", "k"], { say: (l) => lines.push(l), start: noPowerShell }), 2, "no mode prints a key");
   assert.match(lines.join(""), /usage: node with-key\.mjs <key-name> <ENV_VAR> <program> \[args\.\.\.\]/);
 });
 
-test("--headers prints the header object, or fails with code 1 and no output", async () => {
+test("a read that timed out is said on stderr, and the program still starts without the variable", async () => {
   const dir = home({ "k.dpapi": "00" });
   try {
-    const out = []; const err = [];
-    const deps = { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, say: (l) => err.push(l), write: (s) => out.push(s) };
-    assert.equal(await main(["--headers", "k"], { ...deps, runPowerShell: () => headers("synthetic-key") }), 0);
-    assert.deepEqual(out, [headers("synthetic-key")]);
-    out.length = 0;
-    assert.equal(await main(["--headers", "k"], { ...deps, runPowerShell: timedOut }), 1);
-    assert.deepEqual(out, []);
-    assert.match(err.join(""), /with-key: could not read key "k" \(.*did not answer in 15 seconds/);
+    const err = []; const started = [];
+    const code = await main(["k", "SOME_KEY", "prog"], { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: timedOut, env: {},
+      say: (l) => err.push(l), start: (program, args, env) => { started.push(env); return 3; } });
+    assert.equal(code, 3);
+    assert.deepEqual(started, [{}]);
+    assert.match(err.join(""), /with-key: could not read key "k" \(.*did not answer in 15 seconds.*\); continuing without SOME_KEY/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -185,8 +187,6 @@ test("Windows: the launcher as a process, by several spellings of its path", { s
       assert.equal(run.status, 7, `${path}: ${run.stderr}`);
       assert.equal(run.stderr, "", "no warning about node:ffi on stderr");
     }
-    const head = spawnSync(process.execPath, [launcher, "--headers", "synthetic"], { env, encoding: "utf8", timeout: 60000 });
-    assert.equal(head.stdout, headers(value));
     const none = spawnSync(process.execPath, [launcher, "absent", "SYN_KEY", process.execPath, "-e", "process.exit(process.env.SYN_KEY === undefined ? 5 : 9)"], { env, encoding: "utf8", timeout: 60000 });
     assert.equal(none.status, 5);
     assert.match(none.stderr, /continuing without SYN_KEY/);

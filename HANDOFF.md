@@ -31,7 +31,6 @@ start, each scan can wait about 30 seconds. `with-key.mjs` read a key by startin
 - The PowerShell route stays as the fallback where `node:ffi` is missing. It is ended after
   15 seconds and the launcher says why. A failure message holds only the launcher's own
   words or an error code, never what PowerShell printed.
-- New: `with-key.mjs --headers <name>`, the header object for an MCP `headersHelper`.
 - `recipes/keys.md` (new; the map row links it); `catalog.json` notes for the two copies.
 
 **Verification.**
@@ -51,7 +50,15 @@ start, each scan can wait about 30 seconds. `with-key.mjs` read a key by startin
 - Other PowerShell key reads still stall the same way: an MCP `headersHelper` that calls
   `agent-key.ps1 -Mode headers`, and the launchers `firecrawl-secure.mjs`,
   `parallel-secure.mjs` and `browserbase-key.ps1` in `~/.local/bin`, which are in no
-  repository either. Owner: Claude. Cleared by moving each to `with-key.mjs`.
+  repository either. Owner: Claude. Cleared by a read without PowerShell for each. A
+  `--headers` mode in `with-key.mjs` was written and taken out again: GitHub's security
+  review flags a mode that prints a key, so that design goes to the owner first.
+- The first commit of this pull request carried a stray file,
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` (the AI review caught it). A test ran
+  PowerShell with a temporary home folder, and PowerShell then writes its module cache into
+  the working directory. It held no path under the user's profile. Removed; the test's
+  temporary home now has `AppData\Local`, which keeps the cache there. The squash merge
+  leaves it out of `main`; it stays readable in the pull request's first commit.
 - `with-key.mjs` still starts the program without its variable when the key cannot be read
   (the owner-questions broker relies on it), still ends with code 1 when a signal kills its
   child, and has no handler for a child that cannot start. Unchanged here: one fault per

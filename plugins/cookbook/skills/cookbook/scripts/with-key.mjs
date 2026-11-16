@@ -2,7 +2,7 @@
 // agent-key.ps1 keeps in ~/.secrets) placed in its environment only. Stdio is inherited, so
 // this works as an MCP stdio server launcher.
 //   node with-key.mjs <key-name> <ENV_VAR> <program> [args...]
-//   node with-key.mjs --headers <key-name>      {"Authorization":"Bearer ..."}, for a headersHelper
+// It prints no key: the key goes to the program's environment and nowhere else.
 //
 // A copy of this file lives at ~/.local/bin/with-key.mjs, the path every caller uses. Copy
 // it again when this file changes (recipes/keys.md).
@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 // long is waiting on a script scan: it is ended, and the launcher says so.
 export const POWERSHELL_TIMEOUT_MS = 15000;
 
-const USAGE = "usage: node with-key.mjs <key-name> <ENV_VAR> <program> [args...]\n       node with-key.mjs --headers <key-name>\n";
+const USAGE = "usage: node with-key.mjs <key-name> <ENV_VAR> <program> [args...]\n";
 
 // A failure whose message is ours: it never holds a key or a program's output.
 class KeyError extends Error {}
@@ -120,17 +120,7 @@ function startProgram(program, args, env) {
 }
 
 export async function main(argv, deps = {}) {
-  const { say = (line) => process.stderr.write(line), write = (text) => process.stdout.write(text), start = startProgram, env: base = process.env } = deps;
-  if (argv[0] === "--headers") {
-    if (!argv[1] || argv.length !== 2) { say(USAGE); return 2; }
-    try {
-      write(JSON.stringify({ Authorization: `Bearer ${(await readKey(argv[1], deps)).key}` }));
-      return 0;
-    } catch (e) {
-      say(`with-key: could not read key "${argv[1]}" (${reason(e)})\n`);
-      return 1;
-    }
-  }
+  const { say = (line) => process.stderr.write(line), start = startProgram, env: base = process.env } = deps;
   const [name, envVar, program, ...args] = argv;
   if (!name || !envVar || !program) { say(USAGE); return 2; }
   const env = { ...base };

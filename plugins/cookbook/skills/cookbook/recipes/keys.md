@@ -11,8 +11,9 @@ One store, two helpers. Checked on 16 November 2026.
 - **A program gets a key at run time only:**
   `node ~/.local/bin/with-key.mjs <name> <ENV_VAR> <program> [args]`. The key is in that
   program's environment and nowhere else.
-- **A header for an MCP `headersHelper`:** `node ~/.local/bin/with-key.mjs --headers <name>`
-  prints `{"Authorization":"Bearer ..."}`. Never run it in a shell whose output is shown.
+- **A header for an MCP `headersHelper`:** `agent-key.ps1 -Mode headers -Name <name>` prints
+  `{"Authorization":"Bearer ..."}`. Never run it in a shell whose output is shown. It is the
+  one read that still goes through PowerShell, so it can stall (next point).
 - **The read starts no PowerShell.** `with-key.mjs` calls Windows' `CryptUnprotectData`
   itself, through `node:ffi` (Node 26; experimental there). The reason: the PC's security
   software scans every PowerShell script block, and while many processes start (a test
@@ -22,7 +23,7 @@ One store, two helpers. Checked on 16 November 2026.
 - **The fallback** is `agent-key.ps1 -Mode headers`, used where `node:ffi` is missing (an
   older Node). It is ended after 15 seconds, and the launcher says why on stderr:
   `with-key: could not read key "x" (...)`. The program then starts without its variable,
-  as before; `--headers` ends with code 1 instead.
+  as before.
 - **Any other PowerShell call can stall the same way.** Give it a time limit, and keep
   PowerShell out of a path that runs often. Never change the security software's settings:
   raise a recommendation to the owner.
@@ -30,4 +31,4 @@ One store, two helpers. Checked on 16 November 2026.
   `scripts/agent-key.ps1`, with tests in `scripts/with-key.test.mjs`. Callers use the copies
   in `~/.local/bin`, a path that does not move when the plugin updates. After a change to
   either file: merge it, copy both to `~/.local/bin`, then prove it with one real call
-  (`node ~/.local/bin/with-key.mjs --headers <name>` with its output discarded, exit code 0).
+  through the copy: a program that needs the key answers, and stderr has no `with-key:` line.
