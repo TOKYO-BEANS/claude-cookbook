@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.4)
+## 16 November 2026 (night): the fallback review in the map and the recipes (0.39.1)
 
 **Why.** The owner decided on 16 November 2026 that when the `ai-review` job cannot reach its
 reviewer (the API credit ran out), a fallback review stands in for it. Stack-Atlas #200 puts that
@@ -12,7 +12,7 @@ was `sa-review`). The new page `recipes/ai-review-fallback.md` (split from `reci
 which went over the 4000-byte limit) says when it applies (only the API failing to serve the
 call), what it never covers, who reviews, its form (#200's: first line `Fallback review of <full
 id>`, findings, count line) and what follows it; `recipes/ci-releases.md` names it in the merge
-condition. Plugin 0.38.4.
+condition. Plugin 0.39.1.
 
 **Security review.** GitHub's security review opened a thread on the first version ("Prompt
 injection risk": the pull request's text could steer the fallback reviewer to "No findings").
@@ -25,6 +25,83 @@ branch, and `No findings.` means none under that rubric.
 live; log `~/.local/share/stack-atlas/evidence/merge-cookbook-84.log`.
 
 **Outstanding.** None for these pages; they describe Stack-Atlas #200, merged as 3cebc1f.
+
+## 16 November 2026 (late night): the model budget saves no reset list; the hook holds the advice (0.39.0)
+
+**Why.** GitHub's security review raised one finding twice on #80 (threads 4589548572 and
+4589716196): do not save the reset list from T3 Code's unsigned file into the script's signed
+`resets.json`. For the second thread the owner's yes had been written without asking; asked
+afterwards, the owner answered "No, revisit". The finding stood open with the owner.
+
+**Owner decision (question dialog, 16 November 2026, for both threads).** Asked how the script
+should handle the list, with the cost of each: "Hold the advice (Recommended)", over "Show
+it, never act on it" (no "Redeem" line, Opus where a banked Fable reset allows Fable), "Drop
+the kept list" (the advice changes whenever T3 Code's reads are refused for over five
+minutes) and "Not now". Reading as Claude Code was named as still possible and not taken. The
+first answer was "not sure?"; the choice came after a plainer account of the same options.
+
+**What changed.**
+- `model-budget.mjs`: `resets.json` is gone (`keepResets`, `readResets`). `readUsage` adds
+  T3 Code's list to a reading only while that file shows it, under an hour old by the file's
+  own time, which is the fix the review proposed. Nothing T3 Code's file says is written to a
+  file the script signs; with `cacheOnly` and no signed reading the script writes nothing at
+  all. A `resets.json` left by 0.38.0 is neither read nor written.
+- The hook: a change of advice that comes while the list is missing waits until the list is
+  back, for an hour at most (`RULES.staleMs`, where 0.38.0 waited five minutes for the renewed
+  sign-in). A spent limit, a session start and a change that comes with the list are said at
+  once; a session that never saw the list is not held back. The session's file holds what
+  was said and since when the list is missing (`key`, `at`, `resets`, `lostAt`), never the list.
+- The script run by hand says "The banked resets are T3 Code's list, as its file shows it
+  now.", and "not read" in the minutes the file has none.
+- `recipes/model-budget-resets.md` (what the script does, what holds the advice, the cost,
+  what was not chosen), `model-budget.md` and `model-budget-setup.md`.
+
+**What it costs** (said to the owner in the option's text). A session that starts in a minute
+without the list hears the advice without the resets and the other one once the list shows.
+While the list is missing, a change from the figures alone waits too, up to the hour. T3
+Code's file still chooses among the fixed lines at the moment it is read.
+
+**Verification.**
+- 64 tests in `scripts/model-budget.test.mjs`: 9 rewritten and failing first on 0.38.0 (no
+  `resets.json` is written; the list is used only when T3 Code's file shows it; a list an
+  hour old by the file's time is not read; a signed `resets.json` left behind is ignored;
+  the hook holds a change at 10 and at 59 minutes without the list and says it after the
+  hour; a spent limit and a session start are not held). With the hold set back to five
+  minutes the hold test fails. `npm test`: 565 tests, 564 pass, 1 skipped, none failed
+  (before `main` was merged in, and again on the merged head).
+- The hook as its own process on T3 Code's real file, the list taken out of a copy in every
+  other reading, 12 events (`toggle-hook-week96.log`): the script alone gave two lines (the
+  "Redeem" line and "use Opus"), the session was told one. The week's figure was set to 96%
+  in the copy, and said so in the log: the list then held one weekly reset, and the day's
+  real figures (week 11%) did not let it decide anything (`toggle-hook.log`: one line either
+  way).
+- The same on T3 Code's file as it stood, every five seconds for 25 minutes, 19:36 to 20:01
+  UTC, the week's figure again set to 96% (`watch-hook-week96-25min.log`): 274 events, the
+  list in the file in 112 of them, 20 changes between list and no list, the longest gap
+  3 minutes 20 seconds; the script alone gave two lines, the session was told one. The run's
+  state folder held `sessions` and `usage-tried.json`, and no list.
+- Not seen live: a gap of over five minutes. The hold at 10 and 59 minutes and its end at
+  the hour are proved by the tests, which set the time the list went missing.
+
+**Seen in this chat, on 0.38.0.** The hook said "changed: use Opus 5.5 high" and, a few
+minutes later, "changed: use Fable 5.2 high" (about 19:20 UTC). The week's figure had gone
+from 58% to 11% and the Fable reset was gone from T3 Code's list (read at 19:30 UTC), which
+fits a reset redeemed in those minutes. Which reading gave each of the two lines was not
+traced, so the pair is not counted as the list coming and going.
+
+**Outstanding.**
+- The AI review job has no API credit (unchanged): `sa-review` is the fallback and the merge
+  is asked of the owner.
+- A session that starts in a minute without the list is told the advice without the resets.
+  Known cost of the owner's choice. Clears only with a first-hand, signed source of the
+  resets (reading as Claude Code, which the owner has not chosen).
+- The `resets.json` that 0.38.0 left in `~/.local/share/model-budget/` on this PC is no longer
+  read. Owner: Claude. Clears when it is moved to `~/.local/share/backups/` after the install.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-hold-advice/`:
+`hook-advice.mjs` (the hook as its own process on T3 Code's real file, with a made-up
+sign-in and a home folder of its own), `toggle-hook-week96.log`, `toggle-hook.log`,
+`watch-hook-week96-25min.log`, `toggle-advice.log`, `npm-test.log`.
 
 ## 16 November 2026 (night): the setup page says both rates; the record of #82 (0.38.3)
 

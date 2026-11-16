@@ -474,7 +474,7 @@ test("readUsage: a signed reading under an hour old stands in before T3 Code's, 
 
 const payload = (file) => JSON.parse(JSON.parse(readFileSync(file, "utf8")).payload);
 
-test("readUsage: the reset list in T3 Code's file goes with every reading, whatever the source of the figures", async (t) => {
+test("readUsage: the reset list in T3 Code's file goes with every reading while that file shows it, and is saved nowhere", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   seedHome(home);
@@ -489,41 +489,39 @@ test("readUsage: the reset list in T3 Code's file goes with every reading, whate
   assert.deepEqual([cached.source, cached.usage.grants, cached.usage.resetsRead], ["cache", [FABLE_RESET], true]);
   const stale = await readUsage({ home, stateDir, now: NOW + RULES.cacheMs + 1, fetchImpl: never, cacheOnly: true });
   assert.deepEqual([stale.source, stale.usage.grants], ["stale", [FABLE_RESET]]);
-  // The list is kept in a file of its own: the signed reading holds only what the endpoint said, and
-  // the list's file holds no usage figure.
-  assert.deepEqual(readdirSync(stateDir).sort(), ["resets.json", "usage.json"]);
+  // Nothing T3 Code's file said is saved: the script's folder holds its own signed reading, which
+  // has only what the endpoint said.
+  assert.deepEqual(readdirSync(stateDir).sort(), ["usage.json"]);
   assert.deepEqual([payload(join(stateDir, "usage.json")).usage.grants, payload(join(stateDir, "usage.json")).usage.resetsRead], [[], false]);
-  assert.deepEqual(payload(join(stateDir, "resets.json")), { seen: NOW - 60000, grants: [FABLE_RESET] });
-  assert.ok(!readFileSync(join(stateDir, "resets.json"), "utf8").includes("tok-secret-1"));
+  // T3 Code's file no longer shows the list: the very same signed reading now has none.
+  seedT3(home, t3());
+  const without = await readUsage({ home, stateDir, now: NOW + 2000, fetchImpl: never });
+  assert.deepEqual([without.source, without.usage.grants, without.usage.resetsRead, without.resetsSeen], ["cache", [], false, undefined]);
+  assert.deepEqual(readdirSync(stateDir).sort(), ["usage.json"]);
 });
 
-test("readUsage: the list is kept through the minutes T3 Code's file has none, so the advice does not change", async (t) => {
+test("readUsage: the list is used only in the readings T3 Code's file has it, and the script writes nothing for it", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   seedHome(home);
-  // Fable ahead of pace: Opus by the pace rule, Fable while a Fable reset is banked. In 0.35.4 the
-  // advice went back and forth between the two, minute by minute, as the list came and went.
+  // Fable ahead of pace: Opus by the pace rule, Fable while a Fable reset is banked. T3 Code's file
+  // has the list only in the minutes its own read got through, so the reading differs from one
+  // minute to the next; the hook is what keeps a session's advice (its own tests, below).
   const minute = (n, options) => {
     seedT3(home, t3({ fable: 80, options, checkedAt: NOW + n * 60000 }));
     return readUsage({ home, stateDir, now: NOW + n * 60000 + 20000, fetchImpl: never, cacheOnly: true });
   };
-  const said = [];
-  for (const [n, options] of [[0, [option()]], [1, null], [2, [option()]], [3, null], [4, null], [5, null]]) {
+  for (const [n, options] of [[0, [option()]], [1, null], [2, [option()]], [3, null], [4, null]]) {
     const r = await minute(n, options);
-    assert.deepEqual([r.source, r.usage.grants, r.usage.resetsRead], ["t3", [FABLE_RESET], true], `minute ${n}`);
-    said.push(advice(decide(r.usage, NOW + n * 60000 + 20000)));
+    const now = NOW + n * 60000 + 20000;
+    assert.deepEqual([r.source, r.usage.grants, r.usage.resetsRead, r.resetsSeen], options ? ["t3", [FABLE_RESET], true, NOW + n * 60000] : ["t3", [], false, undefined], `minute ${n}`);
+    assert.equal(advice(decide(r.usage, now)), options ? "Model budget: use Fable 5.2 high." : "Model budget: use Opus 5.5 high.", `minute ${n}`);
+    if (!options) assert.match(line(r.usage, decide(r.usage, now), now, "UTC"), /Use Opus 5\.5 high: Fable is ahead of pace\. Banked resets: not read/);
+    assert.equal(existsSync(stateDir), false, "no file of the script's own: T3 Code's list is never saved");
   }
-  assert.deepEqual([...new Set(said)], ["Model budget: use Fable 5.2 high."]);
-  assert.equal(payload(join(stateDir, "resets.json")).seen, NOW + 2 * 60000, "the time T3 Code's file last showed the list");
-  // With no list seen for an hour, the resets are "not read" again: never a list of unknown age.
-  const last = await minute(61, null);
-  assert.equal(last.usage.resetsRead, true, "59 minutes after the list was last seen");
-  const over = await minute(62, null);
-  assert.deepEqual([over.source, over.usage.grants, over.usage.resetsRead, over.resetsSeen], ["t3", [], false, undefined]);
-  assert.match(line(over.usage, decide(over.usage, NOW + 62 * 60000), NOW + 62 * 60000, "UTC"), /Use Opus 5\.5 high: Fable is ahead of pace\. Banked resets: not read/);
 });
 
-test("readUsage: a newer list replaces the kept one, an empty one means none, and an older file never replaces a newer list", async (t) => {
+test("readUsage: the list is what T3 Code's file shows at that read: a newer one, none, or one not understood", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   seedHome(home);
@@ -535,32 +533,29 @@ test("readUsage: a newer list replaces the kept one, an empty one means none, an
   // The owner used the Fable reset: T3 Code's next read shows what is left.
   const weekly = await read(NOW + 120000, t3({ options: [option({ creditId: "w1", label: "Weekly reset" })], checkedAt: NOW + 119000 }));
   assert.deepEqual(weekly.grants.map((g) => [g.id, g.kind]), [["w1", "weekly"]]);
-  // A list in a shape that is not understood (a renamed label, a count with no entries) replaces nothing.
+  // A list in a shape that is not understood (a renamed label, a count with no entries) is "not read", never "none".
   const count = t3({ checkedAt: NOW + 149000 });
   count.usageLimits.resetCredits = { availableCount: 2 };
   for (const [now, json] of [[NOW + 150000, count], [NOW + 180000, t3({ options: [option({ label: "Fable refill" })], checkedAt: NOW + 179000 })]]) {
-    const kept = await read(now, json);
-    assert.deepEqual([kept.grants.map((g) => g.id), kept.resetsRead], [["w1"], true]);
-    assert.equal(payload(join(stateDir, "resets.json")).seen, NOW + 119000);
+    const odd = await read(now, json);
+    assert.deepEqual([odd.grants, odd.resetsRead], [[], false]);
+    assert.match(line(odd, decide(odd, now), now, "UTC"), /Banked resets: not read/);
   }
   const none = t3({ checkedAt: NOW + 239000 });
   none.usageLimits.resetCredits = { availableCount: 0 };
   const empty = await read(NOW + 240000, none);
   assert.deepEqual([empty.grants, empty.resetsRead], [[], true]);
   assert.match(line(empty, decide(empty, NOW + 240000), NOW + 240000, "UTC"), /Banked resets: none\.$/);
-  // An older copy of T3 Code's file put back: its list is not taken over the newer one.
-  const back = await read(NOW + 300000, t3({ options: [option()], checkedAt: NOW - 1000 }));
-  assert.deepEqual([back.grants, back.resetsRead], [[], true]);
-  assert.equal(payload(join(stateDir, "resets.json")).seen, NOW + 239000);
+  assert.equal(existsSync(stateDir), false);
 });
 
-test("readUsage: the list's time is the file's own checkedAt, so a list that changes between two limit probes is taken", async (t) => {
+test("readUsage: the list's time is the file's own checkedAt, and a list an hour old is not read", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   seedHome(home);
   // As on 16 November 2026: T3 Code rewrites the file, reset list included, every minute (the top
   // checkedAt), and asks Claude Code for the limits less often (usageLimits.checkedAt stays).
-  const file = (fileCheckedAt, options) => ({ ...t3({ options, checkedAt: NOW - 4 * 60000 }), checkedAt: new Date(fileCheckedAt).toISOString() });
+  const file = (fileCheckedAt, options, limitsAt = NOW - 4 * 60000) => ({ ...t3({ options, checkedAt: limitsAt }), checkedAt: new Date(fileCheckedAt).toISOString() });
   const read = async (now, json) => {
     seedT3(home, json);
     return readUsage({ home, stateDir, now, fetchImpl: never, cacheOnly: true });
@@ -570,14 +565,15 @@ test("readUsage: the list's time is the file's own checkedAt, so a list that cha
   // The owner used the Fable reset; a minute later the file shows what is left, with the same limits probe.
   const next = await read(NOW + 60000, file(NOW + 59000, [option({ creditId: "w1", label: "Weekly reset" })]));
   assert.deepEqual([next.usage.grants.map((g) => g.id), next.resetsSeen, next.at], [["w1"], NOW + 59000, NOW - 4 * 60000]);
-  // A list that differs at the very same time is taken too; the same list is not written again.
-  const same = await read(NOW + 61000, file(NOW + 59000, []));
-  assert.deepEqual([same.usage.grants, same.usage.resetsRead, same.resetsSeen], [[], true, NOW + 59000]);
-  // The hour is counted from the file's time, not from the limits probe.
-  const held = await read(NOW + 59000 + RULES.staleMs - 1, t3({ checkedAt: NOW + 59000 + RULES.staleMs - 60000 }));
-  assert.equal(held.usage.resetsRead, true);
-  const over = await read(NOW + 59000 + RULES.staleMs, t3({ checkedAt: NOW + 59000 + RULES.staleMs - 60000 }));
-  assert.equal(over.usage.resetsRead, false);
+  // A file T3 Code stopped rewriting: its list stands while the file's time is under an hour old
+  // (the figures here are the script's own signed reading, so only the list's age is in question).
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at: NOW, usage: usage() }));
+  const young = await read(NOW + 1000, file(NOW + 1000 - RULES.staleMs + 1, [option()], NOW - 2 * HOUR));
+  assert.deepEqual([young.source, young.usage.grants, young.usage.resetsRead], ["cache", [FABLE_RESET], true]);
+  const old = await read(NOW + 1000, file(NOW + 1000 - RULES.staleMs, [option()], NOW - 2 * HOUR));
+  assert.deepEqual([old.source, old.usage.grants, old.usage.resetsRead, old.resetsSeen], ["cache", [], false, undefined]);
+  rmSync(join(stateDir, "usage.json"));
   // A file time that is odd or ahead of the clock: its list is not taken, its figures still are.
   const later = NOW + RULES.staleMs + 5 * 60000;
   for (const odd of ["soon", 7, null, new Date(later + 60000).toISOString()]) {
@@ -586,33 +582,22 @@ test("readUsage: the list's time is the file's own checkedAt, so a list that cha
   }
 });
 
-test("readUsage: the kept list is the script's own signed file; one that is changed, odd or from another sign-in is ignored", async (t) => {
+test("readUsage: a resets.json left by 0.38.0 is not read and not written, however well it is signed", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   mkdirSync(stateDir, { recursive: true });
   seedHome(home);
   seedT3(home, t3());
   const file = join(stateDir, "resets.json");
+  const left = sealCache("tok-secret-1", { seen: NOW - 60000, grants: [FABLE_RESET] });
+  writeFileSync(file, left);
   const read = async () => (await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true })).usage;
-  const good = { seen: NOW - 60000, grants: [FABLE_RESET] };
-  writeFileSync(file, sealCache("tok-secret-1", good));
-  assert.deepEqual((await read()).grants, [FABLE_RESET]);
-  const refused = [
-    JSON.stringify(good),
-    JSON.stringify({ payload: JSON.stringify(good), sig: "0".repeat(64) }),
-    sealCache("tok-secret-2", good),
-    sealCache("tok-secret-1", { ...good, seen: NOW + 60000 }),
-    sealCache("tok-secret-1", { ...good, seen: NOW - RULES.staleMs }),
-    sealCache("tok-secret-1", { ...good, seen: "now" }),
-    sealCache("tok-secret-1", { seen: NOW - 60000, grants: { 0: FABLE_RESET } }),
-    sealCache("tok-secret-1", { seen: NOW - 60000, grants: Array.from({ length: 5 }, () => FABLE_RESET) }),
-    ...[{ id: "../x" }, { kind: "everything" }, { left: 0 }, { left: "1" }, { endsAt: "2026-12-10" }].map((over) => sealCache("tok-secret-1", { seen: NOW - 60000, grants: [{ ...FABLE_RESET, ...over }] })),
-  ];
-  for (const text of refused) {
-    writeFileSync(file, text);
-    const u = await read();
-    assert.deepEqual([u.grants, u.resetsRead], [[], false], text.slice(0, 160));
-  }
+  const u = await read();
+  assert.deepEqual([u.grants, u.resetsRead], [[], false], "T3 Code's file has no list now: not read");
+  seedT3(home, t3({ options: [option({ creditId: "w1", label: "Weekly reset" })] }));
+  assert.deepEqual((await read()).grants.map((g) => g.id), ["w1"], "the list is T3 Code's, as its file shows it now");
+  assert.equal(readFileSync(file, "utf8"), left);
+  assert.deepEqual(readdirSync(stateDir), ["resets.json"]);
 });
 
 test("readUsage: a T3 Code file that is broken, changed or far too large is ignored", async (t) => {
@@ -854,48 +839,59 @@ test("hook: the reset list coming and going in T3 Code's file changes nothing a 
   const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-10" }, { cache: null });
   assert.match(start.context.additionalContext, /^Model budget: use Fable 5\.2 high\. /);
   assert.doesNotMatch(start.context.additionalContext, /\d+%|\d{1,2}:\d{2}|week|share|pace|Banked|expires|T3|g1/);
-  for (const options of [null, [option({ expiresAt: new Date(Date.now() + 20 * 24 * HOUR).toISOString() })], null]) {
+  for (const options of [null, [option({ expiresAt: new Date(Date.now() + 20 * 24 * HOUR).toISOString() })], null, null]) {
     saved(options);
-    for (const event of ["UserPromptSubmit", "PostToolUse"]) assert.equal(runHook(home, { hook_event_name: event, session_id: "s-10" }, { cache: null }).context, null, "silent: the advice is the same");
+    for (const event of ["UserPromptSubmit", "PostToolUse"]) assert.equal(runHook(home, { hook_event_name: event, session_id: "s-10" }, { cache: null }).context, null, "silent: the session keeps its advice");
   }
-  assert.deepEqual(readdirSync(stateDir).sort(), ["resets.json", "sessions", "usage-tried.json"], "the list is kept; no figure is saved and nothing was read over the network");
+  assert.deepEqual(readdirSync(stateDir).sort(), ["sessions", "usage-tried.json"], "the list is saved nowhere, no figure is saved and nothing was read over the network");
+  // The session's file holds what was said and since when the list is missing: no list, no figure.
+  const session = JSON.parse(readFileSync(join(stateDir, "sessions", "s-10.json"), "utf8"));
+  assert.deepEqual(Object.keys(session).sort(), ["at", "key", "lostAt", "resets"]);
+  assert.deepEqual([session.key, session.resets, typeof session.lostAt], ["fable|||", false, "number"]);
 });
 
-test("hook: after a renewed sign-in the kept list is missing for a minute or two, and a change of advice waits five minutes", (t) => {
+test("hook: a change of advice that comes while T3 Code's file has no list waits for the list, for an hour at most", (t) => {
   const home = tmp(t);
   const stateDir = seedMark(home);
   const fableReset = () => [option({ expiresAt: new Date(Date.now() + 20 * 24 * HOUR).toISOString() })];
   const saved = (options, fable = 80) => seedT3(home, t3({ fable, options, checkedAt: Date.now() - 1000, reset: Date.now() + 70 * HOUR }));
-  const event = (name, token) => runHook(home, { hook_event_name: name, session_id: "s-11" }, { cache: null, token }).context;
+  const event = (name) => runHook(home, { hook_event_name: name, session_id: "s-11" }, { cache: null }).context;
   const session = join(stateDir, "sessions", "s-11.json");
+  const missingFor = (ms) => writeFileSync(session, JSON.stringify({ ...JSON.parse(readFileSync(session, "utf8")), lostAt: Date.now() - ms }));
   saved(fableReset());
   assert.match(event("SessionStart").additionalContext, /^Model budget: use Fable 5\.2 high\. /);
-  // Claude Code renews the sign-in: the list's file was signed with the old one, and this minute
-  // T3 Code's file has no list. Without the list the rules say Opus; the session is not told yet.
+  // T3 Code's own read was refused: its file has no list. Without the list the rules say Opus;
+  // the session is not told, and keeps the advice it has.
   saved(null);
-  assert.equal(event("PostToolUse", "tok-secret-2"), null);
-  assert.equal(event("UserPromptSubmit", "tok-secret-2"), null);
+  assert.equal(event("PostToolUse"), null);
+  assert.equal(event("UserPromptSubmit"), null);
   assert.equal(typeof JSON.parse(readFileSync(session, "utf8")).lostAt, "number");
-  // The list is back in T3 Code's file a minute later: nothing changed, nothing is said.
+  // Still so after ten minutes without the list (seen on 16 November 2026), and after 59.
+  for (const minutes of [10, 59]) {
+    missingFor(minutes * 60000);
+    assert.equal(event("PostToolUse"), null, `${minutes} minutes without the list`);
+  }
+  // The list is back in T3 Code's file: nothing changed, nothing is said.
   saved(fableReset());
-  assert.equal(event("PostToolUse", "tok-secret-2"), null);
+  assert.equal(event("PostToolUse"), null);
   assert.equal(JSON.parse(readFileSync(session, "utf8")).lostAt, undefined);
-  // A list that stays away is said after the five minutes.
+  // A list that stays away for an hour is "not read", and the change is said.
   saved(null);
-  assert.equal(event("PostToolUse", "tok-secret-3"), null);
-  const waiting = JSON.parse(readFileSync(session, "utf8"));
-  writeFileSync(session, JSON.stringify({ ...waiting, lostAt: Date.now() - 5 * 60000 - 1000 }));
-  assert.match(event("PostToolUse", "tok-secret-3").additionalContext, /^Model budget changed\. Model budget: use Opus 5\.5 high\. /);
-  // A spent limit is never held back, and neither is a session start.
+  assert.equal(event("PostToolUse"), null);
+  missingFor(HOUR + 1000);
+  assert.match(event("PostToolUse").additionalContext, /^Model budget changed\. Model budget: use Opus 5\.5 high\. /);
+  // A change that comes with the list is said at once; a spent limit is never held back, and neither is a session start.
   saved(fableReset());
-  assert.match(event("PostToolUse", "tok-secret-3").additionalContext, /^Model budget changed\. Model budget: use Fable 5\.2 high\. /);
+  assert.match(event("PostToolUse").additionalContext, /^Model budget changed\. Model budget: use Fable 5\.2 high\. /);
   seedT3(home, t3({ week: 100, fable: 100, options: null, checkedAt: Date.now() - 1000, reset: Date.now() + 70 * HOUR }));
-  assert.match(event("PostToolUse", "tok-secret-4").additionalContext, /^Model budget changed\. Model budget: nothing left until the reset\. /);
+  assert.match(event("PostToolUse").additionalContext, /^Model budget changed\. Model budget: nothing left until the reset\. /);
   saved(fableReset());
-  assert.match(event("PostToolUse", "tok-secret-4").additionalContext, /^Model budget changed\. Model budget: use Fable 5\.2 high\. /);
+  assert.match(event("PostToolUse").additionalContext, /^Model budget changed\. Model budget: use Fable 5\.2 high\. /);
   saved(null);
-  seedMark(home, "tok-secret-5"); // a session start may read over the network: its read was just refused
-  assert.match(event("SessionStart", "tok-secret-5").additionalContext, /^Model budget: use Opus 5\.5 high\. /);
+  assert.equal(event("PostToolUse"), null);
+  seedMark(home); // a session start may read over the network: its read was just refused
+  assert.match(event("SessionStart").additionalContext, /^Model budget: use Opus 5\.5 high\. /);
+  assert.deepEqual(readdirSync(stateDir).sort(), ["sessions", "usage-tried.json"]);
 });
 
 test("hook: a session that started without the list is held back too, once the list has come", (t) => {
@@ -903,31 +899,32 @@ test("hook: a session that started without the list is held back too, once the l
   const stateDir = seedMark(home);
   const fableReset = () => [option({ expiresAt: new Date(Date.now() + 20 * 24 * HOUR).toISOString() })];
   const saved = (options, fable) => seedT3(home, t3({ fable, options, checkedAt: Date.now() - 1000, reset: Date.now() + 70 * HOUR }));
-  const event = (name, token) => runHook(home, { hook_event_name: name, session_id: "s-12" }, { cache: null, token }).context;
+  const event = (name) => runHook(home, { hook_event_name: name, session_id: "s-12" }, { cache: null }).context;
   const state = () => JSON.parse(readFileSync(join(stateDir, "sessions", "s-12.json"), "utf8"));
-  // Fable on pace: the advice is Fable with the list and without it.
+  // Fable ahead of pace and no list in T3 Code's file: Opus, and a session that never saw the list is not held back.
+  saved(null, 80);
+  assert.match(event("SessionStart").additionalContext, /^Model budget: use Opus 5\.5 high\. /);
+  assert.deepEqual([state().resets, state().lostAt], [false, undefined]);
   saved(null, 59);
-  assert.match(event("SessionStart").additionalContext, /^Model budget: use Fable 5\.2 high\. /);
-  assert.equal(state().resets, false);
+  assert.match(event("PostToolUse").additionalContext, /^Model budget changed\. Model budget: use Fable 5\.2 high\. /, "a change from the figures alone is said at once");
   saved(fableReset(), 59);
   assert.equal(event("PostToolUse"), null, "the list came and the advice is the same: nothing is said");
   assert.equal(state().resets, true, "but the session now knows the list");
   // Fable moves ahead of pace: only the banked Fable reset keeps the advice on Fable.
   saved(fableReset(), 80);
   assert.equal(event("PostToolUse"), null);
-  // A renewed sign-in, and no list in T3 Code's file this minute.
   saved(null, 80);
-  assert.equal(event("PostToolUse", "tok-secret-2"), null, "held back: the list is missing for under five minutes");
+  assert.equal(event("PostToolUse"), null, "held back: the list is missing for under an hour");
   assert.deepEqual([state().resets, typeof state().lostAt], [false, "number"]);
   saved(fableReset(), 80);
-  assert.equal(event("UserPromptSubmit", "tok-secret-2"), null);
+  assert.equal(event("UserPromptSubmit"), null);
   assert.deepEqual([state().resets, state().lostAt], [true, undefined]);
   // The list goes missing while the advice is the same, and the advice changes later in the same gap: held back as well.
   saved(null, 59);
-  assert.equal(event("PostToolUse", "tok-secret-3"), null);
+  assert.equal(event("PostToolUse"), null);
   assert.deepEqual([state().resets, typeof state().lostAt], [false, "number"]);
   saved(null, 80);
-  assert.equal(event("PostToolUse", "tok-secret-3"), null, "the gap began under five minutes ago");
+  assert.equal(event("PostToolUse"), null, "the gap began under an hour ago");
 });
 
 test("the script says that the banked resets are T3 Code's list", (t) => {
@@ -938,7 +935,7 @@ test("the script says that the banked resets are T3 Code's list", (t) => {
   const env = { ...process.env, USERPROFILE: home, HOME: home };
   const plain = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8", env });
   assert.equal(plain.status, 0);
-  assert.match(plain.stdout, / Banked resets: 1 Fable \(expires \d{1,2} \w{3}\), 1 weekly\. Source: T3 Code's saved reading\. The banked resets are the list T3 Code last saved\.\n$/);
+  assert.match(plain.stdout, / Banked resets: 1 Fable \(expires \d{1,2} \w{3}\), 1 weekly\. Source: T3 Code's saved reading\. The banked resets are T3 Code's list, as its file shows it now\.\n$/);
   const json = JSON.parse(spawnSync(process.execPath, [SCRIPT, "--json"], { encoding: "utf8", env }).stdout);
   assert.deepEqual([json.usage.resetsRead, json.usage.grants.map((g) => g.kind), typeof json.resetsSeen], [true, ["fable", "weekly"], "number"]);
 });
