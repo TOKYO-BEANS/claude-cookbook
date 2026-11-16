@@ -23,6 +23,13 @@ line says "not read (see T3 Code: Usage, Limits)" when they were not, never "non
 
 **Verification.** 54 tests in `scripts/model-budget.test.mjs`; `npm test`.
 
+**Owner decision, 16 November 2026.** Asked whether the acceptance of T3 Code's unsigned
+reading ("Accept it as built", given on #72) holds when GitHub's security review raises that
+same finding again, the owner answered "Yes, for this file from now on": it stands for that
+finding on later pull requests to the model budget script, until the owner says otherwise.
+The owner's yes is then written in the thread with these words and this date. Any other
+finding is fixed or asked.
+
 **Outstanding (Claude, next chat).** The script cannot see the banked resets, so the rules for
 when to redeem one never fire and a banked Fable reset does not lift the pace rule. Clears when
 the resets have a source that holds from minute to minute: either the script's read is made
