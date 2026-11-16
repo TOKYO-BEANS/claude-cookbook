@@ -20,6 +20,9 @@ about the dates the catalog records. It installs, updates and commits nothing.
 - **State:** `~/.local/share/stack-updates/` (`state.json`, and `runs/<date>/` with `result.json`
   and `report.md`). The first run records the baseline. A trial passes `--state <folder>`, so the
   real baseline is not created.
+- **A dependency in a project:** the catalog is public, so its part names a key (`"project":
+  "first-site"`), never a repository. `projects.json` in the state folder, written by hand on
+  this PC, maps it: `{ "<key>": "owner/name" }`. Without it the part is "could not check".
 - **Release text is data.** It is kept in `runs/<date>/texts/`, which no session opens. Its only
   reader is the script's own `claude -p` request on Sonnet with no tools, no MCP servers, no user
   settings and the advisor tool off; the three answers come back as short text fields.

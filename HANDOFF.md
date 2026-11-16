@@ -1,5 +1,56 @@
 # Handoff
 
+## 16 November 2026 (night): the first site's name out of the files; a project part names a key (0.36.3)
+
+**Why.** #75 took a customer's site name out of `options/check.md`. The same site, and the
+name of its private repository, were still in eight other places on `main`. This repository
+is public: no project or client names. None of the eight was there on the owner's word.
+
+**What changed.**
+- **Prose.** `recipes/visual-check.md` and `recipes/visual-check-build.md` say "the first
+  site's repository"; four lines of older entries below say "the first site" (and one path
+  inside that project is now described, not spelled out). Which site and repository are
+  meant is a reference note in memory on this PC.
+- **The catalog names a key, not a repository.** The ts-rust trial entry held the
+  repository's full name, and the update check used it to read that repository's lockfile.
+  A `project` part now reads `{ "kind": "project", "project": "first-site", "package": … }`;
+  `~/.local/share/stack-updates/projects.json` on the PC, outside every repository, maps
+  the key: `{ "<key>": "owner/name" }`. `readInstalled` resolves the key there and reads the
+  lockfile through `gh api` as before. No file, an unknown key or a value that is not
+  owner/name is "unreadable" with its reason ("could not check" in the report), and `gh` is
+  not called. The report on this PC still names the repository (`projectRepository`).
+- **The catalog check keeps it out.** `scripts/check.mjs` refuses `repository` on a
+  `project` part and anything but a key (lower-case letters, digits, hyphens) in `project`.
+- The inventory test's fixture is a made-up repository; the fixture home has its own
+  `projects.json`. `recipes/update-check.md` and the `stack-updates` skill say where the map
+  is.
+
+**Verification.** Tests first: with the implementation taken out, 3 of the 95 tests in the
+three changed test files failed (the inventory file on the missing export, the catalog check,
+the end-to-end run); with it, all pass. `npm test` in a boat sandbox: 504 tests, 503 passed,
+1 skipped (no Gitleaks there). The Windows job of CI is the check for this PC's platform.
+Live on this PC, with the map written: the installed plugin (0.36.2, repository in the
+catalog) and the new code (key in the catalog) gave the same answer for two packages in
+that repository's lockfile, one read with its version and one "not in the lockfile"; with no
+map file the answer is "unreadable" and says which file is missing. Log:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-project-key/live-read.log` (the
+repository's name is replaced in it).
+
+**Outstanding.**
+- **Git history keeps the old text.** The names are in earlier commits of `main` and in the
+  merged pull requests' diffs. History is not rewritten here (no force-push): this is known
+  and left as it is.
+- A PC without `projects.json` reports the ts-rust part as "could not check" until the file
+  is written by hand. This PC has it.
+- The ts-rust trial package is not in that repository's lockfile today, so the update check
+  reports the part as missing; it did before this change too (the state file has had no
+  installed version since 14 November 2026). Whether the trial is still on is a question
+  for that project, not this one.
+- One more name is in two places and was not part of this job: the owner's own product, in
+  `recipes/sign-ins-mail-and-access.md` (a site key of the site login, in use) and in one
+  line of an older entry here. Whether it is there on the owner's word is not known. A job
+  of its own, opened as a new chat on 16 November 2026.
+
 ## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.2)
 
 **Why.** The last AI review on #70 left two low findings, both in
@@ -41,6 +92,12 @@ with `BOAT-RUN: not started: no result (boat limits did not answer in time)`, ex
 whose child holds the pipes (the key helper around boat) came back in 531 ms at a limit of
 500. Logs: `~/.local/share/claude-cookbook/evidence/2026-11-16-boat-run-followup/`.
 
+**Merged.** #75 merged as db475dc through `sa-release` on the first run (review gate allowed,
+no review threads), release event verified, execution 1573, plugin 0.36.2 installed; evidence
+`~/.local/share/claude-cookbook/evidence/2026-11-16-boat-run-followup/release-cookbook-75-merge.log`.
+The squash commit's title says 0.36.1; the plugin version is 0.36.2 (#74 took 0.36.1 while
+#75 was open).
+
 **Outstanding.**
 - The slow call is the key helper on this PC, not boat. Of ten `boat limits` calls in a
   row, eight took 1.4 to 1.7 seconds, one 32 seconds and one over 90; in both slow ones
@@ -56,8 +113,8 @@ whose child holds the pipes (the key helper around boat) came back in 531 ms at 
   double count between "created" and "ready"). It is "not started": run it again.
 - The same site, and its repository, are still named in eight other places: two recipe
   pages, three lines of older entries here, one catalog entry (in use: the update check
-  reads that repository's lockfile) and one test. A job of its own, opened as a new chat on
-  16 November 2026.
+  reads that repository's lockfile) and one test. Done in 0.36.3, the entry above (the count
+  of older lines was four, not three).
 ## 16 November 2026 (evening): the model budget leaves T3 Code's reset list out (0.36.1)
 
 **Why.** #72 merged as `aaf25de` (release event `verified`, execution 1570; merged by hand on
@@ -1536,8 +1593,8 @@ says "being built". Its owner is the site's own check script, in the site's repo
 fallback is to ask the owner; its page is `recipes/visual-check.md` (when a pass lifts the
 stop, how to use a check, what a pass never covers), with `recipes/visual-check-build.md`
 (how a site gets one: the four layers, the capture traps, the proofs, the record). Both are
-general. What is specific to wecarestudio.dk stays in that project (`CLAUDE.md`, section
-"Visual check", and `jobs/25-visuelt-tjek/FINDINGS.md`), where the check was built and
+general. What is specific to the first site stays in that project (`CLAUDE.md`, section
+"Visual check", and the findings file of the job that built it), where the check was built and
 proved on 15 November 2026.
 
 **The stop is not loosened.** The page quotes the owner's global rule (15 November 2026,
@@ -1575,7 +1632,7 @@ pass rule needs the owner's yes. The ground rules in `SKILL.md` are unchanged.
 
 **What uses Stagehand, checked on this PC.** Only its own user-scope MCP entry. No hook,
 script in `~/.local/bin`, scheduled task or project file names it. Its tools were called 18
-times, all in the WeCare project on 14 and 15 November (the screenshot trial of job 25).
+times, all in the first site's project on 14 and 15 November (the screenshot trial of job 25).
 
 **Verification.** `npm test` passes. Three review rounds were set before the first push.
 Before it, a `cookbook:review` subagent that did not write the change read the diff: no stop
@@ -1589,8 +1646,8 @@ owner's yes"). Evidence of the Stagehand check and the owner's answers:
 commit is `verified` (execution 1528; `sa-release` itself ended `unknown` for the skipped
 `ai-review` job, as on every merge commit). Plugin 0.30.1 was installed the same evening.
 Its numbers are now the final ones, and its "dead end" is corrected: a workspace ID for the
-`anthropic-api` key can be read with `depot ci vars list --repo TOKYO-BEANS/WeCare-Wix`
-(variable `ANTHROPIC_WORKSPACE_ID_REVIEW`), as the WeCare check does.
+`anthropic-api` key can be read with `depot ci vars list --repo <the first site's repository>`
+(variable `ANTHROPIC_WORKSPACE_ID_REVIEW`), as that site's check does.
 
 **Outstanding** is carried in the entry above.
 

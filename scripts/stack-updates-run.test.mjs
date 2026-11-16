@@ -982,6 +982,23 @@ test("run folders older than 30 days are removed; today's is kept", async (t) =>
   assert.ok(existsSync(join(runs, "2026-10-14")));
 });
 
+// A dependency in a project: the catalog names a key, the fixture home's projects.json names
+// the repository, and the report names it too.
+test("a project dependency: the lockfile is read from the mapped repository, and the report names that repository", async (t) => {
+  const cat = { version: 1, ignored: [], tools: [tool("dep", "Dep", [{ name: "dependency", installed: { kind: "project", project: "site-one", package: "firecrawl-cli" }, feed: { kind: "npm", package: "firecrawl-cli" } }])] };
+  const lock = (version) => ({ "repos/example-owner/site-one/contents/package-lock.json": { type: "file", encoding: "base64", content: Buffer.from(JSON.stringify({ packages: { "node_modules/firecrawl-cli": { version } } })).toString("base64") } });
+  const state = tmp(t);
+  const first = fakes({ npm: "1.31.0", gh: lock("1.31.0") });
+  assert.equal((await cli(["run", ...at(state, "2026-11-13")], first, cat)).code, 0);
+  assert.ok(first.gh.calls.some((c) => c[1] === "repos/example-owner/site-one/contents/package-lock.json"), JSON.stringify(first.gh.calls));
+  assert.deepEqual(readJson(join(state, "state.json")).parts["dep/dependency"].installed, "1.31.0");
+  const next = await cli(["run", ...at(state, "2026-11-14", "--no-read")], fakes({ npm: "1.32.0", gh: lock("1.31.0") }), cat);
+  assert.equal(next.code, 0, next.err);
+  assert.ok(next.out.includes("1.31.0 -> 1.32.0, dependency in example-owner/site-one\n"), next.out);
+  assert.ok(next.out.includes("(the version pull request in example-owner/site-one, which Dependabot opens)"), next.out);
+  assert.equal(readJson(join(state, "runs", "2026-11-14", "result.json")).changes[0].repository, "example-owner/site-one");
+});
+
 // A skill copy followed by its commits: where it stands is known only from a recorded commit.
 const C1 = "a".repeat(40), C2 = "b".repeat(40);
 const SKILL_CAT = { version: 1, ignored: [], tools: [tool("x", "X skill", [{ name: "skill", installed: { kind: "skill", folder: "x" }, feed: { kind: "commit", repository: "o/x" } }])] };

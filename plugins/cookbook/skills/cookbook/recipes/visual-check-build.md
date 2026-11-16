@@ -1,7 +1,7 @@
 # Visual check of a live site: building one
 
 Built once per site, in the site's repository, as a script with tests. The pattern is
-`scripts/check-visual.mjs` in `TOKYO-BEANS/WeCare-Wix` (built and proved 15 November 2026).
+`scripts/check-visual.mjs` in the first site's repository (built and proved 15 November 2026).
 
 - **Before and after.** Before is the live site. After is the change before it is public: a
   local build of the branch, or the host's preview address (making one asks first where the
