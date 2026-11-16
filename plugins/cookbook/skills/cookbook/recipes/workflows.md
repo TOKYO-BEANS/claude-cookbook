@@ -12,7 +12,7 @@ opinions, and an agent budget. Exceeding a budget needs a stated reason (`budget
 | `sa-review` | a commit range or PR: evidence first, then one reviewer | 3 |
 | `sa-release` | after a merge or deploy; or merge a PR when the merge condition holds | 1 |
 | `sa-research` | a public question with cited sources | 4 |
-| `sa-build` | a written plan, task by task, to a green PR | 8 |
+| `sa-build` | a written plan, task by task, to a green PR | 11 |
 | `sa-debug` | a reproducible bug: failing test first, then fix and review | 4 |
 | `sa-triage` | open CodeQL alerts and Semgrep Supply Chain findings, one fix PR | 6 |
 | `sa-onboard` | bring a repository onto the shared standard | 2 |
@@ -30,7 +30,8 @@ opinions, and an agent budget. Exceeding a budget needs a stated reason (`budget
   `.github/workflows/**`, and any change that loosens one of these stops or
   weakens a check, a ruleset or a CI job.
 - The reviewer steps of `sa-review`, `sa-build` and `sa-triage` read text other people wrote, so
-  they are meant to run without a shell, on `cookbook:reader` (the `sa-triage` triager on
-  `cookbook:reader-graph`), from the Stack-Atlas pull request that uses them
-  ([dispatch](dispatch.md)).
+  they run without a shell, on `cookbook:reader` (the `sa-triage` triager on
+  `cookbook:reader-graph`): `sa-review` and `sa-triage` since Stack-Atlas #188, `sa-build` since
+  Stack-Atlas #190 ([dispatch](dispatch.md)). What a reviewer needed a shell for runs in a step
+  before it; in `sa-build` that step makes a task three agents, hence its budget of 11.
 - Record each completed run as Stack-Atlas's `workflows/README.md` "After a run" says.

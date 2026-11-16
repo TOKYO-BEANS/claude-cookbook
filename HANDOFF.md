@@ -82,6 +82,22 @@ uploaded 176 tracked files and passed `npm test` in 22 seconds, no slot file was
 - Saved snapshots (10 in the plan) are unused: a snapshot with a repository's dependencies
   installed would start faster. Worth it only for a repository whose install is slow.
 
+## 16 November 2026 (evening): `sa-build`'s reviewers without a shell (0.35.3)
+
+**Why.** TOKYO-BEANS/Stack-Atlas#190 moves `sa-build`'s three reviewer steps onto
+`cookbook:reader`, as #188 did for `sa-review` and `sa-triage`. What those reviewers needed a
+shell for (building and counting the review package, the no-change checks) runs in a runner
+step before each review, so a task takes three agents and the workflow's budget goes from 8
+to 11. The workflows recipe states each workflow's budget, so it changes with it.
+
+**What changed.**
+- `recipes/workflows.md`: `sa-build`'s budget 11; the reviewer point says all three workflows
+  now run their reviewers without a shell, and why `sa-build`'s budget grew.
+- Plugin 0.35.3.
+
+**Verification.** `npm test` passes in this repository. No code, hook or agent definition
+changes; the dispatch profiles stay as #65 made them.
+
 ## 16 November 2026 (later afternoon): a security review thread stops the merge (0.35.2)
 
 **Why.** On 16 November 2026 #62 merged with four `github-advanced-security` review threads
