@@ -75,7 +75,7 @@ fallback and say that you did.
 | Web logins | the **Proton Pass CLI**, vault "Claude" | the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Keys and tokens | the DPAPI store (`agent-key.ps1`, `with-key.mjs`) | — | — |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
-| Run code away from this PC | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md) |
+| Run code away from this PC: tests on Linux before a push, a Linux-only failure, a long or parallel job | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
 | Connect a new app or service | the **Cookbook** first, then the lightest route | — | [connecting](recipes/connecting.md) |
 | Office files and PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |
