@@ -115,8 +115,10 @@ test("Windows: the helper as a process prints the header by the direct route", n
 });
 
 // The two launchers. Each test gives them a home folder with a stand-in for the pinned CLI.
-const STUB = "process.stdout.write(JSON.stringify({ args: process.argv.slice(2), key: process.env.FIRECRAWL_API_KEY ?? null, url: process.env.FIRECRAWL_API_URL ?? null })); process.exit(4);";
+const STUB = "process.stdout.write(JSON.stringify({ args: process.argv.slice(2), key: process.env.FIRECRAWL_API_KEY ?? null, url: process.env.FIRECRAWL_API_URL ?? null, updates: [process.env.FIRECRAWL_NO_AUTO_UPDATE ?? null, process.env.FIRECRAWL_NO_UPDATE_CHECK ?? null] })); process.exit(4);";
 const HOSTED = "https://api.firecrawl.dev";
+// The pinned CLI never updates itself: both of its switches are set on every start.
+const OFF = ["1", "1"];
 const READ_TRIED = /with-key: could not read key "firecrawl" \(no key is saved as "firecrawl"\)/;
 function firecrawlHome(files) {
   const dir = home(files);
@@ -138,7 +140,7 @@ test("firecrawl launcher: no saved key means the CLI starts without one, and wit
     assert.equal(got.status, 4, got.stderr);
     // The address is set on this path: one saved in the CLI's own credentials file ranks
     // below the environment, so it cannot send the stored key to another host.
-    assert.deepEqual(JSON.parse(got.stdout), { args: ["scrape", "https://example.test"], key: null, url: HOSTED });
+    assert.deepEqual(JSON.parse(got.stdout), { args: ["scrape", "https://example.test"], key: null, url: HOSTED, updates: OFF });
     assert.match(got.stderr, /with-key: could not read key "firecrawl" \(no key is saved as "firecrawl"\); continuing without FIRECRAWL_API_KEY/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -162,7 +164,7 @@ test("firecrawl launcher: an --api-url argument for another host gets no stored 
       ["--api-url", "https://api.firecrawl.dev", "scrape", "x", "--api-url=https://example.test"]]) {
       const got = firecrawl(dir, { FIRECRAWL_API_KEY: "own" }, args);
       assert.equal(got.status, 4, got.stderr);
-      assert.deepEqual(JSON.parse(got.stdout), { args, key: "own", url: null });
+      assert.deepEqual(JSON.parse(got.stdout), { args, key: "own", url: null, updates: OFF });
       assert.equal(got.stderr, "", `${args.join(" ")}: no key read is tried`);
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -175,10 +177,11 @@ test("firecrawl launcher: only a listed command gets the stored key, and only kn
     // command, an option this launcher does not know, a scrape option before the command.
     for (const args of [["env"], ["env", "--file", "x.env"], ["--api-url", HOSTED, "env"], ["-k", "scrape", "init"], ["setup"], ["make", "x"], ["config"], ["login"],
       ["launch", "claude", "--install"], ["launcher"], ["doctor"], ["view-config"], ["update"], ["--enable", "alexandria", "env"], ["--enable=alexandria", "env"],
-      ["--some-new-option", "x", "scrape", "y"], ["-u", "https://example.test"]]) {
+      ["--some-new-option", "x", "scrape", "y"], ["-u", "https://example.test"],
+      ["experimental", "download", "https://example.test"], ["x", "sql", "select 1"], ["sql", "select 1"], ["download", "https://example.test"], ["browser", "execute", "snapshot"], ["create", "agent"], ["logout"]]) {
       const got = firecrawl(dir, { FIRECRAWL_API_KEY: "own" }, args);
       assert.equal(got.status, 4, got.stderr);
-      assert.deepEqual(JSON.parse(got.stdout), { args, key: "own", url: null }, args.join(" "));
+      assert.deepEqual(JSON.parse(got.stdout), { args, key: "own", url: null, updates: OFF }, args.join(" "));
       assert.match(got.stderr, /^firecrawl-secure: no stored key for this call \([^)]+\)\n$/, args.join(" "));
     }
     // Nothing to call, nothing to say.
@@ -186,8 +189,23 @@ test("firecrawl launcher: only a listed command gets the stored key, and only kn
     // What the caller typed is not repeated when it is not a plain command name.
     for (const args of [["--token=synthetic-secret", "scrape"], ["Synthetic-Secret-Value"]]) assert.doesNotMatch(firecrawl(dir, {}, args).stderr, /synthetic-secret/i);
     // These get the key: here none is saved, so the read is tried and says so.
-    for (const args of [["search", "env"], ["--status"], ["status"], ["https://example.test"], ["--enable", "alexandria", "scrape", "x"], ["--enable=alexandria", "scrape", "x"], ["-k", "own", "scrape", "x"], ["--api-url", HOSTED, "map", "x"]]) {
+    for (const args of [["search", "env"], ["--status"], ["status"], ["https://example.test"], ["--enable", "alexandria", "scrape", "x"], ["--enable=alexandria", "scrape", "x"], ["-k", "own", "scrape", "x"], ["--api-url", HOSTED, "map", "x"],
+      ["credit-usage", "--json"], ["credits"], ["list"], ["list-tools", "x"], ["research", "search-github", "x"], ["agent", "thread", "x"]]) {
       assert.match(firecrawl(dir, {}, args).stderr, READ_TRIED, args.join(" "));
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("firecrawl launcher: the pinned CLI's self-update is off on both paths, whatever the caller had set", () => {
+  const dir = firecrawlHome();
+  try {
+    // Another spelling of a name is the same variable on Windows, and another one elsewhere.
+    for (const extra of [{ FIRECRAWL_NO_AUTO_UPDATE: "0", FIRECRAWL_NO_UPDATE_CHECK: "false" }, { firecrawl_no_auto_update: "0", Firecrawl_No_Update_Check: "" }]) {
+      for (const args of [["scrape", "x"], ["--status"], ["env"], ["update"], ["--version"], []]) {
+        const got = firecrawl(dir, extra, args);
+        assert.equal(got.status, 4, got.stderr);
+        assert.deepEqual(JSON.parse(got.stdout).updates, OFF, `${Object.keys(extra)[0]}: ${args.join(" ")}`);
+      }
     }
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -200,6 +218,7 @@ test("Windows: the firecrawl launcher hands the stored key to the hosted API onl
       const got = firecrawl(dir, extra, args);
       assert.equal(JSON.parse(got.stdout).key, value, got.stderr);
       assert.equal(JSON.parse(got.stdout).url, url);
+      assert.deepEqual(JSON.parse(got.stdout).updates, OFF);
       assert.equal(got.stderr, "");
     }
     for (const args of [["scrape", "x", "--api-url=https://example.test"], ["env"], ["launch", "claude"], ["--enable", "alexandria", "env"]]) assert.equal(JSON.parse(firecrawl(dir, {}, args).stdout).key, null, args.join(" "));

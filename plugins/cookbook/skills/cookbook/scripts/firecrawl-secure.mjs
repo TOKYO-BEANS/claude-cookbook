@@ -40,17 +40,38 @@ function addresses(env, argv) {
   return list;
 }
 
-// The commands that call the API with the key and do nothing else with it. Not listed, so
-// without the stored key: the ones that set up credentials or integrations (`init`,
-// `setup`, `make`, `config`, `login`), write the key to a file (`env`), start another
-// program that would inherit it (`launch`), or only look at this PC (`doctor`,
-// `view-config`, `update`). On this PC the store and this launcher are the setup.
+// The commands that call the API with the key and do nothing else with it. A subcommand
+// goes with its command: `research search-github` and `agent thread` get the key.
+// Every other name starts without the stored key. Those of the pinned CLI, and why:
+// - `init`, `setup`, `make`, `config`, `login`, `logout`, `create`: credentials,
+//   integrations and starter projects. On this PC the store and this launcher are the
+//   setup. `env` writes the key to a file; `launch` starts a program that inherits it.
+// - `doctor`, `view-config`, `update`, `version`: the install on this PC.
+// - `experimental` (`x`), which holds `download` and `sql`, and the hidden `sql`: a
+//   group gets new commands between versions, and each would get the key unread.
+// - `browser` (hidden, deprecated for `interact`): its file holds a function that starts
+//   a local shell with the whole environment. Nothing calls it in 1.29.0.
 const KEYED_COMMANDS = new Set(["scrape", "crawl", "batch-scrape", "map", "parse", "monitor", "search", "find-tools", "find-skills", "read-skill",
-  "create-skill", "update-skill", "alexandria", "developer", "gov", "research", "feedback", "search-feedback", "agent", "interact", "status"]);
+  "create-skill", "update-skill", "list", "list-tools", "alexandria", "developer", "gov", "research", "feedback", "search-feedback", "agent", "interact",
+  "status", "credit-usage", "credits"]);
 // The options the CLI takes before a command. An option that is not one of these, before
 // the command, means no stored key: its value could be read as the command.
 const VALUE_OPTIONS = ["-k", "--api-key", "--api-url", "--enable"];
 const QUIET_OPTIONS = new Set(["-h", "--help", "-V", "--version"]);
+
+// The CLI is a pinned copy and never updates itself. Its update worker is a detached copy
+// of the CLI that inherits the environment, the key included, and its update notice names
+// an install this PC does not have. Both switches are set on every start, with the key or
+// without, over whatever the caller had under those names.
+const UPDATES_OFF = ["FIRECRAWL_NO_AUTO_UPDATE", "FIRECRAWL_NO_UPDATE_CHECK"];
+function pinned(source) {
+  const env = { ...source };
+  for (const name of UPDATES_OFF) {
+    dropVariable(env, name, process.platform);
+    env[name] = "1";
+  }
+  return env;
+}
 
 // Whether this call gets the stored key: { keyed } and, when it is worth a line, why not.
 // The line never repeats an option or an argument that is not a plain command name.
@@ -79,9 +100,9 @@ const own = process.argv.slice(2);
 const args = [CLI, ...own];
 const { keyed, why } = decide(process.env, own);
 if (why) process.stderr.write(`firecrawl-secure: no stored key for this call (${why})\n`);
-if (!keyed) process.exit(await startProgram(process.execPath, args, process.env));
+const env = pinned(process.env);
+if (!keyed) process.exit(await startProgram(process.execPath, args, env));
 
-const env = { ...process.env };
 const url = process.env.FIRECRAWL_API_URL || HOSTED;
 dropVariable(env, "FIRECRAWL_API_URL", process.platform);
 env.FIRECRAWL_API_URL = url;
