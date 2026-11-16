@@ -47,10 +47,10 @@ and "Not now".
 **Verification.** 62 tests in `scripts/model-budget.test.mjs` (8 new, failing first; the
 grace test fails with the grace set to 0); `npm test`. On T3 Code's real file, with the list
 taken out of a copy in every other reading: one line of advice in 12 readings, where 0.35.4
-gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live for seven
-minutes with `watch-advice.mjs`: one line of advice, through a change of source from T3
-Code's reading to a signed one; the list was in T3 Code's file throughout, so the live run
-did not show a minute without it.
+gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live with
+`watch-advice.mjs`, for seven minutes and then a longer run: one line of advice, through
+changes of source (T3 Code's reading, a signed one, the signed one over ten minutes old) and
+through the minutes from 17:44 UTC on in which T3 Code's file had no list.
 
 **Limits (known).**
 - Whoever can write T3 Code's file as the owner can have a session told to ask for a reset,
