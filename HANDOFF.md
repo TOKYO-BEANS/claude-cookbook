@@ -38,8 +38,8 @@ holding a question written as a paragraph at the end of a closing message.
 **Dead ends.** Reading the key at every turn (too slow). The environment as the scripted-run
 signal (inherited). The phrase list as the judge (falls apart out of sample).
 
-**Backstop.** No daily agent run can reach T3's sidebar: the three daily runs are Claude Desktop
-tasks without T3 tools, and T3 has no scheduled task. T3's CLI (`t3 thread list --json`, run
+**Backstop.** Until the sweep below, no daily agent run could reach T3's sidebar: the three daily
+runs are Claude Desktop tasks without T3 tools, and T3 had no scheduled task. T3's CLI (`t3 thread list --json`, run
 from a folder other than `C:\`) lists title, status and settled, so a plain script could count
 waiting chats; it cannot see pins. The owner chose a daily T3 agent sweep (below).
 
@@ -65,8 +65,9 @@ waiting chats; it cannot see pins. The owner chose a daily T3 agent sweep (below
 - The global `CLAUDE.md` sidebar bullet names the marker and the hook.
 
 **The daily sidebar sweep** (the owner's choice on 16 November 2026, a recurring spend): a T3
-scheduled task in this project, "Daily sidebar sweep", 07:45 every day, unbound with a fresh
-session per run, so the runs share one thread. It marks, unmarks or settles chats idle for more
+scheduled task in this project, "Daily sidebar sweep", 07:45 every day, with a fresh session per
+run. It was created without a thread; its first run made one and bound the task to it
+(`boundThreadId`, checked with `list_scheduled_tasks`), so every run uses that thread. It marks, unmarks or settles chats idle for more
 than 2 hours, never answers or continues one, and settles its own thread. A run now: about a
 minute, nothing old enough to touch. Its thread is set to Sonnet 5.5 after that run.
 
