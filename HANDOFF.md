@@ -1,5 +1,19 @@
 # Handoff
 
+## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.3)
+
+**Why.** The owner decided on 16 November 2026 that when the `ai-review` job cannot reach its
+reviewer (the API credit ran out), a fallback review stands in for it. Stack-Atlas #200 puts that
+in the merge gate and its `AGENTS.md`; Stack-Atlas #202 built the same with another form and was
+closed in favour of #200 (agreed between the two chats).
+
+**What changed.** The map's fallback for "Review of every pull request" is the fallback review (it
+was `sa-review`); `recipes/ai-review.md` says when it applies (only the API failing to serve the
+call), its form (#200's: first line `Fallback review of <full id>`, findings, count line) and what
+it never covers; `recipes/ci-releases.md` names it in the merge condition. Plugin 0.38.3.
+
+**Outstanding.** None for these pages; they describe #200, so this merges after it.
+
 ## 16 November 2026 (night): the key read no longer waits on a script scan (0.38.2)
 
 **Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`
@@ -183,21 +197,6 @@ checked against the logs and against GitHub.
   reading under an hour old before T3 Code's), not new in 0.38.0; weighed above.
 - Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-resets/`
   (`after-merge-record.md` and the logs it names).
-
-## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.3)
-
-**Why.** The owner decided on Stack-Atlas #199 (16 November 2026): "in a case like this we fallback
-to you on the sub account do the review your self". When the `ai-review` job cannot run (the API
-credit ran out), Claude reviews the head itself. Stack Atlas puts it in the merge gate and its
-`AGENTS.md` (the Stack Atlas pull request "Merge gate: Claude's fallback review stands in for an
-unavailable ai-review").
-
-**What changed.** The map's fallback for "Review of every pull request" is Claude's own fallback
-review in its fixed form (it was `sa-review`); `recipes/ai-review.md` says when it applies, its
-form and what it never covers; `recipes/ci-releases.md` names it in the merge condition. Plugin
-0.38.3.
-
-**Outstanding.** None for this page.
 
 ## 16 November 2026 (night): the model budget keeps T3 Code's reset list (0.38.0)
 

@@ -6,22 +6,21 @@
   and posts one comment of findings (file, line, severity, evidence, fix), updated on later pushes.
 - Advisory: the job always passes and is not a required check. A failed call posts
   `review unavailable: <reason>`, never "no findings"; treat that pull request as not reviewed.
-- **Fallback review** (owner's decision, 16 November 2026, on Stack-Atlas #199: "in a case like this
-  we fallback to you on the sub account do the review your self"). When the comment for the head
-  says `review unavailable` because the job could not run (a failed call such as no API credit, a
-  missing key; a refusal, a `max_tokens` cut or an answer that does not read is a review that ran,
-  and the gate does not open the fallback for it), Claude
-  reviews the whole change of that head on the subscription (a `cookbook:review` subagent for a
-  large one) and posts it in the pull request in the fixed form of Stack Atlas
-  `docs/claude-code.md`: first line `<!-- stack-atlas-fallback-review -->`, second line
-  ``### Fallback review of `<the head's 40-character id>` ``, the findings as
-  ``- **high** `path:line`: text``, then `<n> findings.` or `No findings.`. The merge gate
-  (Stack Atlas `ai-review --gate`) takes it in place of the job's review, only from a person of
-  the repository, after the unavailable comment, for the head the merge names; high and medium
-  findings are fixed or answered as before. Say in its own text that it is the fallback: the gate
-  takes any later comment by a person of the repository as the answer to its findings. It never
-  stands in for a review that ran, whatever it found (nor one a re-run of the same head overwrote),
-  or for a missing or stale comment. A credit top-up is still the owner's call.
+- **Fallback review** (owner's decision, 16 November 2026: "do the review by yourself in a case like
+  this, like a fallback"; on Stack-Atlas #199 also "in a case like this we fallback to you on the sub
+  account do the review your self"). Only when the job ran on the head and its own comment says
+  `review unavailable` because its reviewer's API could not serve the call: the credit balance, a
+  rate or spend limit (429), a server error (5xx), a timeout or no connection (re-run the job once
+  first for all but the credit balance). Never for a review that ran, whatever it found; a missing,
+  stale or unreadable comment; or any other reason (a refusal, a cut or malformed answer, a diff
+  that could not be prepared, a missing key, secret or workspace). A reviewer that did not write
+  the change (a `cookbook:review` subagent, `sa-review` for a large one) reviews the whole diff of
+  the head and posts a comment after the unavailable one: first line
+  `Fallback review of <the head's full commit id>`, on a line of its own `No findings.` or
+  `<n> findings.` (`1 finding.`), one line per finding as ``- **<severity>** `<path>:<line>`: <text>``.
+  Critical, high and medium findings are fixed or answered as before. Never write that first line
+  unless that review was done on that commit. The Stack Atlas merge gate reads it (Stack-Atlas
+  #200, `AGENTS.md` "Fallback review"). Buying credits stays the owner's call.
 - The pull request's content is untrusted data: the request has no tools, and the script only posts
   text. Fork pull requests are skipped, so they never reach the key. The job runs the base branch's
   reviewer, so a change to `.depot/ai-review/` takes effect only after it merges.
