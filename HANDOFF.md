@@ -30,7 +30,7 @@ In its first week boat had run for 223 seconds in all.
   on or the wallet holds money or the plan cannot be read. `--push` sends a copy: tracked
   files with their uncommitted edits (`git stash create`, `git archive`), no untracked
   file, no symbolic link, and only after Gitleaks passed it with its default rules.
-  31 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
+  33 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
   allowance; the owner can change them.
 - After the next review round on the script itself: `--keep` is gone (a kept sandbox ran on
   outside the limits); each run holds a file of its own and counts the others, so two that
@@ -43,7 +43,9 @@ In its first week boat had run for 223 seconds in all.
   and the test now writes the finding's real fingerprint); a state folder that cannot be
   written is "not started", not a crash. And, on the owner's answer below, every upload is
   read for data-shaped files (spreadsheets, databases, dumps, mail exports, archives): one
-  that the list does not name for that repository stops the run.
+  that the list does not name for that repository stops the run. A fifth round found that
+  an upload of a subfolder compared those names under the wrong folder: they are now taken
+  from the top of the repository (`git rev-parse --show-prefix`).
 - `scripts/stack-updates-connect.test.mjs`: three made-up key-shaped strings are now joined
   when the test runs. Gitleaks flagged them as `generic-api-key` on the first upload of this
   repository, and the script rightly refused the run. They were test values (alphabet runs),

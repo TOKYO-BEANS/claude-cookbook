@@ -132,6 +132,7 @@ test("an upload of a clean repository is its last commit; a subfolder sends only
     git("commit", "-q", "-m", "second");
     const whole = stage(dir);
     assert.deepEqual(listed(whole.dir), [".gitignore", "moved.js"]);
+    assert.equal(whole.prefix, "");
     whole.remove();
     mkdirSync(join(dir, "sub"));
     writeFileSync(join(dir, "sub", "inner.js"), "x\n");
@@ -139,6 +140,7 @@ test("an upload of a clean repository is its last commit; a subfolder sends only
     git("commit", "-q", "-m", "third");
     const part = stage(join(dir, "sub"));
     assert.equal(basename(part.dir), "sub");
+    assert.equal(part.prefix, "sub/");
     assert.deepEqual(listed(part.dir), ["inner.js"]);
     part.remove();
   } finally {
@@ -420,6 +422,45 @@ test("a data-shaped file the list does not name stops the upload before the scan
   const many = world({ dataFiles: () => ["a.csv", "b.csv", "c.csv", "d.csv", "e.csv", "f.csv"] });
   assert.equal(main(["--timeout", "120", "--push", ".", "--", "x"], many.deps), 2);
   assert.match(many.out.join("\n"), /holds 6 data-shaped files .*\(a\.csv; b\.csv; c\.csv; d\.csv; e\.csv; \.\.\.\)/);
+});
+
+test("an upload of a subfolder: its data-shaped files are named from the repository's top", () => {
+  const sub = { stage: () => ({ dir: "/tmp/s/src", prefix: "src/", remove: () => {} }), dataFiles: () => ["data/customers.csv"] };
+  const list = (data) => ({ permit: () => ({ ok: true, key: "github.com/some-org/shop", list: "/state/upload-allowed.txt", data }) });
+  // A folder "data/" at the top of the repository is another folder than "src/data/".
+  const other = world({ ...sub, ...list(["data/"]) });
+  assert.equal(main(["--timeout", "120", "--push", "src", "--", "x"], other.deps), 2);
+  assert.ok(!other.calls.some((c) => c[0] === "boat"));
+  assert.match(other.out.join("\n"), /holds 1 data-shaped file the upload list does not name \(src\/data\/customers\.csv\)/);
+  for (const named of [["src/data/"], ["src/data/customers.csv"], ["src/"]]) {
+    const w = world({ ...sub, ...list(named) });
+    assert.equal(main(["--timeout", "120", "--push", "src", "--", "x"], w.deps), 0, named[0]);
+  }
+  // The same file with the whole repository uploaded.
+  const top = world({ stage: () => ({ dir: "/tmp/s/shop", prefix: "", remove: () => {} }), dataFiles: () => ["src/data/customers.csv"], ...list(["src/data/"]) });
+  assert.equal(main(["--timeout", "120", "--push", ".", "--", "x"], top.deps), 0);
+});
+
+test("a real subfolder with a data file: stopped under its real path, passed when that path is named", () => {
+  const { root, dir, git } = repo();
+  try {
+    mkdirSync(join(dir, "src", "data"), { recursive: true });
+    mkdirSync(join(dir, "data"));
+    writeFileSync(join(dir, "src", "data", "customers.csv"), "a,b\n");
+    writeFileSync(join(dir, "data", "prices.csv"), "a,b\n");
+    git("add", "-A");
+    git("commit", "-q", "-m", "data");
+    const run = (data) => {
+      const w = world({ stage, dataFiles, permit: () => ({ ok: true, key: "k", list: "/state/upload-allowed.txt", data }) });
+      return { code: main(["--timeout", "120", "--push", join(dir, "src"), "--", "x"], w.deps), w };
+    };
+    const stopped = run(["data/"]);
+    assert.equal(stopped.code, 2);
+    assert.match(stopped.w.out.join("\n"), /\(src\/data\/customers\.csv\)/);
+    assert.equal(run(["src/data/"]).code, 0);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("no free slot starts nothing", () => {

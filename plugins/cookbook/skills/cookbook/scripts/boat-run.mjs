@@ -104,7 +104,9 @@ function links(dir, at = "") {
   return null;
 }
 
-// A copy of the folder's tracked files in a new temporary folder: { dir, tmp, remove }.
+// A copy of the folder's tracked files in a new temporary folder: { dir, tmp, remove,
+// prefix }. The prefix is where the folder sits in its repository ("" at the top, else
+// "src/"): the upload list names files from the repository's top.
 // `git stash create` writes a commit of the tracked files as they are now and changes
 // nothing in the working folder; with no edits it prints nothing and HEAD is used.
 export function stage(folder) {
@@ -112,6 +114,9 @@ export function stage(folder) {
   const git = (...a) => spawnSync("git", ["-C", from, "-c", "user.name=boat-run", "-c", "user.email=boat-run@localhost", ...a], { encoding: "utf8" });
   if (git("rev-parse", "--show-toplevel").status !== 0) throw new Error("the folder to upload is not in a git repository: only tracked files are uploaded");
   if (git("rev-parse", "--verify", "-q", "HEAD^{commit}").status !== 0) throw new Error("the repository has no commit yet: commit first, only tracked files are uploaded");
+  const where = git("rev-parse", "--show-prefix");
+  if (where.status !== 0) throw new Error("git could not say where the folder sits in its repository");
+  const prefix = where.stdout.trim();
   const stash = git("stash", "create");
   if (stash.status !== 0) throw new Error("git could not read the tracked files (stash create failed)");
   const tree = /^[0-9a-f]{40,64}$/.test(stash.stdout.trim()) ? stash.stdout.trim() : "HEAD";
@@ -126,7 +131,7 @@ export function stage(folder) {
     rmSync(join(tmp, "src.tar"), { force: true });
     const link = links(dir);
     if (link) throw new Error(`the upload holds a symbolic link (${oneLine(link)}), which could lead outside the copy`);
-    return { dir, tmp, remove };
+    return { dir, tmp, remove, prefix };
   } catch (e) {
     remove();
     throw e;
@@ -330,7 +335,9 @@ export function main(argv, deps = REAL) {
         return stop(`${permit.key ? oneLine(permit.key) : "this folder"} is not on the upload list (${oneLine(permit.list)}): a repository is listed once, when it tracks code and no customer data; one that tracks customer data needs the owner's yes`);
       }
       staged = deps.stage(run.push);
-      const data = unnamed(deps.dataFiles(staged.dir), permit.data || []);
+      // From the repository's top, as the list names them: an upload of a subfolder would
+      // otherwise be compared under the wrong folder.
+      const data = unnamed(deps.dataFiles(staged.dir).map((f) => `${staged.prefix || ""}${f}`), permit.data || []);
       if (data.length > 0) {
         const some = data.slice(0, 5).map(oneLine).join("; ");
         return stop(`the upload holds ${data.length} data-shaped file${data.length === 1 ? "" : "s"} the upload list does not name (${some}${data.length > 5 ? "; ..." : ""}): look at each; name it on the list only when it holds no customer data, and take one that does to the owner`);
