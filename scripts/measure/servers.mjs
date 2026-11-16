@@ -28,6 +28,7 @@ export const PROMPT = "Reply with the single word OK.";
 const CONNECT_SECONDS = 100;
 const GRACE_MS = 4000; // a server lists its tools a moment after it connects
 const RUN_SECONDS = 240;
+const KILL_GRACE_MS = 5000; // then SIGKILL, where a signal can be ignored
 
 export const loadServers = (file = fileURLToPath(new URL("./servers.json", import.meta.url))) => JSON.parse(readFileSync(file, "utf8"));
 
@@ -48,11 +49,23 @@ export function parseArm(arm, { servers, plugins, userServers = [] }) {
 }
 
 // A `defer` arm passes the user's own entry for the server again with `"alwaysLoad": false`
-// (Claude Code 2.1.287 or later). The entry holds a command or a headers helper, never a key.
+// (Claude Code 2.1.287 or later). The entry goes into a temporary file, so only an entry that
+// can hold no key is copied: a remote server with these fields and no others, whose URL has no
+// user part, no query and no path segment that could be a key. A command, its arguments, an
+// `env` or literal `headers` are refused, whatever they hold.
+const DEFER_FIELDS = new Set(["type", "url", "headersHelper", "timeout", "alwaysLoad"]);
+export function plainUrl(text) {
+  let u;
+  try { u = new URL(String(text)); } catch { return false; }
+  if (u.protocol !== "https:" || u.username || u.password || u.search || u.hash) return false;
+  return u.pathname.split("/").every((seg) => seg.length <= 12 && /^[A-Za-z0-9._~-]*$/.test(seg));
+}
 export function deferConfig(name, userConfig) {
   const entry = userConfig?.mcpServers?.[name];
   if (!entry) throw new Error(`no user-scope server named ${name}`);
-  if (entry.headers || Object.keys(entry.env ?? {}).some((k) => /key|token|secret|password/i.test(k))) throw new Error(`${name}: its entry holds headers or a key, so it is not copied`);
+  const extra = Object.keys(entry).filter((k) => !DEFER_FIELDS.has(k));
+  if (extra.length) throw new Error(`${name}: its entry has ${extra.join(", ")}, so it is not copied`);
+  if (!["http", "sse", "ws"].includes(entry.type) || !plainUrl(entry.url)) throw new Error(`${name}: its URL could hold a key, so it is not copied`);
   return { mcpServers: { [name]: { ...entry, alwaysLoad: false } } };
 }
 
@@ -116,13 +129,18 @@ export function buildRow({ arm, rep, model, cap, expected, states, all, waitMs, 
     : unexpected.length ? `connected though left out: ${unexpected.join(", ")}`
     : null;
   return {
-    arm, rep, model: s.init?.model ?? model, version: s.init?.version ?? null, planLogin: s.init?.login === "plan",
+    arm, rep, requested: model, model: s.init?.model ?? model, version: s.init?.version ?? null, planLogin: s.init?.login === "plan",
     firstContext: s.firstContext, requests: s.calls, waitMs, exit,
     costUsd: r && r.costReported ? r.costUsd : cap, costReported: Boolean(r?.costReported),
     tools: s.init ? toolsByServer(s.init.tools, all) : null, plugins: s.init?.plugins ?? null, skills: s.init?.skills ?? null,
     connected: expected.filter((n) => states.expected[n] === "connected"), problem,
   };
 }
+
+// A folder holds the runs of one requested model. The model a session reports can be another
+// name for it (`opus` against its full id), so the comparison is on what was asked for; a row
+// from before that field existed has only the reported one.
+export const otherModel = (rows, model) => rows.some((r) => (r.requested ?? r.model) && (r.requested ?? r.model) !== model);
 
 export const spentSoFar = (rows) => rows.reduce((a, r) => a + (r.costUsd ?? 0), 0);
 
@@ -173,15 +191,19 @@ function session(argv, cwd, debugFile, expected) {
     const started = Date.now();
     let waitMs = 0;
     const readDebug = () => { try { return readFileSync(debugFile, "utf8"); } catch { return ""; } };
+    let tick = null, hard = null;
+    // Runs once: it ends the watch, so a limit that was reached is not acted on again.
     const kill = (why) => {
+      if (stopped) return;
       stopped = why;
+      clearInterval(tick);
       if (process.platform === "win32") spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on("error", () => child.kill());
-      else child.kill();
+      else { child.kill(); hard = setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS); }
     };
     child.stdout.on("data", (d) => { out += d; });
     child.stderr.on("data", () => {});
     child.stdin.on("error", () => {});
-    const tick = setInterval(() => {
+    tick = setInterval(() => {
       const now = Date.now();
       if (now - started > RUN_SECONDS * 1000) return kill("the time limit");
       if (sent) return;
@@ -192,7 +214,7 @@ function session(argv, cwd, debugFile, expected) {
         child.stdin.end(`${JSON.stringify({ type: "user", message: { role: "user", content: PROMPT } })}\n`);
       } else if (!settledAt && now - started > CONNECT_SECONDS * 1000) kill(`not every server settled in ${CONNECT_SECONDS} seconds`);
     }, 250);
-    const end = (exit) => { clearInterval(tick); done({ exit, out, stopped, waitMs, debugText: readDebug() }); };
+    const end = (exit) => { clearInterval(tick); clearTimeout(hard); done({ exit, out, stopped, waitMs, debugText: readDebug() }); };
     child.on("error", () => end(null));
     child.on("close", end);
   });
@@ -207,7 +229,7 @@ async function run(opts) {
   const expected = expectedServers(arm, catalog.servers);
   mkdirSync(opts.out, { recursive: true });
   const rows = readRows(opts.out);
-  if (rows.some((r) => r.model && r.model !== model)) throw new Error("this folder holds runs of another model");
+  if (otherModel(rows, model)) throw new Error("this folder holds runs of another model");
   let spent = spentSoFar(rows);
   const have = rows.filter((r) => r.arm === arm.arm && !r.problem).length;
   for (let rep = have + 1; rep <= reps; rep += 1) {

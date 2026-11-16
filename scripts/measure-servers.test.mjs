@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aggregate, armSettings, deferConfig, buildRow, claudeArgs, expectedServers, loadServers, parseArm, parseFlags, parseLimits, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
+import { aggregate, armSettings, deferConfig, buildRow, claudeArgs, expectedServers, loadServers, otherModel, parseArm, parseFlags, parseLimits, plainUrl, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
 
 // A fixed list for the tests; the live one (servers.json) follows this PC's setup.
 const catalog = {
@@ -99,13 +99,34 @@ test("limits and flags are read strictly", () => {
   assert.throws(() => parseFlags(["--out"]), /needs a value/);
 });
 
-test("a deferred server is the user's own entry with alwaysLoad false; an entry with headers or a key is not copied", () => {
-  const user = { mcpServers: { a: { type: "http", url: "https://a.example/mcp", headersHelper: "helper" }, b: { type: "http", url: "u", headers: { Authorization: "x" } }, c: { command: "node", env: { API_KEY: "x" } }, d: { command: "node", env: { BROWSER: "cloud" } } } };
-  assert.deepEqual(deferConfig("a", user), { mcpServers: { a: { type: "http", url: "https://a.example/mcp", headersHelper: "helper", alwaysLoad: false } } });
-  assert.equal(deferConfig("d", user).mcpServers.d.alwaysLoad, false);
-  for (const n of ["b", "c"]) assert.throws(() => deferConfig(n, user), /not copied/);
-  assert.throws(() => deferConfig("zz", user), /no user-scope server/);
+test("a deferred server is the user's own entry with alwaysLoad false, copied only when it can hold no key", () => {
+  const ok = { type: "http", url: "https://mcp.example.dev/v2/mcp", headersHelper: "helper", timeout: 5000 };
+  assert.deepEqual(deferConfig("a", { mcpServers: { a: ok } }), { mcpServers: { a: { ...ok, alwaysLoad: false } } });
+  const refused = {
+    headers: { ...ok, headers: { Authorization: "x" } },
+    env: { ...ok, env: { BROWSER: "cloud" } },
+    command: { command: "node", args: ["server.js", "--api-key", "x"] },
+    keyInPath: { type: "http", url: "https://mcp.example.dev/fc-0123456789abcdef0123/v2/mcp" },
+    keyInQuery: { type: "http", url: "https://mcp.example.dev/mcp?key=x" },
+    keyInUser: { type: "http", url: "https://user:pass@mcp.example.dev/mcp" },
+    notHttps: { type: "http", url: "http://mcp.example.dev/mcp" },
+    stdio: { type: "stdio", url: "https://mcp.example.dev/mcp" },
+  };
+  for (const [n, entry] of Object.entries(refused)) assert.throws(() => deferConfig(n, { mcpServers: { [n]: entry } }), /not copied/, n);
+  assert.throws(() => deferConfig("zz", { mcpServers: {} }), /no user-scope server/);
+  assert.ok(plainUrl("https://api.example.com/mcp"));
+  assert.ok(!plainUrl("https://api.example.com/mcp#x") && !plainUrl("not a url") && !plainUrl("https://api.example.com/a%2Fb"));
   const a = claudeArgs({ settings: "s", model: "m", cap: 1, debug: "d", mcpConfig: "mcp.json" });
   assert.deepEqual(a.slice(0, 2), ["--mcp-config", "mcp.json"]);
   assert.ok(!a.includes("--strict-mcp-config"));
+});
+
+test("a folder is of one requested model: an alias the session reports under its full id is not another model", () => {
+  const row = rowOf({ model: "opus", summary: summary({ init: { tools: [], plugins: [], skills: 0, login: "plan", model: "claude-opus-5-5", version: "2.1.325" } }) });
+  assert.deepEqual([row.requested, row.model], ["opus", "claude-opus-5-5"]);
+  assert.ok(!otherModel([row], "opus"));
+  assert.ok(otherModel([row], "claude-opus-5-5"));
+  assert.ok(!otherModel([{ model: "claude-opus-5-5" }], "claude-opus-5-5"), "a row from before the field has the reported model only");
+  assert.ok(otherModel([{ model: "claude-opus-5-5" }], "claude-haiku-5-5"));
+  assert.ok(!otherModel([], "x"));
 });

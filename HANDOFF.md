@@ -59,7 +59,17 @@ the three ways out of a session start), linked from `connecting.md`; one bullet 
 - Start-up probes without a prompt (no cost): OpenSEO connects in both site folders and not
   in an empty one. In a child session (`--setting-sources "" --plugin-dir <cache folder>`) it
   connects with its stored sign-in.
-- `npm test` passes (355 tests, 11 of them in `scripts/measure-servers.test.mjs`).
+- `npm test` passes (356 tests, 12 of them in `scripts/measure-servers.test.mjs`).
+
+**AI review round 1** (of three): three low findings, all fixed. A limit that was reached
+ended the session again on every tick: it now runs once, and where a signal can be ignored a
+SIGKILL follows after five seconds. The `defer` arm copied an entry unless it had `headers`
+or a key-like `env` name, so a key in the URL or in the arguments would have gone into the
+temporary file: it now copies only a remote entry with `type`, `url`, `headersHelper` and
+`timeout`, whose URL has no user part, no query and no long path segment, and refuses
+everything else (Stagehand's entry among them; Firecrawl's passes). A folder is checked
+against the model that was asked for, not the one the session reports, so an alias in
+`--model` no longer blocks the next run.
 
 **Spend.** USD 7.96 at list prices, on the plan login: 31 measuring runs (7.37, limit 15) and
 the Firecrawl call (0.59, and four Firecrawl credits).

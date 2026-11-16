@@ -15,7 +15,6 @@
   "userServers": [
     "cloudflare-docs",
     "firecrawl",
-    "graphify",
-    "stagehand"
+    "graphify"
   ]
 }
