@@ -20,8 +20,12 @@ Fable reset, and the script said Opus where the rules, with the reset known, say
   `resetCredits` key means its read was refused, and `availableCount: 0` means none.
 - Claude Code renews the sign-in every 8 hours (seen at 17:19 UTC), and every file the
   script signs is unreadable from then on.
-- T3 Code's reads are not always refused every other minute: from 17:32 to 17:40 UTC all
-  nine answered 200, and its file had the list in every minute.
+- T3 Code's reads are not refused every other minute as a rule: from 17:32 to 17:43 UTC
+  each one answered 200 and its file had the list in every minute; from 17:44 on each one
+  answered 429, for over ten minutes, and the file had no list.
+- In T3 Code's file the top `checkedAt` moves with every rewrite, about every minute;
+  `usageLimits.checkedAt` moves only when T3 Code asks for the limits and lagged by two
+  minutes.
 
 **Owner decision (question dialog, 16 November 2026).** Asked which source the script should
 use, with the cost of each: "Keep T3 Code's list (Recommended)" (the script stores what an
@@ -34,8 +38,10 @@ and "Not now".
 - `readUsage` keeps the newest list T3 Code's file showed in
   `~/.local/share/model-budget/resets.json` (signed like the script's other files; only the
   list and the time it was seen, no figure) and adds it to every reading, whatever the
-  source of the figures. A list last seen over an hour ago is dropped: "not read". An older
-  copy of T3 Code's file never replaces a newer list. The signed reading (`usage.json`)
+  source of the figures. A list last seen over an hour ago is dropped: "not read". The
+  list's time is the file's top `checkedAt` (the AI review's finding on #80: by
+  `usageLimits.checkedAt` a list that changed between two limit probes was not taken). An
+  older copy of T3 Code's file never replaces a newer list. The signed reading (`usage.json`)
   holds only what the endpoint said.
 - The hook: a change of advice that comes while the list is missing waits five minutes
   (`GRACE_MS`), unless a limit is spent or the session starts. That covers the minute or two
@@ -44,7 +50,7 @@ and "Not now".
 - `recipes/model-budget-resets.md` is new (the source, the cost, what was not chosen);
   `model-budget.md` and `model-budget-setup.md` point to it.
 
-**Verification.** 62 tests in `scripts/model-budget.test.mjs` (8 new, failing first; the
+**Verification.** 63 tests in `scripts/model-budget.test.mjs` (9 new, failing first; the
 grace test fails with the grace set to 0); `npm test`. On T3 Code's real file, with the list
 taken out of a copy in every other reading: one line of advice in 12 readings, where 0.35.4
 gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live with
@@ -52,13 +58,18 @@ gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live w
 changes of source (T3 Code's reading, a signed one, the signed one over ten minutes old) and
 through the minutes from 17:44 UTC on in which T3 Code's file had no list.
 
+**Owner decision on the merge (question dialog, 16 November 2026).** Asked as a condition
+before the check came: "Merge #80 once (Recommended)", for a neutral Graphify Formal
+Verification as the only check not passing, on this pull request only.
+
 **Limits (known).**
 - Whoever can write T3 Code's file as the owner can have a session told to ask for a reset,
   or told Fable where the pace rule says Opus. Redeeming stays the owner's click in T3 Code.
 - After a reset is used, the old list stands until T3 Code's next read that gets through.
 - A session started in the minute or two after a renewed sign-in, while T3 Code's file has
   no list, may be told the other model once.
-- With T3 Code closed for an hour, the resets are "not read".
+- With T3 Code closed for an hour, or its reads refused for an hour on end, the resets are
+  "not read".
 
 **Recorded here, from the job before (#74).** #74 merged by hand as `6dcdf3b` (release event
 `verified`, execution 1572) on the owner's "Merge #74 once", past a neutral Graphify Formal

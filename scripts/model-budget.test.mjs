@@ -523,6 +523,38 @@ test("readUsage: a newer list replaces the kept one, an empty one means none, an
   assert.equal(payload(join(stateDir, "resets.json")).seen, NOW + 239000);
 });
 
+test("readUsage: the list's time is the file's own checkedAt, so a list that changes between two limit probes is taken", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  // As on 16 November 2026: T3 Code rewrites the file, reset list included, every minute (the top
+  // checkedAt), and asks Claude Code for the limits less often (usageLimits.checkedAt stays).
+  const file = (fileCheckedAt, options) => ({ ...t3({ options, checkedAt: NOW - 4 * 60000 }), checkedAt: new Date(fileCheckedAt).toISOString() });
+  const read = async (now, json) => {
+    seedT3(home, json);
+    return readUsage({ home, stateDir, now, fetchImpl: never, cacheOnly: true });
+  };
+  const first = await read(NOW, file(NOW - 1000, [option()]));
+  assert.deepEqual([first.usage.grants, first.resetsSeen, first.at], [[FABLE_RESET], NOW - 1000, NOW - 4 * 60000]);
+  // The owner used the Fable reset; a minute later the file shows what is left, with the same limits probe.
+  const next = await read(NOW + 60000, file(NOW + 59000, [option({ creditId: "w1", label: "Weekly reset" })]));
+  assert.deepEqual([next.usage.grants.map((g) => g.id), next.resetsSeen, next.at], [["w1"], NOW + 59000, NOW - 4 * 60000]);
+  // A list that differs at the very same time is taken too; the same list is not written again.
+  const same = await read(NOW + 61000, file(NOW + 59000, []));
+  assert.deepEqual([same.usage.grants, same.usage.resetsRead, same.resetsSeen], [[], true, NOW + 59000]);
+  // The hour is counted from the file's time, not from the limits probe.
+  const held = await read(NOW + 59000 + RULES.staleMs - 1, t3({ checkedAt: NOW + 59000 + RULES.staleMs - 60000 }));
+  assert.equal(held.usage.resetsRead, true);
+  const over = await read(NOW + 59000 + RULES.staleMs, t3({ checkedAt: NOW + 59000 + RULES.staleMs - 60000 }));
+  assert.equal(over.usage.resetsRead, false);
+  // A file time that is odd or ahead of the clock: its list is not taken, its figures still are.
+  const later = NOW + RULES.staleMs + 5 * 60000;
+  for (const odd of ["soon", 7, null, new Date(later + 60000).toISOString()]) {
+    const r = await read(later, { ...t3({ options: [option()], checkedAt: later - 60000 }), checkedAt: odd });
+    assert.deepEqual([r.source, r.usage.week.used, r.usage.grants, r.usage.resetsRead], ["t3", 43, [], false], String(odd));
+  }
+});
+
 test("readUsage: the kept list is the script's own signed file; one that is changed, odd or from another sign-in is ignored", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");

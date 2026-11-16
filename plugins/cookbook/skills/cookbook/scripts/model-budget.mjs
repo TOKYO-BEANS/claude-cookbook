@@ -276,7 +276,12 @@ export function parseT3(json, now) {
   // The banked resets are kept out of the reading and given beside it. T3 Code's file holds them
   // (resetCredits) only in the minutes its own read of them got through, so a reading built on
   // them would change from one minute to the next: readUsage adds the kept list instead.
-  return { usage: { week, fable, session, grants: [], resetsRead: false, credits: windows.some((w) => w.id === "monthly_spend") }, at, resets: t3Resets(limits.resetCredits) };
+  // The list's time is the file's own checkedAt, which T3 Code moves each time it rewrites the
+  // file, about every minute; usageLimits.checkedAt moves only when it asks for the limits. A
+  // file with no time of its own has the limits' time; an odd one or one ahead of the clock has no list.
+  const resetsAt = json.checkedAt === undefined ? at : time(json.checkedAt);
+  const resets = resetsAt === null || resetsAt > now + T3_AHEAD_MS ? null : t3Resets(limits.resetCredits);
+  return { usage: { week, fable, session, grants: [], resetsRead: false, credits: windows.some((w) => w.id === "monthly_spend") }, at, resets, resetsAt };
 }
 
 // The text of a plain file of this user's, or null: no link, and where the system can say so
@@ -321,8 +326,8 @@ const readT3 = (file, now) => {
 
 // The list of banked resets T3 Code's file last showed, kept in resets.json between the minutes
 // that file has it, so that the advice is the same in every minute. The list is saved when
-// T3 Code's file shows one newer than the kept one, and stands while it was seen under an hour
-// ago; after that the resets are "not read". The file is signed like the script's others, so a
+// T3 Code's file shows one newer than the kept one (by the file's own time), and stands while
+// it was seen under an hour ago; after that the resets are "not read". The file is signed like the script's others, so a
 // changed one is ignored; but what it holds came from a file that is not signed. Whoever can
 // write T3 Code's file can therefore have a session told to ask the owner for a reset, or told
 // Fable where the pace rule says Opus: still one of the fixed lines, and redeeming stays the
@@ -335,8 +340,10 @@ const readResets = (file, token, now) => {
 const keepResets = (stateDir, token, t3, now) => {
   const file = join(stateDir, "resets.json");
   const kept = readResets(file, token, now);
-  if (!t3 || t3.resets === null || now - t3.at >= RULES.staleMs || (kept && kept.seen >= t3.at)) return kept;
-  const next = { seen: t3.at, grants: t3.resets };
+  if (!t3 || t3.resets === null || now - t3.resetsAt >= RULES.staleMs) return kept;
+  // An older file never replaces a newer list; the same file is saved once, unless its list differs.
+  if (kept && (kept.seen > t3.resetsAt || (kept.seen === t3.resetsAt && JSON.stringify(kept.grants) === JSON.stringify(t3.resets)))) return kept;
+  const next = { seen: t3.resetsAt, grants: t3.resets };
   writeSigned(stateDir, file, next, token);
   return next;
 };
