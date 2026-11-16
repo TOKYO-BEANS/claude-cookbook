@@ -1,0 +1,18 @@
+{
+  "servers": [
+    "claude.ai Claude Docs",
+    "cloudflare-docs",
+    "firecrawl",
+    "graphify",
+    "plugin:cloudflare:cloudflare",
+    "plugin:context-mode:context-mode",
+    "plugin:parallel:parallel-search",
+    "stagehand"
+  ],
+  "plugins": [
+    "cloudflare@cloudflare"
+  ],
+  "deferrable": {
+    "firecrawl": "7b4fbca1567f307fa5a82ea7ff09d7c86c23aca0927f16a41d872a80cfc8df5b"
+  }
+}

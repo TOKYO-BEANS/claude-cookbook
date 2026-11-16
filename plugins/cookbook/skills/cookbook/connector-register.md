@@ -12,12 +12,16 @@ describe the setup before 2 November, when the user-scope Aikido, GitHub, REA an
 servers left, OpenSEO moved to project scope and two unused connectors were disconnected. A row with
 zero calls is a removal candidate.
 
+What each server costs a session start was measured on 16 November 2026, with the calls of the 30
+days before: `recipes/connecting-load.md`. Two servers changed how they load that day (their rows).
+
 ## Servers and connectors
 
 | Server | Kind | Job | Calls (folders) | Tool names | Route | Decision and reason |
 |---|---|---|---|---|---|---|
 | graphify | user, HTTP | code graph: symbols, callers, impact, tests | 685 (5) | 28 | user-scope MCP; no CLI | Keep: the most called server, used across code projects |
-| firecrawl | user, HTTP | hosted scrape, search, crawl, map, agent | 273 (11) | 31 | MCP, plus the `firecrawl` CLI for scripts | Keep: the page-extraction route; crawl and agent have ask rules |
+| firecrawl | user, HTTP | hosted scrape, search, crawl, map, agent | 273 (11) | 31 | MCP, plus the `firecrawl` CLI for scripts | Keep: the page-extraction route; crawl and agent have ask rules. **Deferred 16 November** (`"alwaysLoad": false`): five of its tools loaded in full, 11,407 tokens a session; 1,376 now, every tool reached through tool search |
+| openseo | plugin, HTTP | SEO research: audits, keywords, competitors, backlinks, local SEO, reports | 186 (3 projects) in the 30 days to 16 November | 85 | **project scope**: `"openseo@openseo": false` in user settings, `true` in the `.claude/settings.local.json` of the two site projects | **Done 16 November** (the move noted for 2 November had not held: the plugin was on in the user settings): 2,303 tokens a session, called in 32 of 557 sessions |
 | Firecrawl | claude.ai connector | search, developer and research indexes | 1 (1) | 10 | duplicate of the user server in Code | **Disconnected 3 November**: the user `firecrawl` server has the same search, developer and research tools, and connectors are used only through Claude Code |
 | parallel-search | plugin, HTTP | web search and fetch; since plugin 0.12.0 (14 November 2026) also research (needs a sign-in, not set up), typed decisions, verticals and image search | 383 (17) | 8 (2 before 0.12.0) | plugin MCP; `parallel-cli` for extract and research | Keep: the default research route. The names grew from 2 to 8 with the plugin's move to `mcp.parallel.ai/mcp/claude`; `web_search` and `web_fetch` kept their names |
 | cloudflare | plugin, HTTP | Cloudflare API `execute`, `search`, docs | 25 (5) | 4 | plugin MCP; Wrangler or `cf` for D1 and Workers logs (its login lacks those scopes) | Keep: 4 names for the whole API |

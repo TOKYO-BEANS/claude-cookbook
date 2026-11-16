@@ -1,5 +1,151 @@
 # Handoff
 
+## 16 November 2026: each MCP server measured; Firecrawl deferred, OpenSEO in its projects only (0.31.3)
+
+**Why.** After the Adobe connector came back "on demand only" (#55) the owner asked: "shouldnt
+we do exactly that for all things? or is that too much?". The answer then: not for all, and
+with a measurement per server first. This is that job.
+
+**Measured** (Claude Code 2.1.325, Opus 5.5, the plan login, tool search on): the input tokens
+of a new headless session's first request with the user's own settings, plugins and servers.
+With all nine servers 67,356; with none 48,100. A server's cost is every server on minus that
+one left out, two runs each (three for every server on); repeats agreed to within 10 tokens.
+
+| Server | Tokens | Sessions that called it (of 557 in 30 days) | Calls |
+| --- | --- | --- | --- |
+| firecrawl | 11,407 | 35 | 204 |
+| OpenSEO | 2,303 (2,339 with its skills) | 32 | 186 |
+| parallel-search | 1,783 | 75 | 471 |
+| Claude Docs | 1,656 | 5 | 54 |
+| graphify | 965 | 78 | 478 |
+| context-mode | 885 | 79 | 3,455 |
+| cloudflare (plugin) | 91 (272 with its skills) | 10 | 23 |
+| cloudflare-docs | 52 | 10 | 30 |
+| stagehand | 39 | 1 | 3 |
+
+- The servers cost 19,256 tokens together, not the 8,000 to 15,000 estimated on 15 November.
+- Why two plain runs differed by thousands of tokens: a server reaches a session a moment
+  after it starts, and a prompt sent at once is answered without the ones still connecting.
+  The script holds the prompt back until the debug log shows each server connected.
+- Tool search already keeps tool definitions out. Firecrawl was the exception: its author
+  marks five tools to load in full. `"alwaysLoad": false` in the user's entry for the server
+  overrules that (Claude Code's MCP docs, 2.1.287 or later): measured 57,325, so 10,031 saved,
+  with all 33 tools still listed.
+- T3 Code's own server is not in a headless run: not measured.
+
+**Asked once** (question tool, 16 November 2026), each with the saving, the use and the cost
+of the move. Firecrawl: "Defer (Recommended)". OpenSEO: "Only in its projects (Recommended)".
+Claude Docs: "Leave as is (Recommended)". Cloudflare (both) and Stagehand: "Leave all three
+(Recommended)".
+
+**What changed on this PC.**
+- `firecrawl` in `~/.claude.json` has `"alwaysLoad": false` (`claude mcp remove`, then
+  `add-json`, user scope; the headers helper is unchanged).
+- `openseo@openseo` is `false` in `~/.claude/settings.json` (`claude plugin disable`). It was
+  already `true` in the `.claude/settings.local.json` of the two site projects that use it,
+  which now decide. The register's note that it moved on 2 November had not held.
+- Nothing else: no deny entry, no connector, no sign-in.
+
+**What changed here.** `scripts/measure/servers.mjs` with `servers.json` (this PC's servers)
+and `scripts/measure-servers.test.mjs`; a new page `recipes/connecting-load.md` (the table and
+the three ways out of a session start), linked from `connecting.md`; one bullet each on
+`firecrawl.md` (load the tool with `ToolSearch` first), `seo.md` (where OpenSEO loads) and
+`scripted-runs.md` (hold the prompt back); the register's Firecrawl row and a new OpenSEO row.
+
+**Verification.**
+- After the moves a session start is 55,308 tokens (two runs, 55,307 and 55,309): 12,048 fewer.
+- A new session found `firecrawl_scrape` through `ToolSearch` and called it: every tool
+  result ok, no call denied.
+- Start-up probes without a prompt (no cost): OpenSEO connects in both site folders and not
+  in an empty one. In a child session (`--setting-sources "" --plugin-dir <cache folder>`) it
+  connects with its stored sign-in.
+- `npm test` passes (363 tests with `main` taken in, 17 of them in `scripts/measure-servers.test.mjs`).
+
+**AI review round 1** (of three): three low findings, all fixed. A limit that was reached
+ended the session again on every tick: it now runs once, and where a signal can be ignored a
+SIGKILL follows after five seconds. The `defer` arm copied an entry unless it had `headers`
+or a key-like `env` name, so a key in the URL or in the arguments would have gone into the
+temporary file: it now copies only a remote entry with `type`, `url`, `headersHelper` and
+`timeout`, whose URL has no user part, no query and no long path segment, and refuses
+everything else (Stagehand's entry among them; Firecrawl's passes). A folder is checked
+against the model that was asked for, not the one the session reports, so an alias in
+`--model` no longer blocks the next run.
+
+**Review round 2**, on `0818d74` (the commit that took `main` in). GitHub's security review:
+the URL check of the `defer` arm still let a short path segment or a host name carry a key
+into the temporary file. Its proposal (a root path only) would have refused Firecrawl's own
+`/v2/mcp`, and no check of an entry's text can prove it holds no key. So the entry is now
+pinned: `servers.json` records the SHA-256 fingerprint of the one entry a person has read
+(`servers.mjs fingerprint --server firecrawl`), and any other entry is refused, also one
+that passes every text check. The text checks stay and are stricter: a plain DNS host name,
+no IP address, no port. Graphify: `run()` called 13 functions; one run is now its own
+function. A second comment of the security review, on the debug log: the temporary folder
+and its files are now made for this user only (modes 700 and 600 where the system has them),
+the debug log exists before the session starts, deleting is tried again while a file is
+held, and a folder that still cannot be deleted has its files emptied, is named without its
+path and stops the batch with exit code 3. The AI review of `0818d74` (one low): a headers
+helper is free text and was copied as it is. The fingerprint already refuses any helper but
+the recorded one; a helper whose own text carries a header or a key (`echo "Authorization:
+Bearer ..."`) is now refused as well, recorded or not. My reply to the first security comment
+landed under the second by mistake; both threads were answered again in the right place.
+
+**The final script was run once more** after these changes (`runs-after`, run 3): it ended
+well and left no temporary folder. It measured 55,030 tokens, 278 fewer than the two runs
+an hour before, with the same servers, tool, skill and plugin counts. The cause is not
+known (the other chat had installed Cookbook 0.31.2 in between; a server may also have
+changed its own text). So compare arms within one sitting only.
+
+**Review round 3**, the last of the three. The AI review of `63d97dc`, one low: the script
+said a run "can call nothing", but a run loads the user's own settings, and `dontAsk`
+honours their allow rules (24 on this PC, for Bash and MCP tools). Every arm's settings now
+add a PreToolUse hook that refuses every tool call, and a run in which the model tried a
+tool is not counted. A deny rule or `--tools ""` was not used: either would change what is
+measured. Proved with two capped runs (`checks/hook-blocks-tools.json`): with the hook a
+Read of a file in the run's folder was refused, without it the Read worked. A measuring run
+with the hook gave 55,035 tokens against 55,030 without, so the hook is not in the context.
+None of the 32 measuring runs before it called a tool (each made one request). The rule is
+on `recipes/scripted-runs-rules.md`.
+
+**After round 3**, the AI review of `f3d0826`, one low: `recipes/seo.md` named the two site
+projects, and this repository is public (the register says: no project names or paths). The
+names are gone from the page and from this entry; they are in memory on this PC. They were
+in three pushed commits of this pull request's branch (`78fa830` to `f3d0826`), which a
+squash merge keeps out of `main`; the owner was told. A fourth push, for this alone.
+
+**Spend.** USD 8.32 at list prices, on the plan login: 33 measuring runs (7.71, limit 15), the
+hook proof (0.02) and
+the Firecrawl call (0.59, and four Firecrawl credits).
+
+**Not proved.** An OpenSEO call from a child session (it connected; no call was made, since
+its calls spend credits). OpenSEO in a T3 worktree thread of its two projects: the local
+settings file is not in git, so it will not load there; open SEO work in the project folder.
+
+**Dead end.** The `claude-code-guide` agent had no web tool in this session and answered
+nothing; the docs were read through Parallel instead.
+
+**Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-mcp-on-demand/` (`RESULT.md`,
+`runs/`, `runs-after/`, `checks/`, the census). Copies from before:
+`~/.local/share/backups/mcp-on-demand-20261116/`.
+
+**From #57** (the entry below, the Adobe follow-up, from another chat). It merged as `c004774`
+on 16 November while this job ran and took 0.31.2; this branch took `main` in by a merge
+commit, and the plugin here is 0.31.3. Its release check, install and proof run are that
+chat's to report: not known here, so they are still owed to the next Cookbook pull request.
+
+**From #58** (two entries below). It merged as `d951c09`. The release check of that commit is
+`verified` and acknowledged (execution 1534; `sa-release` itself ended `unknown` for the
+skipped `ai-review` job, as on every merge commit). No plugin file changed, so the installed
+plugin stayed 0.31.1. Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`.
+
+**Outstanding.**
+- The merge commit, the release check and the install (0.31.3) of this pull request go into
+  the next Cookbook pull request.
+- Stagehand's review is on 28 November (the owner chose to keep it, do not ask again). It
+  starts a process with the Browserbase key at every session start, for 39 tokens and one
+  session in 557: a point for that review.
+- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+- The older list in the entries below stands.
+
 ## 16 November 2026: the owner's yes is read by whole words and a number of credits (0.31.2)
 
 **Why.** Two things #55 left open, both in how `scripts/adobe-session.mjs` reads the owner's
