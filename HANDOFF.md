@@ -22,8 +22,9 @@ T3 Code's newer reading said 97%, so the hook said "use Fable" where the newer f
 - When that read is refused (429), Claude Code answers T3 Code from the rate-limit headers of
   its last reply, or from its own saved copy, and saves nothing. T3 Code's file moves on and
   Claude Code's copy does not: from 19:05:24 T3 Code's limits were newer. Sampled every
-  15 seconds from 19:05 UTC (`sample-sources.log`): T3 Code asked for the limits about every
-  five minutes (19:05:24, 19:10:28) while Claude Code's copy stayed at 19:00:20.
+  15 seconds from 19:05 to 19:30 UTC (`sample-sources.log`): T3 Code asked for the limits
+  every three to six minutes (19:05:24, 19:10:28, 19:13:42, 19:19:39), and Claude Code's
+  copy stayed at 19:00:20 throughout, over 23 minutes old at the end.
 - So Claude Code's copy is there whenever a Claude Code thread has asked in the last hour
   (T3 Code's probe is what fills it), and is never newer than T3 Code's figures.
 - Fable's part of the week was 49 of its 50 in Claude Code's copy; for T3 Code's the script
@@ -42,9 +43,15 @@ recorded as a known limit on `model-budget-setup.md`. The recipes now say why Cl
 copy is not used (`model-budget-resets.md`) and where T3 Code's figures come from
 (`model-budget-setup.md`).
 
-**Verification.** `npm test`. The sampler (`sample-sources.mjs`, `sample-sources.log`) and
-the code reading are in the evidence folder. No change to the script or the hook, so the
-advice is as in 0.38.0.
+**Verification.** `npm test`: 564 passed, 0 failed, 1 skipped (`npm-test.log`). The
+sampler (`sample-sources.mjs`, `sample-sources.log`) is in the evidence folder. No change
+to the script or the hook, so the advice is as in 0.38.0. `sa-review` on `22e3200` (run
+`cookbook-82-review`): tests and Semgrep passed, CodeQL no alert, one low finding (below).
+
+**The Fable reset was redeemed.** At 19:14:31 UTC T3 Code's file said `availableCount: 0`
+for a moment and the hook said "Model budget changed: use Opus 5.5 high" (a count of 0 is
+"none", so it replaced the kept list). By 19:24 the script read week 11%, Fable 0%, one
+weekly reset banked, and the hook said "use Fable 5.2 high".
 
 **Outstanding.**
 - The AI review job has no API credit (from the 0.38.0 entry, unchanged): a Stack Atlas
@@ -52,6 +59,10 @@ advice is as in 0.38.0.
 - Known limit, kept: with a signed reading 10 to 60 minutes old, the advice can trail
   T3 Code's newer figures for up to 50 minutes. Clears only if the owner wants an unsigned
   reading to pass over a signed one; not asked, since Claude does not recommend it.
+- `sa-review`'s low finding: `model-budget-setup.md` says T3 Code's file is "rewritten every
+  minute"; that is the file, while the limits in it are asked for every three to six
+  minutes. Owner: Claude. Clears with a follow-up that says both (not pushed into a
+  reviewed head).
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-claude-usage-reading/`.
 
