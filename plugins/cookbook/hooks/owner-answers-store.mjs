@@ -97,7 +97,6 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
       while (fd === null) {
         try {
           fd = openSync(lock, "wx");
-          writeSync(fd, mark);
         } catch (e) {
           if (e?.code !== "EEXIST") break;
           try {
@@ -115,14 +114,37 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
           pause(25);
         }
       }
+      // Each step of taking and giving back the lock stands alone: one that fails never
+      // leaves a lock behind that this chat could have removed.
+      const close = () => {
+        try {
+          closeSync(fd);
+        } catch {
+          // closed or unusable: the file is still removed below
+        }
+      };
+      if (fd !== null) {
+        try {
+          writeSync(fd, mark);
+        } catch {
+          // A lock without its mark could never be given back: drop it and go ahead without.
+          close();
+          try {
+            unlinkSync(lock);
+          } catch {
+            // already gone
+          }
+          fd = null;
+        }
+      }
       held = fd !== null;
       try {
         return fn();
       } finally {
         if (fd !== null) {
           held = false;
+          close();
           try {
-            closeSync(fd);
             if (readFileSync(lock, "utf8") === mark) unlinkSync(lock);
           } catch {
             // taken away as stale: the lock there now is another chat's

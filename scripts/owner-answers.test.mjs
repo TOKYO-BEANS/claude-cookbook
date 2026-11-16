@@ -187,6 +187,9 @@ test("what looks like a key is never written down, and long text is cut", () => 
   // A long id is cut out and the rest is kept: a whole commit, a run of mixed parts.
   assert.equal(redact("see aac9c72d152f0b6a3f5d7e9c1b2a4d6f8e0c1a2b now"), "see [long id] now");
   assert.equal(redact(`use ${["ab12cd", "ef34gh", "ij56kl", "mn78op", "qr90st", "uv12wx"].join("_")} here`), "use [long id] here");
+  // Many short mixed parts, and words with two digits after them, five times over.
+  assert.equal(redact("x9k-2pq-r7t-4mz-8vb-q1w-e3r-t5y-u7i-o9p-a2s"), "[long id]");
+  assert.equal(redact("abcdef12-ghijkl34-mnopqr56-stuvwx78-yzabcd90"), "[long id]");
   assert.ok(redact("word ".repeat(400)).length <= 620);
   const [e] = recordAnswers({ input: answered("me", { [Q]: prefixed }), env: {}, now: NOW, repo: "owner/repo" });
   assert.doesNotMatch(JSON.stringify(e), /a1B2/);
@@ -240,6 +243,9 @@ test("repository names and the list", () => {
     assert.equal(repoLabel(real), "owner/repo", real);
   }
   assert.equal(repoLabel("git@github-work:Owner/Repo.git"), "", "an alias names no host");
+  for (const trick of ["https://evil.example#@github.com/o/r", "https://evil.example?@github.com/o/r", "https://evil.example\\@github.com/o/r", "https://evil.example/@github.com/o/r"]) {
+    assert.equal(repoLabel(trick), "", trick);
+  }
   for (const other of ["C:/somewhere/local", "https://notgithub.com/owner/repo.git", "https://gitlab.com/github.com/owner/repo", "https://github.com.example.org/owner/repo", "https://example.org/x?u=https://github.com/owner/repo", "git@gitlab.com:owner/repo.git"]) {
     assert.equal(repoLabel(other), "", other);
   }

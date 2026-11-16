@@ -39,11 +39,16 @@ export const entryId = (session, question) => createHash("sha256").update(`${ses
 // "_" are none of these.
 const mixedRun = (t) => (t.match(/[A-Za-z0-9]{32,}/g) ?? []).some((run) => /[0-9]/.test(run) && /[a-z]/.test(run) && /[A-Z]/.test(run));
 // A long run that is not words: 32 or more hexadecimal digits, or 40 or more characters
-// joined by "_" or "-" in which two parts or more, each of six characters or more, mix
-// letters and digits ("v2" and "node24" in a name are words).
-const mixed = (part) => part.length >= 6 && /[0-9]/.test(part) && /[A-Za-z]/.test(part) && !/^[A-Za-z]+[0-9]{1,2}$/.test(part);
-const cutLongIds = (t) =>
-  t.replace(/\b[A-Fa-f0-9]{32,}\b/g, "[long id]").replace(/[A-Za-z0-9_-]{40,}/g, (run) => (run.split(/[_-]/).filter(mixed).length >= 2 ? "[long id]" : run));
+// joined by "_" or "-" in which letters and digits mix in five parts or more, or in two
+// parts of six characters or more that are not a word with a number after it ("v2" and
+// "node24" in a name are words, and a name has few of them).
+const mixed = (part) => /[0-9]/.test(part) && /[A-Za-z]/.test(part);
+const strong = (part) => part.length >= 6 && mixed(part) && !/^[A-Za-z]+[0-9]{1,2}$/.test(part);
+const isLongId = (run) => {
+  const parts = run.split(/[_-]/);
+  return parts.filter(mixed).length >= 5 || parts.filter(strong).length >= 2;
+};
+const cutLongIds = (t) => t.replace(/\b[A-Fa-f0-9]{32,}\b/g, "[long id]").replace(/[A-Za-z0-9_-]{40,}/g, (run) => (isLongId(run) ? "[long id]" : run));
 const KEY_SHAPES = [
   /\b(sk|pk|rk|ghp|gho|ghu|ghs|github_pat|glpat|xox[abprs]|fc|tvly)[-_][A-Za-z0-9_-]{16,}/,
   /\b(AKIA|AIza)[A-Za-z0-9_-]{16,}/,
@@ -65,7 +70,7 @@ export function redact(text) {
 // host with "github.com" in its name or path included. An SSH alias of the owner's own
 // (git@work:owner/name) names no host: the list is then off for that checkout.
 export function repoLabel(url) {
-  const m = /^(?:https?:\/\/(?:[^@/\s]{1,100}@)?github\.com(?::\d{1,5})?\/|(?:ssh:\/\/)?[A-Za-z0-9_-]{1,60}@(?:ssh\.)?github\.com(?::\d{1,5}\/|[:/]))([A-Za-z0-9_.-]{1,100})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?\/?$/i.exec(str(url).trim().slice(0, 300));
+  const m = /^(?:https?:\/\/(?:[A-Za-z0-9._~%:-]{1,100}@)?github\.com(?::\d{1,5})?\/|(?:ssh:\/\/)?[A-Za-z0-9_-]{1,60}@(?:ssh\.)?github\.com(?::\d{1,5}\/|[:/]))([A-Za-z0-9_.-]{1,100})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?\/?$/i.exec(str(url).trim().slice(0, 300));
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : "";
 }
 
