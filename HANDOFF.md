@@ -213,11 +213,14 @@ that did this job as: nothing is bought; until the credit is back a `cookbook:re
 subagent (Opus, high) reads the pull request in place of the review in CI; the last part is a
 thought about the model, not an instruction. Applied to this pull request only; no rule was
 changed, and the gate in code still refuses a pull request whose review is unavailable, so
-this one is merged by hand on the hand review (all checks passed, no security review thread).
-That review found one medium finding (this "Installed" text was out of date: the plugin had
-been installed after it was written) and two low (two reasons stated imprecisely), all in
-this entry and corrected in the next commit. Log of the merge by hand and its release check:
-`~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/merge-by-hand-cookbook-81.log`.
+this one is to be merged by hand on the hand review, once every check on its head has passed
+and with no security review thread open. That review found one medium finding (this
+"Installed" text was out of date: the plugin had been installed after it was written) and
+three low (two reasons stated imprecisely, and this paragraph spoke of the merge as done),
+all in this entry and corrected. The script of the merge by hand, and its log with the
+release check once it has run, are in
+`~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/`
+(`merge-by-hand-cookbook-81.sh`, `.log`). Whether it merged is on the pull request itself.
 
 **Verification.** `npm test` with `main` merged in: 553 tests, 552 pass, 0 fail, 1 skipped (an
 older symbolic-link test that Windows skips); the test file again after the round-four fix: 50
