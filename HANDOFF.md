@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.1)
+## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.2)
 
 **Why.** The last AI review on #70 left two low findings, both in
 `skills/cookbook/scripts/boat-run.mjs`, and #70's entry did not yet say how it was merged.
@@ -17,7 +17,9 @@
 - **A time limit.** `boat limits --json` and `boat delete` are ended after 60 seconds
   (`CALL_SECONDS`). A `limits` that hangs is "no result" and nothing starts; a `delete`
   that hangs is a failed removal, with the "may still exist" line. Before, a hung call held
-  the run and its place for good. `recipes/boat.md`: that one refusal is run again, once.
+  the run and its place for good. `recipes/boat.md`: that one refusal is run again, once
+  (the page was trimmed elsewhere to fit: a page test adds a line to it, so it needs 51
+  bytes of room under the limit, which the sandbox run caught).
 - `options/check.md` named a customer's site in the visual check point. The rule for this
   public repository is no project or client names; the name came in with #54, before the
   rule, and not on the owner's word. It now says "the first site".
@@ -28,8 +30,10 @@
   hung calls through `main`.
 
 **Verification.** The new tests failed first (7 of 44) and pass after. `npm test` in a boat
-sandbox through the changed script: 500 tests, 499 passed, 1 skipped (no Gitleaks there),
-11 seconds; on this PC the same counts (the skip is the symbolic link test).
+sandbox through the changed script, on the state merged with `main` (#74): 501 tests, 500
+passed, 1 skipped (no Gitleaks there), 8 seconds. On this PC the whole suite passed before
+that merge and before the last edit of `recipes/boat.md`; after them the Windows job of CI
+is the check.
 Live, a short run: its place was `run-…` at the start, `run-….up` 5 seconds later when
 boat said "ready", and gone at the end (`live-slot-up.log`). The limit was also seen live,
 unplanned, twice in five runs: `boat limits` gave no answer for 60 seconds and the run ended
@@ -54,6 +58,45 @@ whose child holds the pipes (the key helper around boat) came back in 531 ms at 
   pages, three lines of older entries here, one catalog entry (in use: the update check
   reads that repository's lockfile) and one test. A job of its own, opened as a new chat on
   16 November 2026.
+## 16 November 2026 (evening): the model budget leaves T3 Code's reset list out (0.36.1)
+
+**Why.** #72 merged as `aaf25de` (release event `verified`, execution 1570; merged by hand on
+the owner's "Merge #72 once", past a neutral Graphify Formal Verification titled "0/5
+PR-changed function(s) verified"; the gate allowed it with every security thread closed by a
+fix or the owner's yes). Plugin 0.35.4 was installed, and the first live runs disagreed: "use
+Fable" and, twenty seconds later, "use Opus", from the same T3 Code reading.
+
+**What was found.** T3 Code's file holds the banked resets (`resetCredits`) only in the minutes
+its own read of them got through, about every other one (sampled for seven minutes). With a
+Fable reset banked and Fable ahead of pace, the advice therefore changed every minute, and each
+change tells a thread to switch model. One timed read of the endpoint by the script (16:28:10
+UTC, 200) showed why the script itself never saw a reset: to its read the endpoint answers
+`cedar_ember.eligible: false` with no grants, while T3 Code, reading as Claude Code, is shown
+one weekly and one Fable reset. So "Banked resets: none" in 0.35.0 to 0.35.4 was never a
+reading.
+
+**What changed.** `parseT3` no longer takes the reset list from T3 Code's file, so the advice is
+the same in every minute. A reading says whether the resets were read (`resetsRead`), and the
+line says "not read (see T3 Code: Usage, Limits)" when they were not, never "none".
+
+**Verification.** 54 tests in `scripts/model-budget.test.mjs`; `npm test`.
+
+**Owner decision, 16 November 2026.** Asked whether the acceptance of T3 Code's unsigned
+reading ("Accept it as built", given on #72) holds when GitHub's security review raises that
+same finding again, the owner answered "Yes, for this file from now on": it stands for that
+finding on later pull requests to the model budget script, until the owner says otherwise.
+The owner's yes is then written in the thread with these words and this date. Any other
+finding is fixed or asked.
+
+**Outstanding (Claude, next chat).** The script cannot see the banked resets, so the rules for
+when to redeem one never fire and a banked Fable reset does not lift the pace rule. Clears when
+the resets have a source that holds from minute to minute: either the script's read is made
+eligible (the difference from T3 Code's read is the `claude-cli` User-Agent and
+`skip_spend=1`; which of the two matters is not known), or the last list seen in T3 Code's
+file is kept between its reads. Each is a decision with a cost: the first names the script as
+another client, the second stores what an unsigned file said. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-reading/`
+(`merge-by-hand-cookbook-72.sh` and `.log`, `raw-grants-read.mjs` and `.json`, `timed-read.mjs`).
 
 ## 16 November 2026 (evening): boat on the paid plan, used by default (0.36.0)
 
@@ -141,14 +184,14 @@ Through `boat-run.mjs`: the first run was refused on the three Gitleaks findings
 uploaded 176 tracked files and passed `npm test` in 22 seconds, no slot file was left.
 `npm test` on this PC passed. Logs: `~/.local/share/claude-cookbook/evidence/2026-11-16-boat-paid-plan/`.
 
-**After the last commit (added with 0.36.1).** The first `sa-release` run refused the merge:
+**After the last commit (added with 0.36.2).** The first `sa-release` run refused the merge:
 the AI review of the last commit had left `HANDOFF.md` out, so it was a partial review. This
 entry was then read by a `cookbook:reader` subagent, which had no finding that needed a
 change, and that reading was answered in the pull request. The second run merged #70 as
 `692bd2a`; the release check was verified (execution 1571) and plugin 0.36.0 was installed.
 Evidence, in the folder above: `summary-cookbook-70-merge.json` (the refusal),
 `summary-cookbook-70-merge-2.json` and `release-cookbook-70-merge-2.log` (the merge). The
-last review also left two low findings on `boat-run.mjs`; they are fixed in 0.36.1, above.
+last review also left two low findings on `boat-run.mjs`; they are fixed in 0.36.2, above.
 
 **Outstanding.**
 - What happens when the month's time runs out was read from boat's terms, not tested.

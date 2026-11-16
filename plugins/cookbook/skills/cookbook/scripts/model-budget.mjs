@@ -78,7 +78,8 @@ export function parseUsage(json) {
     .filter((g) => g && typeof g === "object" && typeof g.id === "string" && GRANT_ID.test(g.id) && Number.isInteger(g.resets_left) && g.resets_left > 0 && g.paused !== true && g.usable_now === true)
     .map((g) => ({ id: g.id, kind: grantKind(g), left: g.resets_left, endsAt: time(g.ends_at) }));
 
-  return { week, fable, session, grants, credits: json?.extra_usage?.is_enabled === true };
+  // The endpoint lists banked resets only for a client it calls eligible; otherwise they are not read, which is not "none".
+  return { week, fable, session, grants, resetsRead: json?.cedar_ember?.eligible === true, credits: json?.extra_usage?.is_enabled === true };
 }
 
 export function decide(u, now) {
@@ -153,7 +154,7 @@ export function line(u, d, now, timeZone) {
     return [`${of.reduce((n, g) => n + g.left, 0)} ${KIND_LABEL[kind]}${Number.isFinite(ends) ? ` (expires ${day(ends, timeZone)})` : ""}`];
   });
   const warn = d.warn.map((w) => ` Warning: ${w}.`).join("");
-  return `Model budget (${stamp(now, timeZone)}): ${reading}; weekly reset ${weekday(u.week.resetsAt, timeZone)}. ${act} Banked resets: ${banked.join(", ") || "none"}.${warn}`;
+  return `Model budget (${stamp(now, timeZone)}): ${reading}; weekly reset ${weekday(u.week.resetsAt, timeZone)}. ${act} Banked resets: ${banked.join(", ") || (u.resetsRead === true ? "none" : "not read (see T3 Code: Usage, Limits)")}.${warn}`;
 }
 
 // What a hook may put into a session: the action only, with no figures, times or counts.
@@ -228,7 +229,6 @@ const readToken = (home) => {
 // T3 Code may change its shape: it is used only when no signed reading can be had, every value
 // is checked, anything odd means "no reading", nothing from it is stored, and all it can
 // change is which of the fixed lines of advice is said.
-const T3_RESETS = { "5-hour reset": "session", "Weekly reset": "weekly", "Fable reset": "fable", "Full reset": "full" };
 const T3_MAX_BYTES = 4000000;
 const T3_AHEAD_MS = 5000;
 const percent = (v) => (num(v) !== null && v >= 0 && v <= 100 ? v : null);
@@ -251,12 +251,10 @@ export function parseT3(json, now) {
   const five = windows.find((w) => w.id === "five_hour");
   const session = percent(five?.usedPercent) === null || time(five?.resetsAt) === null || time(five.resetsAt) <= now ? null : { used: five.usedPercent, resetsAt: time(five.resetsAt) };
 
-  const options = Array.isArray(limits.resetCredits?.options) ? limits.resetCredits.options : [];
-  const grants = options
-    .filter((o) => o && typeof o === "object" && typeof o.creditId === "string" && GRANT_ID.test(o.creditId) && Object.hasOwn(T3_RESETS, o.label) && Number.isInteger(o.availableCount) && o.availableCount > 0)
-    .map((o) => ({ id: o.creditId, kind: T3_RESETS[o.label], left: o.availableCount, endsAt: time(o.expiresAt) }));
-
-  return { usage: { week, fable, session, grants, credits: windows.some((w) => w.id === "monthly_spend") }, at };
+  // The banked resets are left out on purpose. T3 Code's file holds them (resetCredits) only in
+  // the minutes its own read of them got through, about every other one, so advice built on them
+  // would change from one minute to the next.
+  return { usage: { week, fable, session, grants: [], resetsRead: false, credits: windows.some((w) => w.id === "monthly_spend") }, at };
 }
 
 // The text of a plain file of this user's, or null: no link, and where the system can say so
