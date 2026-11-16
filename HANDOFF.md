@@ -1,5 +1,10 @@
 # Handoff
 
+**This file is closed.** From 0.39.0 an entry is a file of its own in [`handoff/`](handoff/),
+named `YYYY-MM-DD-short-name.md`, so two pull requests never edit the same lines. Read the
+newest files there first; search this file for what is older. `npm test` fails when this file
+changes (`recipes/parallel-chats.md` in the cookbook skill).
+
 ## 16 November 2026 (night): the key read no longer waits on a script scan (0.38.2)
 
 **Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`

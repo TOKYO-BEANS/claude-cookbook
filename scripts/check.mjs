@@ -1,6 +1,7 @@
 // Checks that plugins/cookbook/catalog.json, SKILL.md (the map) and the pages beside it
 // (recipes/ and options/) agree. No dependencies: run `node scripts/check.mjs` before
 // every merge.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { posix } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -376,14 +377,33 @@ export function checkCookbook({ catalogText, skillText, pages = [], otherTexts =
   return errors;
 }
 
+// The handoff (recipes/parallel-chats.md): an entry is a file of its own in handoff/, so two
+// pull requests never edit the same lines. HANDOFF.md holds the entries up to 0.38.0 and is
+// closed: its text is pinned here, with line endings set aside.
+export const HANDOFF_CLOSED_SHA256 = "f3b3e4295e7c3a25541a8b04e4d755d6b17e5e35a7a9fb28d5a0dfa6f9680d23";
+export const HANDOFF_ENTRY_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*\.md$/;
+export const handoffHash = (text) => createHash("sha256").update(text.replace(/\r\n/g, "\n")).digest("hex");
+export function handoffErrors({ closedText, entryNames, pinned = HANDOFF_CLOSED_SHA256 }) {
+  const errors = [];
+  if (handoffHash(closedText) !== pinned) errors.push("HANDOFF.md is closed and has changed: put the entry in a new file, handoff/YYYY-MM-DD-short-name.md, and leave HANDOFF.md as it is on main");
+  if (!entryNames.length) errors.push("handoff/ has no entry");
+  for (const n of entryNames) if (!HANDOFF_ENTRY_NAME.test(n)) errors.push(`handoff/${n}: an entry is named YYYY-MM-DD-short-name.md (lower case, digits and hyphens)`);
+  return errors;
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = new URL("../", import.meta.url);
+  const handoff = handoffErrors({
+    closedText: readFileSync(new URL("HANDOFF.md", root), "utf8"),
+    entryNames: readdirSync(new URL("handoff/", root)),
+  });
   const errors = checkCookbook({
     catalogText: readFileSync(new URL("plugins/cookbook/catalog.json", root), "utf8"),
     skillText: readFileSync(new URL("plugins/cookbook/skills/cookbook/SKILL.md", root), "utf8"),
     pages: readPages(new URL("plugins/cookbook/skills/cookbook/", root)),
     otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: readFileSync(new URL(p, root), "utf8") })),
   });
+  errors.push(...handoff);
   for (const e of errors) console.error(e);
   console.log(errors.length ? `${errors.length} problem(s)` : "Cookbook check passed.");
   process.exitCode = errors.length ? 1 : 0;

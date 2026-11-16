@@ -390,3 +390,20 @@ test("argv patterns: a literal dot before cmd, and no shell metacharacter or whi
   // The real tables pass.
   assert.deepEqual(errors(), []);
 });
+
+test("the handoff: HANDOFF.md is closed, and an entry is a dated file in handoff/", async () => {
+  const { HANDOFF_ENTRY_NAME, handoffErrors, handoffHash } = await import("./check.mjs");
+  const { readdirSync } = await import("node:fs");
+  const closedText = read("HANDOFF.md");
+  const entryNames = readdirSync(new URL("../handoff/", import.meta.url));
+  assert.deepEqual(handoffErrors({ closedText, entryNames }), []);
+  // Line endings are set aside; any other change is a new entry in the wrong place.
+  assert.equal(handoffHash(closedText.replace(/\r?\n/g, "\r\n")), handoffHash(closedText));
+  assert.match(handoffErrors({ closedText: `${closedText}\n## One more entry\n`, entryNames })[0], /closed.*handoff\/YYYY-MM-DD-short-name\.md/);
+  assert.match(handoffErrors({ closedText, entryNames: [] })[0], /no entry/);
+  for (const bad of ["notes.md", "2026-11-16.md", "2026-11-16-Upper.md", "16-11-2026-name.md", "2026-11-16-name.txt"]) {
+    assert.equal(HANDOFF_ENTRY_NAME.test(bad), false, bad);
+    assert.equal(handoffErrors({ closedText, entryNames: [bad] }).length, 1, bad);
+  }
+  assert.ok(HANDOFF_ENTRY_NAME.test("2026-11-16-parallel-chats.md"));
+});
