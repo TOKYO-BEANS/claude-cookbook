@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   BRIEF_BYTES, buildRun, checkStage, clickHeld, connected, CONNECTOR, CREDITS_GAP, creditsIn, dryRun, fencedBrief, folderErrors, gatedOf, initErrors, logEntry, main, namedIn,
-  OPERATIONS, OTHER_CONNECTORS, otherServers, outcome, ownerClick, parseArgs, plainFolder, POWERSHELL, readBrief, READ_ONLY, realOut, removeTemp, RULES,
+  OPERATIONS, OTHER_CONNECTORS, otherServers, outcome, ownerClick, parseArgs, plainFolder, POWERSHELL, readBrief, READ_ONLY, realOut, realWindowOnly, removeTemp, RULES,
   RUN_FOLDERS, rulePath, SECRET_DENY, sendList, shown, showWindow, STAGE, stageFiles, summarize, TOOL_PREFIX, TRIAL_BUTTON, WAIT, WINDOW_FILE, WINDOW_SECONDS, windowAnswer,
   windowNeeded, windowText, yesGaps,
 } from "../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs";
@@ -724,6 +724,22 @@ test("nothing skips the window: no flag, no environment variable, no file", asyn
     assert.deepEqual(trace.splice(0), ["window:true"], answer);
     assert.equal(existsSync(join(out, "to-adobe")), false, answer);
   }
+  // A stand-in window never comes before the real session: a caller that gives main a
+  // window of its own, and not a session of its own, is refused before anything is asked
+  // or started. (The stand-in here answers "stop", so this test starts nothing even if
+  // that refusal were to break.)
+  await assert.rejects(main(gated, { show: answering("stop") }), (error) => error.usage === true && /a stand-in window cannot start a session/.test(error.message));
+  assert.deepEqual(trace.splice(0), []);
+  assert.equal(existsSync(join(out, "to-adobe")), false);
+  const standIn = async () => "go";
+  const refused = (error) => error.usage === true && /the go-ahead comes from the owner's real window only/.test(error.message);
+  assert.throws(() => realWindowOnly(gatedRun(), { show: standIn }), refused);
+  assert.throws(() => realWindowOnly(gatedRun(), { show: standIn, launch: undefined }), refused);
+  assert.equal(realWindowOnly(gatedRun(), { show: standIn, launch }), undefined);
+  assert.equal(realWindowOnly(gatedRun(), { show: showWindow }), undefined);
+  assert.equal(realWindowOnly(gatedRun()), undefined);
+  assert.equal(realWindowOnly(run("--allow", "font_search"), { show: standIn }), undefined);
+  assert.ok(source.indexOf("realWindowOnly(o, { show, launch });") > 0 && source.indexOf("realWindowOnly(o, { show, launch });") < source.indexOf("await ownerClick(o, show)"));
   // A read-only run opens no window and starts.
   assert.equal(await main(["run", "--brief", brief, "--out", out, "--allow", "font_search"], { show: answering("stop"), launch }), 0);
   assert.deepEqual(trace.splice(0), ["launch:not-needed"]);

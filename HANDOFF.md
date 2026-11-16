@@ -138,7 +138,13 @@ that path that is a link to another place, it showed the link's harmless name wh
 copy came from the other place. It now shows the folder the file is really in, and the
 given one beside it when they differ. Graphify's review: no issues by static checks, and
 three notes on coupling (`parseArgs`, `windowText` and `main` call more functions than
-before), which are not findings about behaviour and were left.
+before), which are not findings about behaviour and were left. GitHub's security review:
+one comment (4583768687), fixed. `main` is exported with a window and a session that the
+tests can replace, so a program that imported the script could give it a window of its
+own that answers "go" and reach the real session. `main` now refuses a stand-in window
+unless the session is a stand-in too (`realWindowOnly`): only the real window's go-ahead
+starts the real session. `Graphify Formal Verification` on that commit: neutral ("0/3
+PR-changed function(s) verified · 3 not verified (2 vacuous, 1 unsupported)").
 
 **Proved for this pull request.** `npm test` passes (372 tests with `main` taken in). `--dry-run` of a run with
 a file and `image_select_subject` printed `"opens": true` and the window's text and made

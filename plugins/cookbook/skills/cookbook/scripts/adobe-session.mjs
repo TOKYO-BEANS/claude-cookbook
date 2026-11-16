@@ -643,9 +643,21 @@ export function dryRun(o, briefText = "") {
   return { argv: run.argv, settings: run.settings, system: run.system, prompt: run.prompt, window };
 }
 
-// `show` and `launch` are there for the tests; started as a script, main gets neither.
+// A stand-in window never comes before the real session: a caller that imports this file
+// and gives main a `show` of its own that answers "go" gets a refusal, not a session. Only
+// the real window's go-ahead starts one. The tests give both a stand-in window and a
+// stand-in session, which starts nothing.
+export function realWindowOnly(o, { show = showWindow, launch = session } = {}) {
+  if (windowNeeded(o) && show !== showWindow && launch === session) {
+    throw fail("a stand-in window cannot start a session: the go-ahead comes from the owner's real window only");
+  }
+}
+
+// `show` and `launch` are there for the tests (see realWindowOnly); started as a script,
+// main gets neither.
 export async function main(argv, { show = showWindow, launch = session } = {}) {
   const o = parseArgs(argv);
+  realWindowOnly(o, { show, launch });
   if (o.command === "window") {
     let answer;
     try { answer = await show(windowText(WINDOW_SAMPLE, true)); } catch { answer = "failed"; }
