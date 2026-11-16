@@ -1,5 +1,44 @@
 # Handoff
 
+## 16 November 2026 (late): Codex added as a second model (0.32.0)
+
+**Why.** The owner's job, with a yes, 16 November 2026: "bring Codex's global setup in line
+with Claude's, so a task delegated to Codex from T3 Code follows the same rules as Claude
+does", and "Whether Codex belongs in the stack as a second opinion, and for which jobs, is
+decided in the Cookbook, through a pull request there."
+
+**What changed.**
+- `catalog.json`: Codex, a trial, with no update feed (the desktop app updates itself). No new
+  spend: it runs on the ChatGPT account the owner already has.
+- The map: one new row, "a second opinion from a model that is not Claude", owner Codex
+  through T3 `delegate_task`, fallback a `cookbook:review` subagent. No other owner changes.
+- `recipes/codex.md`: what it is for and not for, how to start it, where its rules come from,
+  the model route, the proof. `options/plan-and-build.md`: why, and what was weighed.
+- Plugin 0.32.0.
+
+**Done outside the repository.** In `~/.codex` (backups in
+`~/.codex/backups/claude-parity-20261116/`): `AGENTS.md` now holds no rules, only pointers to
+`~/.claude/CLAUDE.md`, this Cookbook and a repository's `CLAUDE.md`, plus what differs for
+Codex; `TOOL-STACK.md` is a pointer to the Cookbook; `config.toml` gained the Parallel Search
+and Stagehand servers (keys at run time, as in Claude) and lost the unused
+`[model_providers.context-mode]` block, which held a device key as a literal.
+`approval_policy` and `sandbox_mode` were not touched.
+
+**Verified.** A delegated run on each model (`gpt-5.6-sol`, `gpt-6-astra`) answered eleven
+questions on the rules correctly from its own instructions and named the files it read;
+both listed the two new servers. Evidence:
+`~/.local/share/stack-atlas/evidence/codex-parity-20261116/`.
+
+**Outstanding.**
+- Servers and skills connected in Codex that are not in the catalog (`agit`, `aikido`,
+  `firecrawl-local`, `magic-workflow`, `shinkai`, `windmill`, `n8n`, the Waggle plugin, the
+  Disler, Caveman and RTK skills and guides). Codex is told not to use them. Removing them is
+  an uninstall. Owner: the owner. Clears with a yes.
+- The gateway's device key is still in two older backups of `config.toml` in `~/.codex` and
+  passed through a session. Owner: the owner. Clears when it is revoked at the gateway, or
+  when the owner says the account is closed, and the two backups are deleted.
+- Not proven: a Codex piece that writes code and opens a pull request.
+
 ## 16 November 2026 (evening): Macroscope weighed and not added (0.31.5)
 
 **Why.** The owner asked whether the hosted reviewer Macroscope should be part of the
