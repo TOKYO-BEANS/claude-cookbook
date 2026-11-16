@@ -27,8 +27,8 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
   `isolation: "worktree"`, other project or machine. What the hook does not reach:
   [codex-setup](codex-setup.md).
 - **Start it supervised:** `orchestrator_capabilities` once per thread, then `delegate_task`
-  with `providerInstanceId: "codex"`, a model it lists (`gpt-5.6-sol`, `gpt-6-astra`) and
-  `runtimeMode: "approval-required"`. That gives a read-only sandbox and
+  with `target: { providerInstanceId: "codex", model }` (one it lists: `gpt-5.6-sol`,
+  `gpt-6-astra`) and `runtimeMode: "approval-required"`. That gives a read-only sandbox and
   `approval_policy = "untrusted"`: the first command waited for the owner's click (tested
   16 November 2026); that every later one waits is not proven
   ([codex-limits](codex-limits.md)).
