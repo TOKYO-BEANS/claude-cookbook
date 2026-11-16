@@ -6,6 +6,7 @@
 // the sign-in, calls the one address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
 import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -165,19 +166,32 @@ const validUsage = (u) =>
   num(u?.week?.used) !== null && num(u?.week?.resetsAt) !== null && Array.isArray(u?.grants) &&
   (u.fable === null || num(u.fable?.used) !== null) && (u.session === null || (num(u.session?.used) !== null && num(u.session?.resetsAt) !== null));
 
-const readCache = (file) => {
+// The cache is signed with the sign-in token: a file written by anything that does not hold the
+// token (a tampered or hand-made one) is ignored, and a new token simply means a fresh read.
+const seal = (token, payload) => createHmac("sha256", token).update(payload).digest("hex");
+export const sealCache = (token, value) => {
+  const payload = JSON.stringify(value);
+  return JSON.stringify({ payload, sig: seal(token, payload) });
+};
+const openCache = (text, token) => {
+  const box = JSON.parse(text);
+  if (typeof box?.payload !== "string" || typeof box?.sig !== "string" || !/^[0-9a-f]{64}$/.test(box.sig)) return null;
+  const want = Buffer.from(seal(token, box.payload), "hex");
+  return timingSafeEqual(want, Buffer.from(box.sig, "hex")) ? JSON.parse(box.payload) : null;
+};
+const readCache = (file, token) => {
   try {
-    const c = JSON.parse(readFileSync(file, "utf8"));
+    const c = openCache(readFileSync(file, "utf8"), token);
     if (num(c?.tried) === null) return null;
     return { at: num(c.at), tried: c.tried, usage: validUsage(c.usage) ? c.usage : null, error: typeof c.error === "string" ? c.error : null };
   } catch {
     return null;
   }
 };
-const writeCache = (stateDir, file, value) => {
+const writeCache = (stateDir, file, value, token) => {
   try {
     mkdirSync(stateDir, { recursive: true });
-    writeFileSync(`${file}.${process.pid}.tmp`, JSON.stringify(value));
+    writeFileSync(`${file}.${process.pid}.tmp`, sealCache(token, value));
     renameSync(`${file}.${process.pid}.tmp`, file);
   } catch {
     // no cache is slower, never wrong
@@ -194,16 +208,18 @@ const readToken = (home) => {
 
 // The reading, from the shared cache when it is fresh. A failure is { error }, or a reading
 // under an hour old marked "stale"; it is never a made-up reading and never the cause's text.
-export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), now = Date.now(), fetchImpl = fetch } = {}) {
+// With cacheOnly, nothing goes over the network: the saved reading or { error }.
+export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
   const file = join(stateDir, "usage.json");
-  const cache = readCache(file);
+  const token = readToken(home);
+  if (!token) return { error: "no Claude sign-in found" };
+  const cache = readCache(file, token);
   // A reading from before the weekly reset says nothing about this week.
   const kept = cache?.usage && cache.at !== null && cache.at <= now && cache.usage.week.resetsAt > now ? cache : null;
   if (kept && now - kept.at < RULES.cacheMs) return { usage: kept.usage, at: kept.at, source: "cache" };
   const fall = (error) => (kept && now - kept.at < RULES.staleMs ? { usage: kept.usage, at: kept.at, source: "stale" } : { error });
+  if (cacheOnly) return fall("no fresh reading saved");
   if (cache && cache.tried <= now && now - cache.tried < RULES.retryMs) return fall(cache.error ?? "the usage read failed");
-  const token = readToken(home);
-  if (!token) return fall("no Claude sign-in found");
   // One read at a time across every process: the one that creates the lock reads; the rest use
   // what is cached. A lock older than two timeouts is from a process that died, and is taken over.
   const lock = join(stateDir, "usage.lock");
@@ -236,7 +252,7 @@ export async function readUsage({ home = homedir(), stateDir = join(home, ".loca
 
 async function fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl }) {
   const fail = (error) => {
-    writeCache(stateDir, file, { at: kept?.at ?? null, tried: now, usage: kept?.usage ?? null, error });
+    writeCache(stateDir, file, { at: kept?.at ?? null, tried: now, usage: kept?.usage ?? null, error }, token);
     return fall(error);
   };
   let res;
@@ -256,7 +272,7 @@ async function fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl
   } catch (e) {
     return fail(e instanceof Error && e.message === "the usage answer has no weekly limit" ? e.message : "the usage answer was not readable");
   }
-  writeCache(stateDir, file, { at: now, tried: now, usage });
+  writeCache(stateDir, file, { at: now, tried: now, usage }, token);
   return { usage, at: now, source: "live" };
 }
 

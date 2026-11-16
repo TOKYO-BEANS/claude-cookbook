@@ -37,7 +37,8 @@ try {
       // first event of this session
     }
     const now = Date.now();
-    const r = await readUsage({ now });
+    // Only a session start may read over the network; a prompt or a tool event uses the saved reading.
+    const r = await readUsage({ now, cacheOnly: event !== "SessionStart" });
     let text = "";
     // Only the advice goes into the session: no usage figures, times, counts or error text.
     if (!r.usage) {

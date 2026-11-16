@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RULES, advice, decide, line, parseUsage, readUsage } from "../plugins/cookbook/skills/cookbook/scripts/model-budget.mjs";
+import { RULES, advice, decide, line, parseUsage, readUsage, sealCache } from "../plugins/cookbook/skills/cookbook/scripts/model-budget.mjs";
 
 const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/model-budget-note.mjs", import.meta.url));
 const HOOKS_JSON = fileURLToPath(new URL("../plugins/cookbook/hooks/hooks.json", import.meta.url));
@@ -297,6 +297,40 @@ test("readUsage: reads started together call the endpoint once; a dead process's
   assert.equal(calls, 2);
 });
 
+test("readUsage: a cache not signed with the current sign-in is ignored", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  mkdirSync(stateDir, { recursive: true });
+  seedHome(home);
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return answer(200, raw()); };
+  const forged = { at: NOW, tried: NOW, usage: parseUsage(raw({ week: 99, fable: 100 })) };
+  for (const text of [JSON.stringify(forged), sealCache("another-token", forged), JSON.stringify({ payload: JSON.stringify(forged), sig: "0".repeat(64) })]) {
+    writeFileSync(join(stateDir, "usage.json"), text);
+    assert.equal((await readUsage({ home, stateDir, now: NOW, fetchImpl, cacheOnly: true })).usage, undefined);
+  }
+  const live1 = await readUsage({ home, stateDir, now: NOW, fetchImpl });
+  assert.equal(live1.source, "live");
+  assert.equal(live1.usage.week.used, 37);
+  assert.equal(calls, 1);
+  const text = readFileSync(join(stateDir, "usage.json"), "utf8");
+  const box = JSON.parse(text);
+  writeFileSync(join(stateDir, "usage.json"), JSON.stringify({ ...box, payload: box.payload.replace('"used":37', '"used":99') }));
+  assert.equal((await readUsage({ home, stateDir, now: NOW + 1, fetchImpl, cacheOnly: true })).usage, undefined, "an edited payload fails the signature");
+});
+
+test("readUsage with cacheOnly never calls the network", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  const never = async () => { throw new Error("must not be called"); };
+  const empty = await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true });
+  assert.match(empty.error, /no fresh reading/);
+  await readUsage({ home, stateDir, now: NOW, fetchImpl: async () => answer(200, raw()) });
+  const stale = await readUsage({ home, stateDir, now: NOW + RULES.cacheMs + 1, fetchImpl: never, cacheOnly: true });
+  assert.equal(stale.source, "stale");
+});
+
 test("readUsage: no sign-in, or an answer it cannot read, is an error and never a reading", async (t) => {
   const home = tmp(t);
   const none = await readUsage({ home, stateDir: join(home, "state"), now: NOW, fetchImpl: async () => { throw new Error("must not be called"); } });
@@ -311,10 +345,12 @@ test("readUsage: no sign-in, or an answer it cannot read, is an error and never 
 // The hook runs as its own process with a home folder of ours and a fresh cached reading,
 // so it never reaches the network. It reads the real clock, so its week ends 70 hours from now.
 const live = (opts) => raw({ ...opts, reset: Date.now() + 70 * HOUR });
-const runHook = (home, input, { cache = live(), cachedAt = Date.now() } = {}) => {
+const runHook = (home, input, { cache = live(), cachedAt = Date.now(), signedIn = true } = {}) => {
   const stateDir = join(home, ".local", "share", "model-budget");
   mkdirSync(stateDir, { recursive: true });
-  if (cache) writeFileSync(join(stateDir, "usage.json"), JSON.stringify({ at: cachedAt, tried: cachedAt, usage: parseUsage(cache) }));
+  if (signedIn) seedHome(home, { expiresAt: Date.now() + HOUR });
+  else rmSync(join(home, ".claude"), { recursive: true, force: true });
+  if (cache) writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at: cachedAt, tried: cachedAt, usage: parseUsage(cache) }));
   const run = spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), encoding: "utf8", env: { ...process.env, USERPROFILE: home, HOME: home } });
   return { ...run, context: run.stdout.trim() ? JSON.parse(run.stdout).hookSpecificOutput : null };
 };
@@ -367,7 +403,7 @@ test("hook: a session it has not seen gets the line on its first event", (t) => 
 
 test("hook: an unknown reading is said at session start and is never a change", (t) => {
   const home = tmp(t);
-  const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-4" }, { cache: null });
+  const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-4" }, { cache: null, signedIn: false });
   assert.match(start.context.additionalContext, /^Model budget: unknown\. Keep this thread's model\.$/);
   const tool = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-4" }, { cache: null });
   assert.equal(tool.stdout, "");
@@ -399,7 +435,8 @@ test("the script prints the line, and --json the reading and the decision", (t) 
   const home = tmp(t);
   const stateDir = join(home, ".local", "share", "model-budget");
   mkdirSync(stateDir, { recursive: true });
-  writeFileSync(join(stateDir, "usage.json"), JSON.stringify({ at: Date.now(), tried: Date.now(), usage: parseUsage(live()) }));
+  seedHome(home);
+  writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at: Date.now(), tried: Date.now(), usage: parseUsage(live()) }));
   const env = { ...process.env, USERPROFILE: home, HOME: home };
   const plain = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8", env });
   assert.equal(plain.status, 0);
