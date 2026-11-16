@@ -88,11 +88,21 @@ export function decide(u, now) {
   const spent = { session: S, fable: F, weekly: W, full: W };
   const timeLeft = (kind) => (kind === "session" ? (u.session.resetsAt - now) / HOUR >= RULES.sessionMinHours : hoursLeft >= RULES.redeemMinHours);
 
+  // What is left spent after a reset of each kind: a reset that leaves the week or the session
+  // window spent lets nothing run, so it is never the one to redeem.
+  const blocked = (s, w) => (s ?? 0) >= RULES.stopAt || w >= RULES.stopAt;
+  const after = {
+    session: () => blocked(0, W),
+    fable: () => blocked(0, W - (u.fable?.usedOfWeek ?? 0)), // it also refills the session window
+    weekly: () => blocked(S, 0),
+    full: () => blocked(0, 0),
+  };
+
   // A reset is worth what it clears: redeem it when that is spent, or when it is about to expire.
   let redeem = null;
   for (const kind of KINDS) {
     const g = grants.find((x) => x.kind === kind);
-    if (!g || spent[kind] === null) continue;
+    if (!g || spent[kind] === null || after[kind]()) continue;
     const expiring = g.endsAt !== null && g.endsAt - now <= RULES.expiryHours * HOUR;
     if ((spent[kind] >= RULES.redeemAt && timeLeft(kind)) || (expiring && spent[kind] >= RULES.expiryFloor)) {
       redeem = { id: g.id, kind };
@@ -103,8 +113,8 @@ export function decide(u, now) {
   const warn = u.credits ? ["usage credits are on: a limit hit would be billed"] : [];
   const out = (model, why, wait = null) => ({ model, why, redeem, wait, pace, warn });
   if (redeem && redeem.kind !== "session") return out("fable", `the ${redeem.kind} reset refills Fable`);
-  if (S !== null && S >= RULES.stopAt && !redeem) return out("wait", "the session window is spent", { until: u.session.resetsAt });
   if (W >= RULES.stopAt) return out("wait", "the week is spent", { until: u.week.resetsAt });
+  if (S !== null && S >= RULES.stopAt && !redeem) return out("wait", "the session window is spent", { until: u.session.resetsAt });
   // With a Fable reset banked and time to use it, Fable is spent down to the redeem line.
   const fableReset = hoursLeft >= RULES.redeemMinHours && grants.some((g) => g.kind === "fable");
   if (F !== null && F >= RULES.fableSwitch && !fableReset) return out("opus", "the Fable share is nearly spent");

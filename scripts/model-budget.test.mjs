@@ -163,6 +163,26 @@ test("a session reset is redeemed only for a spent session window", () => {
   assert.equal(pick({ grants: [sess] }).redeem, null);
 });
 
+test("a reset that would leave another limit spent is passed over for one that lets work run", () => {
+  const sess = grant({ id: "s1", gives_back_weekly: false, type: "session", clears: ["five_hour"] });
+  const weekly = grant({ id: "w1", gives_back_weekly: false, type: "weekly" });
+  const full = grant({ id: "x1", gives_back_weekly: false, type: "full" });
+  // session nearly spent, week spent: the weekly reset, not the session one (the review's case).
+  assert.deepEqual(pick({ session: 97, week: 99, fable: 100, grants: [sess, weekly] }).redeem, { id: "w1", kind: "weekly" });
+  // session and week both spent: neither single reset lets anything run; a full one does.
+  assert.equal(pick({ session: 100, week: 99, fable: 100, grants: [sess, weekly] }).redeem, null);
+  assert.equal(pick({ session: 100, week: 99, fable: 100, grants: [sess, weekly] }).model, "wait");
+  assert.equal(pick({ session: 100, week: 99, fable: 100, grants: [sess, weekly] }).wait.until, RESET, "the later of the two limits");
+  assert.deepEqual(pick({ session: 100, week: 99, fable: 100, grants: [sess, weekly, full] }).redeem, { id: "x1", kind: "full" });
+  // session spent and the week not: the session reset is enough.
+  assert.deepEqual(pick({ session: 97, week: 60, grants: [sess, weekly] }).redeem, { id: "s1", kind: "session" });
+  // week spent, session fine: the weekly reset, never the session one, even when it expires.
+  const soon = new Date(NOW + 6 * HOUR).toISOString();
+  assert.deepEqual(pick({ session: 60, week: 99, fable: 100, grants: [grant({ ...sess, ends_at: soon }), weekly] }).redeem, { id: "w1", kind: "weekly" });
+  // a Fable reset that gives back too little of the week is passed over.
+  assert.deepEqual(pick({ week: 99, fable: 4, grants: [grant(), weekly] }).redeem, { id: "w1", kind: "weekly" });
+});
+
 test("the smallest reset that clears the spent limit is chosen", () => {
   const weekly = grant({ id: "w1", gives_back_weekly: false, type: "weekly" });
   const d = pick({ week: 97, fable: 100, grants: [weekly, grant({ id: "f1" })] });

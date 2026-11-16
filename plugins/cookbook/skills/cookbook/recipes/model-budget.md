@@ -27,7 +27,8 @@ Opus 5.5 high, and a script chooses.
   the thread's: on Opus advice, pass `model: "opus"`.
 - **A banked reset.** Anthropic gives limit resets now and then; each expires. The script says
   when one is worth its most: a Fable reset at 95% of the Fable share, a weekly or full reset
-  at 95% of the whole week, a session reset at 95% of the session window. With a weekly reset
+  at 95% of the whole week, a session reset at 95% of the session window; never one that would
+  leave the week or the session window spent, so nothing could run. With a weekly reset
   banked, a spent Fable share means Opus first: redeeming then would throw the Opus half of
   the week away. A reset is held when the weekly reset is under 12 hours off, and redeemed
   at half spent when it expires within 12 hours. Redeeming is the owner's click: T3 Code,
