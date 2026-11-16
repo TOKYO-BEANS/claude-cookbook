@@ -1,5 +1,43 @@
 # Handoff
 
+## 16 November 2026 (later afternoon): a security review thread stops the merge (0.35.2)
+
+**Why.** On 16 November 2026 #62 merged with four `github-advanced-security` review threads
+unread, and #64 merged six seconds before a fifth arrived. The merge commands read the
+`ai-review` comment and the checks, never the review threads. The owner's job: a pull request
+cannot be merged by our merge commands while a security review thread on it is unanswered or
+unfixed, and the rule is where every merge loads it. This entry is the rule text; the gate is
+TOKYO-BEANS/Stack-Atlas#187 (`b643b8a`) and the merge script
+TOKYO-BEANS/release-maintenance#14 (`92a3bed`). It tightens the merge condition and loosens
+nothing.
+
+**What changed.**
+- `recipes/ci-releases.md`: the merge condition names the threads, and a new point holds the
+  rule. Only a reply in the thread closes it for the merge: `Fixed in <commit>` (a later
+  commit of the pull request that fixes the finding) or
+  `Owner's yes (<date>): <the owner's words>`, written only after the owner has said yes to
+  that thread. "With the owner" means that yes: telling or asking the owner, a planned
+  follow-up or an answer leaves the thread open.
+- `recipes/review-threads.md` (new, linked from that point; the first page is at its size
+  limit): what the threads are, how to read them (`pulls/<n>/comments`;
+  `gh pr view --json comments` does not show them), a fix, the owner's decision, what the gate
+  reads, and a thread that arrives after the merge.
+- `recipes/codex.md`: one point that was an interim step in Stack Atlas's handoff. Codex reads
+  the Cookbook of Claude's last plugin update, so before a start that leans on a page changed
+  since, compare the clone's plugin version with `main`. The next job turns the start check,
+  this comparison included, into a tested script.
+- Plugin 0.35.2.
+
+**Verification.** `npm test`: 444 tests pass, 0 fail, with the page-size check.
+
+**Outstanding.**
+- The installed plugin moves with the next plugin update. Until then a session loads the old
+  `ci-releases.md`; the gate in code refuses the merge either way. Owner: Claude, with the
+  `stack-updates` rules.
+- The Codex start check as a tested script that validates the repository name (the open
+  security thread on #64) and compares the clone's version with `main`. Owner: Claude, as the
+  next Cookbook job.
+
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 
 **Why.** The plan has one weekly limit and a Fable limit inside it (Fable may take half the
