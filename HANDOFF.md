@@ -1,5 +1,97 @@
 # Handoff
 
+## 16 November 2026 (night): Claude Code's saved usage reading weighed; the record of #80 (0.38.1)
+
+**Why.** The 0.38.0 entry left one item: should `model-budget.mjs` take its stand-in figures
+from Claude Code's own saved reading (`cachedUsageUtilization` in `~/.claude.json`, with
+Fable's part of the week), before or in place of T3 Code's file? With it, one thing seen the
+same evening: the script's signed reading (Fable 90%) stood in for up to an hour while
+T3 Code's newer reading said 97%, so the hook said "use Fable" where the newer figures said
+"redeem".
+
+**What was found** (16 November 2026, from both programs' code and a sampled run, no guess).
+- Claude Code writes `cachedUsageUtilization` only after its own read of `api/oauth/usage`
+  gets through, at most once a minute (it skips the write while its copy is under 60 seconds
+  old), and itself ignores a copy over an hour old or of another account (`claude.exe`
+  2.1.325, the functions around the key).
+- T3 Code does not read the endpoint for the figures: it asks a running Claude Code with the
+  SDK's `get_usage` request (`claudeUsageResponseToLimits` in T3 Code's `server.asar`), and
+  that request is the read that writes Claude Code's copy. One read fills both files: Claude
+  Code's `fetchedAtMs` and T3 Code's `usageLimits.checkedAt` were both 19:00:20 UTC. T3 Code
+  reads the endpoint itself only for the reset list (`readClaudeResetCredits`).
+- When that read is refused (429), Claude Code answers T3 Code from the rate-limit headers of
+  its last reply, or from its own saved copy, and saves nothing. T3 Code's file moves on and
+  Claude Code's copy does not: from 19:05:24 T3 Code's limits were newer. Sampled every
+  15 seconds from 19:05 UTC (`sample-sources.log`): T3 Code asked for the limits about every
+  five minutes (19:05:24, 19:10:28) while Claude Code's copy stayed at 19:00:20.
+- So Claude Code's copy is there whenever a Claude Code thread has asked in the last hour
+  (T3 Code's probe is what fills it), and is never newer than T3 Code's figures.
+- Fable's part of the week was 49 of its 50 in Claude Code's copy; for T3 Code's the script
+  takes half the Fable share (48.5). The script uses the part in one place: whether a Fable
+  reset would leave the week spent. Half a point there changes no advice below 99% of the
+  week.
+
+**Decision: dropped, by Claude.** Claude Code's copy is the same reading as T3 Code's file,
+never newer and often older; what it adds changes no advice; and it would be a second
+unsigned file to read and answer for. The evening's case is not about which unsigned file:
+it is the order. A signed reading under an hour old stands before any unsigned one, however
+new; that order answers GitHub's security review (the signing came from its findings on
+#67), and Claude Code's copy would have stood behind the signed reading too. Letting a newer
+unsigned reading pass over a signed one would undo that answer: not done. The lag is
+recorded as a known limit on `model-budget-setup.md`. The recipes now say why Claude Code's
+copy is not used (`model-budget-resets.md`) and where T3 Code's figures come from
+(`model-budget-setup.md`).
+
+**Verification.** `npm test`. The sampler (`sample-sources.mjs`, `sample-sources.log`) and
+the code reading are in the evidence folder. No change to the script or the hook, so the
+advice is as in 0.38.0.
+
+**Outstanding.**
+- The AI review job has no API credit (from the 0.38.0 entry, unchanged): a Stack Atlas
+  chat works on it; `sa-review` is the fallback and the merge is asked of the owner.
+- Known limit, kept: with a signed reading 10 to 60 minutes old, the advice can trail
+  T3 Code's newer figures for up to 50 minutes. Clears only if the owner wants an unsigned
+  reading to pass over a signed one; not asked, since Claude does not recommend it.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-claude-usage-reading/`.
+
+**Recorded here, from the job before (#80).** All on 16 November 2026, times UTC; each fact
+checked against the logs and against GitHub.
+- 18:22: GitHub's security review raised a second thread on `c2ac9f8`, the same finding as
+  the first (do not keep the reset list from T3 Code's unsigned file). The merge script
+  refused on it first (`merge-by-hand-cookbook-80-refused.log`: "1 security review
+  thread(s) have no fix on the head and no owner's yes"); at 18:28 the owner's answer on
+  the source, "Keep T3 Code's list (Recommended)", was written in it as the owner's yes.
+- About 18:28: the gates allowed the merge and it ended "MERGE FAILED": #81 had merged to
+  `main` at 18:25 (0.37.1) and the plugin's version file conflicted. `main` was merged in
+  once more (`62d3fd5`; the change stayed 0.38.0). The merge script now compares the pull
+  request's own changes with the reviewed commit file by file, and allows a difference in
+  `HANDOFF.md` and the plugin's version file only.
+- 18:56: #80 merged by hand as `aac9c72` on the owner's two answers ("Merge #80 once",
+  "Merge once on sa-review"): Graphify Formal Verification neutral ("0/4 PR-changed
+  function(s) verified · 4 not verified (2 vacuous, 2 unsupported)"), every other check
+  passed, both security threads with the owner's yes, no new thread during the merge.
+  Release event `verified`, execution 1583 (`merge-by-hand-cookbook-80.log`).
+- 18:57: plugin 0.38.0 installed (`claude plugin marketplace update claude-cookbook`,
+  `claude plugin update cookbook@claude-cookbook`).
+- 18:58 to 19:01: the installed hook at a session start, a prompt and a tool event
+  2.5 minutes later, and a second session start: one advice throughout, the later events
+  silent, no figures; the reset list was in T3 Code's file and then not
+  (`installed-hook-0.38.0.log`: "distinct advice lines in 150 s: 1; states of the reset
+  list seen: 2"). On the final code before the merge: `toggle-advice-final.log` (12
+  readings, one line) and `watch-advice-final.log` (240 s, one line).
+- That advice was the first real "Redeem" line: Fable at 97% of its share (T3 Code's
+  reading), the week at 59% (the record's "58 to 59%": no log shows 58), pace 62%, the weekly reset on Thursday 19 November at
+  10:00 UTC. Asked with the question dialog at 18:30, the owner answered "I redeem it now"
+  (the Fable reset; the click is the owner's, in T3 Code). At 19:01 it was not yet
+  redeemed.
+- A reading note: the script's own signed reading (Fable 90%) stood in for up to an hour
+  while T3 Code's newer reading said 97%, so for that time the hook said "use Fable" where
+  the newer figures said "redeem". That is the order of sources since 0.35.4 (a signed
+  reading under an hour old before T3 Code's), not new in 0.38.0; weighed above.
+- Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-resets/`
+  (`after-merge-record.md` and the logs it names).
+
 ## 16 November 2026 (night): the model budget keeps T3 Code's reset list (0.38.0)
 
 **Why.** Since 0.36.1 the script read no banked resets ("not read"): no "Redeem" line came,
@@ -92,7 +184,7 @@ the change read the whole diff, no finding. The commit after it changes this fil
 - Figures: Claude Code's own saved reading (`cachedUsageUtilization` in `~/.claude.json`)
   has Fable's part of the week, which T3 Code's file lacks. Not used; a possible better
   stand-in for the figures than T3 Code's file. Owner: Claude. Clears when weighed in a
-  job of its own.
+  job of its own. Weighed in 0.38.1: dropped (the same reading as T3 Code's, never newer).
 
 **Limits (known).**
 - Whoever can write T3 Code's file as the owner can have a session told to ask for a reset,
