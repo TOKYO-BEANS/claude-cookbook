@@ -1,4 +1,4 @@
-# 16 November 2026 (night): several chats at once (0.39.0)
+# 16 November 2026 (night): several chats at once (0.40.0)
 
 **Why.** The owner asked whether the nine chats then open could overlap on merges and
 pushes, and said the same questions were reaching them in different chats. Measured that
@@ -14,7 +14,8 @@ evening:
   #202; one was closed).
 - Every Cookbook pull request edited the top of `HANDOFF.md` and the `version` in
   `plugin.json`, so each one conflicted with the next. 23 pull requests merged that day; one
-  job saw `main` move six times under it, and this one four times.
+  job saw `main` move six times under it, and this one five times: the last time another
+  pull request took the version number this one had (0.39.0), so it became 0.40.0.
 
 **The owner's answer (question dialog, 16 November 2026).** To "Should I build the fix in
 the Cookbook now?": "Build all three (Recommended)", the three being a look at other chats'
