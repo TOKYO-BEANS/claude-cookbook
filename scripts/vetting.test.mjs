@@ -204,7 +204,8 @@ const finished = [
 test("the step sends three files, without the account's secrets, and passes a finished run", { skip }, () => {
   const r = step({ log: finished });
   assert.equal(r.status, 0, r.out);
-  assert.equal(r.pushed.trim(), "package-lock.json package.json sandbox-probe.sh");
+  // Sorted here: the stub lists the folder in the machine's own sort order, which differs by locale.
+  assert.deepEqual(r.pushed.trim().split(/\s+/).sort(), ["package-lock.json", "package.json", "sandbox-probe.sh"]);
   assert.match(r.args, /^run --type small --no-env --timeout 900 --push sandbox -- bash sandbox-probe\.sh some-cli$/m);
   assert.match(r.out, /^SANDBOX some-cli \| Ubuntu/m);
   assert.ok(!r.out.includes("no result"));

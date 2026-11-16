@@ -1,5 +1,47 @@
 # Handoff
 
+## 16 November 2026 (evening): boat on the paid plan, used by default (0.36.0)
+
+**Why.** The owner ended the boat trial and took the USD 20 plan on 16 November 2026, and
+asked that it be used as well as it can be. The recipe still held the trial's terms: 2
+sandboxes at once, no private code without a yes per task, and a trial date in the catalog.
+In its first week boat had run for 223 seconds in all.
+
+**The owner's two answers (question dialog, 16 November 2026).**
+- How many sandboxes: "set an allowance, use your own judgment to decide how much for each
+  individual parallel work or job; the plan allows 100 and has a 20$ budget a month". So
+  Claude sizes each job inside the plan's limits. My own guard, not the owner's words: a job
+  that would take more than a tenth of the month's included time is said first, because the
+  daily vetting needs time left.
+- Private code: "Standing yes, code only". The code of the owner's own repositories may be
+  pushed, with `--no-env`; customer data and credentials still need a yes per task.
+
+**What changed.**
+- `recipes/boat.md`: used by default (tests on Linux before a push, a CI-only or Linux-only
+  failure, long and parallel jobs, beside the vetting step); the two answers; what still
+  needs a yes now names everything that can bill past the plan and sharing a snapshot.
+  `boat cp` was wrong (no such command): `boat push` and `boat scp`.
+- `recipes/boat-setup.md`: the plan as `boat limits --json` printed it, the trial text gone,
+  the API key's end date, today's proofs.
+- `recipes/debugging.md`: a failure only in CI or on Linux is reproduced in a sandbox.
+- The map row names the new uses. boat's own CI (`runs-on: boat`) was weighed and left:
+  Depot keeps the required checks (the options page had no room for the line).
+- `catalog.json`: boat is `active`; its date is now the API key's end, 10 February 2027.
+- `scripts/vetting.test.mjs`: one test compared a folder listing in the machine's sort
+  order. It passed here and on Depot and failed in the sandbox (another locale); it sorts now.
+
+**Verification.** On the paid plan: `npm test` in a `small` sandbox, 13 seconds with the
+upload (one failure, the test above; green after the fix); five sandboxes at once
+(`boat list` showed 5); `large` reported 8 CPUs and 15 GB; `boat list --all` empty after.
+`npm test` on this PC passed. Logs: `~/.local/share/claude-cookbook/evidence/2026-11-16-boat-paid-plan/`.
+
+**Outstanding.**
+- What happens when the month's time runs out was read from boat's terms, not tested.
+- The standing yes covers code only. A repository that keeps customer data or a key in its
+  folder is not pushed without a yes for that task.
+- Saved snapshots (10 in the plan) are unused: a snapshot with a repository's dependencies
+  installed would start faster. Worth it only for a repository whose install is slow.
+
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 
 **Why.** The plan has one weekly limit and a Fable limit inside it (Fable may take half the
