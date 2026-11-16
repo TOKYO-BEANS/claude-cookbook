@@ -10,10 +10,14 @@
 //   node adobe-session.mjs tools --out <folder>
 //        writes the connector's tool names to adobe-tools.txt in the run's results folder
 //        (<folder>/run-<time>, printed at the end); calls none of them
+//   node adobe-session.mjs window
+//        shows the owner's window once, with sample text, and starts nothing: a trial
 //
 // Exit codes: 0 the session ended well and did its work; 1 it failed, or did nothing (no
-// Adobe tool called, no list written); 2 the arguments were refused; 3 the run was stopped
-// or cannot be trusted (time limit, no connector, another server, a debug log left behind).
+// Adobe tool called, no list written); 2 the arguments were refused, or the owner's window
+// did not end in a click on "Go ahead"; 3 the run was stopped or cannot be trusted (time
+// limit, no connector, another server, a debug log left behind). "window": 0 it was shown
+// and ended (a click, closed or its time limit), 3 it could not be shown.
 //
 // Why a child session: Adobe's server refuses a direct connection from Claude Code (HTTP
 // 403 on every request, 15 November 2026), so an agent file cannot define it inline. The
@@ -44,10 +48,22 @@
 // - The owner's yes is checked for what the gate asks of it: the Adobe account, a number
 //   of credits, each file by name, and the operation of every tool that is not read-only,
 //   as a whole word.
+// - Before a run that sends a file or may call a tool outside READ_ONLY, the script opens a
+//   window on the owner's screen (adobe-window.ps1 beside this file; Windows only) that
+//   shows the files, the tools, the quoted yes and its credits, and waits for a click.
+//   "Stop", a closed window, no click within WINDOW_SECONDS, or no window at all (another
+//   system, no desktop) ends the run with exit code 2: nothing is copied and no session
+//   starts. No flag, environment variable or file skips it, and a click is for the one run
+//   that asked: nothing is kept. A read-only run opens no window.
 // The script cannot know what the owner said. It checks that a yes is there and names the
 // files; whether the owner gave it is the recipe's gate (recipes/photos.md).
+// What the window does not stop. It is a second channel, independent of the text an agent
+// writes, not a proof of who clicked. An agent that controls the desktop (computer use, a
+// program that sends clicks or keys to a window) can click it, and an agent with a shell
+// can start a session of its own without this script. The window shows the owner a yes
+// they did not give; it does not make quoting one impossible.
 import { spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
@@ -188,6 +204,10 @@ export const OPERATIONS = Object.freeze({
 // number, whatever mark or space groups the digits.
 const CREDITS = /(?<=^|[(\[]|(?:^|[^\p{N}\s])\s+)\d{1,7}\s+credits?(?![\p{L}\p{N}_-]|\.[\p{L}\p{N}_-])/u;
 export const CREDITS_GAP = "the credits it may spend, as a whole number in digits without a separator, after a space ('0 credits' or 'up to 300 credits')";
+// Every number of credits a yes states, as the pattern above reads it: what the window shows.
+export const creditsIn = (ownerYes) => [...String(ownerYes ?? "").toLowerCase().matchAll(new RegExp(CREDITS.source, "gu"))].map((m) => Number(m[0].match(/\d+/)[0]));
+// The tools of an allow list that are not read-only.
+export const gatedOf = (allow) => allow.filter((n) => !READ_ONLY.includes(n));
 
 // What a yes must hold, beside the file names (`sendList`), for a run that sends a file or
 // calls a tool that is not read-only: the account, a number of credits and each operation,
@@ -228,8 +248,12 @@ export function sendList(files, ownerYes) {
 
 export function parseArgs(argv, checks = {}) {
   const [command, ...rest] = argv;
-  if (!["run", "tools"].includes(command)) throw fail('the first argument is "run" or "tools"');
-  const o = { command, allow: [], send: [], dryRun: false, ...DEFAULTS };
+  if (!["run", "tools", "window"].includes(command)) throw fail('the first argument is "run", "tools" or "window"');
+  if (command === "window") {
+    if (rest.length) throw fail('"window" takes no option: it shows the owner\'s window once, with sample text, and starts nothing');
+    return { command, allow: [], send: [], dryRun: false };
+  }
+  const o ={ command, allow: [], send: [], dryRun: false, ...DEFAULTS };
   const files = [];
   for (let i = 0; i < rest.length; i += 1) {
     const flag = rest[i];
@@ -266,7 +290,7 @@ export function parseArgs(argv, checks = {}) {
   if (o.ownerYes !== undefined && (o.ownerYes.length < 2 || o.ownerYes.length > 500 || CONTROL.test(o.ownerYes) || o.ownerYes.includes('"'))) {
     throw fail("--owner-yes quotes the owner on one line, at most 500 characters, without a double quote (write ' for one)");
   }
-  const gated = o.allow.filter((n) => !READ_ONLY.includes(n));
+  const gated = gatedOf(o.allow);
   if (gated.length && !o.ownerYes) throw fail(`${gated.join(", ")}: not read-only, so --owner-yes "<the owner's words from this chat>" is required`);
   o.send = sendList(files, o.ownerYes);
   if (gated.length || o.send.length) {
@@ -436,8 +460,15 @@ export function realOut(out, fs = FS, checks = {}) {
 // a file left there by an earlier run was covered by an earlier yes, not by this one. A
 // file to send must be a real file where its path says it is: a link (to a key, say) would
 // be copied as its target. The folder is checked before anything is copied into it, and
-// made even when nothing is sent: the child starts in it.
+// made even when nothing is sent: the child starts in it. `checkStage` is the checks alone,
+// made once before the owner's window and again here, after the click.
 export function stageFiles(stage, send, fs = FS) {
+  checkStage(stage, send, fs);
+  fs.mkdirSync(stage, { recursive: true });
+  for (const s of send) fs.copyFileSync(s.from, join(stage, s.name));
+}
+
+export function checkStage(stage, send, fs = FS) {
   plainFolder(stage, fs);
   const names = new Set(send.map((s) => s.name));
   const left = fs.existsSync(stage) ? fs.readdirSync(stage).filter((n) => !names.has(n)) : [];
@@ -447,8 +478,6 @@ export function stageFiles(stage, send, fs = FS) {
     const real = fs.realpathSync(s.from);
     if (secretIn(real)) throw fail(`--send ${s.from}: it is really inside ${secretIn(real)}`);
   }
-  fs.mkdirSync(stage, { recursive: true });
-  for (const s of send) fs.copyFileSync(s.from, join(stage, s.name));
 }
 
 // The brief: a small plain text file, not a link, not really inside a secret folder.
@@ -469,12 +498,133 @@ function endTree(child) {
   } else child.kill("SIGKILL");
 }
 
-async function main(argv) {
+// ---- The owner's window ----
+// A run needs it when it sends a file or may call a tool that is not read-only. "tools"
+// calls no Adobe tool and a read-only run changes nothing: neither opens one.
+export const windowNeeded = (o) => o.command === "run" && (o.send.length > 0 || gatedOf(o.allow).length > 0);
+export const WINDOW_SECONDS = 300;
+// Windows PowerShell and the window's file, by fixed paths: not looked up in PATH or in an
+// environment variable, which the caller of this script sets.
+export const POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
+export const WINDOW_FILE = join(dirname(fileURLToPath(import.meta.url)), "adobe-window.ps1");
+
+// A character that does not show, or that changes the order in which text shows (a
+// right-to-left override, say), is written out: the window shows what the child will get.
+const shown = (text) => String(text).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, (c) => `<U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}>`);
+
+// What the window shows for a run: the files by name and folder, every Adobe tool the
+// session may call, the yes as the child will get it and the credits it states.
+export function windowText(o, trial = false) {
+  const credits = creditsIn(o.ownerYes);
+  const body = [
+    ...(trial ? ["THIS IS A TRIAL of the window, with sample text. Nothing is sent and nothing starts, whatever you click.", ""] : []),
+    "An agent has asked the adobe-session script to start an Adobe session that sends a file of yours or may change something in your Adobe account.",
+    "",
+    `Files it sends to Adobe (${o.send.length}):`,
+    ...(o.send.length ? o.send.map((s) => `    ${shown(s.name)}    from ${shown(dirname(s.from))}`) : ["    none"]),
+    "",
+    `Adobe tools the session may call (${o.allow.length}):`,
+    ...gatedOf(o.allow).map((n) => `    ${shown(n)}    NOT read-only`),
+    ...o.allow.filter((n) => READ_ONLY.includes(n)).map((n) => `    ${shown(n)}    read-only`),
+    "",
+    "The yes it quotes as yours:",
+    `    "${shown(o.ownerYes ?? "")}"`,
+    `Credits named in that yes: ${credits.length ? credits.join(", ") : "none found"}`,
+    "",
+    `Click "Go ahead" only if you gave this yes in the chat. "Stop", closing this window or no click within ${WINDOW_SECONDS / 60} minutes starts nothing.`,
+  ].join("\r\n");
+  return { title: trial ? "adobe-session: a trial of this window" : "adobe-session: go ahead?", body, go: "Go ahead", stop: "Stop", wait: "Stops by itself in {s} seconds", seconds: WINDOW_SECONDS, arm: 2 };
+}
+const WINDOW_SAMPLE = Object.freeze({
+  command: "run", send: [{ name: "example-photo.jpg", from: "C:\\example\\photos\\example-photo.jpg" }],
+  allow: ["image_select_subject", "font_search"], ownerYes: "Yes: example-photo.jpg to my Adobe account, masks, 0 credits (sample text)",
+});
+
+// The window's answer from what its process wrote and how it ended. "go" needs a clean
+// exit and this run's own random mark: a window that broke, or printed something else,
+// is never a go-ahead.
+export function windowAnswer(out, code, nonce) {
+  const said = String(out).trim();
+  if (code !== 0) return "failed";
+  if (said === `go:${nonce}`) return "go";
+  return ["stop", "closed", "timeout"].includes(said) ? said : "failed";
+}
+
+// Opens the window and waits: "go", "stop", "closed", "timeout", "failed", or "no-window"
+// where none can be shown. The text goes in on standard input as plain ASCII, not on the
+// command line; the process gets none of the caller's environment.
+export function showWindow(text, { start = spawn, platform = process.platform, exists = existsSync, nonce = randomBytes(16).toString("hex") } = {}) {
+  return new Promise((done) => {
+    if (platform !== "win32" || !exists(POWERSHELL) || !exists(WINDOW_FILE)) return done("no-window");
+    let child;
+    try {
+      child = start(POWERSHELL, ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-STA", "-File", WINDOW_FILE], {
+        stdio: ["pipe", "pipe", "ignore"], windowsHide: true, env: { SystemRoot: "C:\\Windows" },
+      });
+    } catch { return done("no-window"); }
+    let out = "";
+    let ended = false;
+    // The window ends itself at its time limit; this ends one that hangs.
+    const limit = setTimeout(() => { endTree(child); end("timeout"); }, (text.seconds + 20) * 1000);
+    const end = (answer) => {
+      if (ended) return;
+      ended = true;
+      clearTimeout(limit);
+      done(answer);
+    };
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => { out = (out + chunk).slice(0, 200); });
+    child.on("error", () => end("no-window"));
+    child.on("close", (code) => end(windowAnswer(out, code, nonce)));
+    child.stdin.on("error", () => {});
+    const ascii = JSON.stringify({ ...text, nonce }).replace(/[\u007f-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`);
+    child.stdin.end(ascii);
+  });
+}
+
+const WINDOW_ENDS = Object.freeze({
+  stop: 'the owner clicked "Stop" in the window',
+  closed: "the owner's window was closed without a click",
+  timeout: `no click in the owner's window within ${WINDOW_SECONDS} seconds`,
+  "no-window": "the owner's window could not be opened (it needs Windows, its PowerShell and adobe-window.ps1 beside this script)",
+  failed: "the owner's window ended without an answer",
+});
+
+// Asks the owner on screen when the run needs it. Returns "not-needed" or "go"; every
+// other end of the window is a usage error (exit code 2) before anything is started.
+// `show` is there for the tests: the command line has no way to give another one.
+export async function ownerClick(o, show = showWindow) {
+  if (!windowNeeded(o)) return "not-needed";
+  let answer;
+  try { answer = await show(windowText(o)); } catch { answer = "failed"; }
+  if (answer === "go") return "go";
+  const why = typeof answer === "string" && Object.hasOwn(WINDOW_ENDS, answer) ? WINDOW_ENDS[answer] : WINDOW_ENDS.failed;
+  throw fail(`${why}. Nothing was started: a run that sends a file or calls a tool that is not read-only needs the owner's click on "Go ahead"`);
+}
+
+// What --dry-run prints: the child's command line, settings and prompts, and whether a real
+// run would open the owner's window, with the text it would show. A dry run opens none.
+export function dryRun(o, briefText = "") {
+  const run = buildRun(o, briefText);
+  const window = windowNeeded(o)
+    ? { opens: true, note: "A real run opens this window on the owner's screen and waits for a click on \"Go ahead\" before anything starts. This dry run opened none.", shows: windowText(o).body.split("\r\n") }
+    : { opens: false, note: "A real run opens no window: no file is sent and every tool is read-only." };
+  return { argv: run.argv, settings: run.settings, system: run.system, prompt: run.prompt, window };
+}
+
+// `show` and `launch` are there for the tests; started as a script, main gets neither.
+export async function main(argv, { show = showWindow, launch = session } = {}) {
   const o = parseArgs(argv);
+  if (o.command === "window") {
+    let answer;
+    try { answer = await show(windowText(WINDOW_SAMPLE, true)); } catch { answer = "failed"; }
+    const ended = ["go", "stop", "closed", "timeout"].includes(answer);
+    console.log(ended ? `window: shown, and it ended with "${answer}". Nothing was started` : "window: it could not be shown");
+    return ended ? 0 : 3;
+  }
   const brief = o.command === "run" ? readBrief(o.brief) : "";
   if (o.dryRun) {
-    const run = buildRun(o, brief);
-    console.log(JSON.stringify({ argv: run.argv, settings: run.settings, system: run.system, prompt: run.prompt }, null, 2));
+    console.log(JSON.stringify(dryRun(o, brief), null, 2));
     return 0;
   }
   o.out = realOut(o.out);
@@ -483,7 +633,13 @@ async function main(argv) {
   // happens: it holds the system prompt and the session's debug log while the run lasts.
   let end;
   try {
-    end = removeTemp(debugDir, await session(o, buildRun(o, brief, debugDir)));
+    const run = buildRun(o, brief, debugDir);
+    // Every check comes before the owner's window, so a click is never asked for a run
+    // that would be refused; the session makes the same checks again before it copies.
+    plainFolder(run.control);
+    checkStage(run.stage, o.send);
+    const clicked = await ownerClick(o, show);
+    end = removeTemp(debugDir, await launch(o, run, clicked));
   } catch (error) {
     for (const line of removeTemp(debugDir, 2).lines) console.log(line);
     throw error;
@@ -492,7 +648,8 @@ async function main(argv) {
   return end.code;
 }
 
-async function session(o, run) {
+async function session(o, run, clicked) {
+  if (windowNeeded(o) && clicked !== "go") throw fail("the owner's window gave no go-ahead: nothing was started");
   plainFolder(run.control);
   stageFiles(run.stage, o.send);
   mkdirSync(run.results);
@@ -505,7 +662,7 @@ async function session(o, run) {
   writeFileSync(run.paths.system, run.system, { mode: 0o600 });
   const log = createWriteStream(run.paths.log);
   const note = (entry) => log.write(`${JSON.stringify(entry)}\n`);
-  note({ type: "adobe-session", command: o.command, allow: o.allow, filesSent: o.send.length, ownerYesGiven: Boolean(o.ownerYes), model: o.model });
+  note({ type: "adobe-session", command: o.command, allow: o.allow, filesSent: o.send.length, ownerYesGiven: Boolean(o.ownerYes), ownerWindow: clicked === "go" ? "go" : "not-needed", model: o.model });
   const child = spawn("claude", run.argv, { cwd: run.stage, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
   const events = [];
   let stopped = "";

@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
-import { join, resolve } from "node:path";
+import { EventEmitter } from "node:events";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, dirname, join, resolve } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
-  BRIEF_BYTES, buildRun, connected, CONNECTOR, CREDITS_GAP, fencedBrief, folderErrors, initErrors, logEntry, namedIn, OPERATIONS, OTHER_CONNECTORS, otherServers,
-  outcome, parseArgs, plainFolder, readBrief, READ_ONLY, realOut, removeTemp, RULES, RUN_FOLDERS, rulePath, SECRET_DENY, sendList, STAGE,
-  stageFiles, summarize, TOOL_PREFIX, WAIT, yesGaps,
+  BRIEF_BYTES, buildRun, checkStage, connected, CONNECTOR, CREDITS_GAP, creditsIn, dryRun, fencedBrief, folderErrors, gatedOf, initErrors, logEntry, main, namedIn,
+  OPERATIONS, OTHER_CONNECTORS, otherServers, outcome, ownerClick, parseArgs, plainFolder, POWERSHELL, readBrief, READ_ONLY, realOut, removeTemp, RULES,
+  RUN_FOLDERS, rulePath, SECRET_DENY, sendList, showWindow, STAGE, stageFiles, summarize, TOOL_PREFIX, WAIT, WINDOW_FILE, WINDOW_SECONDS, windowAnswer,
+  windowNeeded, windowText, yesGaps,
 } from "../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs";
+
+const SCRIPT = fileURLToPath(new URL("../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs", import.meta.url));
 
 // A home folder and a file system the tests control: nothing here depends on the machine.
 // Every folder is under that home, so the tests also pass in a checkout that sits inside a
@@ -172,7 +179,7 @@ test("a file goes along only when the owner's yes names it, by its whole name", 
 });
 
 test("arguments are checked before anything runs", () => {
-  assert.throws(() => parseArgs(["go"], checks), /"run" or "tools"/);
+  assert.throws(() => parseArgs(["go"], checks), /"run", "tools" or "window"/);
   assert.throws(() => parseArgs(["run", "--out", OUT, "--allow", "font_search"], checks), /--brief/);
   assert.throws(() => parseArgs(["run", "--brief", BRIEF, "--allow", "font_search"], checks), /--out/);
   assert.throws(() => run("--allow", "font_search", "--model", "gpt"), /--model/);
@@ -477,4 +484,255 @@ test("the summary reports calls, denials and failure as they are", () => {
   assert.equal(summarize([{ type: "assistant", message: { content: [{ type: "tool_use", name: "Write" }] } }, events[2]]).adobeCalls, 0);
   assert.equal(summarize([]).ok, false);
   assert.equal(summarize([{ type: "result", subtype: "error_max_budget_usd", is_error: true }]).ok, false);
+});
+
+// ---- The owner's window ----
+const YES = "Yes, 1598.jpg to my Adobe account, masks, 0 credits";
+const gatedRun = () => run("--allow", "font_search,image_select_subject", "--owner-yes", YES, "--send", PHOTO);
+
+test("the owner's window is needed for a file or a tool that is not read-only, and for nothing else", () => {
+  assert.equal(windowNeeded(gatedRun()), true);
+  // A tool that is not read-only, without a file.
+  assert.equal(windowNeeded(run("--allow", "image_select_subject", "--owner-yes", "Yes: my Adobe account, masks, 0 credits")), true);
+  // A file, with read-only tools only.
+  assert.equal(windowNeeded(run("--allow", "font_search", "--owner-yes", YES, "--send", PHOTO)), true);
+  // A tool the script does not know is not read-only.
+  assert.equal(windowNeeded(run("--allow", "some_new_tool", "--owner-yes", "Yes: my Adobe account, some_new_tool, 0 credits")), true);
+  for (const name of READ_ONLY) assert.equal(windowNeeded(run("--allow", name)), false, name);
+  assert.equal(windowNeeded(run("--allow", READ_ONLY.join(","))), false);
+  // A yes alone, on a read-only run without a file, opens none.
+  assert.equal(windowNeeded(run("--allow", "font_search", "--owner-yes", YES)), false);
+  assert.equal(windowNeeded(parseArgs(["tools", "--out", OUT], checks)), false);
+  assert.deepEqual(gatedOf(["font_search", "image_select_subject", "some_new_tool"]), ["image_select_subject", "some_new_tool"]);
+});
+
+test("the window shows the files, the tools, the quoted yes and its credits", () => {
+  const text = windowText(gatedRun());
+  const lines = text.body.split("\r\n");
+  assert.ok(lines.includes("Files it sends to Adobe (1):"));
+  assert.ok(lines.includes(`    1598.jpg    from ${dirname(PHOTO)}`));
+  assert.ok(lines.includes("Adobe tools the session may call (2):"));
+  assert.ok(lines.includes("    image_select_subject    NOT read-only"));
+  assert.ok(lines.includes("    font_search    read-only"));
+  assert.ok(lines.includes(`    "${YES}"`));
+  assert.ok(lines.includes("Credits named in that yes: 0"));
+  assert.match(lines.at(-1), /"Stop", closing this window or no click within 5 minutes starts nothing\.$/);
+  assert.deepEqual([text.go, text.stop, text.seconds, WINDOW_SECONDS], ["Go ahead", "Stop", 300, 300]);
+  assert.ok(text.arm >= 1);
+  assert.ok(!text.body.includes("TRIAL"));
+  assert.match(windowText(gatedRun(), true).body, /^THIS IS A TRIAL of the window, with sample text\. Nothing is sent and nothing starts/);
+  // Every number of credits the yes states is shown; a run without a file says "none".
+  assert.deepEqual(creditsIn("Yes, my Adobe account, masks, 0 credits, or up to 300 credits"), [0, 300]);
+  assert.deepEqual(creditsIn("credits are fine, 1,000 credits"), []);
+  const noFile = windowText(run("--allow", "image_select_subject", "--owner-yes", "Yes: my Adobe account, masks, up to 300 credits")).body.split("\r\n");
+  assert.ok(noFile.includes("Files it sends to Adobe (0):") && noFile.includes("    none"));
+  assert.ok(noFile.includes("Credits named in that yes: 300"));
+  // A character that does not show, or that turns the text around, is written out.
+  const hidden = windowText(run("--allow", "image_select_subject", "--owner-yes", "Yes: my Adobe account, masks, 0 credits \u202eti dnes ton od\u200b")).body;
+  assert.ok(hidden.includes("<U+202E>ti dnes ton od<U+200B>"));
+  assert.ok(!/[\u202e\u200b]/.test(hidden));
+});
+
+test("only a click on go ahead starts the run: every other answer of the window ends it with exit code 2", async () => {
+  const o = gatedRun();
+  const texts = [];
+  assert.equal(await ownerClick(o, async (text) => { texts.push(text); return "go"; }), "go");
+  assert.deepEqual(texts, [windowText(o)]);
+  const ends = {
+    stop: /the owner clicked "Stop"/, closed: /closed without a click/, timeout: /no click in the owner's window within 300 seconds/,
+    "no-window": /could not be opened/, failed: /ended without an answer/,
+  };
+  for (const [answer, message] of Object.entries(ends)) {
+    await assert.rejects(ownerClick(o, async () => answer), (error) => error.usage === true && message.test(error.message) && /Nothing was started/.test(error.message), answer);
+  }
+  // Anything that is not exactly "go" is no go-ahead: another word, another type, an error.
+  for (const answer of ["GO", "go ", "go:1", "yes", "", undefined, null, true, 1, {}, ["go"], "constructor", "__proto__"]) {
+    await assert.rejects(ownerClick(o, async () => answer), (error) => error.usage === true && /ended without an answer/.test(error.message), String(answer));
+  }
+  await assert.rejects(ownerClick(o, async () => { throw new Error("spawn EPERM"); }), (error) => error.usage === true && /ended without an answer/.test(error.message));
+  // A read-only run asks nothing: the window is never opened.
+  const never = async () => { throw new Error("the window was opened"); };
+  assert.equal(await ownerClick(run("--allow", "font_search"), never), "not-needed");
+  assert.equal(await ownerClick(parseArgs(["tools", "--out", OUT], checks), never), "not-needed");
+});
+
+test("the window's answer is a go-ahead only with a clean exit and this run's own mark", () => {
+  assert.equal(windowAnswer("go:abc", 0, "abc"), "go");
+  assert.equal(windowAnswer("go:abc\r\n", 0, "abc"), "go");
+  for (const [out, code] of [["go:abc", 1], ["go:abc", null], ["go", 0], ["go:", 0], ["go:other", 0], ["go:abcd", 0], ["x go:abc", 0], ["", 0], ["GO:abc", 0], ["error", 0]]) {
+    assert.equal(windowAnswer(out, code, "abc"), "failed", `${out} ${code}`);
+  }
+  for (const said of ["stop", "closed", "timeout"]) {
+    assert.equal(windowAnswer(said, 0, "abc"), said);
+    assert.equal(windowAnswer(said, 1, "abc"), "failed");
+  }
+});
+
+// A stand-in for the window's process: what it was started with and what was written to it.
+function fakeWindow() {
+  const child = new EventEmitter();
+  child.stdout = Object.assign(new EventEmitter(), { setEncoding() {} });
+  child.stdin = Object.assign(new EventEmitter(), { end(text) { child.written = text; } });
+  child.kill = () => { child.killed = true; };
+  const started = [];
+  const start = (program, args, options) => { started.push({ program, args, options }); return child; };
+  return { child, started, start, on: { start, platform: "win32", exists: () => true, nonce: "mark1" } };
+}
+
+test("the window's process: a fixed program, the text on standard input, none of the caller's environment", async (t) => {
+  const o = run("--allow", "image_select_subject", "--owner-yes", "Yes, 1598.jpg to my Adobe account, masks, 0 credits, née Ærø", "--send", PHOTO);
+  const text = windowText(o);
+  const w = fakeWindow();
+  const answer = showWindow(text, w.on);
+  const [{ program, args, options }] = w.started;
+  assert.equal(program, POWERSHELL);
+  assert.match(POWERSHELL, /^C:\\Windows\\System32\\/);
+  assert.deepEqual(args.slice(-2), ["-File", WINDOW_FILE]);
+  assert.ok(args.includes("-NoProfile") && args.includes("-NonInteractive"));
+  // Nothing of the run is on the command line, and the process gets a fixed environment.
+  assert.ok(!args.join(" ").includes("1598") && !args.join(" ").includes("Adobe account"));
+  assert.deepEqual(options.env, { SystemRoot: "C:\\Windows" });
+  assert.equal(options.stdio[0], "pipe");
+  // The text arrives as plain ASCII and reads back as it was, with this run's mark.
+  assert.match(w.child.written, /^[\x20-\x7e]+$/);
+  assert.deepEqual(JSON.parse(w.child.written), { ...text, nonce: "mark1" });
+  w.child.stdout.emit("data", "go:mark1");
+  w.child.emit("close", 0);
+  assert.equal(await answer, "go");
+
+  for (const [out, code, expected] of [["stop", 0, "stop"], ["closed", 0, "closed"], ["timeout", 0, "timeout"], ["go:mark1", 1, "failed"], ["go:another", 0, "failed"], ["", 0, "failed"]]) {
+    const next = fakeWindow();
+    const pending = showWindow(text, next.on);
+    if (out) next.child.stdout.emit("data", out);
+    next.child.emit("close", code);
+    assert.equal(await pending, expected, `${out} ${code}`);
+  }
+  // No window can be shown: another system, no PowerShell, no window file, a start that fails.
+  const none = fakeWindow();
+  assert.equal(await showWindow(text, { ...none.on, platform: "linux" }), "no-window");
+  assert.equal(await showWindow(text, { ...none.on, exists: (path) => path !== POWERSHELL }), "no-window");
+  assert.equal(await showWindow(text, { ...none.on, exists: (path) => path !== WINDOW_FILE }), "no-window");
+  assert.equal(await showWindow(text, { ...none.on, start: () => { throw new Error("EPERM"); } }), "no-window");
+  assert.deepEqual(none.started, []);
+  const broken = fakeWindow();
+  const failing = showWindow(text, broken.on);
+  broken.child.emit("error", new Error("ENOENT"));
+  assert.equal(await failing, "no-window");
+  // A window that hangs is ended after its own time limit and counts as no click.
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const hung = fakeWindow();
+  const waiting = showWindow(text, hung.on);
+  t.mock.timers.tick((WINDOW_SECONDS + 19) * 1000);
+  assert.equal(hung.child.killed, undefined);
+  t.mock.timers.tick(2000);
+  assert.equal(await waiting, "timeout");
+  assert.equal(hung.child.killed, true);
+  // A late "go" from a window that was ended changes nothing.
+  hung.child.stdout.emit("data", "go:mark1");
+  hung.child.emit("close", 0);
+  assert.equal(await waiting, "timeout");
+});
+
+test("the window's file is plain ASCII, puts the focus on Stop and reads nothing but its input", () => {
+  assert.equal(basename(WINDOW_FILE), "adobe-window.ps1");
+  assert.equal(dirname(WINDOW_FILE), dirname(SCRIPT));
+  const ps = readFileSync(WINDOW_FILE, "utf8");
+  assert.match(ps, /^[\x09\x0a\x0d\x20-\x7e]+$/);
+  assert.match(ps, /\$form\.AcceptButton = \$stop/);
+  assert.match(ps, /\$form\.CancelButton = \$stop/);
+  assert.match(ps, /\$go\.Enabled = \$false/);
+  assert.match(ps, /\$script:answer = 'closed'/);
+  assert.match(ps, /'go:' \+ \[string\]\$in\.nonce/);
+  // Started with a hidden console, the first showing of the window is hidden too (the first
+  // trial by hand ended at its time limit, unseen): it is shown, hidden and shown again.
+  const order = ["$form.Show()", "$form.Hide()", "[void]$form.ShowDialog()"].map((line) => ps.indexOf(`\n${line}`));
+  assert.ok(order[0] > 0 && order[0] < order[1] && order[1] < order[2], String(order));
+  // No argument, no environment variable, no file, no command built from text.
+  assert.ok(!/\$env:|\$args\b|\bparam\s*\(|Get-Content|Test-Path|Import-|Invoke-Expression|\biex\b|Start-Process|ReadAllText|GetEnvironmentVariable/i.test(ps));
+});
+
+test("nothing skips the window: no flag, no environment variable, no file", async (t) => {
+  for (const flag of ["--no-window", "--skip-window", "--window", "--yes", "--confirm", "--force", "--unattended", "--clicked", "--go"]) {
+    assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", YES, flag, "go"), /unknown option/, flag);
+    assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", YES, flag), /needs a value|unknown option/, flag);
+  }
+  assert.throws(() => parseArgs(["window", "--out", OUT], checks), /"window" takes no option/);
+  // The script reads no environment variable at all, and no file decides about the window.
+  const source = readFileSync(SCRIPT, "utf8");
+  assert.ok(!/process\.env|\bgetenv\b/.test(source));
+  assert.equal(source.match(/\bownerClick\(o, show\)/g).length, 1);
+  assert.equal(source.match(/spawn\("claude"/g).length, 1);
+  assert.ok(source.indexOf("await ownerClick(o, show)") < source.indexOf("await launch(o, run, clicked)"));
+  assert.match(source, /if \(windowNeeded\(o\) && clicked !== "go"\) throw fail\(/);
+
+  // The run itself, in a folder of its own, with a window and a session that the test
+  // gives it: what is asked, in which order, and what starts.
+  const folder = mkdtempSync(join(tmpdir(), "adobe-session-test-"));
+  t.after(() => rmSync(folder, { recursive: true, force: true }));
+  const brief = join(folder, "brief.md");
+  const photo = join(folder, "1598.jpg");
+  writeFileSync(brief, "Make a subject mask of 1598.jpg.\n");
+  writeFileSync(photo, "not a photo");
+  const out = join(folder, "out");
+  const gated = ["run", "--brief", brief, "--out", out, "--allow", "image_select_subject", "--owner-yes", YES, "--send", photo];
+  const trace = [];
+  const launch = async (o, started, clicked) => { trace.push(`launch:${clicked}`); return 0; };
+  const answering = (answer) => async (text) => {
+    trace.push(`window:${text.body.includes("    1598.jpg    from ") && !existsSync(join(out, "to-adobe"))}`);
+    return answer;
+  };
+  assert.equal(await main(gated, { show: answering("go"), launch }), 0);
+  assert.deepEqual(trace.splice(0), ["window:true", "launch:go"]);
+  for (const answer of ["stop", "closed", "timeout", "no-window", "failed", "whatever"]) {
+    await assert.rejects(main(gated, { show: answering(answer), launch }), (error) => error.usage === true && /Nothing was started/.test(error.message), answer);
+    assert.deepEqual(trace.splice(0), ["window:true"], answer);
+    assert.equal(existsSync(join(out, "to-adobe")), false, answer);
+  }
+  // A read-only run opens no window and starts.
+  assert.equal(await main(["run", "--brief", brief, "--out", out, "--allow", "font_search"], { show: answering("stop"), launch }), 0);
+  assert.deepEqual(trace.splice(0), ["launch:not-needed"]);
+  // A run that the checks refuse asks for no click: the window comes after every check.
+  mkdirSync(join(out, "to-adobe"));
+  writeFileSync(join(out, "to-adobe", "older.jpg"), "left by an earlier run");
+  await assert.rejects(main(gated, { show: answering("go"), launch }), /holds files this run does not send/);
+  assert.deepEqual(trace.splice(0), []);
+  // A dry run and the trial start nothing; the trial shows the window with sample text.
+  const printed = t.mock.method(console, "log", () => {});
+  assert.equal(await main([...gated, "--dry-run"], { show: answering("go"), launch }), 0);
+  assert.deepEqual(trace.splice(0), []);
+  const trial = [];
+  assert.equal(await main(["window"], { show: async (text) => { trial.push(text); return "stop"; }, launch }), 0);
+  assert.equal(await main(["window"], { show: async () => "no-window", launch }), 3);
+  assert.equal(await main(["window"], { show: async () => { throw new Error("EPERM"); }, launch }), 3);
+  assert.deepEqual(trace.splice(0), []);
+  assert.match(trial[0].body, /^THIS IS A TRIAL of the window/);
+  assert.match(trial[0].title, /trial/);
+  assert.match(printed.mock.calls.at(-3).arguments[0], /^window: shown, and it ended with "stop"\. Nothing was started$/);
+  assert.equal(printed.mock.calls.at(-1).arguments[0], "window: it could not be shown");
+});
+
+test("a dry run opens no window and says that a real run would", () => {
+  const gated = dryRun(gatedRun(), "Make a subject mask of 1598.jpg.");
+  assert.deepEqual(Object.keys(gated), ["argv", "settings", "system", "prompt", "window"]);
+  assert.equal(gated.window.opens, true);
+  assert.match(gated.window.note, /A real run opens this window on the owner's screen and waits for a click on "Go ahead" before anything starts\. This dry run opened none\./);
+  assert.deepEqual(gated.window.shows, windowText(gatedRun()).body.split("\r\n"));
+  const readOnly = dryRun(run("--allow", "font_search"), "Find Lato.");
+  assert.deepEqual(readOnly.window, { opens: false, note: "A real run opens no window: no file is sent and every tool is read-only." });
+});
+
+test("the checks of the staging folder alone make and copy nothing", () => {
+  const stage = join(OUT, STAGE);
+  const send = [{ from: PHOTO, name: "1598.jpg" }];
+  const made = [];
+  const fs = {
+    existsSync: () => false, lstatSync: () => ({ isFile: () => true, isDirectory: () => true }), realpathSync: (path) => path,
+    mkdirSync: (path) => made.push(path), readdirSync: () => [], copyFileSync: (from, to) => made.push(to),
+  };
+  checkStage(stage, send, fs);
+  assert.deepEqual(made, []);
+  stageFiles(stage, send, fs);
+  assert.deepEqual(made, [stage, join(stage, "1598.jpg")]);
+  assert.throws(() => checkStage(stage, send, { ...fs, lstatSync: () => ({ isFile: () => false, isDirectory: () => true }) }), /not a plain file/);
+  assert.throws(() => checkStage(stage, send, { ...fs, existsSync: () => true, readdirSync: () => ["older.jpg"] }), /holds files this run does not send/);
 });
