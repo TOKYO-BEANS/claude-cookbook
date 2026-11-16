@@ -689,7 +689,33 @@ test("a call with a key the hook does not know is not taken to run in this check
   assert.equal(today.check.calls.length, 1);
   const full = gate(hookInput("delegate_task", { task: BRIEF, target: codex, isolation: "shared", mode: "wait", role: "review", runtimeMode: "approval-required", interactionMode: "inherit", timeoutMs: 1000, title: "t", clientRequestId: "r" }));
   assert.equal(full.check.calls.length, 1);
-  assert.equal(gate(hookInput("create_threads", { threads: [{ prompt: "x", somethingNew: true }], other: 1 })).out, null);
+});
+
+test("a call with a key the hook does not know is not taken for Claude either: the key may name a provider", () => {
+  const cases = [
+    hookInput("create_threads", { threads: [{ prompt: "x", somethingNew: true }] }),
+    hookInput("create_threads", { threads: [{ prompt: "x" }], other: 1 }),
+    hookInput("create_threads", { threads: [{ prompt: BRIEF, modelSelection: { provider: "codex", model: "gpt-6-astra" } }] }),
+    hookInput("create_threads", { threads: [{ prompt: "x" }, { prompt: BRIEF, provider: "codex" }] }),
+    hookInput("delegate_task", { task: BRIEF, provider: "codex" }),
+    hookInput("delegate_task", { task: BRIEF, providerInstanceId: "codex" }),
+    hookInput("delegate_task", { task: BRIEF, modelSelection: { provider: "codex", model: "gpt-6-astra" } }),
+    hookInput("delegate_task", { task: "x", target: { providerInstanceId: "claudeAgent" }, somethingNew: true }),
+    hookInput("t3_thread_launch", { title: "t", message: BRIEF, provider: "codex" }),
+    hookInput("t3_thread_launch", { title: "t", message: "m", target: { providerInstanceId: "codex" } }),
+  ];
+  for (const input of cases) {
+    const { out, check } = gate(input);
+    denied(out, DENIALS.checkout);
+    assert.deepEqual(check.calls, []);
+  }
+  // Every key T3 has today, on a start that is Claude's: left alone.
+  const today = [
+    hookInput("delegate_task", { task: "x", isolation: "worktree", mode: "wait", role: "review", runtimeMode: "inherit", interactionMode: "inherit", timeoutMs: 1000, title: "t", clientRequestId: "r", target: { providerInstanceId: "claudeAgent", driverKind: "claudeAgent", model: "claude-opus-5-5", options: { effort: "high" }, projectId: "p", environmentId: "e" } }),
+    hookInput("create_threads", { clientRequestId: "r", threads: [{ prompt: "x", title: "t", runtimeMode: "inherit", interactionMode: "plan", target: { model: "claude-sonnet-5-5" } }] }),
+    hookInput("t3_thread_launch", { title: "t", message: "m", attachments: [], clientRequestId: "r", delegatedFrom: { environmentId: "e", threadId: "x", title: "t" }, environmentId: "e", interactionMode: "default", modelSelection: { provider: "claudeAgent", instanceId: "claudeAgent", model: "claude-fable-5-2", options: {} }, projectId: "p", runtimeMode: "full-access", scratch: false, workspaceStrategy: { type: "worktree", baseRef: "origin/main" } }),
+  ];
+  for (const input of today) assert.equal(gate(input).out, null, input.tool_name);
 });
 
 test("create_threads: each Codex thread is checked, a Claude thread beside it is not", () => {

@@ -95,6 +95,10 @@ It is not in code anywhere else:
   the three T3 tools are blocked for every call, Claude's included. Reason: the gate fails
   closed, and the plugin runs on this PC only. Owner: Claude. Clears if the plugin is ever
   used on another machine: a launcher that finds Node.
+- **A field T3 adds to one of the three tools blocks every call that uses it,** Claude's
+  included, until the hook knows the field: an unknown key may name a provider. Reason: the
+  gate fails closed. Owner: Claude. Clears when seen: read the field in T3's tool definition
+  and add it to the key lists in `codex-start-gate-lib.mjs`, with a test.
 - **A T3 tool renamed, or a fourth one that starts an agent,** is not matched. Owner: Claude.
   Clears when seen: add it to the matcher and to `STARTERS`.
 - **A provider id for Claude that is not `claudeAgent`** (or `claudeAgent_<id>`) counts as
@@ -156,8 +160,16 @@ run in this thread's own checkout. And the check has one time limit of 100 secon
 the hook's 150: out of time is a no with its own fixed reason ("the check ran out of time",
 the tenth), and each `gh` call gets what is left, 20 seconds at most.
 
-**Verification.** `npm test` on the last push, with `main` merged in: 553 tests, 552 pass, 0
-fail, 1 skipped (an older symbolic-link test that Windows skips). Of these, 49 are new (`scripts/codex-start-check.test.mjs`), on
+**The review in CI, round four** (past the three rounds set at the start, because of the
+merge that failed): one medium finding, fixed in the next push. A call that named its
+provider under a key the hook does not know, with no `target`, was still taken for Claude
+(`{ prompt, modelSelection: { provider: "codex" } }` in `create_threads`, a top-level
+`provider` in `delegate_task`). Now a start is plainly Claude only when the call and the
+thread hold nothing but the keys T3 has today; any other key means a denial.
+
+**Verification.** `npm test` with `main` merged in: 553 tests, 552 pass, 0 fail, 1 skipped (an
+older symbolic-link test that Windows skips); the test file again after the round-four fix: 50
+pass. Of these, 50 are new (`scripts/codex-start-check.test.mjs`), on
 real Git repositories with a stand-in for GitHub; the first run of the file failed before the
 script existed. Six deliberate breakages of the script (links not followed, `.git` skipped at
 any depth, the head not required, other spellings ignored, a cut-short tree accepted, `gh`
