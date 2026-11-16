@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   BRIEF_BYTES, buildRun, checkStage, clickHeld, connected, CONNECTOR, CREDITS_GAP, creditsIn, dryRun, fencedBrief, folderErrors, gatedOf, initErrors, logEntry, main, namedIn,
-  OPERATIONS, OTHER_CONNECTORS, otherServers, outcome, ownerClick, parseArgs, plainFolder, POWERSHELL, readBrief, READ_ONLY, realOut, realWindowOnly, removeTemp, RULES,
+  OPERATIONS, OTHER_CONNECTORS, otherServers, outcome, ownerClick, parseArgs, pinned, plainFolder, POWERSHELL, readBrief, READ_ONLY, realOut, realWindowOnly, removeTemp, RULES,
   RUN_FOLDERS, rulePath, SECRET_DENY, sendList, shown, showWindow, STAGE, stageFiles, summarize, TOOL_PREFIX, TRIAL_BUTTON, WAIT, WINDOW_FILE, WINDOW_SECONDS, windowAnswer,
   windowNeeded, windowText, yesGaps,
 } from "../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs";
@@ -790,5 +790,24 @@ test("the checks of the staging folder alone make and copy nothing", () => {
   stageFiles(stage, send, fs);
   assert.deepEqual(made, [stage, join(stage, "1598.jpg")]);
   assert.throws(() => checkStage(stage, send, { ...fs, lstatSync: () => ({ isFile: () => false, isDirectory: () => true }) }), /not a plain file/);
+  // The place a file really is, is read once before the window and held: the window shows
+  // it, a file that is somewhere else after the click is refused, and the copy comes from it.
+  const elsewhere = join(HOME, "private", "1598.jpg");
+  const linkedFs = { ...fs, realpathSync: (path) => (path === PHOTO ? elsewhere : path) };
+  const held = pinned(send, linkedFs);
+  assert.deepEqual(held, [{ from: PHOTO, name: "1598.jpg", real: elsewhere }]);
+  assert.ok(windowText({ command: "run", send: held, allow: ["font_search"], ownerYes: YES }).body.includes(`    1598.jpg    from ${dirname(elsewhere)}    (given as ${dirname(PHOTO)})`));
+  const copied = [];
+  stageFiles(stage, held, { ...linkedFs, copyFileSync: (from, to) => copied.push([from, to]) });
+  assert.deepEqual(copied, [[elsewhere, join(stage, "1598.jpg")]]);
+  // The link is turned to another place while the window is open: nothing is copied.
+  const swapped = { ...fs, realpathSync: (path) => (path === PHOTO ? join(HOME, "other", "1598.jpg") : path), copyFileSync: (from, to) => copied.push([from, to]) };
+  assert.throws(() => stageFiles(stage, held, swapped), (error) => error.usage === true && /it was in .*private when the owner's window opened and is in .*other now\. Nothing was copied/.test(error.message));
+  assert.equal(copied.length, 1);
+  assert.throws(() => stageFiles(stage, pinned(send, fs), linkedFs), /when the owner's window opened/);
+  // main pins the files between the checks and the window.
+  const source = readFileSync(SCRIPT, "utf8");
+  const at = ["checkStage(run.stage, o.send);", "o.send = pinned(o.send);", "await ownerClick(o, show)"].map((line) => source.indexOf(line));
+  assert.ok(at[0] > 0 && at[0] < at[1] && at[1] < at[2], String(at));
   assert.throws(() => checkStage(stage, send, { ...fs, existsSync: () => true, readdirSync: () => ["older.jpg"] }), /holds files this run does not send/);
 });

@@ -470,8 +470,14 @@ export function realOut(out, fs = FS, checks = {}) {
 export function stageFiles(stage, send, fs = FS) {
   checkStage(stage, send, fs);
   fs.mkdirSync(stage, { recursive: true });
-  for (const s of send) fs.copyFileSync(s.from, join(stage, s.name));
+  for (const s of send) fs.copyFileSync(s.real ?? s.from, join(stage, s.name));
 }
+
+// The files to send, each with the place it really is (`real`, links in its path
+// followed), read once before the owner's window. The window shows that place, the checks
+// after the click refuse a file that is somewhere else by then, and the copy is made from
+// it: what the owner saw is what is copied, however long the window stayed open.
+export const pinned = (send, fs = FS) => send.map((s) => ({ ...s, real: fs.realpathSync(s.from) }));
 
 export function checkStage(stage, send, fs = FS) {
   plainFolder(stage, fs);
@@ -482,6 +488,7 @@ export function checkStage(stage, send, fs = FS) {
     if (!fs.lstatSync(s.from).isFile()) throw fail(`--send ${s.from}: not a plain file (a link or a folder is refused)`);
     const real = fs.realpathSync(s.from);
     if (secretIn(real)) throw fail(`--send ${s.from}: it is really inside ${secretIn(real)}`);
+    if (s.real !== undefined && real !== s.real) throw fail(`--send ${s.from}: it was in ${dirname(s.real)} when the owner's window opened and is in ${dirname(real)} now. Nothing was copied: start the run again`);
   }
 }
 
@@ -530,7 +537,7 @@ export function windowText(o, trial = false, realPath = real) {
   const credits = creditsIn(o.ownerYes);
   const fileLine = (s) => {
     const given = dirname(s.from);
-    const really = dirname(realPath(s.from));
+    const really = dirname(s.real ?? realPath(s.from));
     return `    ${shown(s.name)}    from ${shown(really)}${really === given ? "" : `    (given as ${shown(given)})`}`;
   };
   const body = [
@@ -682,6 +689,7 @@ export async function main(argv, { show = showWindow, launch = session } = {}) {
     // that would be refused; the session makes the same checks again before it copies.
     plainFolder(run.control);
     checkStage(run.stage, o.send);
+    o.send = pinned(o.send);
     const clicked = await ownerClick(o, show);
     end = removeTemp(debugDir, await launch(o, run, clicked));
   } catch (error) {

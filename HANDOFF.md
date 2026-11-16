@@ -146,6 +146,13 @@ unless the session is a stand-in too (`realWindowOnly`): only the real window's 
 starts the real session. `Graphify Formal Verification` on that commit: neutral ("0/3
 PR-changed function(s) verified · 3 not verified (2 vacuous, 1 unsupported)").
 
+**Review round 2**, on `93be055`. The AI review: one low finding, fixed. The folder a file
+is really in was read when the window opened and not again in a way that held it: a link
+in the path turned to another place during the five minutes would have been copied from
+there. The real place is now read once before the window (`pinned`), shown, compared after
+the click (a file that is somewhere else by then ends the run, nothing copied) and used
+for the copy.
+
 **Proved for this pull request.** `npm test` passes (372 tests with `main` taken in). `--dry-run` of a run with
 a file and `image_select_subject` printed `"opens": true` and the window's text and made
 no folder; a read-only one printed `"opens": false`. The trial above. No upload was made,
