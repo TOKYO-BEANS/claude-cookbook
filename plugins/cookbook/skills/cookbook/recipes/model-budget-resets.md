@@ -10,28 +10,35 @@ Part of [model-budget](model-budget.md). Measured on 16 November 2026.
   list only in the minutes T3 Code's own read got through: every other one at times, none
   for ten minutes and more at others. No key is "not read"; a count of 0 is "none"; a list
   the script does not understand in full (a renamed label, entries that do not add up to
-  the count) is "not read" too and replaces nothing. Taken as it stands, the list made the
-  advice change every minute (0.35.4).
-- **What the script does** (the owner's choice, 16 November 2026: "Keep T3 Code's list").
-  When T3 Code's file shows a list newer than the kept one, the script saves it in
-  `~/.local/share/model-budget/resets.json`, signed like its other files, and adds the kept
-  list to every reading, whatever the source of the figures. Any hook event may save it;
-  none goes on the network for it. A list last seen over an hour ago is dropped: the line
-  then says "not read", and no "Redeem" line comes.
-- **What that costs.** T3 Code's file is not signed, and the kept list is what it said.
-  Whoever can write that file as the owner can have a session told to ask for a reset, or
-  told Fable where the pace rule says Opus. That is still one of the fixed lines, and
-  redeeming stays the owner's click in T3 Code, which shows the real list.
-- **After a reset is used**, the next read of T3 Code's that gets through replaces the list,
-  in a minute or two. Until then the old list stands.
-- **A renewed sign-in.** Claude Code renews the sign-in about every 8 hours, and the script's
-  files are signed with it: the kept list cannot be read until T3 Code's file next shows
-  one. A change of advice in those minutes is not said to a running session (the hook waits
-  five minutes, unless a limit is spent); a session started in them may be told the other
-  model once.
+  the count) is "not read" too.
+- **What the script does** (the owner's choices, 16 November 2026: "Keep T3 Code's list" as
+  the source, then "Hold the advice" on GitHub's security review of #80). It adds the list
+  to a reading only while T3 Code's file shows it, under an hour old by the file's own
+  time, and saves it nowhere: that file is not signed, so nothing it says goes into a file
+  the script signs. In the other minutes the resets are "not read": the script run by hand
+  says so and gives no "Redeem" line.
+- **What keeps the advice still.** The hook. A change of advice that comes while the list
+  is missing waits until the list is back, an hour at most; then the change is said. A
+  spent limit and a session start are never held back. The session's file holds what was
+  said and since when the list is missing, never the list.
+- **What that costs.** A session that starts in a minute without the list hears the advice
+  without the resets (Opus where a banked Fable reset says Fable, no "Redeem" line), and
+  hears the other one once the list shows. While the list is missing, a change that comes
+  from the figures alone waits as well, up to the hour. And T3 Code's file still chooses,
+  at the moment it is read, among the fixed lines: whoever can write it as the owner can
+  have a session told to ask for a reset. Redeeming stays the owner's click in T3 Code,
+  which shows the real list.
+- **After a reset is used**, the next read of T3 Code's that gets through shows the new
+  list, in a minute or two.
 
 ## Not chosen
 
+- **Keeping the list** in a signed file of the script's own for an hour (0.38.0). It held
+  the advice, and gave what an unsigned file said the standing of a signed one: the
+  security review's finding.
+- **The list as it stands, with nothing held** (0.35.4): the advice changed every minute.
+- **Showing the list and never acting on it**: no "Redeem" line, and Opus where a banked
+  Fable reset allows Fable.
 - **Reading as Claude Code** (the `claude-cli` User-Agent). First-hand and signed, but it
   names the script as another client, past a gate Anthropic set; and the script's read gets
   through only now and then while T3 Code runs.
