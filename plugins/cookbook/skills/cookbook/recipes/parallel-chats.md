@@ -10,7 +10,7 @@ been started by another chat, two of them on one subject.
 `hooks/owner-answers.mjs` in this plugin keeps
 `~/.local/share/claude-cookbook/owner-answers/ledger.jsonl`: a note for each question dialog,
 with the chat, the repository, the time and whether it was answered. **No question and no
-answer is kept.** A note is removed after 72 hours.
+answer is kept.** A note counts for 72 hours and is removed at the first write after that.
 
 Before a question dialog the hook stops the call once and names the other chats of the same
 repository that put questions to the owner (72 hours; open ones 12 hours). The list is a

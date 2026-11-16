@@ -159,18 +159,15 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
       mkdirSync(dir, { recursive: true });
       appendFileSync(ledger, entries.map((e) => `${JSON.stringify(e)}\n`).join(""));
       if (!held) return; // the file is rewritten only by the chat that holds the lock
-      // A record leaves the file when it is past the window: the first line is the oldest,
-      // so one look at it says whether anything is due.
+      // A note leaves the file at the first write after it is past the window, and one dated
+      // in the future with it. Every note is looked at, wherever it stands in the file, so no
+      // line can hold the others back. The rewrite also drops every line that is no note.
       const text = read(ledger);
-      let oldest = 0; // a first line that cannot be read is dropped by the rewrite
-      try {
-        oldest = Number(JSON.parse(text.slice(0, text.indexOf("\n"))).at) || 0;
-      } catch {
-        oldest = 0;
-      }
-      if (Date.now() - oldest > WINDOW_MS || text.length > LEDGER_LIMIT) {
-        const now = Date.now();
-        const keep = parseLedger(text).filter((e) => now - e.at <= WINDOW_MS && e.at <= now + CLOCK_SLACK_MS).sort((a, b) => a.at - b.at).slice(-KEEP_AT_MOST);
+      const now = Date.now();
+      const fresh = (e) => now - e.at <= WINDOW_MS && e.at <= now + CLOCK_SLACK_MS;
+      const notes = parseLedger(text);
+      if (notes.some((e) => !fresh(e)) || text.length > LEDGER_LIMIT) {
+        const keep = notes.filter(fresh).sort((a, b) => a.at - b.at).slice(-KEEP_AT_MOST);
         replace(ledger, keep.map((e) => `${JSON.stringify(e)}\n`).join(""));
       }
     },

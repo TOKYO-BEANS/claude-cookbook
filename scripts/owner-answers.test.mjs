@@ -320,6 +320,12 @@ test("a note leaves the file when it is past 72 hours, and one dated in the futu
   const text = readFileSync(join(dir, "ledger.jsonl"), "utf8");
   assert.deepEqual(parseLedger(text).map((n) => n.id), [id(2), id(3)]);
   assert.ok(!text.includes(id(1)) && !text.includes(id(4)));
+  // A future note at the head of the file holds nothing back, and a line that is no note goes too.
+  const second = mkdtempSync(join(tmpdir(), "owner-answers-keep-"));
+  const t = openStore({ OWNER_ANSWERS_DIR: second });
+  writeFileSync(join(second, "ledger.jsonl"), [line(note({ id: id(9), at: now + 400 * 24 * HOUR })), "not a note", line(note({ id: id(5), at: now - 100 * HOUR })), line(note({ id: id(6), at: now - 1000 }))].join("\n") + "\n");
+  t.locked(() => t.append([note({ id: id(7), at: now })]));
+  assert.equal(readFileSync(join(second, "ledger.jsonl"), "utf8"), [note({ id: id(6), at: now - 1000 }), note({ id: id(7), at: now })].map((n) => `${line(n)}\n`).join(""));
 });
 
 test("one chat at a time has the list; a lock left behind or held too long never stops a chat", () => {
