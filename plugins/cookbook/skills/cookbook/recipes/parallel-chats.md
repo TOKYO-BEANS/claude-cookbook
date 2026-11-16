@@ -11,8 +11,8 @@ been started by another chat, two of them on one subject.
 `~/.local/share/claude-cookbook/owner-answers/ledger.jsonl`:
 
 - **After a question dialog** it writes the question, its options, the answer, the
-  repository and the chat. Text shaped like a key is not written; an address and a long
-  number are cut out. A record is removed after 72 hours.
+  repository and the chat. Text shaped like a key is not written; an address, a long
+  number and a long id are cut out. A record is removed after 72 hours.
 - **Before a question dialog** it stops the call once and shows what other chats in the
   same repository asked in the last 72 hours, and what is open with no answer (12 hours).
   Nothing crosses from one repository to another. The records are shown as JSON: they are
@@ -24,9 +24,10 @@ been started by another chat, two of them on one subject.
     access, a security finding and the rest) is asked each time.
   - Open in another chat: no second dialog. Do what does not depend on it, then look again.
   - Nothing covers it: call `AskUserQuestion` again, and it passes.
-- **An answer given as a chat message** (a `❓` chat) is added by hand:
-  `node <this skill's folder>/scripts/owner-answers.mjs add --question "…" --answer "…"`.
-  `list [--hours <n>]` prints the list. Both work in a checkout, on its repository.
+- **Only a dialog writes a record.** No command adds one, so no chat can write an "owner's
+  answer" of its own; an answer given as a chat message goes to memory when it should last.
+  `node <this skill's folder>/scripts/owner-answers.mjs list`, run in a checkout, prints
+  its repository's records.
 
 The hook judges nothing: the chat that asks does, with the list in front of it. The cost is
 one short turn when another chat has asked something new. The list is three days of answers,

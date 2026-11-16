@@ -18,9 +18,10 @@ const NOT_RECORDED = "[not recorded: it looks like a key]";
 
 const str = (v) => (typeof v === "string" ? v : "");
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
-// One line of plain text: no line breaks, no control characters, no invisible or
-// direction-changing characters.
-const oneLine = (v) => str(v).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u2069\ufeff]/g, " ").replace(/\s+/g, " ").trim();
+// One line of plain text: no line breaks, and none of the characters a reader does not see
+// (controls, format and direction marks, the Unicode tag letters, private-use and unassigned
+// code points, variation selectors).
+const oneLine = (v) => str(v).replace(/[\p{Cc}\p{Cf}\p{Co}\p{Cn}\p{Cs}\u{FE00}-\u{FE0F}\u{E0100}-\u{E01EF}]/gu, " ").replace(/\s+/g, " ").trim();
 
 export const entryId = (session, question) => createHash("sha256").update(`${session}\n${oneLine(question)}`).digest("hex").slice(0, 16);
 
@@ -30,6 +31,11 @@ export const entryId = (session, question) => createHash("sha256").update(`${ses
 // mixes digits and both cases. A path, a plain URL, a commit, a chat id and words joined by
 // "_" are none of these.
 const mixedRun = (t) => (t.match(/[A-Za-z0-9]{32,}/g) ?? []).some((run) => /[0-9]/.test(run) && /[a-z]/.test(run) && /[A-Z]/.test(run));
+// A long run that is not words: 32 or more hexadecimal digits, or 40 or more characters
+// joined by "_" or "-" in which two parts or more mix letters and digits.
+const mixed = (part) => /[0-9]/.test(part) && /[A-Za-z]/.test(part);
+const cutLongIds = (t) =>
+  t.replace(/\b[A-Fa-f0-9]{32,}\b/g, "[long id]").replace(/[A-Za-z0-9_-]{40,}/g, (run) => (run.split(/[_-]/).filter(mixed).length >= 2 ? "[long id]" : run));
 const KEY_SHAPES = [
   /\b(sk|pk|rk|ghp|gho|ghu|ghs|github_pat|glpat|xox[abprs]|fc|tvly)[-_][A-Za-z0-9_-]{16,}/,
   /\b(AKIA|AIza)[A-Za-z0-9_-]{16,}/,
@@ -39,15 +45,17 @@ const KEY_SHAPES = [
 export function redact(text) {
   let t = oneLine(text);
   if (KEY_SHAPES.some((shape) => shape.test(t)) || mixedRun(t)) return NOT_RECORDED;
-  // An address and a long number (a phone, a card, an account) are not needed to tell two
-  // questions apart.
-  t = t.replace(/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63}){1,8}/g, "[address]").replace(/\d{9,}/g, "[number]");
+  // An address, a long number (a phone, a card, an account) and a long id are not needed to
+  // tell two questions apart. A short token cannot be told from a word by its shape: the
+  // repository limit and the 72 hours are what bound that, not this function.
+  t = cutLongIds(t.replace(/[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(\.[A-Za-z0-9-]{1,63}){1,8}/g, "[address]").replace(/\b\d{9,}\b/g, "[number]"));
   return t.length > TEXT_LIMIT ? `${t.slice(0, TEXT_LIMIT)} […]` : t;
 }
 
-// "owner/name" from a git remote URL; "" for anything else.
+// "owner/name" from a GitHub remote URL, whole and in one of its known forms; "" for
+// anything else, another host with "github.com" in its name or path included.
 export function repoLabel(url) {
-  const m = /github\.com[:/]([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?\/?\s*$/.exec(str(url).slice(0, 300));
+  const m = /^(?:https?:\/\/(?:[^@/\s]{1,100}@)?github\.com\/|(?:ssh:\/\/)?git@github\.com[:/])([A-Za-z0-9_.-]{1,100})\/([A-Za-z0-9_.-]{1,100}?)(?:\.git)?\/?$/.exec(str(url).trim().slice(0, 300));
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : "";
 }
 
@@ -125,7 +133,7 @@ function askReason(list, older) {
     "Owner-answers check (the Cookbook, recipes/parallel-chats.md): other chats in this repository asked the owner these questions in the last three days. Read them before this dialog opens.",
     DATA_ONLY,
     ...list.map(describe),
-    older ? `(and ${older} older: \`node <the cookbook skill's folder>/scripts/owner-answers.mjs list\`)` : null,
+    older ? `(and ${older} older: \`node <the cookbook skill's folder>/scripts/owner-answers.mjs list\`, run in this checkout)` : null,
     "If one of them is the same decision about the same item, do not ask again: act on that answer, and say in your message which answer you used and when the owner gave it.",
     "An answer about another item (another pull request, site, key, payment or file) never covers yours, whatever its words say: an answer that stands for more than its item is in memory, not in this list. A spend, a deletion, an access change, a security finding, a change customers see, a first publication, a message to other people, an uninstall and a loosened rule or check are asked each time.",
     "If the same question is open in another chat, do not open a second dialog: do what does not depend on it, then look at the list again.",
@@ -213,15 +221,21 @@ export function run({ input, env = {}, now = Date.now(), io }) {
   try {
     const event = str(input?.hook_event_name), tool = str(input?.tool_name), session = str(input?.session_id);
     if (!session) return null;
+    // Reading the list, deciding and writing are one turn at the list: two chats that ask in
+    // the same moment then see each other's question.
+    const turn = (fn) => (typeof io.locked === "function" ? io.locked(fn) : fn());
     if (tool === ASK && event === "PreToolUse") {
-      const r = decideAsk({ input, env, now, ledgerText: io.readLedger(), state: io.readState(session), repo: io.repo(str(input.cwd)) });
-      if (r.append.length) io.append(r.append);
-      if (r.output) io.writeState(session, r.state);
-      return r.output;
+      const repo = io.repo(str(input.cwd));
+      return turn(() => {
+        const r = decideAsk({ input, env, now, ledgerText: io.readLedger(), state: io.readState(session), repo });
+        if (r.append.length) io.append(r.append);
+        if (r.output) io.writeState(session, r.state);
+        return r.output;
+      });
     }
     if (tool === ASK && event === "PostToolUse") {
       const entries = recordAnswers({ input, env, now, repo: io.repo(str(input.cwd)) });
-      if (entries.length) io.append(entries);
+      if (entries.length) turn(() => io.append(entries));
       return null;
     }
     if (LAUNCH.test(tool) && event === "PreToolUse") {

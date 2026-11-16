@@ -31,8 +31,8 @@ chats before a job starts.
   It judges nothing: the chat that asks decides, with the list in front of it and the limits
   in the text (another item is another question; every stop in the ground rules is asked each
   time). It never fails a session.
-- `skills/cookbook/scripts/owner-answers.mjs`: `list` and `add`, for an answer given as a
-  chat message.
+- `skills/cookbook/scripts/owner-answers.mjs`: `list`, for the repository of the checkout
+  it runs in. No command writes a record.
 - `recipes/parallel-chats.md`, a map row, and the "Memory across sessions" row now names the
   handoff folder.
 - The handoff is a file per entry in `handoff/`. `HANDOFF.md` is closed: `scripts/check.mjs`
@@ -50,6 +50,27 @@ chats before a job starts.
   the owner once per repository.
 - The repository is now read from git's own files, with no program started: a hook gets a
   short `PATH`, and with `git` not found every record would have had no repository.
+- The hand reviewer's read of that fix found the cleaning incomplete: Unicode tag letters,
+  a soft hyphen and other unseen characters still reached a record. Every control, format,
+  private-use and unassigned character and every variation selector is now replaced by a
+  space, with a test that plants tag letters. Also from that read: a remote on another host
+  with "github.com" in its name or path no longer gets a GitHub repository's label, and a
+  run of digits inside a commit is no longer cut as a number.
+
+**Graphify's review of the first push** passed its gate and listed five findings, none
+verified by it. All five were acted on in the second push:
+- *Redaction misses hex, short and joined tokens.* A run of 32 or more hexadecimal digits,
+  and a run of 40 or more characters joined by `_` or `-` with two or more parts that mix
+  letters and digits, are cut out. A short token cannot be told from a word by its shape:
+  that stays, bounded by the repository limit and the 72 hours.
+- *Any chat can forge an owner's answer* through `add`. The command is gone: only a
+  question dialog the owner answered writes a record.
+- *Concurrent compaction can erase new answers*, *two chats asking at once both pass* and
+  *state written non-atomically.* Reading the list, deciding and writing are one turn under
+  a lock file; only the lock's holder rewrites the file; state files are written to a file
+  of the process's own and renamed. A chat that cannot have the lock in 1.5 seconds goes
+  ahead without it, so the hook still never stops a session.
+- Its coupling note on `decideAsk` (six callees) is left: a small pure function.
 
 **Decisions that were mine.**
 - No model in the hook. A word match would miss a reworded question, and a second Jev
@@ -57,7 +78,10 @@ chats before a job starts.
   asked something new.
 - Text shaped like a key is not written to the list: a known prefix, a name and password in
   a URL, a three-part signed token, or one unbroken run of 32 or more letters and digits
-  that mixes digits and both cases.
+  that mixes digits and both cases. An address, a long number and a long id are cut out of
+  text that is written.
+- An answer the owner gives as a chat message is not in the list. It was the reason for
+  `add`; a command any chat can run to write "the owner said" is the larger risk.
 - The list is outside `~/.claude` and outside every repository.
 
 **Verification.** See the pull request for the checks of its head. Before the push:
@@ -69,9 +93,8 @@ chats before a job starts.
   Four low findings fixed (a temporary file per process, a quote inside an answer given as
   text, more key shapes, every stop named in the denial). Its second read passed the commit
   with two more low findings, both fixed (a newer answer to the same question is shown
-  again; an answer with `", "` in it). Two low findings left: an answer added by hand
-  outside T3 is shown once to the chat that added it, and the small state files in
-  `sessions/` are never removed.
+  again; an answer with `", "` in it). One low finding left: the small state
+  files in `sessions/` are never removed. (The other, about `add`, went with the command.)
 - **One existing test was changed, not loosened**: "hooks.json runs the gate before the
   three T3 tools" in `scripts/codex-start-check.test.mjs` required exactly one `PreToolUse`
   group. It now requires exactly two, keeps every assertion about the Codex gate's group
