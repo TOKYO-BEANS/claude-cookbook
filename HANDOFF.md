@@ -85,6 +85,12 @@ comment claimed more than the word list does, and three behaviours had no test.
 **Review round 1** (of three), on `0fed36e`: the AI review had no findings, Graphify's
 review none, and GitHub's security review did not comment.
 
+**Review round 2**, on `6175fbc` (the commit that took `main` in). The AI review: one low
+finding. The credits pattern listed the marks that may not stand before the number, so
+"1  000 credits" (two spaces), a narrow no-break space and "1'000 credits" still passed on
+their last digit group. The pattern now says what may come before the digits instead: the
+start of the yes, an opening bracket, or white space that does not follow another digit.
+
 **Proved for this pull request.** `npm test` passes (346 tests with `main` taken in).
 `--dry-run` refuses a yes with the word
 "credits" and no number, and one that says "the background is fine" for the cut-out, and

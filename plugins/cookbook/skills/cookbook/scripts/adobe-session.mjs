@@ -182,10 +182,12 @@ export const OPERATIONS = Object.freeze({
 // credits". 0 is a number: the connector's calls have shown no charge. The number is the
 // owner's word, quoted to the child with the rest of the yes; the script cannot measure
 // what a run spends, so it checks that a number is there and holds no run to it. Digits
-// only: "1,000", "1.000", "1 000", "0.5" and "-5" (also with a minus sign that is not a
-// dash) are refused instead of read as some number.
-const CREDITS = /(?<![\p{L}\p{N}_.,−-]|\p{N}[  ])\d{1,7}[  ]+credits?(?![\p{L}\p{N}_-]|\.[\p{L}\p{N}_-])/u;
-export const CREDITS_GAP = "the credits it may spend, as a whole number in digits without a separator ('0 credits' or 'up to 300 credits')";
+// only, and the rule says what may come before them, not what may not: the start of the
+// yes, an opening bracket, or white space that does not follow another digit. So "1,000",
+// "1.000", "1 000", "1'000", "0.5", "-5" and "x5" are all refused instead of read as some
+// number, whatever mark or space groups the digits.
+const CREDITS = /(?<=^|[(\[]|(?:^|[^\p{N}\s])\s+)\d{1,7}\s+credits?(?![\p{L}\p{N}_-]|\.[\p{L}\p{N}_-])/u;
+export const CREDITS_GAP = "the credits it may spend, as a whole number in digits without a separator, after a space ('0 credits' or 'up to 300 credits')";
 
 // What a yes must hold, beside the file names (`sendList`), for a run that sends a file or
 // calls a tool that is not read-only: the account, a number of credits and each operation,

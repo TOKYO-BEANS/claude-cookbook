@@ -123,10 +123,18 @@ test("the yes states a number of credits; 0 is one", () => {
     // Digits only: a separator, a space inside the number or a minus sign is not read as some number.
     ["up to 10,000 credits", false], ["1.000 credits", false], ["1 000 credits", false], ["1 000 credits", false],
     ["−5 credits", false], ["300 credits", true], ["300  credits", true], ["é5 credits", false], ["5 creditsé", false],
+    // Whatever groups the digits: more spaces, a narrow no-break space, an apostrophe, an underscore, a middle dot.
+    ["up to 1  000 credits", false], ["1 000 credits", false], ["1 000 credits", false], ["1'000 credits", false],
+    ["1’000 credits", false], ["1_000 credits", false], ["1·000 credits", false], ["0,5 credits", false],
+    // Only the start, an opening bracket or white space comes before the number.
+    ["=5 credits", false], ["<300 credits", false], ["max.300 credits", false], ["[25 credits]", true], ["up to 300 credits", true],
   ]) {
     assert.deepEqual(yesGaps(yes(credits), ["image_select_subject"]), stated ? [] : [CREDITS_GAP], credits);
   }
-  assert.match(CREDITS_GAP, /as a whole number in digits without a separator \('0 credits' or 'up to 300 credits'\)/);
+  // At the very start of the yes, with the account and the operation after it.
+  assert.deepEqual(yesGaps("0 credits, masks, my Adobe account", ["image_select_subject"]), []);
+  assert.deepEqual(yesGaps("1 000 credits, masks, my Adobe account", ["image_select_subject"]), [CREDITS_GAP]);
+  assert.match(CREDITS_GAP, /as a whole number in digits without a separator, after a space \('0 credits' or 'up to 300 credits'\)/);
   assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", yes("credits")), /--owner-yes does not name the credits it may spend, as a whole number/);
   assert.throws(() => run("--allow", "font_search", "--owner-yes", "Yes, send 1598.jpg to my Adobe account, credits", "--send", PHOTO), /as a whole number/);
 });
