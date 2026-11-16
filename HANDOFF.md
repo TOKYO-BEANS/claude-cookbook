@@ -14,6 +14,12 @@ event `verified` (execution 1557); plugin 0.35.0 installed. Its first live read 
 (T3 Code reads the same endpoint with the same sign-in), and the hook said "unknown" as
 designed.
 
+**Outstanding (Claude, next chat).** The usage endpoint kept answering 429 `rate_limit_error`
+(retry-after 0) from 13:20 to 13:45 UTC on 16 November 2026, whatever the User-Agent; it
+answered 200 at 12:42 and 12:52. While it does, the budget is "unknown" and threads keep their
+model. Clears when a second source of the reading is found (T3 Code holds one for its Usage
+page) or the limit's window is known and the cache is lengthened to fit.
+
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 
 **Why.** The plan has one weekly limit and a Fable limit inside it (Fable may take half the
