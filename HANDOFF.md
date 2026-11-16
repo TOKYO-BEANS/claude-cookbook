@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026 (afternoon): the model budget reads T3 Code's saved reading (0.35.3)
+## 16 November 2026 (afternoon): the model budget reads T3 Code's saved reading (0.35.4)
 
 **Why.** The usage read answered 429 on nearly every try, so the budget said "unknown" and no
 thread switched model.
@@ -37,6 +37,22 @@ write that file can move the advice among its fixed lines; it cannot add text. I
 is when T3 Code asked, not the age of the figures. A change of that file's shape in a T3 Code
 update means "no reading": the session then says "unknown" whenever the direct read is refused,
 and `parseT3` is the place to fix.
+
+## 16 November 2026 (evening): `sa-build`'s reviewers without a shell (0.35.3)
+
+**Why.** TOKYO-BEANS/Stack-Atlas#190 moves `sa-build`'s three reviewer steps onto
+`cookbook:reader`, as #188 did for `sa-review` and `sa-triage`. What those reviewers needed a
+shell for (building and counting the review package, the no-change checks) runs in a runner
+step before each review, so a task takes three agents and the workflow's budget goes from 8
+to 11. The workflows recipe states each workflow's budget, so it changes with it.
+
+**What changed.**
+- `recipes/workflows.md`: `sa-build`'s budget 11; the reviewer point says all three workflows
+  now run their reviewers without a shell, and why `sa-build`'s budget grew.
+- Plugin 0.35.3.
+
+**Verification.** `npm test` passes in this repository. No code, hook or agent definition
+changes; the dispatch profiles stay as #65 made them.
 
 ## 16 November 2026 (later afternoon): a security review thread stops the merge (0.35.2)
 
@@ -101,7 +117,7 @@ a script calling the undocumented reset endpoint).
 **Outstanding (Claude, next chat).** The usage endpoint kept answering 429 `rate_limit_error`
 (retry-after 0) from 13:20 to 13:45 UTC on 16 November 2026, whatever the User-Agent; it
 answered 200 at 12:42 and 12:52. While it does, the budget is "unknown" and threads keep their
-model. Cleared by 0.35.3 (the first entry).
+model. Cleared by 0.35.4 (the first entry).
 
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 
