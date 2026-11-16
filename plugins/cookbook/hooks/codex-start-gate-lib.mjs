@@ -21,14 +21,25 @@ export const deny = (why) => ({ hookSpecificOutput: { hookEventName: "PreToolUse
 
 class Unread extends Error {}
 
+// The keys of a call that say nothing about where the agent runs. With any other key the
+// start is not taken to be in this thread's own checkout: a new key may move it.
+const DELEGATE_KEYS = ["task", "target", "isolation", "mode", "role", "runtimeMode", "interactionMode", "timeoutMs", "title", "clientRequestId"];
+const BATCH_KEYS = ["threads", "clientRequestId"];
+const THREAD_KEYS = ["prompt", "target", "title", "runtimeMode", "interactionMode"];
+const onlyKeys = (object, keys) => Object.keys(object).every((key) => keys.includes(key));
+
 // The agents one call would start: who runs each, its brief, and whether it runs in this
 // thread's own checkout.
 function startsOf(tool, toolInput) {
   if (!isObject(toolInput)) throw new Unread();
-  if (tool === "delegate_task") return [{ target: toolInput.target, brief: toolInput.task, here: toolInput.isolation === undefined || toolInput.isolation === "shared" }];
+  if (tool === "delegate_task") {
+    const shared = toolInput.isolation === undefined || toolInput.isolation === "shared";
+    return [{ target: toolInput.target, brief: toolInput.task, here: shared && onlyKeys(toolInput, DELEGATE_KEYS) }];
+  }
   if (tool === "create_threads") {
     if (!Array.isArray(toolInput.threads) || !toolInput.threads.every(isObject)) throw new Unread();
-    return toolInput.threads.map((t) => ({ target: t.target, brief: t.prompt, here: true }));
+    const known = onlyKeys(toolInput, BATCH_KEYS);
+    return toolInput.threads.map((t) => ({ target: t.target, brief: t.prompt, here: known && onlyKeys(t, THREAD_KEYS) }));
   }
   // modelSelection names the same things under its own keys. With any other key in it the
   // selection is passed on as it is, and plainlyClaude refuses it for that key.

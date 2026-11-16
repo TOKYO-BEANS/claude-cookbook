@@ -34,6 +34,8 @@ const SETTINGS_FOLDERS = new Set([".codex", ".agents"]);
 const MAX_FOLDERS = 200_000;
 const MAX_FILES = 60;
 const MAX_BYTES = 1024 * 1024;
+// The whole check, below the 150 seconds its hook is given.
+const MAX_MS = 100_000;
 const RAW = ["-H", "Accept: application/vnd.github.raw+json"];
 const HEX = /^[0-9a-f]{40}$/;
 const WINDOWS = process.platform === "win32";
@@ -56,6 +58,7 @@ export const REASONS = {
   differs: "an instruction file on disk is not the one at GitHub's default head",
   "compare-failed": "the instruction files could not be compared",
   "cookbook-unread": "the Cookbook's version could not be read, in the clone or on main",
+  "too-slow": "the check ran out of time",
   failed: "the check could not run",
 };
 
@@ -119,8 +122,10 @@ export function run(file, args, { cwd, timeoutMs = 20_000 } = {}) {
 // `gh` from outside the checkout, run in its own folder: never in the checkout.
 function realGh(top, path) {
   const program = locate("gh", { avoid: top, path });
-  return (args) => (program === null ? { status: null, stdout: Buffer.alloc(0) } : run(program, args, { cwd: dirname(program) }));
+  return (args, timeoutMs) => (program === null ? { status: null, stdout: Buffer.alloc(0) } : run(program, args, { cwd: dirname(program), timeoutMs }));
 }
+
+class TooSlow extends Error {}
 
 const no = (reason) => ({ start: false, reason });
 const text = (r) => r.stdout.toString("utf8");
@@ -263,7 +268,7 @@ function holdsObject(top, sha) {
 // `outside` is true when one is reached through a link that leads out of the checkout or
 // into its `.git`. A link to a folder inside the checkout is not entered: that folder is
 // walked under its own path. The checkout's own `.git` is not entered.
-function onDisk(top) {
+function onDisk(top, inTime) {
   const found = [];
   let outside = false;
   const seen = new Set();
@@ -273,6 +278,7 @@ function onDisk(top) {
     const { dir, rel, settings } = todo.pop();
     folders += 1;
     if (folders > MAX_FOLDERS) return null;
+    if (folders % 500 === 0) inTime();
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       if (rel === "" && entry.name === ".git") continue;
       const path = rel === null ? null : rel === "" ? entry.name : `${rel}/${entry.name}`;
@@ -326,13 +332,20 @@ function atHeadOf(json) {
   return files;
 }
 
-function inner({ repo, checkout, home, gh, path }) {
+function inner({ repo, checkout, home, gh, path, now, maxMs }) {
   if (!plainRepoName(repo)) return no("name");
   if (typeof checkout !== "string" || checkout === "") return no("checkout");
   const top = topOf(checkout);
   if (top === null) return no("checkout");
   const ask = gh ?? realGh(top, path);
-  const api = (route, more = []) => ask(["api", `repos/${OWNER}/${route}`, ...more, "--hostname", "github.com"]);
+  // One time limit for the whole check: each call gets what is left of it, 20 seconds at most.
+  const end = now() + maxMs;
+  const inTime = () => {
+    const left = end - now();
+    if (left <= 0) throw new TooSlow();
+    return left;
+  };
+  const api = (route, more = []) => ask(["api", `repos/${OWNER}/${route}`, ...more, "--hostname", "github.com"], Math.min(20_000, inTime()));
 
   const head = api(`${repo}/commits/HEAD`, ["--jq", ".sha"]);
   const sha = head.status === 0 ? text(head).trim() : "";
@@ -352,8 +365,9 @@ function inner({ repo, checkout, home, gh, path }) {
 
   let disk;
   try {
-    disk = onDisk(top);
-  } catch {
+    disk = onDisk(top, inTime);
+  } catch (error) {
+    if (error instanceof TooSlow) throw error;
     disk = null;
   }
   if (disk === null) return no("compare-failed");
@@ -380,13 +394,13 @@ function inner({ repo, checkout, home, gh, path }) {
   return { start: true, cookbook: clone === main ? "same" : "differs" };
 }
 
-// `gh` and `path` are for the tests: a function that takes gh's arguments and answers
-// { status, stdout }, and the folders to look for gh in.
-export function checkStart({ repo, checkout, home = homedir(), gh, path } = {}) {
+// `gh`, `path`, `now` and `maxMs` are for the tests: a function that takes gh's arguments and
+// answers { status, stdout }, the folders to look for gh in, the clock and the time limit.
+export function checkStart({ repo, checkout, home = homedir(), gh, path, now = Date.now, maxMs = MAX_MS } = {}) {
   try {
-    return inner({ repo, checkout, home, gh, path });
-  } catch {
-    return no("failed");
+    return inner({ repo, checkout, home, gh, path, now, maxMs });
+  } catch (error) {
+    return no(error instanceof TooSlow ? "too-slow" : "failed");
   }
 }
 

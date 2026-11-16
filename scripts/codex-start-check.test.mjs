@@ -480,6 +480,23 @@ test("a Cookbook version that cannot be read on either side: do not start", (t) 
   refused(check(s, {}, { main: '{"version":"latest"}' }), "cookbook-unread");
 });
 
+test("the whole check has one time limit: out of time is a refusal with its own reason", (t) => {
+  const s = scene(t);
+  // A clock that moves 30 seconds with every look: the limit of 100 is passed during the check.
+  let clock = 0;
+  const hub = github({ sha: s.sha });
+  const limits = [];
+  const slow = (args, timeoutMs) => {
+    limits.push(timeoutMs);
+    return hub(args);
+  };
+  refused(checkStart({ repo: "claude-cookbook", checkout: s.checkout, home: s.home, gh: slow, now: () => (clock += 30_000) }), "too-slow");
+  assert.ok(hub.calls.length >= 1 && hub.calls.length < 6, "it stops part of the way");
+  for (const limit of limits) assert.ok(limit > 0 && limit <= 20_000, "each call gets what is left, 20 seconds at most");
+  assert.ok(limits.at(-1) < 20_000, "near the end a call gets less than 20 seconds");
+  assert.equal(checkStart({ repo: "claude-cookbook", checkout: s.checkout, home: s.home, gh: github({ sha: s.sha }), maxMs: 0 }).reason, "too-slow");
+});
+
 test("a step that throws is a refusal, never a pass", (t) => {
   const s = scene(t);
   refused(checkStart({ repo: "claude-cookbook", checkout: s.checkout, home: s.home, gh: () => { throw new Error("boom"); } }), "failed");
@@ -650,6 +667,29 @@ test("create_threads: many Codex threads on one repository cost one check", () =
   const { out, check } = gate(hookInput("create_threads", { threads }));
   assert.equal(out, null);
   assert.equal(check.calls.length, 1);
+});
+
+test("a call with a key the hook does not know is not taken to run in this checkout", () => {
+  const cases = [
+    hookInput("create_threads", { threads: [{ prompt: BRIEF, target: codex, isolation: "worktree" }] }),
+    hookInput("create_threads", { threads: [{ prompt: BRIEF, target: codex, workspaceStrategy: { type: "worktree" } }] }),
+    hookInput("create_threads", { threads: [{ prompt: BRIEF, target: codex }], workspaceStrategy: { type: "worktree" } }),
+    hookInput("create_threads", { threads: [{ prompt: BRIEF, target: codex }], projectId: "p2" }),
+    hookInput("delegate_task", { task: BRIEF, target: codex, workspaceStrategy: { type: "worktree" } }),
+    hookInput("delegate_task", { task: BRIEF, target: codex, worktreePath: "C:/elsewhere" }),
+  ];
+  for (const input of cases) {
+    const { out, check } = gate(input);
+    denied(out, DENIALS.checkout);
+    assert.deepEqual(check.calls, []);
+  }
+  // The keys T3 has today are known, and a Claude start with an unknown key is still left alone.
+  const today = gate(hookInput("create_threads", { clientRequestId: "r1", threads: [{ prompt: BRIEF, target: codex, title: "t", runtimeMode: "approval-required", interactionMode: "default" }] }));
+  assert.equal(today.out, null);
+  assert.equal(today.check.calls.length, 1);
+  const full = gate(hookInput("delegate_task", { task: BRIEF, target: codex, isolation: "shared", mode: "wait", role: "review", runtimeMode: "approval-required", interactionMode: "inherit", timeoutMs: 1000, title: "t", clientRequestId: "r" }));
+  assert.equal(full.check.calls.length, 1);
+  assert.equal(gate(hookInput("create_threads", { threads: [{ prompt: "x", somethingNew: true }], other: 1 })).out, null);
 });
 
 test("create_threads: each Codex thread is checked, a Claude thread beside it is not", () => {
