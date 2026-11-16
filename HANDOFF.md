@@ -28,7 +28,7 @@ nothing.
   this comparison included, into a tested script.
 - Plugin 0.35.2.
 
-**Verification.** `npm test`: 444 tests pass, 0 fail, with the page-size check.
+**Verification.** `npm test`: 449 tests pass, 0 fail, with the page-size check.
 
 **Outstanding.**
 - The installed plugin moves with the next plugin update. Until then a session loads the old
