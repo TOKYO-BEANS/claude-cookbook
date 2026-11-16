@@ -77,6 +77,7 @@ traced, so the pair is not counted as the list coming and going.
 `hook-advice.mjs` (the hook as its own process on T3 Code's real file, with a made-up
 sign-in and a home folder of its own), `toggle-hook-week96.log`, `toggle-hook.log`,
 `watch-hook-week96-25min.log`, `toggle-advice.log`, `npm-test.log`.
+
 ## 16 November 2026 (night): the key read no longer waits on a script scan (0.38.2)
 
 **Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`
