@@ -359,6 +359,31 @@ test("readUsage: the lock is removed only by its owner, and a dead lock is taken
   assert.deepEqual(readdirSync(stateDir).filter((n) => n.includes("takeover")), [], "no gate file is left");
 });
 
+test("readUsage: a takeover gate left by a dead process does not block the takeover for good", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  mkdirSync(stateDir, { recursive: true });
+  seedHome(home);
+  const { utimesSync } = await import("node:fs");
+  const { createHash } = await import("node:crypto");
+  const lock = join(stateDir, "usage.lock");
+  const gate = `${lock}.takeover-${createHash("sha256").update("dead-process").digest("hex").slice(0, 16)}`;
+  const past = new Date(Date.now() - 60000);
+  writeFileSync(lock, "dead-process");
+  utimesSync(lock, past, past);
+  writeFileSync(gate, "dead-taker");
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return answer(200, raw()); };
+  // A gate that is fresh belongs to a takeover in progress: this read stands back.
+  assert.match((await readUsage({ home, stateDir, now: NOW, fetchImpl })).error, /in progress/);
+  assert.equal(calls, 0);
+  // The same gate, old: it is cleared and the takeover goes through.
+  utimesSync(gate, past, past);
+  assert.equal((await readUsage({ home, stateDir, now: NOW, fetchImpl })).source, "live");
+  assert.equal(calls, 1);
+  assert.deepEqual(readdirSync(stateDir).filter((n) => n.includes("takeover") || n === "usage.lock"), []);
+});
+
 test("readUsage: no sign-in, or an answer it cannot read, is an error and never a reading", async (t) => {
   const home = tmp(t);
   const none = await readUsage({ home, stateDir: join(home, "state"), now: NOW, fetchImpl: async () => { throw new Error("must not be called"); } });

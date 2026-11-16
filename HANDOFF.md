@@ -9,7 +9,7 @@ lock is taken over through a gate file created with `wx`, so one process wins. W
 every model shares spent, the advice for a reset says to stop at a safe point, not to use
 Opus. A session whose saved reading is over an hour old is told "unknown" once.
 
-**Verification.** 45 tests in `scripts/model-budget.test.mjs`. #67 merged as `f8be85b`, release
+**Verification.** 46 tests in `scripts/model-budget.test.mjs`. #67 merged as `f8be85b`, release
 event `verified` (execution 1557); plugin 0.35.0 installed. Its first live read answered 429
 (T3 Code reads the same endpoint with the same sign-in), and the hook said "unknown" as
 designed.

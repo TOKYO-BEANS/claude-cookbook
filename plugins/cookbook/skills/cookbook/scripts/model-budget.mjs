@@ -257,10 +257,25 @@ export async function readUsage({ home = homedir(), stateDir = join(home, ".loca
     }
     if (stale === null || age <= 2 * RULES.timeoutMs) return busy();
     const gate = `${lock}.takeover-${createHash("sha256").update(stale).digest("hex").slice(0, 16)}`;
-    try {
-      writeFileSync(gate, me, { flag: "wx" });
-    } catch {
-      return busy();
+    const enter = () => {
+      try {
+        writeFileSync(gate, me, { flag: "wx" });
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    if (!enter()) {
+      // A gate left by a process that died inside the takeover is old too: clear it, try once.
+      let gateAge = 0;
+      try {
+        gateAge = Date.now() - statSync(gate).mtimeMs;
+      } catch {
+        // gone: the other process just finished its takeover
+      }
+      if (gateAge <= 2 * RULES.timeoutMs) return busy();
+      rmSync(gate, { force: true });
+      if (!enter()) return busy();
     }
     try {
       if (holder() === stale) rmSync(lock, { force: true });
