@@ -23,7 +23,8 @@
   (`t3_thread_configure`), `codex` from a shell or another MCP server, a thread the owner
   starts by hand, a session with hooks off, or a file changed after the check. There the
   rule on the Codex page is the control: run the script. Only T3 Code could require it for
-  every start.
+  every start. The hook runs Node from `C:/Program Files/nodejs/node.exe`: on a machine
+  without it, the three tools are blocked, for Claude as well.
 - **What Codex lacks:** Claude's plugins and skills, the `sa-*` workflows, the dispatch
   profiles and auto-memory (it reads the memory files, never writes them). There it takes
   the row's fallback and says so.

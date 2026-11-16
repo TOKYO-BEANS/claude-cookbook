@@ -89,6 +89,12 @@ It is not in code anywhere else:
   provider can ever be Codex, rest on those texts. Owner: Claude. Clears with one refused and
   one allowed `delegate_task` in a session on the new plugin (a supervised start waits for
   the owner's click, and this job starts no Codex run).
+- **Windows with Node in its usual folder only.** The hook's command is
+  `C:/Program Files/nodejs/node.exe` (an absolute path, because the desktop app starts hooks
+  with a minimal `PATH`) and a hook that cannot start blocks. On a machine without that file
+  the three T3 tools are blocked for every call, Claude's included. Reason: the gate fails
+  closed, and the plugin runs on this PC only. Owner: Claude. Clears if the plugin is ever
+  used on another machine: a launcher that finds Node.
 - **A T3 tool renamed, or a fourth one that starts an agent,** is not matched. Owner: Claude.
   Clears when seen: add it to the matcher and to `STARTERS`.
 - **A provider id for Claude that is not `claudeAgent`** (or `claudeAgent_<id>`) counts as
@@ -126,6 +132,12 @@ above. The second read the rewrite: the four closed, no high or medium, eight lo
 folder that only looks like a link is walked, one check per repository in a `create_threads`
 call, the wording of three statements, a test of the real `gh` lookup. The rest are the
 limits listed above.
+
+**The review in CI, round one** (`ai-review` on the first push): two low findings, both fixed
+in the next commit. A target with a key the hook does not know (`provider`, `instanceId`) was
+taken for Claude: now only the known keys are, and anything else is checked. And the Node
+path, now stated on the setup page and above. GitHub's security review opened no thread on
+that push.
 
 **Verification.** `npm test`: 547 tests, 546 pass, 0 fail, 1 skipped (an older symbolic-link
 test that Windows skips). Of these, 46 are new (`scripts/codex-start-check.test.mjs`), on

@@ -563,6 +563,11 @@ test("anything that is not plainly Claude counts as Codex", () => {
     { model: "gpt-6-astra" },
     { providerInstanceId: "claudeAgent", model: "gpt-6-astra" },
     "codex",
+    // A key the hook does not know may name a provider: no guessing.
+    { provider: "codex" },
+    { instanceId: "codex" },
+    { providerInstanceId: "claudeAgent", provider: "codex" },
+    { providerInstanceId: "claudeAgent", model: "claude-opus-5-5", somethingNew: true },
   ];
   for (const target of targets) {
     const { check } = gate(hookInput("delegate_task", { task: BRIEF, target }));
@@ -594,6 +599,15 @@ test("the hook denies a Codex brief without exactly one plain Repository line, a
     const { out, check } = gate(hookInput("delegate_task", { task, target: codex }));
     denied(out, DENIALS.brief);
     assert.deepEqual(check.calls, []);
+  }
+});
+
+test("t3_thread_launch: a model selection with a key the hook does not know is not taken for Claude", () => {
+  for (const modelSelection of [{ provider: "claudeAgent", model: "claude-fable-5-2", providerInstanceId: "codex" }, { provider: "claudeAgent", model: "claude-fable-5-2", driver: "codex" }, { instanceId: "codex", model: "claude-fable-5-2" }]) {
+    denied(gate(hookInput("t3_thread_launch", { title: "t", message: BRIEF, modelSelection })).out, DENIALS.checkout);
+  }
+  for (const modelSelection of [{ provider: "claudeAgent", instanceId: "claudeAgent", model: "claude-fable-5-2", options: { effort: "high" } }, { model: "claude-opus-5-5" }]) {
+    assert.equal(gate(hookInput("t3_thread_launch", { title: "t", message: "m", modelSelection })).out, null);
   }
 });
 

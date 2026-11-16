@@ -30,16 +30,21 @@ function startsOf(tool, toolInput) {
     if (!Array.isArray(toolInput.threads) || !toolInput.threads.every(isObject)) throw new Unread();
     return toolInput.threads.map((t) => ({ target: t.target, brief: t.prompt, here: true }));
   }
+  // modelSelection names the same things under its own keys. With any other key in it the
+  // selection is passed on as it is, and plainlyClaude refuses it for that key.
   const selection = toolInput.modelSelection;
-  const target = isObject(selection) ? { providerInstanceId: selection.instanceId, driverKind: selection.provider, model: selection.model } : selection;
+  const known = isObject(selection) && Object.keys(selection).every((key) => ["provider", "instanceId", "model", "options"].includes(key));
+  const target = known ? { providerInstanceId: selection.instanceId, driverKind: selection.provider, model: selection.model } : selection;
   return [{ target, brief: toolInput.message, here: false }];
 }
 
 // Only a target that names nothing (it inherits this Claude session) or names Claude and a
-// Claude model is left alone. Everything else is treated as Codex.
+// Claude model is left alone. Everything else is treated as Codex, and so is a target with a
+// key this hook does not know: it may name a provider.
+const TARGET_KEYS = new Set(["providerInstanceId", "driverKind", "model", "options", "environmentId", "projectId"]);
 function plainlyClaude(target) {
   if (!given(target)) return true;
-  if (!isObject(target)) return false;
+  if (!isObject(target) || !Object.keys(target).every((key) => TARGET_KEYS.has(key))) return false;
   const ids = [target.providerInstanceId, target.driverKind].filter(given);
   if (!ids.every((id) => typeof id === "string" && /^claudeAgent(_[0-9a-f-]{1,64})?$/.test(id))) return false;
   return !given(target.model) || (typeof target.model === "string" && /^claude-[a-z0-9.-]{1,60}$/.test(target.model));
