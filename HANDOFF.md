@@ -1,5 +1,53 @@
 # Handoff
 
+## 16 November 2026 (afternoon): the model budget reads T3 Code's saved reading (0.35.4)
+
+**Why.** The usage read answered 429 on nearly every try, so the budget said "unknown" and no
+thread switched model.
+
+**What was found.** A read that succeeds closes the endpoint to the sign-in for about two
+minutes (429 at 103 seconds after a success, 200 at 119). T3 Code reads it about every 61
+seconds for banked resets, and its Claude Code probe reads every five minutes, so T3 Code takes
+every slot and gets 429 on about half of its own reads (its server trace, 13:30 to 14:17 UTC).
+The 429 therefore never ends while T3 Code runs; no cache length or retry pause fixes it. One
+read timed 119.0 seconds after T3 Code's last success answered 200 (14:16:26 UTC) and cost
+T3 Code its next two reads. T3 Code keeps its own reading in `~/.t3/caches/claudeAgent.json`
+(`usageLimits`), rewritten every minute; its figures trailed the direct read by one and two
+points.
+
+**What changed.** `readUsage` takes the script's own signed reading while it is under ten
+minutes old, else a session start reads over the network (one read per ten minutes, failed or
+not). When that gives nothing, the script's own signed reading stands in while it is under an
+hour old, and T3 Code's saved one (under an hour old too) only when the script has none
+(`parseT3`: every value checked, anything odd is no reading, nothing from it stored). The first version took T3 Code's reading ahead of the network read;
+GitHub's security review flagged an unsigned file as a fresh source, and its suggested fix was
+taken: T3 Code's reading only when there is no signed one under an hour old and none can be
+read. A prompt or tool event still
+never reads over the network, and now has T3 Code's reading too. The
+`usage.lock` and its takeover are gone: the reading (`usage.json`) and the mark of a failed read
+(`usage-tried.json`) are two signed files, so a failed read cannot replace a reading. The
+script run by hand names the source when it is not a direct read. T3 Code's file is read only
+when it is a regular file and no link, and outside Windows only when the user owns it and no
+one else can write it (the review's third thread; Node cannot read an owner on Windows).
+
+**Owner decisions, 16 November 2026.**
+- The three Gitleaks `generic-api-key` hits in `scripts/stack-updates-connect.test.mjs` (the
+  0.32.2 entry's outstanding item): "Fix them (fixture values a scanner does not read as
+  keys), never ignore or dismiss; if one is a real key, stop and tell the owner." Done here:
+  the three made-up strings are put together at run time, and `gitleaks dir` reports none.
+- GitHub's security review asked for T3 Code's unsigned reading to be removed altogether.
+  Asked with what the file can and cannot do, the owner answered "Accept it as built
+  (Recommended)"; the yes is written in that review thread.
+
+**Verification.** 53 tests in `scripts/model-budget.test.mjs`; `npm test`; a live session-start
+run gave the advice.
+
+**Limits (known).** T3 Code's file is not signed: while the signed read is refused, whoever can
+write that file can move the advice among its fixed lines; it cannot add text. Its `checkedAt`
+is when T3 Code asked, not the age of the figures. A change of that file's shape in a T3 Code
+update means "no reading": the session then says "unknown" whenever the direct read is refused,
+and `parseT3` is the place to fix.
+
 ## 16 November 2026 (evening): `sa-build`'s reviewers without a shell (0.35.3)
 
 **Why.** TOKYO-BEANS/Stack-Atlas#190 moves `sa-build`'s three reviewer steps onto
@@ -66,7 +114,11 @@ Opus. A session whose saved reading is over an hour old is told "unknown" once.
 **Verification.** 46 tests in `scripts/model-budget.test.mjs`. #67 merged as `f8be85b`, release
 event `verified` (execution 1557); plugin 0.35.0 installed. Its first live read answered 429
 (T3 Code reads the same endpoint with the same sign-in), and the hook said "unknown" as
-designed.
+designed. #69 was merged by hand as `4784217` (release event `verified`, execution 1562) on
+the owner's "Merge #69 once", past a neutral Graphify Formal Verification titled "1/4
+PR-changed function(s) verified · 3 not verified"; every other check had passed. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget/`
+(`merge-by-hand-cookbook-69.sh` and `.log`).
 
 **Owner decision, 16 November 2026.** A banked reset is not redeemed automatically: when the
 budget says it is worth using, the session asks the owner each time (the owner chose this over
@@ -75,8 +127,7 @@ a script calling the undocumented reset endpoint).
 **Outstanding (Claude, next chat).** The usage endpoint kept answering 429 `rate_limit_error`
 (retry-after 0) from 13:20 to 13:45 UTC on 16 November 2026, whatever the User-Agent; it
 answered 200 at 12:42 and 12:52. While it does, the budget is "unknown" and threads keep their
-model. Clears when a second source of the reading is found (T3 Code holds one for its Usage
-page) or the limit's window is known and the cache is lengthened to fit.
+model. Cleared by 0.35.4 (the first entry).
 
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 
@@ -387,7 +438,8 @@ are not fixed. The three checks before a call stay.
   the error scrubber, and GitHub's secret scanning has no open alert). A model's judgement
   does not clear a finding, so a consult on this repository stops at the scan. Owner: the
   owner. Clears with the owner's decision: build those strings at run time in a pull
-  request, or accept the three hits.
+  request, or accept the three hits. Cleared on 16 November 2026 by the owner's decision to
+  fix them (the 0.35.4 entry).
 - A whole supervised consult, with the owner clicking, has not been run. Owner: Claude.
   Clears with the first consult under the rule.
 - Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
