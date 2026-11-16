@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RULES, advice, decide, line, parseUsage, readUsage, sealCache } from "../plugins/cookbook/skills/cookbook/scripts/model-budget.mjs";
+import { RULES, advice, decide, line, parseT3, parseUsage, readUsage, sealCache } from "../plugins/cookbook/skills/cookbook/scripts/model-budget.mjs";
 
 const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/model-budget-note.mjs", import.meta.url));
 const HOOKS_JSON = fileURLToPath(new URL("../plugins/cookbook/hooks/hooks.json", import.meta.url));
@@ -272,29 +272,152 @@ test("readUsage: a failed read falls back to a reading under an hour old, and do
   assert.match(old.error, /429/);
 });
 
-test("readUsage: reads started together call the endpoint once; a dead process's lock is taken over", async (t) => {
+test("readUsage: two reads at the same moment keep no lock, and the one that fails never replaces a reading", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   seedHome(home);
   let calls = 0;
   let release;
   const gate = new Promise((r) => { release = r; });
-  const fetchImpl = async () => { calls++; await gate; return answer(200, raw()); };
+  // The first read is held open; the second is answered 429 while it is.
+  const fetchImpl = async () => { if (++calls > 1) return answer(429, {}); await gate; return answer(200, raw()); };
   const first = readUsage({ home, stateDir, now: NOW, fetchImpl });
   const second = await readUsage({ home, stateDir, now: NOW, fetchImpl });
-  assert.equal(second.usage, undefined);
-  assert.match(second.error, /in progress/);
+  assert.match(second.error, /429/);
   release();
   assert.equal((await first).source, "live");
-  assert.equal(calls, 1);
-  assert.ok(!existsSync(join(stateDir, "usage.lock")), "the lock is removed after the read");
-  writeFileSync(join(stateDir, "usage.lock"), "old");
-  const { utimesSync } = await import("node:fs");
-  const past = new Date(Date.now() - 60000);
-  utimesSync(join(stateDir, "usage.lock"), past, past);
-  const after = await readUsage({ home, stateDir, now: NOW + RULES.cacheMs + 1, fetchImpl });
-  assert.equal(after.source, "live");
+  const again = await readUsage({ home, stateDir, now: NOW + 1000, fetchImpl });
+  assert.equal(again.source, "cache", "the reading is there beside the mark of the failed read");
   assert.equal(calls, 2);
+  assert.deepEqual(readdirSync(stateDir).sort(), ["usage-tried.json", "usage.json"], "no lock, gate or part file is left");
+});
+
+test("readUsage: a read that fails while another session's read succeeds gets that reading", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  mkdirSync(stateDir, { recursive: true });
+  seedHome(home);
+  // The other session's reading lands while this read is on its way to a 429.
+  const fetchImpl = async () => {
+    writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at: NOW + 5, usage: parseUsage(raw({ week: 41 })) }));
+    return answer(429, {});
+  };
+  const r = await readUsage({ home, stateDir, now: NOW, fetchImpl });
+  assert.equal(r.source, "cache");
+  assert.equal(r.usage.week.used, 41);
+  const kept = await readUsage({ home, stateDir, now: NOW + 10, fetchImpl: async () => { throw new Error("must not be called"); } });
+  assert.equal(kept.usage.week.used, 41, "the failed read left the reading alone");
+});
+
+// T3 Code's saved reading, in the shape its file had on 16 November 2026, without the unused keys.
+const t3 = ({ week = 43, fable = 69, session = null, credits = false, options = null, checkedAt = NOW - 60000, reset = RESET, unavailable = null } = {}) => ({
+  displayName: "Claude",
+  usageLimits: {
+    checkedAt: new Date(checkedAt).toISOString(),
+    windows: [
+      ...(session === null ? [] : [{ id: "five_hour", kind: "session", label: "Session", windowDurationMins: 300, usedPercent: session, resetsAt: new Date(NOW + 3 * HOUR).toISOString() }]),
+      ...(week === null ? [] : [{ id: "seven_day", kind: "weekly", label: "Weekly", windowDurationMins: 10080, usedPercent: week, resetsAt: new Date(reset).toISOString() }]),
+      ...(fable === null ? [] : [{ id: "seven_day_fable", kind: "weekly", label: "Weekly · Fable", windowDurationMins: 10080, usedPercent: fable, resetsAt: new Date(reset).toISOString() }]),
+      ...(credits ? [{ id: "monthly_spend", kind: "monthly", label: "Monthly spend", usedPercent: 3 }] : []),
+    ],
+    ...(options === null ? {} : { resetCredits: { availableCount: options.length, options } }),
+    ...(unavailable === null ? {} : { unavailable: { reason: unavailable } }),
+  },
+});
+const option = (over = {}) => ({ creditId: "g1", label: "Fable reset", description: "Refills your Fable allowance.", availableCount: 1, expiresAt: "2026-12-10T22:00:00Z", ...over });
+const seedT3 = (home, json) => {
+  mkdirSync(join(home, ".t3", "caches"), { recursive: true });
+  writeFileSync(join(home, ".t3", "caches", "claudeAgent.json"), typeof json === "string" ? json : JSON.stringify(json));
+};
+const never = async () => { throw new Error("must not be called"); };
+
+test("parseT3 reads the week, the Fable share, the session window, banked resets and credits", () => {
+  const r = parseT3(t3({ session: 12, credits: true, options: [option(), option({ creditId: "g2", label: "5-hour reset", availableCount: 2, expiresAt: undefined })] }), NOW);
+  assert.equal(r.at, NOW - 60000);
+  assert.deepEqual(r.usage.week, { used: 43, resetsAt: RESET });
+  assert.deepEqual(r.usage.fable, { used: 69, usedOfWeek: 34.5, allowanceOfWeek: 50 });
+  assert.deepEqual(r.usage.session, { used: 12, resetsAt: NOW + 3 * HOUR });
+  assert.deepEqual(r.usage.grants, [{ id: "g1", kind: "fable", left: 1, endsAt: Date.parse("2026-12-10T22:00:00Z") }, { id: "g2", kind: "session", left: 2, endsAt: null }]);
+  assert.equal(r.usage.credits, true);
+  const plain = parseT3(t3({ fable: null }), NOW).usage;
+  assert.deepEqual([plain.fable, plain.session, plain.grants, plain.credits], [null, null, [], false]);
+  assert.equal(parseT3(t3({ checkedAt: NOW + 2000 }), NOW).at, NOW + 2000, "written while this run started: still a reading");
+  assert.equal(decide(parseT3(t3({ fable: 95 }), NOW).usage, NOW).model, "opus", "the rules read it like a reading from the endpoint");
+});
+
+test("parseT3: a file that is odd in any way is no reading", () => {
+  const edit = (change) => { const json = t3(); change(json.usageLimits); return json; };
+  const odd = [
+    {},
+    { usageLimits: null },
+    t3({ unavailable: "probeFailed" }),
+    t3({ week: null }),
+    t3({ week: 143 }),
+    t3({ week: -1 }),
+    t3({ week: "43" }),
+    t3({ fable: 101 }),
+    t3({ checkedAt: NOW + 60000 }),
+    t3({ reset: NOW - 1000 }),
+    t3({ reset: NOW + 30 * 24 * HOUR }),
+    edit((l) => { l.checkedAt = "soon"; }),
+    edit((l) => { l.windows = { seven_day: { usedPercent: 1 } }; }),
+    edit((l) => { delete l.windows[0].resetsAt; }),
+  ];
+  for (const json of odd) assert.equal(parseT3(json, NOW), null, JSON.stringify(json).slice(0, 120));
+  // A reset it cannot place is left out; the reading stands.
+  const r = parseT3(t3({ options: [option({ creditId: "../x" }), option({ label: "Mystery reset" }), option({ availableCount: 0 }), null, option({ creditId: "ok-1" })] }), NOW);
+  assert.deepEqual(r.usage.grants.map((g) => g.id), ["ok-1"]);
+});
+
+test("readUsage takes T3 Code's saved reading when it is fresh: nothing over the network, nothing stored", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  seedT3(home, t3());
+  for (const cacheOnly of [false, true]) {
+    const r = await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly });
+    assert.equal(r.source, "t3");
+    assert.equal(r.at, NOW - 60000);
+    assert.equal(r.usage.fable.used, 69);
+  }
+  assert.ok(!existsSync(stateDir), "T3 Code's reading is never copied into the signed cache");
+  // The script's own fresh reading, signed, comes first.
+  mkdirSync(stateDir, { recursive: true });
+  writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at: NOW - 5000, usage: parseUsage(raw()) }));
+  const own = await readUsage({ home, stateDir, now: NOW, fetchImpl: never });
+  assert.equal(own.source, "cache");
+  assert.equal(own.usage.week.used, 37);
+});
+
+test("readUsage: T3 Code's reading over ten minutes old means a read at a session start, and stale without one", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  seedT3(home, t3({ checkedAt: NOW - RULES.cacheMs - 1 }));
+  const quiet = await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true });
+  assert.equal(quiet.source, "stale");
+  assert.equal(quiet.usage.week.used, 43);
+  let calls = 0;
+  const limited = await readUsage({ home, stateDir, now: NOW, fetchImpl: async () => { calls++; return answer(429, {}); } });
+  assert.equal(limited.source, "stale", "a 429 falls back to T3 Code's reading while it is under an hour old");
+  assert.equal(calls, 1);
+  const live1 = await readUsage({ home, stateDir, now: NOW + RULES.retryMs + 1, fetchImpl: async () => answer(200, raw()) });
+  assert.equal(live1.source, "live");
+  seedT3(home, t3({ checkedAt: NOW - RULES.staleMs - 1 }));
+  const gone = await readUsage({ home, stateDir: join(home, "state2"), now: NOW, fetchImpl: never, cacheOnly: true });
+  assert.equal(gone.usage, undefined);
+});
+
+test("readUsage: a T3 Code file that is broken, changed or far too large is ignored", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  for (const text of ["{ not json", JSON.stringify(t3({ week: 250 })), JSON.stringify(t3({ unavailable: "probeFailed" })), `${JSON.stringify(t3()).slice(0, -1)},"pad":"${"x".repeat(4000000)}"}`]) {
+    seedT3(home, text);
+    const r = await readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true });
+    assert.equal(r.usage, undefined, text.slice(0, 60));
+    assert.match(r.error, /no fresh reading/);
+  }
 });
 
 test("readUsage: a cache not signed with the current sign-in is ignored", async (t) => {
@@ -329,59 +452,6 @@ test("readUsage with cacheOnly never calls the network", async (t) => {
   await readUsage({ home, stateDir, now: NOW, fetchImpl: async () => answer(200, raw()) });
   const stale = await readUsage({ home, stateDir, now: NOW + RULES.cacheMs + 1, fetchImpl: never, cacheOnly: true });
   assert.equal(stale.source, "stale");
-});
-
-test("readUsage: the lock is removed only by its owner, and a dead lock is taken over by one process", async (t) => {
-  const home = tmp(t);
-  const stateDir = join(home, "state");
-  seedHome(home);
-  const lock = join(stateDir, "usage.lock");
-  let calls = 0;
-  // Another process's lock appears while this read runs: this read must leave it in place.
-  const fetchImpl = async () => { calls++; writeFileSync(lock, "other-process"); return answer(200, raw()); };
-  assert.equal((await readUsage({ home, stateDir, now: NOW, fetchImpl })).source, "live");
-  assert.equal(readFileSync(lock, "utf8"), "other-process");
-  // That lock is now old: two reads started together take it over once, and one reads.
-  const { utimesSync } = await import("node:fs");
-  const past = new Date(Date.now() - 60000);
-  utimesSync(lock, past, past);
-  let release;
-  const gate = new Promise((r) => { release = r; });
-  const slow = async () => { calls++; await gate; return answer(200, raw()); };
-  const later = NOW + RULES.cacheMs + 1;
-  const first = readUsage({ home, stateDir, now: later, fetchImpl: slow });
-  const second = await readUsage({ home, stateDir, now: later, fetchImpl: slow });
-  assert.equal(second.source, "stale", "the second process uses the saved reading");
-  release();
-  assert.equal((await first).source, "live");
-  assert.equal(calls, 2);
-  assert.ok(!existsSync(lock), "the owner removed its own lock");
-  assert.deepEqual(readdirSync(stateDir).filter((n) => n.includes("takeover")), [], "no gate file is left");
-});
-
-test("readUsage: a takeover gate left by a dead process does not block the takeover for good", async (t) => {
-  const home = tmp(t);
-  const stateDir = join(home, "state");
-  mkdirSync(stateDir, { recursive: true });
-  seedHome(home);
-  const { utimesSync } = await import("node:fs");
-  const { createHash } = await import("node:crypto");
-  const lock = join(stateDir, "usage.lock");
-  const gate = `${lock}.takeover-${createHash("sha256").update("dead-process").digest("hex").slice(0, 16)}`;
-  const past = new Date(Date.now() - 60000);
-  writeFileSync(lock, "dead-process");
-  utimesSync(lock, past, past);
-  writeFileSync(gate, "dead-taker");
-  let calls = 0;
-  const fetchImpl = async () => { calls++; return answer(200, raw()); };
-  // A gate that is fresh belongs to a takeover in progress: this read stands back.
-  assert.match((await readUsage({ home, stateDir, now: NOW, fetchImpl })).error, /in progress/);
-  assert.equal(calls, 0);
-  // The same gate, old: it is cleared and the takeover goes through.
-  utimesSync(gate, past, past);
-  assert.equal((await readUsage({ home, stateDir, now: NOW, fetchImpl })).source, "live");
-  assert.equal(calls, 1);
-  assert.deepEqual(readdirSync(stateDir).filter((n) => n.includes("takeover") || n === "usage.lock"), []);
 });
 
 test("readUsage: no sign-in, or an answer it cannot read, is an error and never a reading", async (t) => {
@@ -531,4 +601,29 @@ test("the script prints the line, and --json the reading and the decision", (t) 
   const none = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8", env: { ...env, USERPROFILE: join(home, "empty"), HOME: join(home, "empty") } });
   assert.equal(none.status, 1);
   assert.match(none.stdout, /^Model budget: unknown/);
+});
+
+test("hook: T3 Code's saved reading serves every event, with no read of its own and no figures", (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, ".local", "share", "model-budget");
+  const saved = (fable) => seedT3(home, t3({ fable, checkedAt: Date.now() - 60000, reset: Date.now() + 70 * HOUR }));
+  saved(59);
+  const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-9" }, { cache: null });
+  assert.match(start.context.additionalContext, /^Model budget: use Fable 5\.2 high\. /);
+  saved(95);
+  const tool = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-9" }, { cache: null });
+  assert.match(tool.context.additionalContext, /^Model budget changed\. Model budget: use Opus 5\.5 high\. /);
+  for (const r of [start, tool]) assert.doesNotMatch(r.context.additionalContext, /\d+%|\d{1,2}:\d{2}|week|share|pace|Banked|expires|T3/);
+  assert.deepEqual(readdirSync(stateDir), ["sessions"], "nothing was read over the network or saved");
+});
+
+test("the script says when the line comes from T3 Code's saved reading", (t) => {
+  const home = tmp(t);
+  seedHome(home);
+  seedT3(home, t3({ checkedAt: Date.now() - 60000, reset: Date.now() + 70 * HOUR }));
+  const env = { ...process.env, USERPROFILE: home, HOME: home };
+  const plain = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8", env });
+  assert.equal(plain.status, 0);
+  assert.match(plain.stdout, /^Model budget \(.*week 43% used, Fable 69% of its share.* Source: T3 Code's saved reading\.\n$/);
+  assert.equal(JSON.parse(spawnSync(process.execPath, [SCRIPT, "--json"], { encoding: "utf8", env }).stdout).source, "t3");
 });

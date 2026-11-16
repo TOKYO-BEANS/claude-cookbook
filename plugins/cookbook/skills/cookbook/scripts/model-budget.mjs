@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Which model a thread should run on now, and whether a banked limit reset should be
-// redeemed. It reads the owner's Claude usage (the week, the Fable share, the session
-// window, banked resets) with the sign-in Claude Code already stores, and applies the fixed
-// rules below: the script decides, not a model. It only reads. It never prints or stores
-// the sign-in, calls the one address below and nothing else, and redeems nothing.
+// redeemed. It takes the owner's Claude usage (the week, the Fable share, the session
+// window, banked resets) from T3 Code's saved reading while T3 Code runs, and otherwise reads
+// it with the sign-in Claude Code already stores. It applies the fixed rules below: the script
+// decides, not a model. It only reads. It never prints or stores the sign-in, calls the one
+// address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
 import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +15,7 @@ import { fileURLToPath } from "node:url";
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";
 const HOUR = 3600000;
 const WEEK_HOURS = 168;
+const FABLE_OF_WEEK = 50; // % of the week Fable may take, when the reading does not say
 
 export const RULES = Object.freeze({
   fableSwitch: 90, // % of the Fable share used: from here a thread runs on Opus
@@ -24,9 +26,9 @@ export const RULES = Object.freeze({
   expiryHours: 12, // a reset this close to its end is redeemed at expiryFloor
   expiryFloor: 50,
   stopAt: 99, // % used: nothing runs
-  cacheMs: 10 * 60000, // one read serves every session for this long
-  retryMs: 2 * 60000, // pause after a failed read
-  staleMs: 60 * 60000, // a failed read falls back to a reading younger than this
+  cacheMs: 10 * 60000, // a reading serves every session for this long
+  retryMs: 2 * 60000, // pause after a failed read: a read that succeeds closes the endpoint for about this long
+  staleMs: 60 * 60000, // with no fresh reading, one younger than this is used and marked stale
   timeoutMs: 4000,
 });
 
@@ -61,7 +63,7 @@ export function parseUsage(json) {
   const fableUsed = index < 0 ? null : num(limits[index].percent);
   const shares = Array.isArray(json?.weekly_scoped_shares) ? json.weekly_scoped_shares : [];
   const share = shares.find((s) => s?.limit_index === index);
-  const allowanceOfWeek = num(share?.allowance_percent_of_weekly) ?? 50;
+  const allowanceOfWeek = num(share?.allowance_percent_of_weekly) ?? FABLE_OF_WEEK;
   const fable = fableUsed === null ? null : {
     used: fableUsed,
     usedOfWeek: num(share?.used_percent_of_weekly) ?? (fableUsed * allowanceOfWeek) / 100,
@@ -169,8 +171,9 @@ const validUsage = (u) =>
   num(u?.week?.used) !== null && num(u?.week?.resetsAt) !== null && Array.isArray(u?.grants) &&
   (u.fable === null || num(u.fable?.used) !== null) && (u.session === null || (num(u.session?.used) !== null && num(u.session?.resetsAt) !== null));
 
-// The cache is signed with the sign-in token: a file written by anything that does not hold the
-// token (a tampered or hand-made one) is ignored, and a new token simply means a fresh read.
+// The script's own files are signed with the sign-in token: one written by anything that does
+// not hold the token (a tampered or hand-made one) is ignored, and a new token simply means a
+// fresh read.
 const seal = (token, payload) => createHmac("sha256", token).update(payload).digest("hex");
 export const sealCache = (token, value) => {
   const payload = JSON.stringify(value);
@@ -182,23 +185,34 @@ const openCache = (text, token) => {
   const want = Buffer.from(seal(token, box.payload), "hex");
   return timingSafeEqual(want, Buffer.from(box.sig, "hex")) ? JSON.parse(box.payload) : null;
 };
-const readCache = (file, token) => {
+const readSigned = (file, token) => {
   try {
-    const c = openCache(readFileSync(file, "utf8"), token);
-    if (num(c?.tried) === null) return null;
-    return { at: num(c.at), tried: c.tried, usage: validUsage(c.usage) ? c.usage : null, error: typeof c.error === "string" ? c.error : null };
+    return openCache(readFileSync(file, "utf8"), token);
   } catch {
     return null;
   }
 };
-const writeCache = (stateDir, file, value, token) => {
+const writeSigned = (stateDir, file, value, token) => {
+  const part = `${file}.${randomUUID()}.tmp`;
   try {
     mkdirSync(stateDir, { recursive: true });
-    writeFileSync(`${file}.${process.pid}.tmp`, sealCache(token, value));
-    renameSync(`${file}.${process.pid}.tmp`, file);
+    writeFileSync(part, sealCache(token, value));
+    renameSync(part, file);
   } catch {
-    // no cache is slower, never wrong
+    // no saved file is slower, never wrong
+    rmSync(part, { force: true });
   }
+};
+// usage.json holds the last reading and usage-tried.json the mark of the last failed read. They
+// are two files so that a failed read can never replace a reading, whatever else runs at the
+// same moment; each is written whole, by a rename.
+const readSaved = (file, token) => {
+  const c = readSigned(file, token);
+  return num(c?.at) !== null && validUsage(c.usage) ? { usage: c.usage, at: c.at } : null;
+};
+const readMark = (file, token) => {
+  const c = readSigned(file, token);
+  return num(c?.tried) !== null ? { tried: c.tried, error: typeof c.error === "string" ? c.error : null } : null;
 };
 const readToken = (home) => {
   try {
@@ -209,92 +223,88 @@ const readToken = (home) => {
   }
 };
 
-// The reading, from the shared cache when it is fresh. A failure is { error }, or a reading
-// under an hour old marked "stale"; it is never a made-up reading and never the cause's text.
-// With cacheOnly, nothing goes over the network: the saved reading or { error }.
-export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
-  const file = join(stateDir, "usage.json");
-  const token = readToken(home);
-  if (!token) return { error: "no Claude sign-in found" };
-  const cache = readCache(file, token);
-  // A reading from before the weekly reset says nothing about this week.
-  const kept = cache?.usage && cache.at !== null && cache.at <= now && cache.usage.week.resetsAt > now ? cache : null;
-  if (kept && now - kept.at < RULES.cacheMs) return { usage: kept.usage, at: kept.at, source: "cache" };
-  const fall = (error) => (kept && now - kept.at < RULES.staleMs ? { usage: kept.usage, at: kept.at, source: "stale" } : { error });
-  if (cacheOnly) return fall("no fresh reading saved");
-  if (cache && cache.tried <= now && now - cache.tried < RULES.retryMs) return fall(cache.error ?? "the usage read failed");
-  // One read at a time across every process: the one that creates the lock reads; the rest use
-  // what is cached. The lock holds its owner's mark, and only the owner removes it. A lock older
-  // than two timeouts is from a process that died: one process wins a gate file named after
-  // that lock's mark (created with wx, so only one can), removes the lock only if it still holds
-  // that mark, and claims it.
-  const lock = join(stateDir, "usage.lock");
-  const me = `${process.pid}-${randomUUID()}`;
-  const busy = () => fall(cache?.error ?? "the usage read is in progress");
-  const claim = () => {
-    try {
-      mkdirSync(stateDir, { recursive: true });
-      writeFileSync(lock, me, { flag: "wx" });
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  const holder = () => {
-    try {
-      return readFileSync(lock, "utf8");
-    } catch {
-      return null;
-    }
-  };
-  if (!claim()) {
-    const stale = holder();
-    let age = 0;
-    try {
-      age = Date.now() - statSync(lock).mtimeMs;
-    } catch {
-      // gone between the two calls: another process just finished
-    }
-    if (stale === null || age <= 2 * RULES.timeoutMs) return busy();
-    const gate = `${lock}.takeover-${createHash("sha256").update(stale).digest("hex").slice(0, 16)}`;
-    const enter = () => {
-      try {
-        writeFileSync(gate, me, { flag: "wx" });
-        return true;
-      } catch {
-        return false;
-      }
-    };
-    if (!enter()) {
-      // A gate left by a process that died inside the takeover is old too: clear it, try once.
-      let gateAge = 0;
-      try {
-        gateAge = Date.now() - statSync(gate).mtimeMs;
-      } catch {
-        // gone: the other process just finished its takeover
-      }
-      if (gateAge <= 2 * RULES.timeoutMs) return busy();
-      rmSync(gate, { force: true });
-      if (!enter()) return busy();
-    }
-    try {
-      if (holder() === stale) rmSync(lock, { force: true });
-    } finally {
-      rmSync(gate, { force: true });
-    }
-    if (!claim()) return busy();
-  }
-  try {
-    return await fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl });
-  } finally {
-    if (holder() === me) rmSync(lock, { force: true });
-  }
+// T3 Code's own saved reading, the one behind its Usage page. T3 Code asks Claude Code for the
+// limits every five minutes and rewrites this file every minute, so while it runs the reading
+// is here and nothing has to go over the network. The file is not signed and T3 Code may
+// change its shape: every value is checked, anything odd means "no reading", nothing from it
+// is stored, and all it can change is which of the fixed lines of advice is said.
+const T3_RESETS = { "5-hour reset": "session", "Weekly reset": "weekly", "Fable reset": "fable", "Full reset": "full" };
+const T3_MAX_BYTES = 4000000;
+const T3_AHEAD_MS = 5000;
+const percent = (v) => (num(v) !== null && v >= 0 && v <= 100 ? v : null);
+
+export function parseT3(json, now) {
+  const limits = json?.usageLimits;
+  const at = time(limits?.checkedAt);
+  // T3 Code may write between this run reading the clock and reading the file: a few seconds ahead is still now.
+  if (at === null || at > now + T3_AHEAD_MS || limits.unavailable !== undefined || !Array.isArray(limits.windows)) return null;
+  const windows = limits.windows.filter((w) => w && typeof w === "object" && typeof w.id === "string");
+  const all = windows.find((w) => w.id === "seven_day");
+  const week = { used: percent(all?.usedPercent), resetsAt: time(all?.resetsAt) };
+  if (week.used === null || week.resetsAt === null || week.resetsAt <= now || week.resetsAt > now + (WEEK_HOURS + 24) * HOUR) return null;
+
+  const scoped = windows.find((w) => /^seven_day_\w*fable/i.test(w.id));
+  if (scoped && percent(scoped.usedPercent) === null) return null;
+  // T3 Code does not keep Fable's part of the week: Fable may take FABLE_OF_WEEK of it.
+  const fable = scoped ? { used: scoped.usedPercent, usedOfWeek: (scoped.usedPercent * FABLE_OF_WEEK) / 100, allowanceOfWeek: FABLE_OF_WEEK } : null;
+
+  const five = windows.find((w) => w.id === "five_hour");
+  const session = percent(five?.usedPercent) === null || time(five?.resetsAt) === null || time(five.resetsAt) <= now ? null : { used: five.usedPercent, resetsAt: time(five.resetsAt) };
+
+  const options = Array.isArray(limits.resetCredits?.options) ? limits.resetCredits.options : [];
+  const grants = options
+    .filter((o) => o && typeof o === "object" && typeof o.creditId === "string" && GRANT_ID.test(o.creditId) && Object.hasOwn(T3_RESETS, o.label) && Number.isInteger(o.availableCount) && o.availableCount > 0)
+    .map((o) => ({ id: o.creditId, kind: T3_RESETS[o.label], left: o.availableCount, endsAt: time(o.expiresAt) }));
+
+  return { usage: { week, fable, session, grants, credits: windows.some((w) => w.id === "monthly_spend") }, at };
 }
 
-async function fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl }) {
+const readT3 = (file, now) => {
+  // Two tries: a read that lands in the middle of T3 Code's own write finds half a file.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      if (statSync(file).size > T3_MAX_BYTES) return null;
+      return parseT3(JSON.parse(readFileSync(file, "utf8")), now);
+    } catch (e) {
+      if (!(e instanceof SyntaxError) || attempt) return null;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  return null;
+};
+
+// The reading, from the first of these that has one under ten minutes old: the script's own
+// saved reading, then T3 Code's. Only when neither has one does a read go over the network, and
+// never with cacheOnly. A failure is { error }, or a reading under an hour old marked "stale";
+// it is never a made-up reading and never the cause's text.
+//
+// No lock: a read that succeeds closes the endpoint to this sign-in for about two minutes, and
+// T3 Code reads it every minute, so while T3 Code runs a read from here mostly answers 429 and
+// is not needed. Without T3 Code, two sessions started in the same second may both read; the
+// second gets the first one's reading or a 429, and no reading is lost.
+export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), t3File = join(home, ".t3", "caches", "claudeAgent.json"), now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
+  const file = join(stateDir, "usage.json");
+  const markFile = join(stateDir, "usage-tried.json");
+  const token = readToken(home);
+  if (!token) return { error: "no Claude sign-in found" };
+  const fresh = (r) => r !== null && now - r.at < RULES.cacheMs;
+  const own = readSaved(file, token);
+  // A reading from before the weekly reset says nothing about this week.
+  const saved = own && own.at <= now && own.usage.week.resetsAt > now ? own : null;
+  if (fresh(saved)) return { ...saved, source: "cache" };
+  const t3 = readT3(t3File, now);
+  if (fresh(t3)) return { ...t3, source: "t3" };
+  const old = [saved, t3].filter((r) => r !== null && now - r.at < RULES.staleMs).sort((a, b) => b.at - a.at)[0];
+  const fall = (error) => (old ? { ...old, source: "stale" } : { error });
+  if (cacheOnly) return fall("no fresh reading saved");
+  const mark = readMark(markFile, token);
+  if (mark && mark.tried <= now && now - mark.tried < RULES.retryMs) return fall(mark.error ?? "the usage read failed");
+
   const fail = (error) => {
-    writeCache(stateDir, file, { at: kept?.at ?? null, tried: now, usage: kept?.usage ?? null, error }, token);
-    return fall(error);
+    writeSigned(stateDir, markFile, { tried: now, error }, token);
+    // Another session may have read while this one did: its reading serves this one too.
+    const other = readSaved(file, token);
+    return other && other.usage.week.resetsAt > now && Math.abs(now - other.at) < RULES.cacheMs ? { ...other, source: "cache" } : fall(error);
   };
   let res;
   try {
@@ -313,7 +323,7 @@ async function fetchAndStore({ token, stateDir, file, now, kept, fall, fetchImpl
   } catch (e) {
     return fail(e instanceof Error && e.message === "the usage answer has no weekly limit" ? e.message : "the usage answer was not readable");
   }
-  writeCache(stateDir, file, { at: now, tried: now, usage }, token);
+  writeSigned(stateDir, file, { at: now, usage }, token);
   return { usage, at: now, source: "live" };
 }
 
@@ -327,6 +337,7 @@ if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpath
     process.exitCode = 1;
   } else {
     const decision = decide(r.usage, now);
-    console.log(json ? JSON.stringify({ source: r.source, at: r.at, usage: r.usage, decision }) : line(r.usage, decision, now));
+    const from = { t3: " Source: T3 Code's saved reading.", stale: " Source: a saved reading over ten minutes old." }[r.source] ?? "";
+    console.log(json ? JSON.stringify({ source: r.source, at: r.at, usage: r.usage, decision }) : line(r.usage, decision, now) + from);
   }
 }
