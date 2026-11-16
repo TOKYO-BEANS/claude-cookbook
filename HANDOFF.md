@@ -70,6 +70,30 @@ before #76 took 0.37.0).
 before the check came: "Merge #80 once (Recommended)", for a neutral Graphify Formal
 Verification as the only check not passing, on this pull request only.
 
+**The reviews on #80.** Three rounds of the AI review, four findings, three fixed (the
+list's time, the session's knowledge of the list, a list not understood in full) and one
+answered (it objected to the merge decision above being recorded). GitHub's security review
+raised one thread, "stop trusting and persisting unsigned T3 reset lists"; the owner's
+answer on the source ("Keep T3 Code's list") is written in it as the owner's yes, with the
+cost as the question stated it. On the last code commit (`f6119bd`) the AI review job
+answered "review unavailable": the review job's Anthropic API credit balance was too low
+(18:09 UTC). Asked with the question dialog, the owner answered "Merge once on sa-review
+(Recommended)", for #80 only, over adding credit and "Not now". `sa-review` on `f6119bd`
+(run `cookbook-80-review`): `npm test` and Semgrep passed, one reviewer that did not build
+the change read the whole diff, no finding. The commit after it changes this file only.
+
+**Outstanding.**
+- The AI review job has no API credit: every pull request in the repositories on the
+  standard reads "review unavailable" until it has. Owner: the credit is the owner's (the
+  plan's monthly API credits, or a purchase, which the owner has so far ruled out). Clears
+  when a review job answers with a review again. Until then a pull request does not meet
+  the merge condition; `sa-review` is the fallback for the review, and the merge is asked
+  of the owner. A job for Stack Atlas, opened as a new chat on 16 November 2026.
+- Figures: Claude Code's own saved reading (`cachedUsageUtilization` in `~/.claude.json`)
+  has Fable's part of the week, which T3 Code's file lacks. Not used; a possible better
+  stand-in for the figures than T3 Code's file. Owner: Claude. Clears when weighed in a
+  job of its own.
+
 **Limits (known).**
 - Whoever can write T3 Code's file as the owner can have a session told to ask for a reset,
   or told Fable where the pace rule says Opus. Redeeming stays the owner's click in T3 Code.
