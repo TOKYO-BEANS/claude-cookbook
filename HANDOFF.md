@@ -1,5 +1,33 @@
 # Handoff
 
+## 16 November 2026 (evening): Macroscope weighed and not added (0.31.5)
+
+**Why.** The owner asked whether the hosted reviewer Macroscope should be part of the
+standard, after installing its GitHub app on the organisation the same morning.
+
+**What changed.**
+- `options/check.md` names Macroscope among the hosted reviewers weighed for "review of
+  every pull request", with the reasons. The owner of that job is unchanged: the
+  `ai-review` job, with `sa-review` as the fallback. No tool was added.
+- Plugin 0.31.5.
+
+**What was found.** Usage-priced ($0.05 per KB of diff, $0.50 minimum per review, $0.05 per
+commit for its Status reports); code goes to several model and inference providers; the
+GitHub app held write access to contents, workflows, pull requests and issues on all
+repositories. On a third-party snapshot of the Martian Code Review Bench (October 2026) it
+was 7th of 14 (60.0% F1, 77.5% precision). The `ai-review` job has not been measured
+against it.
+
+**Done outside the repository, on the owner's word.** The app was uninstalled from the
+organisation and its sign-in authorization revoked on the owner's GitHub account, both in
+the built-in browser (GitHub has no API for an owner to uninstall an app; the owner
+confirmed with GitHub Mobile). Verified: the organisation's installations no longer list it,
+it had posted no comment and left no branch.
+
+**Outstanding.** The Macroscope workspace itself could not be opened after the uninstall,
+so it was not deleted there. Owner: the owner. Clears with a request to Macroscope's
+support, if the owner wants the workspace and its data removed.
+
 ## 16 November 2026 (later): the owner clicks in a window before a gated Adobe run (0.31.4)
 
 **Why.** GitHub's security review on the last commit of #57 (comment 4582851565) said that
