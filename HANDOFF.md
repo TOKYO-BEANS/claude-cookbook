@@ -1,5 +1,60 @@
 # Handoff
 
+## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.1)
+
+**Why.** The last AI review on #70 left two low findings, both in
+`skills/cookbook/scripts/boat-run.mjs`, and #70's entry did not yet say how it was merged.
+
+**What changed.**
+- **One count.** The script read boat's count of sandboxes first and took its place among
+  this PC's runs after. With 9 sandboxes running from elsewhere (the vetting step), runs
+  started together each read "9" and each took a place: up to 19 at once. Now a run takes
+  its place first and asks boat after, and the gate adds the other runs from this PC that
+  hold a place and have no sandbox yet (`waiting`, counted by `takeSlot` at the moment the
+  place is taken). A run marks its place (`.up` on its file) when boat's "ready" line has
+  come: from then on it is in boat's count and is not added a second time. Between
+  "created" and "ready" a run can be counted twice, never left out.
+- **A time limit.** `boat limits --json` and `boat delete` are ended after 60 seconds
+  (`CALL_SECONDS`). A `limits` that hangs is "no result" and nothing starts; a `delete`
+  that hangs is a failed removal, with the "may still exist" line. Before, a hung call held
+  the run and its place for good. `recipes/boat.md`: that one refusal is run again, once.
+- `options/check.md` named a customer's site in the visual check point. The rule for this
+  public repository is no project or client names; the name came in with #54, before the
+  rule, and not on the owner's word. It now says "the first site".
+- #70's entry below now says what happened after its last commit.
+- 44 tests in `scripts/boat-run.test.mjs` (7 new): boat reporting 9 with two runs arriving
+  together (one starts, the other is refused), a run whose sandbox is ready not counted
+  twice, the order (place, then boat), a real hung process ended by the limit, and both
+  hung calls through `main`.
+
+**Verification.** The new tests failed first (7 of 44) and pass after. `npm test` in a boat
+sandbox through the changed script: 500 tests, 499 passed, 1 skipped (no Gitleaks there),
+11 seconds; on this PC the same counts (the skip is the symbolic link test).
+Live, a short run: its place was `run-…` at the start, `run-….up` 5 seconds later when
+boat said "ready", and gone at the end (`live-slot-up.log`). The limit was also seen live,
+unplanned, twice in five runs: `boat limits` gave no answer for 60 seconds and the run ended
+with `BOAT-RUN: not started: no result (boat limits did not answer in time)`, exit 75. A call
+whose child holds the pipes (the key helper around boat) came back in 531 ms at a limit of
+500. Logs: `~/.local/share/claude-cookbook/evidence/2026-11-16-boat-run-followup/`.
+
+**Outstanding.**
+- The slow call is the key helper on this PC, not boat. Of ten `boat limits` calls in a
+  row, eight took 1.4 to 1.7 seconds, one 32 seconds and one over 90; in both slow ones
+  `boat.exe` had not started after 8 seconds and the helper's `powershell.exe` (the read
+  from the DPAPI store) was still running (`limits-probe.log`). Why PowerShell stalls is
+  not known. It explains the 37-second refusal in #70's entry, and it touches every tool
+  that gets its key this way. Here a stalled call is now a refusal after 60 seconds: run
+  again. The helper is not in this repository: a job of its own, opened as a new chat on
+  16 November 2026.
+- On Windows the limit ends the key helper only; the `powershell.exe` or `boat.exe` under
+  it is left to end by itself. It holds no place and no sandbox.
+- Ten runs started a few seconds apart can see one of them refused while there is room (the
+  double count between "created" and "ready"). It is "not started": run it again.
+- The same site, and its repository, are still named in eight other places: two recipe
+  pages, three lines of older entries here, one catalog entry (in use: the update check
+  reads that repository's lockfile) and one test. A job of its own, opened as a new chat on
+  16 November 2026.
+
 ## 16 November 2026 (evening): boat on the paid plan, used by default (0.36.0)
 
 **Why.** The owner ended the boat trial and took the USD 20 plan on 16 November 2026, and
@@ -85,6 +140,15 @@ upload (one failure, the test above; green after the fix); five sandboxes at onc
 Through `boat-run.mjs`: the first run was refused on the three Gitleaks findings, the next
 uploaded 176 tracked files and passed `npm test` in 22 seconds, no slot file was left.
 `npm test` on this PC passed. Logs: `~/.local/share/claude-cookbook/evidence/2026-11-16-boat-paid-plan/`.
+
+**After the last commit (added with 0.36.1).** The first `sa-release` run refused the merge:
+the AI review of the last commit had left `HANDOFF.md` out, so it was a partial review. This
+entry was then read by a `cookbook:reader` subagent, which had no finding that needed a
+change, and that reading was answered in the pull request. The second run merged #70 as
+`692bd2a`; the release check was verified (execution 1571) and plugin 0.36.0 was installed.
+Evidence, in the folder above: `summary-cookbook-70-merge.json` (the refusal),
+`summary-cookbook-70-merge-2.json` and `release-cookbook-70-merge-2.log` (the merge). The
+last review also left two low findings on `boat-run.mjs`; they are fixed in 0.36.1, above.
 
 **Outstanding.**
 - What happens when the month's time runs out was read from boat's terms, not tested.

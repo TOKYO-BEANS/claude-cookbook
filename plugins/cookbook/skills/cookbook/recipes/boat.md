@@ -15,7 +15,8 @@ plan since 16 November 2026. No plugin, no MCP server and no skill pack: the CLI
   It starts a sandbox without the account's stored secrets, runs the command, prints its
   output and cost, and deletes the sandbox. The exit code is the command's.
   `BOAT-RUN: not started: <why>` and exit 75 mean nothing ran: report that, and never go
-  around it with `boat run`. `BOAT-RUN: the sandbox may still exist` means: `boat list`,
+  around it with `boat run`; only "did not answer in time" is run again, once.
+  `BOAT-RUN: the sandbox may still exist` means: `boat list`,
   and delete what that run left.
 - **An upload is a scanned copy of a listed repository.** `--push` sends the files git
   tracks, with their uncommitted edits, and never an untracked file. Gitleaks reads the copy
