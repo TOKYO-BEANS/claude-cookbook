@@ -18,8 +18,8 @@
   and secret from the key store and sends them in one request to the site's exact login address;
   they never enter the browser, and only the session cookie the site answers with does. Sites are
   listed in `site-login/access.json` (login address, the two key names, the cookie name). What the
-  session may do is the site's decision. Today: `probiz` (Probiz production), a reader for one
-  hour that sees what the shared view link shows and is never the owner; `/admin` needs a
-  personal account. Print status, address and title only from its pages: they hold staff and
+  session may do is the site's decision. Today that file has one site, the owner's own product
+  in production (`<site>` is its key there): a reader for one hour that sees what the shared
+  view link shows and is never the owner; `/admin` needs a personal account. Print status, address and title only from its pages: they hold staff and
   business data. A new site needs the owner's yes: a service token and its Access policy are an
   access change. Proven on 14 November 2026.
