@@ -1,5 +1,70 @@
 # Handoff
 
+## 16 November 2026 (night): the key read no longer waits on a script scan (0.36.3)
+
+**Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`
+took 32 seconds once and over 90 once, and `boat-run` refused three of six runs at its
+60-second limit. The 37-second refusal in #70's entry was the same fault.
+
+**The cause, found before anything was changed.** The PC's security software scans every
+PowerShell script block (AMSI; it is the only scanner registered), and while many processes
+start, each scan can wait about 30 seconds. `with-key.mjs` read a key by starting
+`agent-key.ps1`, which crosses several scans: the script itself and each module import.
+- Windows' PowerShell event log: in every slow read PowerShell was ready in under 2 seconds
+  and then waited before compiling the script. 33 of the day's 313 reads took over 3
+  seconds; 14 waits sit at 30.2 to 30.4 seconds, a time limit inside the scanner.
+- A traced read of 32.7 seconds: 9.7 before the script's first line, 18.0 in
+  `Import-Module`, 0.07 decrypting. A one-line block made in memory waited 12.7 seconds; a
+  plain file read in the same run took 5 ms. So: the scan, not file access and not DPAPI.
+- Made to happen on demand: 16 workers starting `git --version` for 45 seconds gave one
+  read of 47 seconds; with no burst, 27 runs took 0.7 to 2.5 seconds.
+- Ruled out: two and four key reads at the same moment (0.9 to 2.0 seconds), and
+  PowerShell's own start.
+
+**What changed.**
+- The helpers were in no repository. On the owner's word (16 November 2026) they live here:
+  `skills/cookbook/scripts/with-key.mjs` and `agent-key.ps1` (the latter byte for byte as it
+  was on the PC). Callers keep using the copies in `~/.local/bin`.
+- `with-key.mjs` reads the key in its own process: Node calls `CryptUnprotectData` through
+  `node:ffi` (Node 26.13.1, no flag; experimental). No PowerShell starts. The store and its
+  files are unchanged. Same checks as `agent-key.ps1`: the name pattern, no link.
+- The PowerShell route stays as the fallback where `node:ffi` is missing. It is ended after
+  15 seconds and the launcher says why. A failure message holds only the launcher's own
+  words or an error code, never what PowerShell printed.
+- New: `with-key.mjs --headers <name>`, the header object for an MCP `headersHelper`.
+- `recipes/keys.md` (new; the map row links it); `catalog.json` notes for the two copies.
+
+**Verification.**
+- 16 tests in `scripts/with-key.test.mjs` (15 pass, the link test skips on this PC: no right
+  to make a link). On Windows they read a synthetic DPAPI key by the direct route with
+  PowerShell forbidden, start the launcher as a process by five spellings of its path, and
+  save a key with `agent-key.ps1` and read it by both routes. CI runs on Linux with Node 24:
+  the Windows tests skip there, the rest run.
+- The real `boat` key, both routes side by side during a 60-second burst of process starts:
+  PowerShell 1 read in 86.8 seconds; the new launcher 38 reads, 0.6 to 1.4 seconds, none
+  failed. The key from both routes has the same SHA-256.
+- `npm test` passed on this PC.
+
+**Outstanding.**
+- The merge, the release check, the copy to `~/.local/bin` and the proof from there are
+  reported in the chat of this pull request and in the next entry.
+- Other PowerShell key reads still stall the same way: an MCP `headersHelper` that calls
+  `agent-key.ps1 -Mode headers`, and the launchers `firecrawl-secure.mjs`,
+  `parallel-secure.mjs` and `browserbase-key.ps1` in `~/.local/bin`, which are in no
+  repository either. Owner: Claude. Cleared by moving each to `with-key.mjs`.
+- `with-key.mjs` still starts the program without its variable when the key cannot be read
+  (the owner-questions broker relies on it), still ends with code 1 when a signal kills its
+  child, and has no handler for a child that cannot start. Unchanged here: one fault per
+  pull request. Owner: Claude.
+- `node:ffi` is experimental. If a Node update changes it, reads fall back to PowerShell and
+  can stall again, for at most 15 seconds, with the reason on stderr.
+- A recommendation for whoever manages the security software, not acted on: its script scan
+  holds PowerShell up to 30 seconds per block under load. Its settings were not touched.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-with-key-stall/`:
+`FINDINGS.md`, the probes (`stall-probe.mjs`, `sampler.mjs`, `phase-split.ps1`,
+`storm.mjs`, `storm-compare.mjs`, `eventlog-gaps.mjs`, `dpapi-ffi.mjs`) and their logs.
+
 ## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.2)
 
 **Why.** The last AI review on #70 left two low findings, both in
