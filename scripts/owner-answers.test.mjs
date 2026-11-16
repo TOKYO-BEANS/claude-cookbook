@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -368,6 +368,32 @@ test("one chat at a time has the list; a lock left behind or held too long never
   for (const n of readdirSync(sessions)) if (n !== mine) utimesSync(join(sessions, n), longAgo, longAgo);
   s.writeState("me", { shown: ["a", "b", "c"] });
   assert.deepEqual(readdirSync(sessions), [mine]);
+});
+
+test("the folder and its files are the owner's alone, whatever the system's default", { skip: process.platform === "win32" ? "Windows keeps its own access lists" : false }, () => {
+  const root = mkdtempSync(join(tmpdir(), "owner-answers-own-"));
+  const dir = join(root, "made", "by", "the", "store");
+  const before = process.umask(0); // the most open default there is
+  try {
+    const s = openStore({ OWNER_ANSWERS_DIR: dir });
+    const lockMode = s.locked(() => {
+      s.append([note({ id: id(1), at: Date.now() - WINDOW_MS - 1000 }), note({ id: id(2), at: Date.now() })]);
+      return statSync(join(dir, "ledger.lock")).mode & 0o777;
+    });
+    s.writeState("me", { shown: [] });
+    s.log({ error: "EBUSY" });
+    assert.equal(lockMode, 0o600);
+    assert.equal(statSync(dir).mode & 0o777, 0o700);
+    assert.equal(statSync(join(dir, "sessions")).mode & 0o777, 0o700);
+    for (const name of ["ledger.jsonl", "log.jsonl", join("sessions", readdirSync(join(dir, "sessions"))[0])]) assert.equal(statSync(join(dir, name)).mode & 0o777, 0o600, name);
+    // A folder that was already there, open to all, is closed at the next use.
+    const open = join(root, "open");
+    mkdirSync(open, { mode: 0o777 });
+    openStore({ OWNER_ANSWERS_DIR: open }).log({ error: "EBUSY" });
+    assert.equal(statSync(open).mode & 0o777, 0o700);
+  } finally {
+    process.umask(before);
+  }
 });
 
 test("the hook file, end to end on a folder of its own", () => {

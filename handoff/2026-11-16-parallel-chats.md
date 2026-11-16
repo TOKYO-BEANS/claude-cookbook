@@ -47,7 +47,10 @@ write that file, so a chat gone wrong could plant an "owner's answer" that other
 on. The third push keeps no text at all. The list is a pointer; the answer is read from the
 host's own record of the chat that asked, which a chat cannot write. Every value the hook
 puts in front of a model is a count, a date or a chat id in T3 Code's own shape, which is
-hexadecimal digits (tested with planted lines). A note with a time in the future is no note. What it costs: a chat may have to read another chat before it asks, and a
+hexadecimal digits (tested with planted lines). A note with a time in the future is no note.
+On the third push the security review held one thing more, and it was fixed: the list's
+folder and files are made for the owner alone (modes 0700 and 0600), whatever the system's
+default. The test of that runs on Linux only, so CI is where it is checked. What it costs: a chat may have to read another chat before it asks, and a
 question asked in one repository is not seen from another.
 
 **Decisions that were mine.**

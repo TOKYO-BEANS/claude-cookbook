@@ -2,7 +2,7 @@
 // this PC, outside every repository and outside ~/.claude. It holds notes that a dialog was
 // shown (ids and times), never a question or an answer.
 import { createHash, randomBytes } from "node:crypto";
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { CLOCK_SLACK_MS, WINDOW_MS, parseLedger, repoLabel } from "./owner-answers-lib.mjs";
@@ -62,6 +62,20 @@ export function originUrl(cwd) {
   return "";
 }
 
+// The folder and every file in it are the owner's alone, whatever the system's default is:
+// the notes name repositories and chats. (Windows keeps its own access lists and ignores
+// these modes; the folder there is inside the owner's profile.)
+const OWNER_FOLDER = 0o700;
+const OWNER_FILE = 0o600;
+function ownFolder(path) {
+  mkdirSync(path, { recursive: true, mode: OWNER_FOLDER });
+  try {
+    chmodSync(path, OWNER_FOLDER); // a folder that was already there keeps its old mode otherwise
+  } catch {
+    // not ours to change: the files inside are still created for the owner alone
+  }
+}
+
 const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {}) {
@@ -82,7 +96,7 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
   // one, never half of either.
   const replace = (path, text) => {
     const own = `${path}.${process.pid}.tmp`;
-    writeFileSync(own, text);
+    writeFileSync(own, text, { mode: OWNER_FILE });
     renameSync(own, path);
   };
   return {
@@ -91,14 +105,14 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
     // moment then see each other. A chat never waits long and never fails for the lock: when
     // it cannot have it, it goes ahead without, and leaves the file's upkeep to the next one.
     locked(fn) {
-      mkdirSync(dir, { recursive: true });
+      ownFolder(dir);
       const until = Date.now() + lockWaitMs;
       // The lock holds a mark of its own, so a chat removes only the lock it took.
       const mark = `${process.pid}.${randomBytes(8).toString("hex")}`;
       let fd = null;
       while (fd === null) {
         try {
-          fd = openSync(lock, "wx");
+          fd = openSync(lock, "wx", OWNER_FILE);
         } catch (e) {
           if (e?.code !== "EEXIST") break;
           try {
@@ -156,8 +170,8 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
     },
     readLedger: () => read(ledger),
     append(entries) {
-      mkdirSync(dir, { recursive: true });
-      appendFileSync(ledger, entries.map((e) => `${JSON.stringify(e)}\n`).join(""));
+      ownFolder(dir);
+      appendFileSync(ledger, entries.map((e) => `${JSON.stringify(e)}\n`).join(""), { mode: OWNER_FILE });
       if (!held) return; // the file is rewritten only by the chat that holds the lock
       // A note leaves the file at the first write after it is past the window, and one dated
       // in the future with it. Every note is looked at, wherever it stands in the file, so no
@@ -182,7 +196,8 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
     },
     writeState(session, state) {
       const folder = join(dir, "sessions");
-      mkdirSync(folder, { recursive: true });
+      ownFolder(dir);
+      ownFolder(folder);
       replace(stateFile(session), JSON.stringify(state));
       // A chat's state is of no use once its chat is long over: files untouched for a week go.
       try {
@@ -197,8 +212,8 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
     // The repository a chat works in, from its checkout's remote; "" when there is none.
     repo: (cwd) => (cwd ? repoLabel(originUrl(cwd)) : ""),
     log(line) {
-      mkdirSync(dir, { recursive: true });
-      appendFileSync(join(dir, "log.jsonl"), `${JSON.stringify(line)}\n`);
+      ownFolder(dir);
+      appendFileSync(join(dir, "log.jsonl"), `${JSON.stringify(line)}\n`, { mode: OWNER_FILE });
     },
   };
 }
