@@ -24,8 +24,14 @@ In its first week boat had run for 223 seconds in all.
   on or the wallet holds money or the plan cannot be read. `--push` sends a copy: tracked
   files with their uncommitted edits (`git stash create`, `git archive`), no untracked
   file, no symbolic link, and only after Gitleaks passed it with its default rules.
-  21 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
+  26 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
   allowance; the owner can change them.
+- After the next review round on the script itself: `--keep` is gone (a kept sandbox ran on
+  outside the limits); each run holds a file of its own and counts the others, so two that
+  arrive together cannot both pass; Gitleaks runs with `--ignore-gitleaks-allow`; and
+  `--push` needs the repository on an upload list outside every repository
+  (`~/.local/share/boat-run/upload-allowed.txt`), because no script can tell code from
+  customer data. This repository is on the list of this PC (it is public).
 - `scripts/stack-updates-connect.test.mjs`: three made-up key-shaped strings are now joined
   when the test runs. Gitleaks flagged them as `generic-api-key` on the first upload of this
   repository, and the script rightly refused the run. They were test values (alphabet runs),
@@ -55,7 +61,12 @@ uploaded 176 tracked files and passed `npm test` in 22 seconds, no slot file was
 - The standing yes covers code only. Gitleaks finds key-shaped text, not customer data: a
   repository that tracks customer data is not uploaded without a yes for that task.
 - The vetting scripts keep their own fixed `boat run` command and do not go through
-  `boat-run.mjs`; a kept sandbox (`--keep`) is counted by the plan's count only.
+  `boat-run.mjs`.
+- The upload list is filled by Claude under the standing yes (code only), one repository
+  at a time. The owner's product repositories are not on it yet: each is added when a job
+  first needs it, after a look at what it tracks.
+- A refusal took 37 seconds once (reading the plan took 13); the usual time is 2 seconds.
+  Not explained.
 - Saved snapshots (10 in the plan) are unused: a snapshot with a repository's dependencies
   installed would start faster. Worth it only for a repository whose install is slow.
 

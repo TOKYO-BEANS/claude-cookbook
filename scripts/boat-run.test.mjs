@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { LIMITS, boatArgv, gate, main, parseArgs, scan, stage, takeSlot } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
+import { LIMITS, boatArgv, gate, main, normalKey, onList, parseArgs, repoKey, scan, stage, takeSlot } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
 // The plan as `boat limits --json` printed it on 16 November 2026, without the unused keys.
 const plan = (over = {}) => ({
@@ -22,8 +22,8 @@ const plan = (over = {}) => ({
 const args = (...a) => parseArgs(a);
 
 test("arguments: a timeout and a command are required; small is the default size", () => {
-  assert.deepEqual(args("--timeout", "300", "--", "npm", "test"), { type: "small", timeout: 300, push: null, keep: false, command: ["npm", "test"] });
-  assert.deepEqual(args("--type", "large", "--timeout", "60", "--push", ".", "--keep", "--", "make").type, "large");
+  assert.deepEqual(args("--timeout", "300", "--", "npm", "test"), { type: "small", timeout: 300, push: null, command: ["npm", "test"] });
+  assert.deepEqual(args("--type", "large", "--timeout", "60", "--push", ".", "--", "make").type, "large");
   assert.match(args("--", "npm", "test").error, /--timeout/);
   assert.match(args("--timeout", "300").error, /command/);
   assert.match(args("--timeout", "300", "--").error, /command/);
@@ -33,6 +33,8 @@ test("arguments: only whole seconds, a known size and known options", () => {
   for (const bad of ["0", "-5", "1.5", "abc", "", "1e3", " 30"]) assert.match(args("--timeout", bad, "--", "x").error, /--timeout/, bad);
   assert.match(args("--type", "xlarge", "--timeout", "60", "--", "x").error, /--type/);
   assert.match(args("--no-auto-stop", "--timeout", "60", "--", "x").error, /--no-auto-stop/);
+  // A kept sandbox would run on outside the limits: the script has no way to keep one.
+  assert.match(args("--keep", "--timeout", "60", "--", "x").error, /--keep/);
   assert.match(args("--env", "A=b", "--timeout", "60", "--", "x").error, /--env/);
   assert.match(args("--timeout", "60", "--push", "--", "x").error, /--push/);
 });
@@ -74,9 +76,9 @@ test("no run while something could bill past the plan, or while the plan cannot 
 
 test("the boat command always has the size, --no-env and the timeout, and never more options", () => {
   assert.deepEqual(boatArgv(args("--timeout", "300", "--", "npm", "test"), null), ["run", "--type", "small", "--no-env", "--timeout", "300", "--", "npm", "test"]);
-  assert.deepEqual(boatArgv(args("--type", "large", "--timeout", "60", "--push", ".", "--keep", "--", "make", "-j8"), "/tmp/s/repo"), [
-    "run", "--type", "large", "--no-env", "--timeout", "60", "--keep", "--push", "/tmp/s/repo", "--", "make", "-j8",
-  ]);
+  const sent = boatArgv(args("--type", "large", "--timeout", "60", "--push", ".", "--", "make", "-j8"), "/tmp/s/repo");
+  assert.deepEqual(sent, ["run", "--type", "large", "--no-env", "--timeout", "60", "--push", "/tmp/s/repo", "--", "make", "-j8"]);
+  assert.ok(!sent.slice(0, sent.indexOf("--")).includes("--keep"));
 });
 
 // A real repository in a temporary folder: git is on every machine that runs these tests.
@@ -185,6 +187,13 @@ test("the scan passes a plain copy and stops on a key, naming the rule and file 
     assert.equal(r.ok, false);
     assert.match(r.reason, /^1 finding \(private-key in shop\/deploy\.pem\): a security finding goes to the owner$/);
     assert.ok(!r.reason.includes(body));
+    // Nor does a comment in the file that asks the scanner to look away.
+    rmSync(join(dir, "deploy.pem"));
+    const value = ["ABCDEFGHIJ0123456789", "abcdefghij0123456789"].join("");
+    writeFileSync(join(dir, "config.js"), `const secret = "${value}"; // ${["gitleaks", "allow"].join(":")}\n`);
+    const quiet = scan(dir, tmp);
+    assert.equal(quiet.ok, false);
+    assert.match(quiet.reason, /^1 finding \(generic-api-key in shop\/config\.js\)/);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
@@ -202,7 +211,7 @@ test("without gitleaks the scan has no result", () => {
   }
 });
 
-test("ten runs at once from this PC: the eleventh waits for a free slot; a dead run's slot is taken over", () => {
+test("ten runs at once from this PC: the eleventh is refused; a dead run's place is free again", () => {
   const dir = mkdtempSync(join(tmpdir(), "boat-run-slots-"));
   try {
     const live = new Set();
@@ -211,15 +220,71 @@ test("ten runs at once from this PC: the eleventh waits for a free slot; a dead 
     for (let pid = 101; pid <= 110; pid += 1) held.push(take(pid));
     assert.ok(held.every(Boolean));
     assert.equal(take(111), null);
+    assert.equal(readdirSync(dir).length, 10, "a refused run leaves no file");
     held[3].release();
     assert.ok(take(112));
     assert.equal(take(113), null);
     live.delete(105); // that run died without releasing
     assert.ok(take(114));
-    writeFileSync(join(dir, "slot-0"), "not a pid");
-    assert.ok(take(115));
+    assert.ok(!readdirSync(dir).some((n) => n.startsWith("run-105-")), "the dead run's file is cleared");
+    // Files that are not a run's are neither counted nor removed.
+    writeFileSync(join(dir, "notes.txt"), "x");
+    writeFileSync(join(dir, "run-abc-1"), "x");
+    assert.equal(take(115), null);
+    assert.ok(existsSync(join(dir, "notes.txt")) && existsSync(join(dir, "run-abc-1")));
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("two runs that arrive together at the last place: never both pass", () => {
+  const dir = mkdtempSync(join(tmpdir(), "boat-run-slots-"));
+  try {
+    const alive = () => true;
+    for (let pid = 201; pid <= 209; pid += 1) assert.ok(takeSlot(dir, { pid, alive }));
+    // The other arrival has written its file and not yet counted: this one sees ten others.
+    writeFileSync(join(dir, "run-210-other"), "");
+    assert.equal(takeSlot(dir, { pid: 211, alive }), null);
+    // And one process can hold several places: the file's name is its own each time.
+    rmSync(join(dir, "run-210-other"));
+    assert.ok(takeSlot(dir, { pid: 201, alive }));
+    assert.equal(takeSlot(dir, { pid: 201, alive }), null);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the upload list names a repository by its origin, in one spelling", () => {
+  for (const url of ["https://github.com/Some-Org/Shop.git", "git@github.com:Some-Org/Shop.git", "ssh://git@github.com/some-org/shop", "https://user:pass@github.com/some-org/shop/", " github.com/some-org/shop "]) {
+    assert.equal(normalKey(url), "github.com/some-org/shop", url);
+  }
+  assert.equal(normalKey("C:\\Users\\me\\Shop"), "c:/users/me/shop");
+  assert.equal(normalKey("/home/me/shop/"), "/home/me/shop");
+});
+
+test("only a whole line of the list allows a repository: no patterns, no prefixes, comments ignored", () => {
+  const list = "# allowed for upload\r\ngithub.com/some-org/shop  # code only\n\nhttps://github.com/Some-Org/Tools.git\n";
+  assert.ok(onList("github.com/some-org/shop", list));
+  assert.ok(onList("github.com/some-org/tools", list));
+  for (const no of ["github.com/some-org/shop-data", "github.com/some-org", "github.com/other/shop", "", null]) assert.ok(!onList(no, list), String(no));
+  assert.ok(!onList("github.com/some-org/shop", ""));
+  assert.ok(!onList("github.com/some-org/shop", "github.com/some-org/*\n*\n"));
+});
+
+test("a repository's name on the list: its origin, or its folder when it has none; none outside git", () => {
+  const { root, dir } = repo();
+  try {
+    assert.equal(repoKey(dir), normalKey(spawnSync("git", ["-C", dir, "rev-parse", "--show-toplevel"], { encoding: "utf8" }).stdout));
+    spawnSync("git", ["-C", dir, "remote", "add", "origin", "git@github.com:Some-Org/Shop.git"]);
+    assert.equal(repoKey(dir), "github.com/some-org/shop");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+  const plain = mkdtempSync(join(tmpdir(), "boat-run-plain-"));
+  try {
+    assert.equal(repoKey(plain), null);
+  } finally {
+    rmSync(plain, { recursive: true, force: true });
   }
 });
 
@@ -232,6 +297,7 @@ function world(over = {}) {
   const deps = {
     limits: () => plan(),
     slot: () => ({ release: () => released.push("slot") }),
+    permit: (folder) => { calls.push(["permit", folder]); return { ok: true, key: "github.com/some-org/shop", list: "/state/upload-allowed.txt" }; },
     stage: (folder) => { calls.push(["stage", folder]); return { dir: "/tmp/s/shop", remove: () => removed.push("/tmp/s/shop") }; },
     scan: (dir) => { calls.push(["scan", dir]); return { ok: true }; },
     boat: (argv) => { calls.push(["boat", ...argv]); return 0; },
@@ -250,8 +316,8 @@ test("a run without an upload: the gate, then boat, and the command's exit code 
 test("a run with an upload: staged, scanned, pushed from the staged copy, and the copy removed", () => {
   const w = world();
   assert.equal(main(["--timeout", "120", "--push", ".", "--", "npm", "test"], w.deps), 0);
-  assert.deepEqual(w.calls.map((c) => c[0]), ["stage", "scan", "boat"]);
-  assert.deepEqual(w.calls[2].slice(1), ["run", "--type", "small", "--no-env", "--timeout", "120", "--push", "/tmp/s/shop", "--", "npm", "test"]);
+  assert.deepEqual(w.calls.map((c) => c[0]), ["permit", "stage", "scan", "boat"]);
+  assert.deepEqual(w.calls[3].slice(1), ["run", "--type", "small", "--no-env", "--timeout", "120", "--push", "/tmp/s/shop", "--", "npm", "test"]);
   assert.deepEqual(w.removed, ["/tmp/s/shop"]);
 });
 
@@ -283,6 +349,17 @@ test("the staged copy is removed and the slot released when boat itself fails to
   assert.equal(main(["--timeout", "120", "--push", ".", "--", "x"], w.deps), 2);
   assert.deepEqual(w.removed, ["/tmp/s/shop"]);
   assert.deepEqual(w.released, ["slot"]);
+});
+
+test("a repository that is not on the upload list is not copied, scanned or sent", () => {
+  const w = world({ permit: () => ({ ok: false, key: "github.com/some-org/shop-data", list: "/state/upload-allowed.txt" }) });
+  assert.equal(main(["--timeout", "120", "--push", ".", "--", "npm", "test"], w.deps), 2);
+  assert.deepEqual(w.calls, []);
+  assert.match(w.out.join("\n"), /^BOAT-RUN: not started: github\.com\/some-org\/shop-data is not on the upload list \(\/state\/upload-allowed\.txt\)/);
+  assert.deepEqual(w.released, ["slot"]);
+  // A run with no upload needs no place on the list.
+  const none = world({ permit: () => { throw new Error("not asked"); } });
+  assert.equal(main(["--timeout", "120", "--", "node", "-v"], none.deps), 0);
 });
 
 test("no free slot starts nothing", () => {

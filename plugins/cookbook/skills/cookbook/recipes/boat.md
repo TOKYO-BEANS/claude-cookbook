@@ -11,20 +11,23 @@ plan since 16 November 2026. No plugin, no MCP server and no skill pack: the CLI
   - a long build, test run or batch, and work that splits: one sandbox per part, side by side.
   A repository's required checks stay on Depot CI. Hosting stays on Cloudflare.
 - **Every job goes through the script:** `node <this skill's folder>/scripts/boat-run.mjs
-  [--type small|default|large] --timeout <seconds> [--push <folder>] [--keep] -- <command>`.
+  [--type small|default|large] --timeout <seconds> [--push <folder>] -- <command>`.
   It starts a sandbox without the account's stored secrets, runs the command, prints its
   output and cost, and deletes the sandbox. The exit code is the command's.
   `BOAT-RUN: not started: <why>` and exit 2 mean nothing ran: report that, and never go
   around it with `boat run`.
-- **An upload is a scanned copy.** `--push` sends the files git tracks, with their uncommitted
-  edits, and never an untracked file. Gitleaks reads the copy first: a finding, or a scan
-  with no result, stops the run, and a finding goes to the owner.
+- **An upload is a scanned copy of a listed repository.** `--push` sends the files git
+  tracks, with their uncommitted edits, and never an untracked file. Gitleaks reads the copy
+  first: a finding, or a scan with no result, stops the run, and a finding goes to the owner.
+  The repository must be on the upload list ([where it is](boat-setup.md)). Add one once,
+  after checking that it is public or the owner's own and tracks no customer data; one that
+  does needs the owner's yes.
 - **Tests that need an install:** `-- bash -c 'npm ci --ignore-scripts && npm test'`, from
   the committed lockfile; install scripts on only when the tests need them. The install
   stays in the sandbox.
-- **A sandbox kept for a task:** `--keep`, then `boat exec <id> "<command>"` (30 s limit by
-  default; `--timeout 0` for none) and `boat delete <id>` when the task ends. Never pass
-  `--no-auto-stop`. End such a task with `boat list` and delete what it left.
+- **Several steps go in one command** (`-- bash -c '...'`). A sandbox kept between commands
+  runs on outside the script's limits, so it needs the owner's yes for that task; then every
+  `boat exec` gets a timeout, never `--no-auto-stop`, and `boat delete <id>` ends the task.
 - **The limits are numbers in the script**, the owner's allowance of 16 November 2026;
   inside them Claude sizes each job: 10 sandboxes at once, an hour of the plan's time for
   one run (a timeout of 7200 on `small`, 3600 on `default`, 1800 on `large`), a fifth of

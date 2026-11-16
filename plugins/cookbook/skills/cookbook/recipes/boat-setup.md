@@ -19,6 +19,10 @@
   profile and the user PATH, which do not survive a reboot from Claude's container. To update:
   download the new binary and checksum list to an empty folder, compare the SHA-256, replace the
   copy and run `boat --version`.
+- **The upload list** of `boat-run.mjs` is `~/.local/share/boat-run/upload-allowed.txt`, one
+  `github.com/owner/name` a line, `#` for a comment; a repository with no origin is listed
+  by its folder. It is outside every repository on purpose. Its `slots` folder beside it
+  holds one file per run under way.
 - The API key ends on 10 February 2027 (the catalog carries the date). A 401 means it ran
   out: the owner makes a new one in the dashboard and saves it through the masked key window.
 - Proven on 12 November 2026: `boat run --type small` had a sandbox ready in under a second

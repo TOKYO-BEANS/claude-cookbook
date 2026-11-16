@@ -3,16 +3,22 @@
 // model: the limits below are numbers, and a job past them is the owner's to allow.
 //
 //   node boat-run.mjs [--type small|default|large] --timeout <seconds> [--push <folder>]
-//                     [--keep] -- <command> [arguments]
+//                     -- <command> [arguments]
 //
 // - Every run gets its size, --no-env (none of the account's stored secrets) and a timeout.
 // - --push sends a copy made here, never the folder itself: the files git tracks, with their
 //   uncommitted edits, and no untracked file. Gitleaks reads the copy first; a finding, or a
 //   scan with no result, stops the run. The copy is removed afterwards.
+// - --push needs the repository on the upload list, a file on this PC outside every
+//   repository: the script cannot tell code from customer data, so a repository is listed
+//   once, on purpose, and only when it tracks none.
+// - The sandbox is always deleted when the command ends: a kept one would run on outside
+//   these limits.
 // - Nothing starts while the plan cannot be read, while something could bill past it, or
 //   past the limits. "BOAT-RUN: not started: <why>" and exit 2; otherwise the exit code is
 //   the command's own.
 import { spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -30,15 +36,14 @@ export const RATE = { small: 0.5, default: 1, large: 2 };
 const oneLine = (text) => String(text).replace(/[^\x20-\x7e]+/g, " ").trim().slice(0, 300);
 
 export function parseArgs(argv) {
-  const out = { type: "small", timeout: null, push: null, keep: false, command: [] };
+  const out = { type: "small", timeout: null, push: null, command: [] };
   const cut = argv.indexOf("--");
   const own = cut < 0 ? argv : argv.slice(0, cut);
   out.command = cut < 0 ? [] : argv.slice(cut + 1);
   for (let i = 0; i < own.length; i += 1) {
     const a = own[i];
     const value = () => (i + 1 < own.length ? own[(i += 1)] : null);
-    if (a === "--keep") out.keep = true;
-    else if (a === "--type") {
+    if (a === "--type") {
       out.type = value();
       if (!Object.hasOwn(RATE, out.type ?? "")) return { error: "--type is small, default or large" };
     } else if (a === "--timeout") {
@@ -48,7 +53,7 @@ export function parseArgs(argv) {
     } else if (a === "--push") {
       out.push = value();
       if (!out.push) return { error: "--push takes a folder" };
-    } else return { error: `${oneLine(a)} is not an option of boat-run: size, timeout, upload and keep are the only ones` };
+    } else return { error: `${oneLine(a)} is not an option of boat-run: size, timeout and upload are the only ones` };
   }
   if (out.timeout === null) return { error: "--timeout <seconds> is required" };
   if (out.command.length === 0) return { error: "a command is required after --" };
@@ -79,7 +84,7 @@ export function gate(run, plan) {
 }
 
 export function boatArgv(run, stagedDir) {
-  return ["run", "--type", run.type, "--no-env", "--timeout", String(run.timeout), ...(run.keep ? ["--keep"] : []), ...(stagedDir ? ["--push", stagedDir] : []), "--", ...run.command];
+  return ["run", "--type", run.type, "--no-env", "--timeout", String(run.timeout), ...(stagedDir ? ["--push", stagedDir] : []), "--", ...run.command];
 }
 
 function links(dir, at = "") {
@@ -123,7 +128,8 @@ export function stage(folder) {
   }
 }
 
-// Gitleaks on the copy, with its default rules and no ignore file of the repository's own.
+// Gitleaks on the copy, with its default rules: no ignore file of the repository's own, and
+// a "gitleaks:allow" comment in a file does not quiet it.
 export function scan(dir, tmp) {
   const cfg = join(tmp, "gitleaks.toml");
   const none = join(tmp, "gitleaks-ignore");
@@ -133,7 +139,7 @@ export function scan(dir, tmp) {
   const env = { ...process.env };
   delete env.GITLEAKS_CONFIG;
   delete env.GITLEAKS_CONFIG_TOML;
-  const r = spawnSync("gitleaks", ["dir", dir, "--config", cfg, "--gitleaks-ignore-path", none, "--no-banner", "--redact", "--exit-code", "3", "--report-format", "json", "--report-path", report], { encoding: "utf8", env });
+  const r = spawnSync("gitleaks", ["dir", dir, "--config", cfg, "--gitleaks-ignore-path", none, "--ignore-gitleaks-allow", "--no-banner", "--redact", "--exit-code", "3", "--report-format", "json", "--report-path", report], { encoding: "utf8", env });
   if (r.error) return { ok: false, reason: "no result (gitleaks did not run)" };
   let found;
   try {
@@ -148,28 +154,49 @@ export function scan(dir, tmp) {
   return { ok: false, reason: `${found.length} finding${found.length === 1 ? "" : "s"} (${where.join("; ")}): a security finding goes to the owner` };
 }
 
-// One of LIMITS.active files, held while this process runs: several runs started in the
-// same second cannot all read "nothing is running" and pass. A file whose process is gone
-// is taken over.
-export function takeSlot(dir, { pid = process.pid, alive = isAlive, max = LIMITS.active } = {}) {
+// A file of its own for each run, held while the process lives, so that runs started in
+// the same second cannot all read "nothing is running" and pass. Each run writes its file
+// first and counts the others after: two that arrive together at the last place may both be
+// refused, and never both pass. Names are never reused, so clearing a dead run's file
+// cannot remove a live one's.
+export function takeSlot(dir, { pid = process.pid, alive = isAlive, max = LIMITS.active, token = randomUUID() } = {}) {
   mkdirSync(dir, { recursive: true });
-  for (let n = 0; n < max; n += 1) {
-    const file = join(dir, `slot-${n}`);
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        writeFileSync(file, String(pid), { flag: "wx" });
-        return { file, release: () => rmSync(file, { force: true }) };
-      } catch {
-        let holder = NaN;
-        try {
-          holder = Number(readFileSync(file, "utf8"));
-        } catch { /* gone in between: try again */ }
-        if (Number.isInteger(holder) && holder > 0 && alive(holder)) break;
-        rmSync(file, { force: true });
-      }
-    }
+  const mine = `run-${pid}-${token}`;
+  writeFileSync(join(dir, mine), "", { flag: "wx" });
+  let others = 0;
+  for (const name of readdirSync(dir)) {
+    const holder = /^run-([1-9][0-9]*)-/.exec(name);
+    if (!holder || name === mine) continue;
+    if (alive(Number(holder[1]))) others += 1;
+    else rmSync(join(dir, name), { force: true });
   }
-  return null;
+  const release = () => rmSync(join(dir, mine), { force: true });
+  if (others >= max) {
+    release();
+    return null;
+  }
+  return { file: join(dir, mine), release };
+}
+
+// How a repository is named on the upload list: its origin without the scheme, the user
+// and ".git", in lower case (github.com/owner/name), or its folder when it has no origin.
+export function repoKey(folder) {
+  const from = resolve(folder);
+  const git = (...a) => spawnSync("git", ["-C", from, ...a], { encoding: "utf8" });
+  const top = git("rev-parse", "--show-toplevel");
+  if (top.status !== 0) return null;
+  const origin = git("config", "--get", "remote.origin.url");
+  return normalKey(origin.status === 0 && origin.stdout.trim() ? origin.stdout.trim() : top.stdout.trim());
+}
+
+export function normalKey(text) {
+  return String(text).trim().replace(/\\/g, "/").replace(/^[a-z+]+:\/\//i, "").replace(/^[^@/]+@/, "").replace(/^([^/:]+):(?!\/)/, "$1/").replace(/\.git$/i, "").replace(/\/+$/, "").toLowerCase();
+}
+
+// One repository on a line; "#" starts a comment. A whole line must match: no patterns.
+export function onList(key, listText) {
+  if (!key) return false;
+  return String(listText).split(/\r?\n/).map((l) => normalKey(l.replace(/#.*$/, ""))).some((l) => l !== "" && l === key);
 }
 
 function isAlive(pid) {
@@ -191,13 +218,24 @@ function boat(argv, options) {
   return local ? spawnSync(process.execPath, [key, "boat", "BOAT_API_KEY", exe, ...argv], { ...options, env }) : spawnSync("boat", argv, { ...options, env });
 }
 
+const STATE = process.env.BOAT_RUN_STATE || join(homedir(), ".local", "share", "boat-run");
+const UPLOAD_LIST = join(STATE, "upload-allowed.txt");
+
 const REAL = {
   limits: () => {
     const r = boat(["limits", "--json"], { encoding: "utf8" });
     if (r.error || r.status !== 0) throw new Error(`boat limits ${r.error ? "did not run" : `exit ${r.status}`}`);
     return JSON.parse(r.stdout);
   },
-  slot: () => takeSlot(join(process.env.BOAT_RUN_STATE || join(homedir(), ".local", "share", "boat-run"), "slots")),
+  slot: () => takeSlot(join(STATE, "slots")),
+  permit: (folder) => {
+    const key = repoKey(folder);
+    let list = "";
+    try {
+      list = readFileSync(UPLOAD_LIST, "utf8");
+    } catch { /* no list yet: nothing is allowed */ }
+    return { ok: onList(key, list), key, list: UPLOAD_LIST };
+  },
   stage,
   scan,
   boat: (argv) => {
@@ -228,6 +266,10 @@ export function main(argv, deps = REAL) {
   let staged = null;
   try {
     if (run.push !== null) {
+      const permit = deps.permit(run.push);
+      if (!permit.ok) {
+        return stop(`${permit.key ? oneLine(permit.key) : "this folder"} is not on the upload list (${oneLine(permit.list)}): a repository is listed once, when it tracks code and no customer data; one that tracks customer data needs the owner's yes`);
+      }
       staged = deps.stage(run.push);
       const result = deps.scan(staged.dir, staged.tmp);
       if (!result.ok) return stop(`the secret scan of the upload: ${result.reason}`);
