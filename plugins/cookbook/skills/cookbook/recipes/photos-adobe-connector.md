@@ -6,9 +6,8 @@
   None of its tools sharpens or upscales: that stays on [photos.md](photos.md).
 - Proved on a business website's photos (10 November 2026): 26 masks (subject on every photo,
   skin on 8, window on 6) under a yellow-cast fix on 14 photos, straighten kept on 21 of 29, lens
-  blur on 14, expand on 4 and one cut-out. The owner, 15 November 2026: "it really helped alot
-  with photos/images".
-- An ordinary session does not load it (109 tool names; that was why it was switched off). A
+  blur on 14, expand on 4 and one cut-out.
+- An ordinary session does not load it (109 tool names: why it was switched off). A
   task brings it in with a child session that loads this connector and nothing else:
   `node <skill folder>/scripts/adobe-session.mjs run --brief <file> --out <folder> --allow
   <tool>,<tool> [--send <file>]`. Name each Adobe tool the piece needs; `tools --out <folder>`
@@ -18,8 +17,9 @@
 - The upload gate and the personal-data check in [photos.md](photos.md) hold here unchanged: no
   photo or film goes to Adobe without the owner's yes in the current chat naming the files, the
   Adobe account, the operation and the credits. Pass that yes word for word as `--owner-yes`:
-  the script refuses a yes that does not name each file, the Adobe account, the operation and
-  the credits, so ask with a yes that says all four. It cannot know what the owner said:
+  the script refuses a yes that does not name each file, the Adobe account, the operation as a
+  whole word ("masks" counts, "unmasked" does not) and a number of credits ("0 credits" is
+  one), so ask with a yes that says all four. It cannot know what the owner said:
   quoting a yes the owner did not give in this chat is breaking the gate. An upload stays in
   the owner's Creative Cloud: say so in the request.
 - Ask first, each time, for anything that stays in the owner's Adobe account: a Creative Cloud

@@ -41,8 +41,9 @@
 // - The system prompt (with the owner's yes and the file names) reaches the child in a
 //   file, not on its command line. That file and the session's debug log are in a
 //   temporary folder that is deleted after the run.
-// - The owner's yes is checked for what the gate asks of it: the Adobe account, the
-//   credits, each file by name, and the operation of every tool that is not read-only.
+// - The owner's yes is checked for what the gate asks of it: the Adobe account, a number
+//   of credits, each file by name, and the operation of every tool that is not read-only,
+//   as a whole word.
 // The script cannot know what the owner said. It checks that a yes is there and names the
 // files; whether the owner gave it is the recipe's gate (recipes/photos.md).
 import { spawn } from "node:child_process";
@@ -86,7 +87,8 @@ const TOOL_NAME = /^[A-Za-z0-9_-]{1,80}$/;
 const MODEL = /^claude-[a-z0-9-]{3,40}$/;
 // A file to send has an extension: "them" or "photo" would be "named" by any sentence.
 const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._ -]{0,110}\.[A-Za-z0-9]{1,8}$/;
-const NAME_CHAR = /[A-Za-z0-9_-]/;
+// A letter or a digit of any alphabet: "é" joins a word as "e" does.
+const NAME_CHAR = /[\p{L}\p{N}_-]/u;
 const CONTROL = /[\u0000-\u001f\u007f\u0085\u2028\u2029]/;
 // Characters a permission rule could read as a pattern. A folder with one is refused.
 const GLOB = /[*?[\]{}]/;
@@ -136,17 +138,21 @@ export function folderErrors(folder, { home = homedir(), exists = existsSync } =
   return errors;
 }
 
-// Whether the owner's yes names a file: the whole name, not a piece of a longer one. "a.jpg"
-// is not named by "banana.jpg", nor "1.jpg" by "11.jpg" or "1.jpg.bak"; a full stop or a
-// comma after the name is punctuation. Upper and lower case count as the same.
-export function namedIn(ownerYes, name) {
-  const text = String(ownerYes ?? "").toLowerCase();
-  const wanted = String(name).toLowerCase();
-  if (!wanted) return false;
-  for (let at = text.indexOf(wanted); at >= 0; at = text.indexOf(wanted, at + 1)) {
+// Whether a text holds a name or a word whole, not as a piece of a longer one: a letter, a
+// digit, a dash or an underscore on either side joins it to something longer, as does a
+// full stop before it, or after it with more of a name behind ("1.jpg.bak", "mask.jpg"). A
+// full stop or a comma after it is punctuation. With `plural`, one "s" at the end still
+// counts ("masks" holds "mask"). Upper and lower case count as the same.
+function wholeIn(said, wanted, plural = false) {
+  const text = String(said ?? "").toLowerCase();
+  const word = String(wanted).toLowerCase();
+  if (!word) return false;
+  for (let at = text.indexOf(word); at >= 0; at = text.indexOf(word, at + 1)) {
     const before = text[at - 1] ?? "";
-    const after = text[at + wanted.length] ?? "";
-    const next = text[at + wanted.length + 1] ?? "";
+    let end = at + word.length;
+    if (plural && text[end] === "s") end += 1;
+    const after = text[end] ?? "";
+    const next = text[end + 1] ?? "";
     const joinedBefore = NAME_CHAR.test(before) || before === ".";
     const joinedAfter = NAME_CHAR.test(after) || (after === "." && NAME_CHAR.test(next));
     if (!joinedBefore && !joinedAfter) return true;
@@ -154,29 +160,49 @@ export function namedIn(ownerYes, name) {
   return false;
 }
 
+// Whether the owner's yes names a file: the whole name, not a piece of a longer one. "a.jpg"
+// is not named by "banana.jpg", nor "1.jpg" by "11.jpg" or "1.jpg.bak".
+export const namedIn = (ownerYes, name) => wholeIn(ownerYes, name);
+
 // The words by which a yes names the operation of a tool that is not read-only. A tool that
 // is not here is named by its own name: an unknown tool is never covered by a general yes.
+// "background" was a word for the cut-out and was dropped: a yes mentions one in passing
+// ("the background is fine"). Words are read, not meanings: "no masks" still names a mask.
 export const OPERATIONS = Object.freeze({
   asset_add_file: ["upload"], asset_initialize_file_upload: ["upload"], asset_finalize_file_upload: ["upload"],
   asset_get_presigned_urls: ["upload"], asset_add_file_check_status: ["upload"],
   image_select_subject: ["mask"], image_select_by_prompt: ["mask"], image_invert_selection: ["mask"],
-  image_remove_background: ["cut-out", "cutout", "cut out", "background"],
+  image_remove_background: ["cut-out", "cutout", "cut out"],
   image_auto_straighten: ["straighten"], image_apply_lens_blur: ["blur"], image_generative_expand: ["expand"],
   image_crop_and_resize: ["crop", "resize"], image_crop_to_bounds: ["crop"],
   font_create_kit: ["font kit", "web project"], get_fontkit_embed_url: ["font kit", "web project"],
 });
 
+// A yes states the credits as a whole number in front of the word: "0 credits", "up to 300
+// credits". 0 is a number: the connector's calls have shown no charge. The number is the
+// owner's word, quoted to the child with the rest of the yes; the script cannot measure
+// what a run spends, so it checks that a number is there and holds no run to it. Digits
+// only, and the rule says what may come before them, not what may not: the start of the
+// yes, an opening bracket, or white space that does not follow another digit. So "1,000",
+// "1.000", "1 000", "1'000", "0.5", "-5" and "x5" are all refused instead of read as some
+// number, whatever mark or space groups the digits.
+const CREDITS = /(?<=^|[(\[]|(?:^|[^\p{N}\s])\s+)\d{1,7}\s+credits?(?![\p{L}\p{N}_-]|\.[\p{L}\p{N}_-])/u;
+export const CREDITS_GAP = "the credits it may spend, as a whole number in digits without a separator, after a space ('0 credits' or 'up to 300 credits')";
+
 // What a yes must hold, beside the file names (`sendList`), for a run that sends a file or
-// calls a tool that is not read-only: the account, the credits and each operation. Returns
-// what is missing. It reads words; whether the owner said them is the caller's gate.
+// calls a tool that is not read-only: the account, a number of credits and each operation,
+// as a whole word (a plural counts; "unmasked" and "cropped" do not) or as the tool's own
+// name, with or without the connector's prefix. "Adobe" is a whole word too: a file called
+// adobe.jpg does not name the account. Returns what is missing. It reads words; whether
+// the owner said them is the caller's gate.
 export function yesGaps(ownerYes, gatedTools) {
   const said = String(ownerYes ?? "").toLowerCase();
   const gaps = [];
-  if (!said.includes("adobe")) gaps.push("the Adobe account");
-  if (!said.includes("credit")) gaps.push("the credits it may spend");
+  if (!wholeIn(said, "adobe")) gaps.push("the Adobe account");
+  if (!CREDITS.test(said)) gaps.push(CREDITS_GAP);
   for (const tool of gatedTools) {
     const words = OPERATIONS[tool] ?? [];
-    if (![tool.toLowerCase(), ...words].some((w) => said.includes(w))) {
+    if (!wholeIn(said, tool) && !wholeIn(said, `${TOOL_PREFIX}${tool}`) && !words.some((w) => wholeIn(said, w, true))) {
       gaps.push(`the operation of ${tool} (${[...words, tool].map((w) => `'${w}'`).join(" or ")})`);
     }
   }
@@ -245,7 +271,7 @@ export function parseArgs(argv, checks = {}) {
   o.send = sendList(files, o.ownerYes);
   if (gated.length || o.send.length) {
     const gaps = yesGaps(o.ownerYes, gated);
-    if (gaps.length) throw fail(`--owner-yes does not name ${gaps.join("; ")}. A yes names the files, the Adobe account, the operation and the credits`);
+    if (gaps.length) throw fail(`--owner-yes does not name ${gaps.join("; ")}. A yes names the files, the Adobe account, the operation and a number of credits`);
   }
   return o;
 }

@@ -1,5 +1,117 @@
 # Handoff
 
+## 16 November 2026: the owner's yes is read by whole words and a number of credits (0.31.2)
+
+**Why.** Two things #55 left open, both in how `scripts/adobe-session.mjs` reads the owner's
+yes (`yesGaps`). This pull request closes them and removes no stop: a yes that passed before
+and is refused now is the only change in behaviour.
+
+**What changed.**
+- An operation word is matched as a whole word, with the boundary rule that file names
+  already had (`namedIn`; both now use one function). A plural still counts: "masks" names
+  `mask`, "uploads" names `upload`. "unmasked", "cropped", "uploaded" and a file called
+  `mask.jpg` do not. A tool's own name is matched whole as well, without a plural, and so
+  is "Adobe" (a file called `adobe.jpg` named the account). A letter of any alphabet joins
+  a word, also for file names. Words are read, not meanings: "no masks" names a mask.
+- "background" is no longer a word for `image_remove_background`: "the background is fine"
+  named the cut-out. "cut-out", "cutout", "cut out" and the tool's own name remain.
+- The yes must state a number of credits in front of the word: "0 credits", "up to 300
+  credits". The word "credits" alone, "no credits", "zero credits" and a number with a
+  separator ("1,000") are refused. 0 is valid. The script checks that the number is there;
+  it cannot measure what a run spends and holds no run to the number.
+- The two pages that describe the yes check say so (`recipes/photos-adobe-connector.md`,
+  `recipes/photos-adobe-connector-setup.md`). Tests: two new ones in
+  `scripts/adobe-session.test.mjs`.
+
+**The owner's decision on the credits.** GitHub's security review on the last commit of #55
+asked for a numeric credit cap in code and for "0 credits" to be refused. Put to the owner
+on 15 November 2026 with that comment, and with the reasoning that the connector's calls
+have shown no charge and that the script cannot measure spend, so a cap in the script would
+be a number it cannot hold a run to. Answer: "Merge now, rest in a follow-up (Recommended)".
+The owner then set this follow-up's scope in its brief, 15 November 2026: "The yes must
+state a number of credits, not only the word "credit" ("0 credits", "up to 300 credits"). 0
+stays valid." This pull request does that and no more of the comment: no cap is held in
+code.
+
+**Round 4 of #55**, the push the owner allowed beyond the three rounds. The AI review of its
+last commit (`a365479`): one low finding, that `yesGaps` matched operation words as plain
+substrings; fixed here. GitHub's security review added two comments on that commit: the
+credits number (above, taken into this pull request) and the brief again (it goes into the
+prompt, fenced; the review proposed stripping instructions from it). The second is the
+earlier finding on the brief with another proposed fix; the owner accepted it with the same
+answer. That acceptance covers that comment and no other finding.
+
+**From #55** (the Adobe connector on demand, 0.31.0, three entries below). It merged as
+`e5a2527` on 15 November 2026. The release check of that commit is `verified` (execution
+1532); the `sa-release` run `cookbook-55-merge` ended `unknown` because the `ai-review` job
+is skipped on a merge commit, as on every one. Plugin 0.31.0 was then installed on this PC
+and proved: a run from the installed path made three read-only Adobe calls
+(`adobe_mandatory_init`, `get_account_type`, `font_search`) and exited 0. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-connector-on-demand/`
+(`proof-installed-0.31.0/`, `release/`).
+
+**From #56 and #58** (the two entries below), which merged while this pull request was
+open. #56 took 0.31.1, so this one is 0.31.2; this branch took `main` in by a merge commit
+(`HANDOFF.md` was the only conflict). #58 merged as `d951c09`; the release check of that
+commit is `verified` and acknowledged (execution 1534; log `release-cookbook-58-merge.log`
+in `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`).
+
+**The merge gate stopped this pull request, and the owner decided.** The `sa-release` run
+`cookbook-57-merge` (15 November 2026, late) ended `failed` and merged nothing: the check
+`Graphify Formal Verification` had run on the head commit (`0fed36e`) and ended neutral
+("0/2 PR-changed function(s) verified · 2 not verified (1 vacuous, 1 unsupported)"). The
+merge script sets that check aside only when its title says it did not run; a neutral one
+that ran counts as not passed. It cannot pass here: it proves that old and new code behave
+the same, and this change alters behaviour on purpose. Every other check had passed and
+the AI review had no findings. Put to the owner with the question tool: merge #57 once as
+an exception for this pull request only, change the gate first in Stack Atlas, or leave it
+open? Answer: "Merge #57 once (Recommended)". That covers this pull request and no other;
+the gate is unchanged. The run is recorded in
+`~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-yes-whole-words/release/`.
+- Dead end: getting that check to pass on a pull request that changes what a function does.
+  Reason: above. Owner: the owner (a change to the gate loosens a check). Clears when the
+  gate in Stack Atlas (`merge-when-green.sh`, `outsideGate`) has a rule for a run that
+  found nothing different, or Graphify reports such a run as passed.
+- Seen beside it: Graphify posts that check about four minutes after a push. #55 and #58
+  merged before it arrived (on #58's head it ended neutral 102 seconds after the merge), so
+  the gate never saw it there. Not changed here: it is Stack Atlas's script.
+
+**Reviewed before the first push** by a `cookbook:review` subagent that did not build it:
+nothing high; one medium (this entry did not show the owner's words on 0; they are quoted
+above now) and five low, all taken: the credits pattern read "1 000" and a minus sign as
+numbers, "Adobe" was still a plain substring, a letter outside a–z did not join a word, a
+comment claimed more than the word list does, and three behaviours had no test.
+
+**Review round 1** (of three), on `0fed36e`: the AI review had no findings, Graphify's
+review none, and GitHub's security review did not comment.
+
+**Review round 2**, on `6175fbc` (the commit that took `main` in). The AI review: one low
+finding. The credits pattern listed the marks that may not stand before the number, so
+"1  000 credits" (two spaces), a narrow no-break space and "1'000 credits" still passed on
+their last digit group. The pattern now says what may come before the digits instead: the
+start of the yes, an opening bracket, or white space that does not follow another digit.
+
+**Proved for this pull request.** `npm test` passes (346 tests with `main` taken in).
+`--dry-run` refuses a yes with the word
+"credits" and no number, and one that says "the background is fine" for the cut-out, and
+accepts "0 credits" with "masks". No upload was made and no `--owner-yes` was passed to a
+real run.
+
+**Outstanding.**
+- The first photo run through the script: it needs the owner's yes, and will show which asset
+  tools an upload takes and which steps (a PUT to a presigned link, a download) the calling
+  chat does itself, since the child has no shell.
+- The Adobe plan started as a 7-day trial on 10 November 2026 and turns paid on day 7. Keeping
+  or cancelling it is the owner's decision.
+- The merge commit, the release check, the install and the proof run of this pull request go
+  into the next Cookbook pull request.
+- The merge gate and a `Graphify Formal Verification` that ran and ended neutral (above):
+  a Stack Atlas job, and the owner's yes, since it changes a check.
+- The fixed set of tasks measured before and after is done (#56, two entries below); the
+  rest of that entry's outstanding list stands: what was not measured, the unproven T3
+  scheduled task, Stagehand's review date of 28 November (the owner chose to keep it: do
+  not ask again), the Proton Pass CLI reported signed out on 15 November and not rechecked,
+  the two register pages still read in ranges, the token counter not retried.
 ## 15 November 2026 (late night): the measuring script, two findings from the last review of #56
 
 No plugin file changes, so the plugin stays 0.31.1.
