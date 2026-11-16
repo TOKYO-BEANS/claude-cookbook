@@ -9,7 +9,9 @@
 // Safety rules kept here:
 // - Only `~/.claude/plugins/installed_plugins.json`, `known_marketplaces.json`,
 //   the folder names and SKILL.md under `~/.claude/skills`, `~/.local/share`
-//   and `~/.local/bin` are read. No credential file, no `.env`, nothing else.
+//   and `~/.local/bin`, and `~/.local/share/stack-updates/projects.json` (which
+//   repository a project key means) are read. No credential file, no `.env`,
+//   nothing else.
 // - The only commands that run are the fixed table's version commands (and
 //   `claude mcp list` from `findUnlisted`), never with a shell.
 // - A version that cannot be read is "unreadable" with a message: never "up to
@@ -34,6 +36,7 @@ const FOLDER = /^[a-zA-Z0-9._-]{1,80}$/;
 const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const PLUGIN_ID = /^[a-zA-Z0-9._-]{1,80}@[a-zA-Z0-9._-]{1,80}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const PROJECT_KEY = /^[a-z0-9-]{1,40}$/;
 const SCRIPT_EXT = /\.(exe|cmd|bat|com|ps1|mjs|js|sh)$/i;
 
 const cause = (e) => String(e?.message ?? e).split("\n")[0].slice(0, 180) || "unreadable";
@@ -253,12 +256,38 @@ async function readSkill(installed, home) {
   return { state: "read", version: createHash("sha256").update(body).digest("hex").slice(0, 16) };
 }
 
-async function readProject(installed, gh) {
-  if (!REPO.test(String(installed.repository))) return unreadable("the repository must be owner/name");
+// The catalog is public and a project's repository may be private, so a project
+// part names a key and this file on the PC, outside every repository, names the
+// repository: `{ "<key>": "owner/name" }`. `{ repository }`, or `{ message }`.
+const PROJECTS_FILE = "~/.local/share/stack-updates/projects.json";
+async function resolveProject(installed, home) {
+  if (typeof installed?.project !== "string" || !PROJECT_KEY.test(installed.project))
+    return { message: `the project must be a key of ${PROJECTS_FILE}: lower-case letters, digits and hyphens` };
+  const map = await readJson(join(home, ".local", "share", "stack-updates", "projects.json"));
+  if (map.missing) return { message: `${PROJECTS_FILE} does not exist: it maps a project key to its repository` };
+  if (!isObject(map.value) || !Object.hasOwn(map.value, installed.project)) return { message: `${installed.project} is not in ${PROJECTS_FILE}` };
+  const repository = map.value[installed.project];
+  if (typeof repository !== "string" || !REPO.test(repository)) return { message: `${installed.project} in ${PROJECTS_FILE} must be owner/name` };
+  return { repository };
+}
+
+// The repository of a project part, for the report on this PC; null when the map
+// does not name it. Never throws.
+export async function projectRepository(installed, home) {
+  try {
+    return (await resolveProject(installed, home)).repository ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function readProject(installed, gh, home) {
   if (!NPM_NAME.test(String(installed.package))) return unreadable("the package must be an npm package name");
-  const text = await ghFile(gh, installed.repository, "package-lock.json");
+  const { repository, message } = await resolveProject(installed, home);
+  if (!repository) return unreadable(message);
+  const text = await ghFile(gh, repository, "package-lock.json");
   const version = JSON.parse(text)?.packages?.[`node_modules/${installed.package}`]?.version;
-  if (version === undefined) return notFound(`${installed.package} is not in the lockfile of ${installed.repository}`);
+  if (version === undefined) return notFound(`${installed.package} is not in the lockfile of ${repository}`);
   if (!cleanText(version)) return unreadable(`${installed.package} has no usable version in that lockfile`);
   return { state: "read", version };
 }
@@ -272,7 +301,7 @@ export async function readInstalled(installed, key, { home, run, gh } = {}) {
       case "pinned": return await readPinned(installed, home);
       case "command": return await readCommand(key, run, home);
       case "skill": return await readSkill(installed, home);
-      case "project": return await readProject(installed, gh);
+      case "project": return await readProject(installed, gh, home);
       case "hosted": return { state: "hosted" };
       case "none": return { state: "none" };
       default: return unreadable(`unknown installed kind ${String(installed?.kind).slice(0, 40)}`);

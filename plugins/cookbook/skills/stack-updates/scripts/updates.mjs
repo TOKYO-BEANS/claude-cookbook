@@ -56,7 +56,7 @@ import { NOTES, decide, decideAll, warnsOf } from "./lib/apply.mjs";
 import { READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
 import { dueDates, runChecks } from "./lib/connect.mjs";
 import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
-import { defaultRun, findUnlisted, readInstalled } from "./lib/inventory.mjs";
+import { defaultRun, findUnlisted, projectRepository, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
 import { quietLine, renderReport } from "./lib/report.mjs";
 import { markSeen, readSeen } from "./lib/notice.mjs";
@@ -480,7 +480,7 @@ async function stageCompare(ctx, loaded = loadStateInfo(ctx)) {
     const e = ctx.byKey.get(c.key);
     c.name = e ? labelOf(e) : c.key;
     c.watching = e?.tool.lifecycle === "watching";
-    if (e?.part.installed?.kind === "project") c.repository = e.part.installed.repository;
+    if (e?.part.installed?.kind === "project") c.repository = await projectRepository(e.part.installed, ctx.home);
     if (c.kind === "installed-changed") c.source = linkFor(e?.part.feed, c);
   }
   result.stateReset = loaded.fresh && loaded.existed;
