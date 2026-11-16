@@ -229,18 +229,31 @@ test("Windows: the launcher as a process, by several spellings of its path", { s
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("Windows: a key saved by agent-key.ps1 reads the same by both routes", { skip: !ffi && "needs Windows and node:ffi", timeout: 300000 }, () => {
+// This test is the one place the real store script runs, so it needs PowerShell and waits as
+// long as PowerShell takes. On a loaded PC a script scan can hold each script block for 30.2
+// seconds, and one run of agent-key.ps1 crosses eight (the script, four in its module import,
+// one block, two for the first Utility command): 242 seconds, measured four times out of four
+// during a burst of process starts on 16 November 2026. The limit ends a process that hangs.
+// It is no measure of the store: a slow start must not fail the test, so it stays above the
+// slowest run there is.
+const STORE_SCANS_PER_RUN = 8;
+const SCAN_WAIT_MS = 30200;
+const STORE_RUN_LIMIT_MS = STORE_SCANS_PER_RUN * SCAN_WAIT_MS + 60000;
+const LAUNCHER_LIMIT_MS = 60000;
+
+test("Windows: a key saved by agent-key.ps1 reads the same by both routes", { skip: !ffi && "needs Windows and node:ffi", timeout: 2 * STORE_RUN_LIMIT_MS + LAUNCHER_LIMIT_MS + 30000 }, () => {
   const value = "synthetic-store-key-42";
   const dir = home();
   try {
     const env = { ...process.env, USERPROFILE: dir, SYN_SOURCE: value };
     const ps = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", store];
-    const saved = spawnSync("powershell.exe", [...ps, "-Mode", "import", "-Name", "synthetic", "-FromEnv", "SYN_SOURCE"], { env, encoding: "utf8", timeout: 140000 });
+    const saved = spawnSync("powershell.exe", [...ps, "-Mode", "import", "-Name", "synthetic", "-FromEnv", "SYN_SOURCE"], { env, encoding: "utf8", timeout: STORE_RUN_LIMIT_MS });
+    assert.notEqual(saved.error?.code, "ETIMEDOUT", `agent-key.ps1 -Mode import did not end in ${STORE_RUN_LIMIT_MS / 1000} seconds: a hang, not a slow script scan`);
     assert.equal(saved.status, 0, saved.stderr);
     const check = `process.exit(process.env.SYN_KEY === ${JSON.stringify(value)} ? 7 : 9)`;
-    const run = spawnSync(process.execPath, [launcher, "synthetic", "SYN_KEY", process.execPath, "-e", check], { env, encoding: "utf8", timeout: 60000 });
+    const run = spawnSync(process.execPath, [launcher, "synthetic", "SYN_KEY", process.execPath, "-e", check], { env, encoding: "utf8", timeout: LAUNCHER_LIMIT_MS });
     assert.equal(run.status, 7, run.stderr);
-    const out = runPowerShell([...ps, "-Mode", "headers", "-Name", "synthetic"], 140000, { env });
+    const out = runPowerShell([...ps, "-Mode", "headers", "-Name", "synthetic"], STORE_RUN_LIMIT_MS, { env });
     assert.equal(out, headers(value));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
