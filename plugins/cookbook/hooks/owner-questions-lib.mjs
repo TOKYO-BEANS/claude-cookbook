@@ -25,7 +25,7 @@ export function phraseCheck(text) {
 const ownThread = (input, threadId) => !input?.threadId || input.threadId === threadId;
 
 const isPrompt = (o) => {
-  if (o.type !== "user" || o.isMeta || o.isSidechain) return false;
+  if (o.type !== "user" || o.isMeta || o.isSidechain || o.isCompactSummary) return false;
   const c = o.message?.content;
   return typeof c === "string" || (Array.isArray(c) && c.some((x) => x?.type === "text"));
 };
@@ -62,8 +62,10 @@ export function readTranscript(text, { threadId } = {}) {
     for (const c of o.message.content) {
       if (c?.type !== "tool_use") continue;
       turnCalls.push({ name: c.name, input: c.input ?? {} });
-      if (c.name === UPDATE && c.input?.action === "rename" && ownThread(c.input, threadId)) {
-        marked = String(c.input.title ?? "").startsWith(MARKER.trim());
+      if (String(c.name).startsWith("mcp__t3-code__")) t3Tools = true; // tools loaded up front
+      if (c.name === UPDATE && ownThread(c.input, threadId)) {
+        if (c.input?.action === "rename") marked = String(c.input.title ?? "").startsWith(MARKER.trim());
+        if (c.input?.action === "regenerate_title") marked = false;
       }
     }
   }
@@ -106,17 +108,34 @@ export function decide({ mode, turn, verdict }) {
   return { problems, reason: problems.map((p) => text[p]).join("\n\n") };
 }
 
+// Only these codes are shown; any other text from the broker or Jev becomes "other".
+export function errorCode(error) {
+  const e = String(error ?? "");
+  const fixed = ["no broker yet (started)", "no broker yet (starting)", "no broker yet (with-key.mjs not found)", "no broker", "no key", "version"];
+  if (fixed.includes(e)) return e;
+  const http = /^HTTP (\d{3})$/.exec(e);
+  if (http) return `HTTP ${http[1]}`;
+  if (/^(broker )?timed out after \d+ ms$/.test(e)) return "timed out";
+  if (e.startsWith("malformed")) return "malformed answer";
+  if (e.startsWith("network error")) return "network error";
+  if (e.startsWith("broker")) return "broker error";
+  return "other";
+}
+const unit = (n) => typeof n === "number" && n >= 0 && n <= 1;
+const shapeOk = (a) => a && typeof a === "object" && Object.keys(a).length === 2 && unit(a.owner_item) && unit(a.declares_done);
+
 export function verdictFrom(answer, text) {
   const phrases = phraseCheck(text);
+  if (answer?.ok && !shapeOk(answer.answers)) answer = { ok: false, error: "malformed answer" };
   if (answer?.ok) {
     return {
       source: "jev",
       owner: answer.answers.owner_item >= OWNER_THRESHOLD,
       done: answer.answers.declares_done >= DONE_THRESHOLD || phrases.done,
-      scores: answer.answers,
+      scores: { owner_item: answer.answers.owner_item, declares_done: answer.answers.declares_done },
     };
   }
-  return { source: "phrases", owner: phrases.owner, done: phrases.done, error: String(answer?.error ?? "no answer") };
+  return { source: "phrases", owner: phrases.owner, done: phrases.done, error: errorCode(answer?.error) };
 }
 
 // The whole hook. Returns the JSON to print, or null to let the stop go ahead. Never throws.

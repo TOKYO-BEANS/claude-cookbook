@@ -9,7 +9,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { askBroker } from "./owner-questions-broker.mjs";
+import { askBroker, pipeName } from "./owner-questions-broker.mjs";
 import { run } from "./owner-questions-lib.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -24,7 +24,7 @@ const log = (line) => {
   appendFileSync(join(stateDir, "log.jsonl"), `${JSON.stringify(line)}\n`);
 };
 
-function startBroker() {
+function startBroker(pipe) {
   const mark = join(stateDir, "broker-start.json");
   try {
     const last = JSON.parse(readFileSync(mark, "utf8")).at;
@@ -35,24 +35,28 @@ function startBroker() {
   if (!existsSync(withKey)) return "with-key.mjs not found";
   mkdirSync(stateDir, { recursive: true });
   writeFileSync(mark, JSON.stringify({ at: Date.now() }));
-  const child = spawn(process.execPath, [withKey, JEV_KEY, "TYPESAFE_API_KEY", process.execPath, join(here, "owner-questions-broker.mjs")], {
+  const child = spawn(process.execPath, [withKey, JEV_KEY, "TYPESAFE_API_KEY", process.execPath, join(here, "owner-questions-broker.mjs"), pipe], {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
   });
+  child.on("error", () => {});
   child.unref();
   return "started";
 }
 
 async function classify(text) {
   const deadline = Date.now() + BUDGET_MS;
-  let answer = await askBroker(text, { timeoutMs: 7000 });
-  if (answer.ok || answer.error !== "no broker") return answer;
-  const start = startBroker();
-  // A cold start reads the key (2 to 27 s); wait while the budget lasts, then fall back.
-  while (Date.now() < deadline - 500) {
+  const pipe = pipeName(stateDir);
+  let answer = await askBroker(text, { pipe, timeoutMs: 7000 });
+  if (answer.ok || !["no broker", "version"].includes(answer.error)) return answer;
+  if (answer.error === "version") await new Promise((r) => setTimeout(r, 300)); // the old broker is closing
+  const start = startBroker(pipe);
+  // Only a start made now is waited for: a cold start reads the key (2 to 27 s). A start that
+  // cannot happen, or one an earlier turn made, falls back at once.
+  while (start === "started" && Date.now() < deadline - 500) {
     await new Promise((r) => setTimeout(r, 500));
-    answer = await askBroker(text, { timeoutMs: Math.max(500, deadline - Date.now()) });
+    answer = await askBroker(text, { pipe, timeoutMs: Math.max(500, deadline - Date.now()) });
     if (answer.error !== "no broker") return answer;
   }
   return { ok: false, error: `no broker yet (${start})` };
