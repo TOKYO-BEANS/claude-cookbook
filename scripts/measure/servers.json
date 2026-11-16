@@ -12,9 +12,7 @@
   "plugins": [
     "cloudflare@cloudflare"
   ],
-  "userServers": [
-    "cloudflare-docs",
-    "firecrawl",
-    "graphify"
-  ]
+  "deferrable": {
+    "firecrawl": "7b4fbca1567f307fa5a82ea7ff09d7c86c23aca0927f16a41d872a80cfc8df5b"
+  }
 }

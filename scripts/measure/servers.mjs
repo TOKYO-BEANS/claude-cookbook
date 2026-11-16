@@ -5,7 +5,9 @@
 //   without:<server>         one server denied (`deniedMcpServers`, added to the user's own list)
 //   plugin-off:<plugin@src>  one plugin disabled: its server, skills and agents all leave
 //   defer:<server>           one user-scope server with `"alwaysLoad": false`: it stays connected, and
-//                            the tools its author marked to load in full wait behind tool search
+//                            the tools its author marked to load in full wait behind tool search.
+//                            Only an entry recorded in servers.json by its fingerprint
+//                            (`servers.mjs fingerprint --server <name>`) is ever copied for this.
 // A server's cost is mean(all) - mean(without:<server>), with the range the repeats allow.
 //   node scripts/measure/servers.mjs run --out <dir> --arm <arm> [--reps 3] [--cap 1] [--limit 15] [--model <id>]
 //   node scripts/measure/servers.mjs report --out <dir>
@@ -17,6 +19,7 @@
 // The run can call nothing: `dontAsk` with no allow rule. It is on the Claude plan login, with a
 // spend cap per run and a stop for the batch. Rules: recipes/scripted-runs.md and -rules.md.
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
@@ -36,7 +39,7 @@ export const loadServers = (file = fileURLToPath(new URL("./servers.json", impor
 export const serversOfPlugin = (plugin, servers) => servers.filter((s) => s.startsWith(`plugin:${plugin.split("@")[0]}:`));
 
 // An arm's name, read strictly: an unknown server or plugin stops the command before a paid run.
-export function parseArm(arm, { servers, plugins, userServers = [] }) {
+export function parseArm(arm, { servers, plugins, deferrable = {} }) {
   const base = { arm, denied: [], pluginOff: null, defer: null };
   if (arm === "all") return base;
   if (arm === "none") return { ...base, denied: [...servers] };
@@ -44,28 +47,38 @@ export function parseArm(arm, { servers, plugins, userServers = [] }) {
   const name = rest.join(":");
   if (kind === "without" && servers.includes(name)) return { ...base, denied: [name] };
   if (kind === "plugin-off" && plugins.includes(name)) return { ...base, pluginOff: name };
-  if (kind === "defer" && userServers.includes(name)) return { ...base, defer: name };
+  if (kind === "defer" && Object.hasOwn(deferrable, name)) return { ...base, defer: name };
   throw new Error(`unknown arm: ${arm}`);
 }
 
 // A `defer` arm passes the user's own entry for the server again with `"alwaysLoad": false`
-// (Claude Code 2.1.287 or later). The entry goes into a temporary file, so only an entry that
-// can hold no key is copied: a remote server with these fields and no others, whose URL has no
-// user part, no query and no path segment that could be a key. A command, its arguments, an
-// `env` or literal `headers` are refused, whatever they hold.
+// (Claude Code 2.1.287 or later). The entry goes into a temporary file, and no check of its
+// text can prove that it holds no key, so only an entry a person has read and recorded is
+// copied: its fingerprint must be the one in servers.json. On top of that it must be a remote
+// server with these fields and no others, on an https URL with a plain DNS host name, no user
+// part, no query and no long path segment. Anything else is refused, whatever it holds.
 const DEFER_FIELDS = new Set(["type", "url", "headersHelper", "timeout", "alwaysLoad"]);
+const DNS_LABEL = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
 export function plainUrl(text) {
   let u;
   try { u = new URL(String(text)); } catch { return false; }
-  if (u.protocol !== "https:" || u.username || u.password || u.search || u.hash) return false;
+  if (u.protocol !== "https:" || u.username || u.password || u.search || u.hash || u.port) return false;
+  const labels = u.hostname.split(".");
+  if (labels.length < 2 || !labels.every((l) => DNS_LABEL.test(l)) || !/[a-z]/.test(labels.at(-1))) return false;
   return u.pathname.split("/").every((seg) => seg.length <= 12 && /^[A-Za-z0-9._~-]*$/.test(seg));
 }
-export function deferConfig(name, userConfig) {
+// The fingerprint of an entry: SHA-256 over its fields in a fixed order, `alwaysLoad` left out.
+export function entryFingerprint(entry) {
+  const fields = Object.keys(entry).filter((k) => k !== "alwaysLoad").sort().map((k) => [k, entry[k]]);
+  return createHash("sha256").update(JSON.stringify(fields)).digest("hex");
+}
+export function deferConfig(name, userConfig, deferrable = {}) {
   const entry = userConfig?.mcpServers?.[name];
   if (!entry) throw new Error(`no user-scope server named ${name}`);
   const extra = Object.keys(entry).filter((k) => !DEFER_FIELDS.has(k));
   if (extra.length) throw new Error(`${name}: its entry has ${extra.join(", ")}, so it is not copied`);
   if (!["http", "sse", "ws"].includes(entry.type) || !plainUrl(entry.url)) throw new Error(`${name}: its URL could hold a key, so it is not copied`);
+  if (!Object.hasOwn(deferrable, name) || entryFingerprint(entry) !== deferrable[name]) throw new Error(`${name}: its entry is not the one recorded in servers.json, so it is not copied`);
   return { mcpServers: { [name]: { ...entry, alwaysLoad: false } } };
 }
 
@@ -220,6 +233,35 @@ function session(argv, cwd, debugFile, expected) {
   });
 }
 
+const userConfig = () => JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8"));
+
+// One session in a temporary folder that is deleted whatever happens: it holds the arm's
+// settings, the session's debug log and, for a `defer` arm, the copied entry.
+async function oneRun({ arm, catalog, expected, model, cap, rep }) {
+  const temp = mkdtempSync(join(tmpdir(), "measure-servers-"));
+  try {
+    const work = join(temp, "work");
+    mkdirSync(work);
+    const settings = join(temp, "settings.json");
+    writeFileSync(settings, JSON.stringify(armSettings(arm)));
+    const debug = join(temp, "debug.log");
+    let mcpConfig = null;
+    if (arm.defer) {
+      mcpConfig = join(temp, "mcp.json");
+      writeFileSync(mcpConfig, JSON.stringify(deferConfig(arm.defer, userConfig(), catalog.deferrable)));
+    }
+    const r = await session(claudeArgs({ settings, model, cap, debug, mcpConfig }), work, debug, expected);
+    const others = catalog.servers.filter((n) => !expected.includes(n));
+    return buildRow({
+      arm: arm.arm, rep, model, cap, expected, all: catalog.servers, waitMs: r.waitMs, exit: r.exit, stopped: r.stopped,
+      states: { expected: serverStates(r.debugText, expected), other: serverStates(r.debugText, others) },
+      summary: summarizeStream(r.out.split("\n"), model),
+    });
+  } finally {
+    try { rmSync(temp, { recursive: true, force: true }); } catch { console.log(`could not delete ${temp}: delete it by hand, it holds the session's debug log`); }
+  }
+}
+
 async function run(opts) {
   if (!opts.out || !opts.arm) throw new Error("run needs --out and --arm");
   const { cap, limit, reps } = parseLimits(opts);
@@ -234,29 +276,7 @@ async function run(opts) {
   const have = rows.filter((r) => r.arm === arm.arm && !r.problem).length;
   for (let rep = have + 1; rep <= reps; rep += 1) {
     if (spent + cap > limit) { console.log(`stopped: USD ${spent.toFixed(2)} spent, one more run could pass the limit of ${limit}`); process.exitCode = 3; return; }
-    const temp = mkdtempSync(join(tmpdir(), "measure-servers-"));
-    let row;
-    try {
-      const work = join(temp, "work");
-      mkdirSync(work);
-      const settings = join(temp, "settings.json");
-      writeFileSync(settings, JSON.stringify(armSettings(arm)));
-      const debug = join(temp, "debug.log");
-      let mcpConfig = null;
-      if (arm.defer) {
-        mcpConfig = join(temp, "mcp.json");
-        writeFileSync(mcpConfig, JSON.stringify(deferConfig(arm.defer, JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8")))));
-      }
-      const r = await session(claudeArgs({ settings, model, cap, debug, mcpConfig }), work, debug, expected);
-      const others = catalog.servers.filter((n) => !expected.includes(n));
-      row = buildRow({
-        arm: arm.arm, rep, model, cap, expected, all: catalog.servers, waitMs: r.waitMs, exit: r.exit, stopped: r.stopped,
-        states: { expected: serverStates(r.debugText, expected), other: serverStates(r.debugText, others) },
-        summary: summarizeStream(r.out.split("\n"), model),
-      });
-    } finally {
-      try { rmSync(temp, { recursive: true, force: true }); } catch { console.log(`could not delete ${temp}: delete it by hand, it holds the session's debug log`); }
-    }
+    const row = await oneRun({ arm, catalog, expected, model, cap, rep });
     appendFileSync(join(opts.out, "summary.jsonl"), `${JSON.stringify(row)}\n`);
     spent += row.costUsd;
     console.log(`${row.arm} #${rep}: first request ${row.firstContext} tokens, waited ${Math.round(row.waitMs / 1000)} s, USD ${row.costUsd.toFixed(3)}${row.costReported ? "" : " (the cap: no cost reported)"}, ${row.planLogin ? "plan login" : "NOT the plan login"}${row.problem ? `, NOT COUNTED: ${row.problem}` : ""}`);
@@ -276,11 +296,16 @@ export function reportText(rows) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const usage = "usage: servers.mjs run --out <dir> --arm all|none|without:<server>|plugin-off:<plugin@source>|defer:<server> [--reps 3] [--cap 1] [--limit 15] [--model <id>] | report --out <dir>";
+  const usage = "usage: servers.mjs run --out <dir> --arm all|none|without:<server>|plugin-off:<plugin@source>|defer:<server> [--reps 3] [--cap 1] [--limit 15] [--model <id>] | report --out <dir> | fingerprint --server <name>";
   try {
     const [cmd, ...rest] = process.argv.slice(2);
     const opts = parseFlags(rest);
     if (cmd === "run") await run(opts);
+    else if (cmd === "fingerprint" && opts.server) {
+      const entry = userConfig().mcpServers?.[opts.server];
+      if (!entry) throw new Error(`no user-scope server named ${opts.server}`);
+      console.log(entryFingerprint(entry));
+    }
     else if (cmd === "report" && opts.out) { const text = reportText(readRows(opts.out)); writeFileSync(join(opts.out, "report.md"), `${text}\n`); console.log(text); }
     else { console.error(usage); process.exit(2); }
   } catch (e) {

@@ -24,7 +24,9 @@ not in a headless run and was not measured.
   load in full (five of Firecrawl's: 10,031 tokens).
 - **Measure before moving**: `scripts/measure/servers.mjs` in the Cookbook repository
   (`run --arm all`, `without:<server>`, `plugin-off:<plugin>`, `defer:<server>`, then
-  `report`). Under about 100 tokens, leave the server alone. Which servers move is the
+  `report`). `defer` copies only a server entry recorded in `servers.json` by its
+  fingerprint (`fingerprint --server <name>`): read the entry before recording it, a key in
+  it would go into a temporary file. Under about 100 tokens, leave the server alone. Which servers move is the
   owner's choice: ask once, with the saving, the use and what the move costs.
 - **Three ways out of a session start, lightest first.**
   1. `"alwaysLoad": false` in the server's own entry (user scope, `claude mcp add-json`;

@@ -1,26 +1,31 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { aggregate, armSettings, deferConfig, buildRow, claudeArgs, expectedServers, loadServers, otherModel, parseArm, parseFlags, parseLimits, plainUrl, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
+import { aggregate, armSettings, deferConfig, entryFingerprint, buildRow, claudeArgs, expectedServers, loadServers, otherModel, parseArm, parseFlags, parseLimits, plainUrl, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
 
 // A fixed list for the tests; the live one (servers.json) follows this PC's setup.
 const catalog = {
   servers: ["claude.ai Claude Docs", "cloudflare-docs", "firecrawl", "graphify", "plugin:cloudflare:cloudflare", "plugin:context-mode:context-mode", "plugin:openseo:openseo", "plugin:parallel:parallel-search", "stagehand"],
   plugins: ["cloudflare@cloudflare", "openseo@openseo"],
-  userServers: ["cloudflare-docs", "firecrawl", "graphify", "stagehand"],
+  deferrable: { firecrawl: "0".repeat(64) },
 };
 const log = (pairs) => pairs.map(([n, s]) => `2026-11-15T22:47:33.718Z [DEBUG] MCP server "${n}": ${s === "connected" ? "Successfully connected (transport: http) in 164ms" : "Connection failed after 300ms"}`).join("\n");
 
-test("the server list names each server once; each plugin and each user-scope server is in it", () => {
+test("the server list names each server once; each plugin has a server in it, and a deferrable server is a user-scope one recorded by a fingerprint", () => {
   const live = loadServers();
   assert.equal(new Set(live.servers).size, live.servers.length);
   for (const p of live.plugins) assert.ok(serversOfPlugin(p, live.servers).length > 0, p);
-  for (const s of live.userServers) assert.ok(live.servers.includes(s) && !s.startsWith("plugin:") && !s.startsWith("claude.ai "), s);
+  for (const [s, print] of Object.entries(live.deferrable)) {
+    assert.ok(live.servers.includes(s) && !s.startsWith("plugin:") && !s.startsWith("claude.ai "), s);
+    assert.match(print, /^[0-9a-f]{64}$/, s);
+  }
 });
 
 test("an arm is read strictly: an unknown server, plugin or kind stops the command", () => {
   assert.deepEqual(parseArm("all", catalog), { arm: "all", denied: [], pluginOff: null, defer: null });
   assert.equal(parseArm("defer:firecrawl", catalog).defer, "firecrawl");
   assert.throws(() => parseArm("defer:plugin:openseo:openseo", catalog), /unknown arm/, "a plugin's server has no entry of the user's to change");
+  assert.throws(() => parseArm("defer:graphify", catalog), /unknown arm/, "a server whose entry is not recorded is not deferred");
+  assert.throws(() => parseArm("defer:toString", catalog), /unknown arm/);
   assert.deepEqual(parseArm("none", catalog).denied, catalog.servers);
   assert.deepEqual(parseArm("without:plugin:openseo:openseo", catalog).denied, ["plugin:openseo:openseo"]);
   assert.equal(parseArm("plugin-off:openseo@openseo", catalog).pluginOff, "openseo@openseo");
@@ -99,9 +104,18 @@ test("limits and flags are read strictly", () => {
   assert.throws(() => parseFlags(["--out"]), /needs a value/);
 });
 
-test("a deferred server is the user's own entry with alwaysLoad false, copied only when it can hold no key", () => {
+test("a deferred server is the user's own entry with alwaysLoad false, copied only when it is the recorded one and can hold no key", () => {
   const ok = { type: "http", url: "https://mcp.example.dev/v2/mcp", headersHelper: "helper", timeout: 5000 };
-  assert.deepEqual(deferConfig("a", { mcpServers: { a: ok } }), { mcpServers: { a: { ...ok, alwaysLoad: false } } });
+  const pin = (entry) => ({ a: entryFingerprint(entry) });
+  assert.deepEqual(deferConfig("a", { mcpServers: { a: ok } }, pin(ok)), { mcpServers: { a: { ...ok, alwaysLoad: false } } });
+  assert.equal(entryFingerprint({ url: ok.url, type: "http", timeout: 5000, headersHelper: "helper", alwaysLoad: false }), entryFingerprint(ok), "the order of the fields and alwaysLoad do not count");
+  // An entry that passes every check of its text is still refused unless it is the recorded one.
+  for (const changed of [{ ...ok, url: "https://mcp.example.dev/s3cr3t/mcp" }, { ...ok, url: "https://s3cr3t.example.dev/v2/mcp" }, { ...ok, headersHelper: "helper --key s3cr3t" }]) {
+    assert.throws(() => deferConfig("a", { mcpServers: { a: changed } }, pin(ok)), /not the one recorded/);
+  }
+  assert.throws(() => deferConfig("a", { mcpServers: { a: ok } }), /not the one recorded/, "nothing recorded: nothing copied");
+  assert.throws(() => deferConfig("a", { mcpServers: { a: ok } }, { b: entryFingerprint(ok) }), /not the one recorded/);
+  for (const host of ["https://127.0.0.1/mcp", "https://[::1]/mcp", "https://localhost/mcp", "https://mcp.example.dev:8443/mcp", "https://a_b.example.dev/mcp", `https://${"a".repeat(40)}.example.dev/mcp`]) assert.ok(!plainUrl(host), host);
   const refused = {
     headers: { ...ok, headers: { Authorization: "x" } },
     env: { ...ok, env: { BROWSER: "cloud" } },
@@ -112,7 +126,7 @@ test("a deferred server is the user's own entry with alwaysLoad false, copied on
     notHttps: { type: "http", url: "http://mcp.example.dev/mcp" },
     stdio: { type: "stdio", url: "https://mcp.example.dev/mcp" },
   };
-  for (const [n, entry] of Object.entries(refused)) assert.throws(() => deferConfig(n, { mcpServers: { [n]: entry } }), /not copied/, n);
+  for (const [n, entry] of Object.entries(refused)) assert.throws(() => deferConfig(n, { mcpServers: { [n]: entry } }, { [n]: entryFingerprint(entry) }), /could hold a key|its entry has/, n);
   assert.throws(() => deferConfig("zz", { mcpServers: {} }), /no user-scope server/);
   assert.ok(plainUrl("https://api.example.com/mcp"));
   assert.ok(!plainUrl("https://api.example.com/mcp#x") && !plainUrl("not a url") && !plainUrl("https://api.example.com/a%2Fb"));

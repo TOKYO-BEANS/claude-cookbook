@@ -71,6 +71,16 @@ everything else (Stagehand's entry among them; Firecrawl's passes). A folder is 
 against the model that was asked for, not the one the session reports, so an alias in
 `--model` no longer blocks the next run.
 
+**Review round 2**, on `0818d74` (the commit that took `main` in). GitHub's security review:
+the URL check of the `defer` arm still let a short path segment or a host name carry a key
+into the temporary file. Its proposal (a root path only) would have refused Firecrawl's own
+`/v2/mcp`, and no check of an entry's text can prove it holds no key. So the entry is now
+pinned: `servers.json` records the SHA-256 fingerprint of the one entry a person has read
+(`servers.mjs fingerprint --server firecrawl`), and any other entry is refused, also one
+that passes every text check. The text checks stay and are stricter: a plain DNS host name,
+no IP address, no port. Graphify: `run()` called 13 functions; one run is now its own
+function. The AI review of `861dd19` and of this commit: see the pull request.
+
 **Spend.** USD 7.96 at list prices, on the plan login: 31 measuring runs (7.37, limit 15) and
 the Firecrawl call (0.59, and four Firecrawl credits).
 
