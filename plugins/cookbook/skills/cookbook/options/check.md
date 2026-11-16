@@ -10,10 +10,11 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
 - **Review of every pull request: the `ai-review` job.** It runs on every same-repository pull
   request with a fixed rubric and no tools, and its comment on the head commit is part of the
   merge condition. Weighed: CodeRabbit (ruled out by the owner: do not use it); Greptile and
-  similar hosted reviewers (one more service reading every private diff); tstack's `sol-loop`
-  and `council` (a second provider's model through T3 Code: only the Claude provider is on,
-  and switching another on costs money); `sa-review` (the fallback, and the owner of a range
-  that has no pull request).
+  similar hosted reviewers (one more service reading every private diff); Macroscope (the same,
+  paid per review, and its GitHub app asks for write access to code and workflows; installed
+  and removed on 16 November 2026); tstack's `sol-loop` and `council` (a second provider's
+  model through T3 Code: only the Claude provider is on, and switching another on costs
+  money); `sa-review` (the fallback, and the owner of a range that has no pull request).
 - **Our code: CodeQL.** Native to GitHub and required through the ruleset. Weighed: Semgrep
   Code (its code rules were dropped so that one scanner owns the job); Snyk Code (a second vendor).
 - **Dependencies: Semgrep Supply Chain.** It blocks only on a reachable high or critical
