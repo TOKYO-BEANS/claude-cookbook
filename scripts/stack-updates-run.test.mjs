@@ -1226,7 +1226,7 @@ test("recipeText: every recipe the real catalog names is found; setup and eviden
   }
   // The page that says how the tool is used goes; the page with this PC's paths and key names does not.
   const boat = recipeText(pages, "Cloud sandboxes (boat)");
-  assert.match(boat, /One command, then gone/);
+  assert.match(boat, /Every job goes through the script/);
   assert.doesNotMatch(boat, /On this PC|\.local\/share\/boat/);
 });
 

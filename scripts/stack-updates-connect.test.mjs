@@ -74,8 +74,8 @@ test("checks run one after another", async () => {
 });
 
 test("the error text never holds an Authorization header or a token-looking value", async () => {
-  // Made up, and put together here so that no line of this file reads as a key to a secret scanner.
-  const secret = ["abcDEF0123456789", "abcDEF0123456789-xyz"].join("_");
+  // A repeated pattern: long and mixed enough for the scrubber, and plainly not a key.
+  const secret = "aB1aB1aB1aB1aB1a_aB1aB1aB1aB1aB1a-xyz";
   const bad = [
     `Authorization: Bearer ${secret}`,
     `request failed key=${secret} retry`,
@@ -89,13 +89,15 @@ test("the error text never holds an Authorization header or a token-looking valu
   assert.ok(!text.includes(secret.slice(0, 20)), text);
   assert.ok(!/authorization/i.test(text), text);
   assert.ok(text.length <= 200);
-  assert.ok(!scrub(`Bearer ${secret}`).includes("abcDEF"));
+  // No six characters in a row of the value are left.
+  const noPart = (out) => { for (let i = 0; i + 6 <= secret.length; i++) assert.ok(!out.includes(secret.slice(i, i + 6)), out); };
+  noPart(scrub(`Bearer ${secret}`));
   assert.equal(scrub("exit 1: not signed in"), "exit 1: not signed in");
   assert.equal(scrub("\x1b[31mERROR\x1b[0m no session"), "ERROR no session", "colour codes are removed");
   assert.equal(scrub("[31mERROR[0m no session"), "ERROR no session", "colour codes are removed");
   // The secret is removed before the text is cut, so half a token cannot survive the cut.
   const edge = `${"y".repeat(170)} token=${secret}`;
-  assert.ok(!scrub(edge).includes("abcDEF"));
+  noPart(scrub(edge));
 });
 
 test("a table argv has its tokens expanded to this PC's folders", async () => {
@@ -279,7 +281,7 @@ const hex32 = "0123456789abcdef0123456789abcdef";
 test("scrub: key names with a prefix, separators =, : and whitespace, known prefixes, long mixed runs, e-mail", () => {
   const gone = (text, ...parts) => { const out = scrub(text); for (const p of parts) assert.ok(!out.includes(p), `${p} left in: ${out}`); return out; };
   gone(`FIRECRAWL_API_KEY=fc-${hex32}`, hex32);
-  gone(`BROWSERBASE_API_KEY=bb_live_${["abcdefghij", "0123456789", "ABCDEFGH"].join("")}`, "abcdefghij0123456789");
+  gone(`BROWSERBASE_API_KEY=bb_live_aB1aB1aB1aB1aB1aB1aB1aB1aB1a`, "aB1aB1aB1aB1aB1aB1aB");
   gone(`Invalid API key fc-${hex32}`, hex32);
   gone(`bad token: ghp_abcdefghijklmnopqrstuvwxyz0123456789`, "abcdefghijklmnop");
   gone(`github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz`, "abcdefghijklmnop");
@@ -294,7 +296,7 @@ test("scrub: key names with a prefix, separators =, : and whitespace, known pref
 });
 
 test("scrub: the cut at 4,000 characters cannot leave part of a secret", () => {
-  const secret = ["ABCDEFGHIJ", "0123456789", "abcdefghij", "0123456789"].join("");
+  const secret = "aB1cD2aB1cD2aB1cD2aB1cD2aB1cD2aB1cD2aB1c"; // a repeated pattern, plainly not a key
   assert.equal(secret.length, 40);
   const out = scrub(`${" ".repeat(3_975)}token=${secret}`);
   for (let i = 0; i + 6 <= secret.length; i++) assert.ok(!out.includes(secret.slice(i, i + 6)), out);
