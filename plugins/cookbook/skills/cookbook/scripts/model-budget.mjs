@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // Which model a thread should run on now, and whether a banked limit reset should be
 // redeemed. It reads the owner's Claude usage (the week, the Fable share, the session
-// window, banked resets) with the sign-in Claude Code already stores, and takes T3 Code's
-// saved reading when that read gives nothing. It applies the fixed rules below: the script
-// decides, not a model. It only reads. It never prints or stores the sign-in, calls the one
-// address below and nothing else, and redeems nothing.
+// window) with the sign-in Claude Code already stores, and takes T3 Code's saved reading when
+// that read gives nothing. The banked resets are the list T3 Code last saved: the endpoint
+// shows them to Claude Code only, not to this script. It applies the fixed rules below: the
+// script decides, not a model. It only reads. It never prints or stores the sign-in, calls
+// the one address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
 import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
@@ -78,7 +79,8 @@ export function parseUsage(json) {
     .filter((g) => g && typeof g === "object" && typeof g.id === "string" && GRANT_ID.test(g.id) && Number.isInteger(g.resets_left) && g.resets_left > 0 && g.paused !== true && g.usable_now === true)
     .map((g) => ({ id: g.id, kind: grantKind(g), left: g.resets_left, endsAt: time(g.ends_at) }));
 
-  // The endpoint lists banked resets only for a client it calls eligible; otherwise they are not read, which is not "none".
+  // The endpoint lists banked resets only for a client it calls eligible, and it does not call this
+  // script one (ineligible_reason "surface", 16 November 2026): then they are not read, which is not "none".
   return { week, fable, session, grants, resetsRead: json?.cedar_ember?.eligible === true, credits: json?.extra_usage?.is_enabled === true };
 }
 
@@ -226,12 +228,32 @@ const readToken = (home) => {
 
 // T3 Code's own saved reading, the one behind its Usage page. T3 Code asks Claude Code for the
 // limits every five minutes and rewrites this file every minute. The file is not signed and
-// T3 Code may change its shape: it is used only when no signed reading can be had, every value
-// is checked, anything odd means "no reading", nothing from it is stored, and all it can
-// change is which of the fixed lines of advice is said.
+// T3 Code may change its shape: its figures are used only when no signed reading can be had,
+// every value is checked, anything odd means "no reading", no figure from it is stored, and
+// all it can change is which of the fixed lines of advice is said.
+//
+// Its list of banked resets is the one source of them (the owner's decision, 16 November 2026):
+// T3 Code reads as Claude Code and is shown them, this script is not. The list goes with every
+// reading, signed or not, and is the one thing from this file that is stored (keepResets below).
 const T3_MAX_BYTES = 4000000;
 const T3_AHEAD_MS = 5000;
+const T3_RESETS = Object.freeze({ "5-hour reset": "session", "Fable reset": "fable", "Weekly reset": "weekly", "Full reset": "full" }); // T3 Code's labels
 const percent = (v) => (num(v) !== null && v >= 0 && v <= 100 ? v : null);
+const validGrant = (g) =>
+  g !== null && typeof g === "object" && typeof g.id === "string" && GRANT_ID.test(g.id) && KINDS.includes(g.kind) && Number.isInteger(g.left) && g.left > 0 && (g.endsAt === null || num(g.endsAt) !== null);
+
+// The banked resets in T3 Code's file: null when the file has no list (T3 Code leaves it out in
+// every minute its own read of them was refused, about every other one), else one entry per
+// kind, an empty list when T3 Code read that there are none. An entry that is odd is dropped.
+const t3Resets = (credits) => {
+  if (credits === null || typeof credits !== "object" || Array.isArray(credits)) return null;
+  const options = Array.isArray(credits.options) ? credits.options : [];
+  return options
+    .filter((o) => o !== null && typeof o === "object" && typeof o.label === "string" && Object.hasOwn(T3_RESETS, o.label))
+    .map((o) => ({ id: o.creditId, kind: T3_RESETS[o.label], left: o.availableCount, endsAt: time(o.expiresAt) }))
+    .filter(validGrant)
+    .slice(0, KINDS.length);
+};
 
 export function parseT3(json, now) {
   const limits = json?.usageLimits;
@@ -251,10 +273,10 @@ export function parseT3(json, now) {
   const five = windows.find((w) => w.id === "five_hour");
   const session = percent(five?.usedPercent) === null || time(five?.resetsAt) === null || time(five.resetsAt) <= now ? null : { used: five.usedPercent, resetsAt: time(five.resetsAt) };
 
-  // The banked resets are left out on purpose. T3 Code's file holds them (resetCredits) only in
-  // the minutes its own read of them got through, about every other one, so advice built on them
-  // would change from one minute to the next.
-  return { usage: { week, fable, session, grants: [], resetsRead: false, credits: windows.some((w) => w.id === "monthly_spend") }, at };
+  // The banked resets are kept out of the reading and given beside it. T3 Code's file holds them
+  // (resetCredits) only in the minutes its own read of them got through, so a reading built on
+  // them would change from one minute to the next: readUsage adds the kept list instead.
+  return { usage: { week, fable, session, grants: [], resetsRead: false, credits: windows.some((w) => w.id === "monthly_spend") }, at, resets: t3Resets(limits.resetCredits) };
 }
 
 // The text of a plain file of this user's, or null: no link, and where the system can say so
@@ -297,22 +319,56 @@ const readT3 = (file, now) => {
   return null;
 };
 
-// The reading: the script's own signed one while it is under ten minutes old, else a read over
-// the network (never with cacheOnly, and at most one per ten minutes, failed or not). When that
-// gives nothing, a reading under an hour old stands in: the script's own older one ("stale"),
-// and T3 Code's ("t3") only when the script has none. T3 Code's file is not signed, so it is
-// never taken ahead of a signed reading under an hour old, however new its own is. A failure
-// is { error }; it is never a made-up reading and never the cause's text.
+// The list of banked resets T3 Code's file last showed, kept in resets.json between the minutes
+// that file has it, so that the advice is the same in every minute. The list is saved when
+// T3 Code's file shows one newer than the kept one, and stands while it was seen under an hour
+// ago; after that the resets are "not read". The file is signed like the script's others, so a
+// changed one is ignored; but what it holds came from a file that is not signed. Whoever can
+// write T3 Code's file can therefore have a session told to ask the owner for a reset, or told
+// Fable where the pace rule says Opus: still one of the fixed lines, and redeeming stays the
+// owner's click in T3 Code, which shows the real list.
+const readResets = (file, token, now) => {
+  const c = readSigned(file, token);
+  const ok = num(c?.seen) !== null && c.seen <= now + T3_AHEAD_MS && now - c.seen < RULES.staleMs && Array.isArray(c.grants) && c.grants.length <= KINDS.length && c.grants.every(validGrant);
+  return ok ? { seen: c.seen, grants: c.grants.map(({ id, kind, left, endsAt }) => ({ id, kind, left, endsAt })) } : null;
+};
+const keepResets = (stateDir, token, t3, now) => {
+  const file = join(stateDir, "resets.json");
+  const kept = readResets(file, token, now);
+  if (!t3 || t3.resets === null || now - t3.at >= RULES.staleMs || (kept && kept.seen >= t3.at)) return kept;
+  const next = { seen: t3.at, grants: t3.resets };
+  writeSigned(stateDir, file, next, token);
+  return next;
+};
+
+// The reading, with the banked resets: the figures from readFigures, and with them the list of
+// resets T3 Code last saved (resetsSeen: when its file last showed it), whatever the source of
+// the figures, unless the endpoint itself listed the resets. A failure is { error }; it is
+// never a made-up reading and never the cause's text.
+export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), t3File = join(home, ".t3", "caches", "claudeAgent.json"), now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
+  const token = readToken(home);
+  if (!token) return { error: "no Claude sign-in found" };
+  const t3 = readT3(t3File, now);
+  const kept = keepResets(stateDir, token, t3, now);
+  const r = await readFigures({ stateDir, token, t3, now, fetchImpl, cacheOnly });
+  if (!r.usage || r.usage.resetsRead === true || !kept) return r;
+  return { ...r, usage: { ...r.usage, grants: kept.grants, resetsRead: true }, resetsSeen: kept.seen };
+}
+
+// The figures: the script's own signed reading while it is under ten minutes old, else a read
+// over the network (never with cacheOnly, and at most one per ten minutes, failed or not). When
+// that gives nothing, a reading under an hour old stands in: the script's own older one
+// ("stale"), and T3 Code's ("t3") only when the script has none. T3 Code's file is not signed,
+// so its figures are never taken ahead of a signed reading under an hour old, however new its
+// own is.
 //
 // A read that succeeds closes the endpoint to this sign-in for about two minutes, and T3 Code
 // reads it every minute: while T3 Code runs, a read from here mostly answers 429 and T3 Code's
 // reading is the one used. No lock: two sessions started in the same second may both read; the
 // second gets the first one's reading or a 429, and no reading is lost.
-export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), t3File = join(home, ".t3", "caches", "claudeAgent.json"), now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
+async function readFigures({ stateDir, token, t3, now, fetchImpl, cacheOnly }) {
   const file = join(stateDir, "usage.json");
   const markFile = join(stateDir, "usage-tried.json");
-  const token = readToken(home);
-  if (!token) return { error: "no Claude sign-in found" };
   const fresh = (r) => r !== null && now - r.at < RULES.cacheMs;
   const own = readSaved(file, token);
   // A reading from before the weekly reset says nothing about this week.
@@ -321,8 +377,7 @@ export async function readUsage({ home = homedir(), stateDir = join(home, ".loca
   // Second best, for when there is no fresh signed reading and none can be read: the script's
   // own signed reading while it is under an hour old, and T3 Code's only when there is none.
   const young = (r) => r !== null && now - r.at < RULES.staleMs;
-  const t3 = young(saved) ? null : readT3(t3File, now);
-  const old = young(saved) ? { ...saved, source: "stale" } : young(t3) ? { ...t3, source: "t3" } : null;
+  const old = young(saved) ? { ...saved, source: "stale" } : young(t3) ? { usage: t3.usage, at: t3.at, source: "t3" } : null;
   const fall = (error) => old ?? { error };
   if (cacheOnly) return fall("no fresh reading saved");
   const mark = readMark(markFile, token);
@@ -366,6 +421,7 @@ if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpath
   } else {
     const decision = decide(r.usage, now);
     const from = { t3: " Source: T3 Code's saved reading.", stale: " Source: the script's own reading, over ten minutes old." }[r.source] ?? "";
-    console.log(json ? JSON.stringify({ source: r.source, at: r.at, usage: r.usage, decision }) : line(r.usage, decision, now) + from);
+    const resets = r.resetsSeen === undefined ? "" : " The banked resets are the list T3 Code last saved.";
+    console.log(json ? JSON.stringify({ source: r.source, at: r.at, resetsSeen: r.resetsSeen ?? null, usage: r.usage, decision }) : line(r.usage, decision, now) + from + resets);
   }
 }

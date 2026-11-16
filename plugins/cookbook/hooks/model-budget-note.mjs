@@ -4,8 +4,10 @@
 // printed only when the script is run). A session start gets the advice; later events are silent
 // until the advice changes, so a long turn hears it while it can still switch. Only a session
 // start may read over the network (one read per ten minutes for all sessions); every other
-// event uses a saved reading, the script's own or T3 Code's. It writes only its own state
-// folder, and never fails a session: any error ends in silence and exit code 0.
+// event uses a saved reading, the script's own or T3 Code's. Every event may save the list of
+// banked resets T3 Code's file shows (a local file, no network), so the advice holds in the
+// minutes that file has none. It writes only its own state folder, and never fails a session:
+// any error ends in silence and exit code 0.
 import { mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +16,7 @@ const EVENTS = ["SessionStart", "UserPromptSubmit", "PostToolUse"];
 const SESSION = /^[A-Za-z0-9_-]{1,80}$/;
 const POINTER = "What to do with it: the Cookbook page recipes/model-budget.md.";
 const KEEP_MS = 14 * 86400000;
+const GRACE_MS = 5 * 60000;
 
 const stdin = async () => {
   let text = "";
@@ -31,9 +34,13 @@ try {
     const sessions = join(homedir(), ".local", "share", "model-budget", "sessions");
     const seenFile = join(sessions, `${id}.json`);
     let seen = null;
+    let state = {};
     try {
-      const key = JSON.parse(readFileSync(seenFile, "utf8"))?.key;
-      if (typeof key === "string") seen = key;
+      const saved = JSON.parse(readFileSync(seenFile, "utf8"));
+      if (typeof saved?.key === "string") {
+        seen = saved.key;
+        state = saved;
+      }
     } catch {
       // first event of this session
     }
@@ -54,11 +61,21 @@ try {
       // Every input of the advice text is in the key, so a change of advice is always said.
       const key = [d.model, d.redeem?.id ?? "", d.wait?.until ?? "", d.held ? "held" : ""].join("|");
       const said = advice(d);
-      if (event === "SessionStart" || seen === null) text = `${said} ${POINTER}`;
-      else if (seen !== key) text = `Model budget changed. ${said} ${POINTER}`;
-      if (text) {
-        mkdirSync(sessions, { recursive: true });
-        writeFileSync(seenFile, JSON.stringify({ key, at: now }));
+      const resets = r.usage.resetsRead === true;
+      // The kept list of banked resets cannot be read for a minute or two after Claude Code renews
+      // the sign-in (its file is signed with it), until T3 Code's file shows the list again. A
+      // change of advice that comes while the list is missing waits GRACE_MS, unless a limit is spent.
+      const lostAt = Number.isFinite(state.lostAt) && state.lostAt <= now ? state.lostAt : now;
+      const waits = event !== "SessionStart" && seen !== null && seen !== key && seen !== "unknown" && state.resets === true && !resets && d.model !== "wait" && !d.held && now - lostAt < GRACE_MS;
+      if (waits) {
+        if (state.lostAt !== lostAt) writeFileSync(seenFile, JSON.stringify({ ...state, lostAt }));
+      } else {
+        if (event === "SessionStart" || seen === null) text = `${said} ${POINTER}`;
+        else if (seen !== key) text = `Model budget changed. ${said} ${POINTER}`;
+        if (text || state.lostAt !== undefined) {
+          mkdirSync(sessions, { recursive: true });
+          writeFileSync(seenFile, JSON.stringify({ key: text ? key : seen, at: text ? now : state.at, resets: text ? resets : state.resets }));
+        }
       }
     }
     if (text) process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: text } })}\n`);

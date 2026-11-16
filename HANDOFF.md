@@ -1,5 +1,77 @@
 # Handoff
 
+## 16 November 2026 (night): the model budget keeps T3 Code's reset list (0.37.0)
+
+**Why.** Since 0.36.1 the script read no banked resets ("not read"): no "Redeem" line came,
+and a banked Fable reset did not lift the pace rule. The account held one weekly and one
+Fable reset, and the script said Opus where the rules, with the reset known, say Fable.
+
+**What was found** (16 November 2026, no guess).
+- One timed read by the script with `cedar_ember=1&skip_spend=1` and its own User-Agent
+  (17:12:12 UTC, 200, 119 seconds after T3 Code's last success): `eligible: false`,
+  `ineligible_reason: "surface"`, no grants. So `skip_spend=1` alone does not help.
+- T3 Code's own code (`claudeResetCredits.ts` in its `server.asar`) sends the same sign-in
+  and the same `anthropic-beta` header; the User-Agent `claude-cli/<version> (external, cli)`
+  is the only other difference. The endpoint lists the resets by client, and Claude Code is
+  the client it lists them for.
+- No third source. Claude Code keeps its own reading (`cachedUsageUtilization` in
+  `~/.claude.json`: the limits and Fable's part of the week), with `cedar_ember: null`.
+  T3 Code's other files hold no steadier copy of the list. In T3 Code's file, no
+  `resetCredits` key means its read was refused, and `availableCount: 0` means none.
+- Claude Code renews the sign-in every 8 hours (seen at 17:19 UTC), and every file the
+  script signs is unreadable from then on.
+- T3 Code's reads are not always refused every other minute: from 17:32 to 17:40 UTC all
+  nine answered 200, and its file had the list in every minute.
+
+**Owner decision (question dialog, 16 November 2026).** Asked which source the script should
+use, with the cost of each: "Keep T3 Code's list (Recommended)" (the script stores what an
+unsigned file said), over "Read as Claude Code" (the script names itself as another client)
+and "Not now".
+
+**What changed.**
+- `parseT3` gives the reset list beside the reading (`resets`: null when the file has no
+  list, an empty list when T3 Code read none), never in it.
+- `readUsage` keeps the newest list T3 Code's file showed in
+  `~/.local/share/model-budget/resets.json` (signed like the script's other files; only the
+  list and the time it was seen, no figure) and adds it to every reading, whatever the
+  source of the figures. A list last seen over an hour ago is dropped: "not read". An older
+  copy of T3 Code's file never replaces a newer list. The signed reading (`usage.json`)
+  holds only what the endpoint said.
+- The hook: a change of advice that comes while the list is missing waits five minutes
+  (`GRACE_MS`), unless a limit is spent or the session starts. That covers the minute or two
+  after a renewed sign-in.
+- The script run by hand says "The banked resets are the list T3 Code last saved."
+- `recipes/model-budget-resets.md` is new (the source, the cost, what was not chosen);
+  `model-budget.md` and `model-budget-setup.md` point to it.
+
+**Verification.** 62 tests in `scripts/model-budget.test.mjs` (8 new, failing first; the
+grace test fails with the grace set to 0); `npm test`. On T3 Code's real file, with the list
+taken out of a copy in every other reading: one line of advice in 12 readings, where 0.35.4
+gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live for seven
+minutes with `watch-advice.mjs`: one line of advice, through a change of source from T3
+Code's reading to a signed one; the list was in T3 Code's file throughout, so the live run
+did not show a minute without it.
+
+**Limits (known).**
+- Whoever can write T3 Code's file as the owner can have a session told to ask for a reset,
+  or told Fable where the pace rule says Opus. Redeeming stays the owner's click in T3 Code.
+- After a reset is used, the old list stands until T3 Code's next read that gets through.
+- A session started in the minute or two after a renewed sign-in, while T3 Code's file has
+  no list, may be told the other model once.
+- With T3 Code closed for an hour, the resets are "not read".
+
+**Recorded here, from the job before (#74).** #74 merged by hand as `6dcdf3b` (release event
+`verified`, execution 1572) on the owner's "Merge #74 once", past a neutral Graphify Formal
+Verification titled "0/4 PR-changed function(s) verified". Plugin 0.36.1 was installed; its
+session-start hook gave the advice, and over 200 seconds reading T3 Code's file only, with
+the reset list absent and then present, the advice was one line throughout
+(`watch-advice.mjs`, `watch-advice-0.36.1.log` in the evidence folder of that job). A
+session started before about 17:00 UTC on 16 November 2026 runs an older plugin until it is
+restarted; one on 0.35.4 can still be told to switch model back and forth.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-resets/`:
+`one-read.mjs` and `read-1-skip-spend.json` (the timed read), `toggle-advice.mjs` and
+`.log`, `watch-advice.mjs` and its logs.
 ## 16 November 2026 (night): the first site's name out of the files; a project part names a key (0.36.3)
 
 **Why.** #75 took a customer's site name out of `options/check.md`. The same site, and the
@@ -145,7 +217,7 @@ finding on later pull requests to the model budget script, until the owner says 
 The owner's yes is then written in the thread with these words and this date. Any other
 finding is fixed or asked.
 
-**Outstanding (Claude, next chat).** The script cannot see the banked resets, so the rules for
+**Outstanding (cleared by 0.37.0, the entry at the top).** The script cannot see the banked resets, so the rules for
 when to redeem one never fire and a banked Fable reset does not lift the pace rule. Clears when
 the resets have a source that holds from minute to minute: either the script's read is made
 eligible (the difference from T3 Code's read is the `claude-cli` User-Agent and
