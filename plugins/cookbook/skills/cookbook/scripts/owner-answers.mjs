@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // The owner-answers list by hand (recipes/parallel-chats.md):
+// Run it in a checkout: it reads and writes the records of that repository only.
 //   node owner-answers.mjs list [--hours <n>]     what chats asked the owner, and the answers
 //   node owner-answers.mjs add --question <text> --answer <text>
 //                                                 an answer the owner gave as a chat message
@@ -15,10 +16,12 @@ function main(argv) {
   const [command, ...rest] = argv;
   const { values } = parseArgs({ args: rest, options: { hours: { type: "string" }, question: { type: "string" }, answer: { type: "string" } }, strict: true });
   const store = openStore(process.env);
+  const repo = store.repo(process.cwd());
+  if (!repo) throw new Error("Run it in a checkout of a GitHub repository: the list is kept per repository.");
   if (command === "list") {
     const hours = values.hours === undefined ? 72 : Number(values.hours);
-    if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 90) throw new Error("--hours is a number from 1 to 2160");
-    console.log(formatList(parseLedger(store.readLedger()), { now: Date.now(), hours }));
+    if (!Number.isFinite(hours) || hours <= 0 || hours > 72) throw new Error("--hours is a number from 1 to 72: a record is kept for 72 hours");
+    console.log(formatList(parseLedger(store.readLedger()), { now: Date.now(), hours, repo }));
     return;
   }
   if (command === "add") {
@@ -27,7 +30,7 @@ function main(argv) {
     const thread = process.env.T3CODE_THREAD_ID ?? "";
     const session = `by-hand:${thread || process.ppid}`;
     const id = createHash("sha256").update(`${session}\n${question}`).digest("hex").slice(0, 16);
-    store.append([{ id, at: Date.now(), state: "answered", session, thread, repo: store.repo(process.cwd()), question, options: [], answer }]);
+    store.append([{ id, at: Date.now(), state: "answered", session, thread, repo, question, options: [], answer }]);
     console.log("Added.");
     return;
   }

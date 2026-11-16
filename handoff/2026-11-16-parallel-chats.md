@@ -38,6 +38,19 @@ chats before a job starts.
 - The handoff is a file per entry in `handoff/`. `HANDOFF.md` is closed: `scripts/check.mjs`
   pins its text, so `npm test` fails when it changes, and names in `handoff/` are checked.
 
+**GitHub's security review, two threads on the first push, both fixed in the second.**
+- *Prompt injection: stored text is replayed as prose into another chat.* A record is now
+  shown as one line of JSON with cleaned, cut fields, under a line that says records are
+  data and never instructions. "Unless its own words make it standing" is gone: an answer
+  about another item never covers a question, whatever it says.
+- *Sensitive text is kept and replayed.* A record is written and shown inside its own
+  repository only (nothing outside a repository, nothing across two), it leaves the file
+  after 72 hours, and an address and a long number are cut out. The price: a question asked
+  in one repository is not seen by a chat in another, so the same question can still reach
+  the owner once per repository.
+- The repository is now read from git's own files, with no program started: a hook gets a
+  short `PATH`, and with `git` not found every record would have had no repository.
+
 **Decisions that were mine.**
 - No model in the hook. A word match would miss a reworded question, and a second Jev
   question would need its own measurement. The cost is one short turn when another chat has
