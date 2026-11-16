@@ -327,7 +327,8 @@ const t3 = ({ week = 43, fable = 69, session = null, credits = false, options = 
 const option = (over = {}) => ({ creditId: "g1", label: "Fable reset", description: "Refills your Fable allowance.", availableCount: 1, expiresAt: "2026-12-10T22:00:00Z", ...over });
 const seedT3 = (home, json) => {
   mkdirSync(join(home, ".t3", "caches"), { recursive: true });
-  writeFileSync(join(home, ".t3", "caches", "claudeAgent.json"), typeof json === "string" ? json : JSON.stringify(json));
+  // Written for the user alone, whatever the umask of the machine the tests run on.
+  writeFileSync(join(home, ".t3", "caches", "claudeAgent.json"), typeof json === "string" ? json : JSON.stringify(json), { mode: 0o600 });
 };
 const never = async () => { throw new Error("must not be called"); };
 
@@ -644,4 +645,28 @@ test("the script says when the line comes from T3 Code's saved reading", (t) => 
   assert.equal(plain.status, 0);
   assert.match(plain.stdout, /^Model budget \(.*week 43% used, Fable 69% of its share.* Source: T3 Code's saved reading\.\n$/);
   assert.equal(JSON.parse(spawnSync(process.execPath, [SCRIPT, "--json"], { encoding: "utf8", env }).stdout).source, "t3");
+});
+
+test("readUsage: T3 Code's file is read only as a plain file of the user's own, never through a link", async (t) => {
+  const home = tmp(t);
+  const stateDir = join(home, "state");
+  seedHome(home);
+  const real = join(home, "elsewhere.json");
+  writeFileSync(real, JSON.stringify(t3()), { mode: 0o600 });
+  const read = (t3File) => readUsage({ home, stateDir, t3File, now: NOW, fetchImpl: never, cacheOnly: true });
+  assert.equal((await read(real)).source, "t3", "a plain file is read");
+  assert.equal((await read(home)).usage, undefined, "a folder is no reading");
+  const link = join(home, "link.json");
+  const { symlinkSync, chmodSync } = await import("node:fs");
+  let linked = true;
+  try {
+    symlinkSync(real, link);
+  } catch {
+    linked = false; // Windows without the right to make links
+  }
+  if (linked) assert.equal((await read(link)).usage, undefined, "a link is not followed");
+  if (typeof process.getuid === "function") {
+    chmodSync(real, 0o666);
+    assert.equal((await read(real)).usage, undefined, "a file others can write is not read");
+  }
 });

@@ -6,7 +6,7 @@
 // decides, not a model. It only reads. It never prints or stores the sign-in, calls the one
 // address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
-import { mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -259,11 +259,19 @@ export function parseT3(json, now) {
   return { usage: { week, fable, session, grants, credits: windows.some((w) => w.id === "monthly_spend") }, at };
 }
 
+// The file must be a plain file of this user's: no link, and where the system can say so
+// (not on Windows), owned by the user and writable by no one else.
+const ownFile = (file) => {
+  const s = lstatSync(file, { throwIfNoEntry: false });
+  if (!s || !s.isFile() || s.size > T3_MAX_BYTES) return false;
+  return typeof process.getuid !== "function" || (s.uid === process.getuid() && (s.mode & 0o022) === 0);
+};
+
 const readT3 = (file, now) => {
   // Two tries: a read that lands in the middle of T3 Code's own write finds half a file.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      if (statSync(file).size > T3_MAX_BYTES) return null;
+      if (!ownFile(file)) return null;
       return parseT3(JSON.parse(readFileSync(file, "utf8")), now);
     } catch (e) {
       if (!(e instanceof SyntaxError) || attempt) return null;

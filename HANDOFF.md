@@ -25,12 +25,21 @@ taken: T3 Code's reading only when no signed one can be had. A prompt or tool ev
 never reads over the network, and now has T3 Code's reading too. The
 `usage.lock` and its takeover are gone: the reading (`usage.json`) and the mark of a failed read
 (`usage-tried.json`) are two signed files, so a failed read cannot replace a reading. The
-script run by hand names the source when it is not a direct read. Three made-up values in
-`scripts/stack-updates-connect.test.mjs` that Gitleaks read as `generic-api-key` are now put
-together at run time (none was a key; `gitleaks dir` reports none).
+script run by hand names the source when it is not a direct read. T3 Code's file is read only
+when it is a regular file and no link, and outside Windows only when the user owns it and no
+one else can write it (the review's third thread; Node cannot read an owner on Windows).
 
-**Verification.** 52 tests in `scripts/model-budget.test.mjs`; `npm test`; a live run that
-took T3 Code's reading.
+**Owner decisions, 16 November 2026.**
+- The three Gitleaks `generic-api-key` hits in `scripts/stack-updates-connect.test.mjs` (the
+  0.32.2 entry's outstanding item): "Fix them (fixture values a scanner does not read as
+  keys), never ignore or dismiss; if one is a real key, stop and tell the owner." Done here:
+  the three made-up strings are put together at run time, and `gitleaks dir` reports none.
+- GitHub's security review asked for T3 Code's unsigned reading to be removed altogether.
+  Asked with what the file can and cannot do, the owner answered "Accept it as built
+  (Recommended)"; the yes is written in that review thread.
+
+**Verification.** 53 tests in `scripts/model-budget.test.mjs`; `npm test`; a live session-start
+run gave the advice.
 
 **Limits (known).** T3 Code's file is not signed: while the signed read is refused, whoever can
 write that file can move the advice among its fixed lines; it cannot add text. Its `checkedAt`
@@ -428,7 +437,8 @@ are not fixed. The three checks before a call stay.
   the error scrubber, and GitHub's secret scanning has no open alert). A model's judgement
   does not clear a finding, so a consult on this repository stops at the scan. Owner: the
   owner. Clears with the owner's decision: build those strings at run time in a pull
-  request, or accept the three hits.
+  request, or accept the three hits. Cleared on 16 November 2026 by the owner's decision to
+  fix them (the 0.35.4 entry).
 - A whole supervised consult, with the owner clicking, has not been run. Owner: Claude.
   Clears with the first consult under the rule.
 - Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
