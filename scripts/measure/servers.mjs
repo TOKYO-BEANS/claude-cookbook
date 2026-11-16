@@ -20,9 +20,9 @@
 // spend cap per run and a stop for the batch. Rules: recipes/scripted-runs.md and -rules.md.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { summarizeStream } from "./measure.mjs";
 
@@ -56,7 +56,8 @@ export function parseArm(arm, { servers, plugins, deferrable = {} }) {
 // text can prove that it holds no key, so only an entry a person has read and recorded is
 // copied: its fingerprint must be the one in servers.json. On top of that it must be a remote
 // server with these fields and no others, on an https URL with a plain DNS host name, no user
-// part, no query and no long path segment. Anything else is refused, whatever it holds.
+// part, no query and no long path segment, and its headers helper must be a command that
+// fetches the headers, not one that carries them. Anything else is refused, whatever it holds.
 const DEFER_FIELDS = new Set(["type", "url", "headersHelper", "timeout", "alwaysLoad"]);
 const DNS_LABEL = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
 export function plainUrl(text) {
@@ -67,6 +68,9 @@ export function plainUrl(text) {
   if (labels.length < 2 || !labels.every((l) => DNS_LABEL.test(l)) || !/[a-z]/.test(labels.at(-1))) return false;
   return u.pathname.split("/").every((seg) => seg.length <= 12 && /^[A-Za-z0-9._~-]*$/.test(seg));
 }
+// A headers helper prints the headers when it runs. One whose own text carries a header or a
+// key (an inline `echo "Authorization: Bearer ..."`) is refused.
+export const plainHelper = (text) => text === undefined || (typeof text === "string" && !/bearer|authorization|echo|printf|write-(output|host)|secret|password|(api[-_]?key|token)\s*[:=]/i.test(text));
 // The fingerprint of an entry: SHA-256 over its fields in a fixed order, `alwaysLoad` left out.
 export function entryFingerprint(entry) {
   const fields = Object.keys(entry).filter((k) => k !== "alwaysLoad").sort().map((k) => [k, entry[k]]);
@@ -78,6 +82,7 @@ export function deferConfig(name, userConfig, deferrable = {}) {
   const extra = Object.keys(entry).filter((k) => !DEFER_FIELDS.has(k));
   if (extra.length) throw new Error(`${name}: its entry has ${extra.join(", ")}, so it is not copied`);
   if (!["http", "sse", "ws"].includes(entry.type) || !plainUrl(entry.url)) throw new Error(`${name}: its URL could hold a key, so it is not copied`);
+  if (!plainHelper(entry.headersHelper)) throw new Error(`${name}: its headers helper could hold a key, so it is not copied`);
   if (!Object.hasOwn(deferrable, name) || entryFingerprint(entry) !== deferrable[name]) throw new Error(`${name}: its entry is not the one recorded in servers.json, so it is not copied`);
   return { mcpServers: { [name]: { ...entry, alwaysLoad: false } } };
 }
@@ -235,22 +240,39 @@ function session(argv, cwd, debugFile, expected) {
 
 const userConfig = () => JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8"));
 
+// A run's temporary folder and its files, for this user only: the modes count where the
+// system has them, and on Windows the folder is in the user's own temporary folder. The debug
+// log exists before the session starts, so the session adds to a file that is already private.
+export function makeTemp(root = tmpdir()) {
+  const temp = mkdtempSync(join(root, "measure-servers-"));
+  chmodSync(temp, 0o700);
+  const paths = { temp, work: join(temp, "work"), settings: join(temp, "settings.json"), debug: join(temp, "debug.log"), mcp: join(temp, "mcp.json") };
+  mkdirSync(paths.work, { mode: 0o700 });
+  writeFileSync(paths.debug, "", { mode: 0o600 });
+  return paths;
+}
+const writePrivate = (file, text) => writeFileSync(file, text, { mode: 0o600 });
+
+// Deletes the folder, trying again while a file in it is still held. When that fails the files
+// are emptied, so nothing of the run stays readable, and the line that comes back names the
+// folder, not its path. Nothing comes back when the folder is gone.
+export function removeTemp(paths, rm = rmSync) {
+  try { rm(paths.temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); return null; } catch { /* emptied below */ }
+  let emptied = true;
+  for (const file of [paths.debug, paths.settings, paths.mcp]) {
+    try { if (existsSync(file)) writeFileSync(file, ""); } catch { emptied = false; }
+  }
+  return `the run's temporary folder ${basename(paths.temp)} (in the system's temporary folder) could not be deleted; ${emptied ? "its files were emptied" : "its files could NOT be emptied: delete it by hand, it holds the session's debug log"}`;
+}
+
 // One session in a temporary folder that is deleted whatever happens: it holds the arm's
 // settings, the session's debug log and, for a `defer` arm, the copied entry.
 async function oneRun({ arm, catalog, expected, model, cap, rep }) {
-  const temp = mkdtempSync(join(tmpdir(), "measure-servers-"));
+  const paths = makeTemp();
   try {
-    const work = join(temp, "work");
-    mkdirSync(work);
-    const settings = join(temp, "settings.json");
-    writeFileSync(settings, JSON.stringify(armSettings(arm)));
-    const debug = join(temp, "debug.log");
-    let mcpConfig = null;
-    if (arm.defer) {
-      mcpConfig = join(temp, "mcp.json");
-      writeFileSync(mcpConfig, JSON.stringify(deferConfig(arm.defer, userConfig(), catalog.deferrable)));
-    }
-    const r = await session(claudeArgs({ settings, model, cap, debug, mcpConfig }), work, debug, expected);
+    writePrivate(paths.settings, JSON.stringify(armSettings(arm)));
+    if (arm.defer) writePrivate(paths.mcp, JSON.stringify(deferConfig(arm.defer, userConfig(), catalog.deferrable)));
+    const r = await session(claudeArgs({ settings: paths.settings, model, cap, debug: paths.debug, mcpConfig: arm.defer ? paths.mcp : null }), paths.work, paths.debug, expected);
     const others = catalog.servers.filter((n) => !expected.includes(n));
     return buildRow({
       arm: arm.arm, rep, model, cap, expected, all: catalog.servers, waitMs: r.waitMs, exit: r.exit, stopped: r.stopped,
@@ -258,7 +280,8 @@ async function oneRun({ arm, catalog, expected, model, cap, rep }) {
       summary: summarizeStream(r.out.split("\n"), model),
     });
   } finally {
-    try { rmSync(temp, { recursive: true, force: true }); } catch { console.log(`could not delete ${temp}: delete it by hand, it holds the session's debug log`); }
+    const left = removeTemp(paths);
+    if (left) { console.log(left); process.exitCode = 3; }
   }
 }
 
@@ -280,7 +303,8 @@ async function run(opts) {
     appendFileSync(join(opts.out, "summary.jsonl"), `${JSON.stringify(row)}\n`);
     spent += row.costUsd;
     console.log(`${row.arm} #${rep}: first request ${row.firstContext} tokens, waited ${Math.round(row.waitMs / 1000)} s, USD ${row.costUsd.toFixed(3)}${row.costReported ? "" : " (the cap: no cost reported)"}, ${row.planLogin ? "plan login" : "NOT the plan login"}${row.problem ? `, NOT COUNTED: ${row.problem}` : ""}`);
-    if (row.problem || !row.planLogin) { process.exitCode = 1; return; }
+    if (row.problem || !row.planLogin) { process.exitCode ||= 1; return; }
+    if (process.exitCode) return; // a temporary folder that could not be deleted stops the batch
   }
 }
 

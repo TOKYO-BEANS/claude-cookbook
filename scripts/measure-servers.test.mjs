@@ -1,6 +1,46 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { test } from "node:test";
-import { aggregate, armSettings, deferConfig, entryFingerprint, buildRow, claudeArgs, expectedServers, loadServers, otherModel, parseArm, parseFlags, parseLimits, plainUrl, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
+import { aggregate, armSettings, deferConfig, entryFingerprint, buildRow, claudeArgs, expectedServers, loadServers, makeTemp, otherModel, parseArm, parseFlags, parseLimits, plainHelper, plainUrl, removeTemp, reportText, serversOfPlugin, serverStates, settled, toolsByServer } from "./measure/servers.mjs";
+
+test("a run's temporary folder is private, its debug log exists before the session, and it is deleted after", () => {
+  const root = mkdtempSync(join(tmpdir(), "measure-servers-test-"));
+  try {
+    const p = makeTemp(root);
+    assert.ok(statSync(p.work).isDirectory());
+    assert.equal(readFileSync(p.debug, "utf8"), "");
+    if (process.platform !== "win32") {
+      assert.equal(statSync(p.temp).mode & 0o777, 0o700);
+      assert.equal(statSync(p.work).mode & 0o777, 0o700);
+      assert.equal(statSync(p.debug).mode & 0o777, 0o600);
+    }
+    assert.equal(removeTemp(p), null);
+    assert.ok(!existsSync(p.temp));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a temporary folder that cannot be deleted has its files emptied, and the line names the folder, not its path", () => {
+  const root = mkdtempSync(join(tmpdir(), "measure-servers-test-"));
+  try {
+    const p = makeTemp(root);
+    writeFileSync(p.debug, "a debug line");
+    writeFileSync(p.settings, "{\"x\":1}");
+    writeFileSync(p.mcp, "{\"mcpServers\":{}}");
+    const line = removeTemp(p, () => { throw new Error("EBUSY"); });
+    assert.match(line, /could not be deleted; its files were emptied$/);
+    assert.ok(line.includes(basename(p.temp)) && !line.includes(root));
+    for (const f of [p.debug, p.settings, p.mcp]) assert.equal(readFileSync(f, "utf8"), "");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a headers helper that carries a header or a key in its own text is refused, also when its entry is the recorded one", () => {
+  for (const bad of ["echo \"Authorization: Bearer fc-0123456789\"", "printf 'x-api-key: abc'", "pwsh -c Write-Output @{a=1}", "helper --token=abc", "helper --api-key: abc", "get-secret.cmd", 5]) assert.ok(!plainHelper(bad), String(bad));
+  for (const good of [undefined, "powershell.exe -NoProfile -File C:/tools/agent-key.ps1 -Mode headers -Name firecrawl", "/usr/local/bin/headers firecrawl"]) assert.ok(plainHelper(good), String(good));
+  const entry = { type: "http", url: "https://mcp.example.dev/v2/mcp", headersHelper: "echo \"Authorization: Bearer fc-0123456789\"" };
+  assert.throws(() => deferConfig("a", { mcpServers: { a: entry } }, { a: entryFingerprint(entry) }), /headers helper could hold a key/);
+});
 
 // A fixed list for the tests; the live one (servers.json) follows this PC's setup.
 const catalog = {

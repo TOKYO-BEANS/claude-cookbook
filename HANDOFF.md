@@ -59,7 +59,7 @@ the three ways out of a session start), linked from `connecting.md`; one bullet 
 - Start-up probes without a prompt (no cost): OpenSEO connects in both site folders and not
   in an empty one. In a child session (`--setting-sources "" --plugin-dir <cache folder>`) it
   connects with its stored sign-in.
-- `npm test` passes (358 tests with `main` taken in, 12 of them in `scripts/measure-servers.test.mjs`).
+- `npm test` passes (361 tests with `main` taken in, 15 of them in `scripts/measure-servers.test.mjs`).
 
 **AI review round 1** (of three): three low findings, all fixed. A limit that was reached
 ended the session again on every tick: it now runs once, and where a signal can be ignored a
@@ -79,9 +79,23 @@ pinned: `servers.json` records the SHA-256 fingerprint of the one entry a person
 (`servers.mjs fingerprint --server firecrawl`), and any other entry is refused, also one
 that passes every text check. The text checks stay and are stricter: a plain DNS host name,
 no IP address, no port. Graphify: `run()` called 13 functions; one run is now its own
-function. The AI review of `861dd19` and of this commit: see the pull request.
+function. A second comment of the security review, on the debug log: the temporary folder
+and its files are now made for this user only (modes 700 and 600 where the system has them),
+the debug log exists before the session starts, deleting is tried again while a file is
+held, and a folder that still cannot be deleted has its files emptied, is named without its
+path and stops the batch with exit code 3. The AI review of `0818d74` (one low): a headers
+helper is free text and was copied as it is. The fingerprint already refuses any helper but
+the recorded one; a helper whose own text carries a header or a key (`echo "Authorization:
+Bearer ..."`) is now refused as well, recorded or not. My reply to the first security comment
+landed under the second by mistake; both threads were answered again in the right place.
 
-**Spend.** USD 7.96 at list prices, on the plan login: 31 measuring runs (7.37, limit 15) and
+**The final script was run once more** after these changes (`runs-after`, run 3): it ended
+well and left no temporary folder. It measured 55,030 tokens, 278 fewer than the two runs
+an hour before, with the same servers, tool, skill and plugin counts. The cause is not
+known (the other chat had installed Cookbook 0.31.2 in between; a server may also have
+changed its own text). So compare arms within one sitting only.
+
+**Spend.** USD 8.13 at list prices, on the plan login: 32 measuring runs (7.54, limit 15) and
 the Firecrawl call (0.59, and four Firecrawl credits).
 
 **Not proved.** An OpenSEO call from a child session (it connected; no call was made, since
