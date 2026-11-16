@@ -6,9 +6,9 @@ import { basename, dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
-  BRIEF_BYTES, buildRun, checkStage, connected, CONNECTOR, CREDITS_GAP, creditsIn, dryRun, fencedBrief, folderErrors, gatedOf, initErrors, logEntry, main, namedIn,
+  BRIEF_BYTES, buildRun, checkStage, clickHeld, connected, CONNECTOR, CREDITS_GAP, creditsIn, dryRun, fencedBrief, folderErrors, gatedOf, initErrors, logEntry, main, namedIn,
   OPERATIONS, OTHER_CONNECTORS, otherServers, outcome, ownerClick, parseArgs, plainFolder, POWERSHELL, readBrief, READ_ONLY, realOut, removeTemp, RULES,
-  RUN_FOLDERS, rulePath, SECRET_DENY, sendList, showWindow, STAGE, stageFiles, summarize, TOOL_PREFIX, WAIT, WINDOW_FILE, WINDOW_SECONDS, windowAnswer,
+  RUN_FOLDERS, rulePath, SECRET_DENY, sendList, shown, showWindow, STAGE, stageFiles, summarize, TOOL_PREFIX, TRIAL_BUTTON, WAIT, WINDOW_FILE, WINDOW_SECONDS, windowAnswer,
   windowNeeded, windowText, yesGaps,
 } from "../plugins/cookbook/skills/cookbook/scripts/adobe-session.mjs";
 
@@ -520,7 +520,14 @@ test("the window shows the files, the tools, the quoted yes and its credits", ()
   assert.deepEqual([text.go, text.stop, text.seconds, WINDOW_SECONDS], ["Go ahead", "Stop", 300, 300]);
   assert.ok(text.arm >= 1);
   assert.ok(!text.body.includes("TRIAL"));
-  assert.match(windowText(gatedRun(), true).body, /^THIS IS A TRIAL of the window, with sample text\. Nothing is sent and nothing starts/);
+  assert.equal(lines[0], 'THIS IS A REAL RUN, not a trial of the window: "Go ahead" starts it.');
+  // The trial says that it is one, and its button is not "Go ahead": that name is on a
+  // real run's window and on no other.
+  const trial = windowText(gatedRun(), true);
+  assert.match(trial.body, /^THIS IS A TRIAL of the window, with sample text\. Nothing is sent and nothing starts/);
+  assert.deepEqual([trial.go, trial.stop, TRIAL_BUTTON], ["It works (trial)", "Stop", "It works (trial)"]);
+  assert.ok(!trial.body.includes('Click "Go ahead"') && trial.body.includes('this trial never does'));
+  assert.notEqual(trial.title, text.title);
   // Every number of credits the yes states is shown; a run without a file says "none".
   assert.deepEqual(creditsIn("Yes, my Adobe account, masks, 0 credits, or up to 300 credits"), [0, 300]);
   assert.deepEqual(creditsIn("credits are fine, 1,000 credits"), []);
@@ -530,6 +537,13 @@ test("the window shows the files, the tools, the quoted yes and its credits", ()
   // A character that does not show, or that turns the text around, is written out.
   const hidden = windowText(run("--allow", "image_select_subject", "--owner-yes", "Yes: my Adobe account, masks, 0 credits \u202eti dnes ton od\u200b")).body;
   assert.ok(hidden.includes("<U+202E>ti dnes ton od<U+200B>"));
+  // What may show is named, not what may not: ASCII, Latin letters and punctuation. A
+  // filler, a joiner, a blank, a letter of another script and a line break are written out.
+  assert.equal(shown("Ærø née – “1598.jpg”, C:\\photos\\søn (1)"), "Ærø née – “1598.jpg”, C:\\photos\\søn (1)");
+  assert.equal(shown("a\u3164b\u034fc\u2800d\u05d0e\u0430f\u00a0g\nh\ti"), "a<U+3164>b<U+034F>c<U+2800>d<U+05D0>e<U+0430>f<U+00A0>g<U+000A>h<U+0009>i");
+  assert.equal(shown("\u{1F600}\u0661"), "<U+1F600><U+0661>");
+  const folder = windowText({ command: "run", send: [{ name: "1598.jpg", from: join(HOME, "pho\u200btos", "1598.jpg") }], allow: ["font_search"], ownerYes: YES }).body;
+  assert.ok(folder.includes("pho<U+200B>tos"));
   assert.ok(!/[\u202e\u200b]/.test(hidden));
 });
 
@@ -641,6 +655,15 @@ test("the window's file is plain ASCII, puts the focus on Stop and reads nothing
   assert.match(ps, /\$form\.AcceptButton = \$stop/);
   assert.match(ps, /\$form\.CancelButton = \$stop/);
   assert.match(ps, /\$go\.Enabled = \$false/);
+  // Only the mouse presses the go-ahead button: no Click handler (Enter and Space raise
+  // Click on a button with the focus), no place in the Tab order, no shortcut letter.
+  assert.match(ps, /\$go\.Add_MouseUp\(\{/);
+  assert.ok(!/\$go\.Add_Click/.test(ps));
+  assert.match(ps, /\[System\.Windows\.Forms\.MouseButtons\]::Left/);
+  assert.match(ps, /\$go\.ClientRectangle\.Contains\(\$_\.Location\)/);
+  assert.match(ps, /\$go\.TabStop = \$false/);
+  assert.match(ps, /\$go\.UseMnemonic = \$false/);
+  assert.equal(ps.match(/\$script:answer = 'go'/g).length, 1);
   assert.match(ps, /\$script:answer = 'closed'/);
   assert.match(ps, /'go:' \+ \[string\]\$in\.nonce/);
   // Started with a hidden console, the first showing of the window is hidden too (the first
@@ -657,13 +680,20 @@ test("nothing skips the window: no flag, no environment variable, no file", asyn
     assert.throws(() => run("--allow", "image_select_subject", "--owner-yes", YES, flag), /needs a value|unknown option/, flag);
   }
   assert.throws(() => parseArgs(["window", "--out", OUT], checks), /"window" takes no option/);
-  // The script reads no environment variable at all, and no file decides about the window.
+  // The script's own text reads no environment variable, and it asks before it launches.
   const source = readFileSync(SCRIPT, "utf8");
   assert.ok(!/process\.env|\bgetenv\b/.test(source));
   assert.equal(source.match(/\bownerClick\(o, show\)/g).length, 1);
   assert.equal(source.match(/spawn\("claude"/g).length, 1);
   assert.ok(source.indexOf("await ownerClick(o, show)") < source.indexOf("await launch(o, run, clicked)"));
-  assert.match(source, /if \(windowNeeded\(o\) && clicked !== "go"\) throw fail\(/);
+  // The session checks the click itself, first of all, whoever calls it.
+  assert.match(source, /async function session\(o, run, clicked\) \{\r?\n  clickHeld\(o, clicked\);/);
+  const needs = gatedRun();
+  assert.equal(clickHeld(needs, "go"), undefined);
+  for (const clicked of ["not-needed", "stop", "GO", "", undefined, null, true]) {
+    assert.throws(() => clickHeld(needs, clicked), (error) => error.usage === true && /gave no go-ahead: nothing was started/.test(error.message), String(clicked));
+  }
+  for (const clicked of ["not-needed", "go", undefined]) assert.equal(clickHeld(run("--allow", "font_search"), clicked), undefined);
 
   // The run itself, in a folder of its own, with a window and a session that the test
   // gives it: what is asked, in which order, and what starts.
@@ -708,6 +738,10 @@ test("nothing skips the window: no flag, no environment variable, no file", asyn
   assert.match(trial[0].body, /^THIS IS A TRIAL of the window/);
   assert.match(trial[0].title, /trial/);
   assert.match(printed.mock.calls.at(-3).arguments[0], /^window: shown, and it ended with "stop"\. Nothing was started$/);
+  assert.equal(await main(["window"], { show: async () => "go", launch }), 0);
+  assert.equal(printed.mock.calls.at(-1).arguments[0], 'window: shown, and it ended with a click on "It works (trial)". Nothing was started');
+  assert.equal(await main(["window"], { show: async () => "no-window", launch }), 3);
+  assert.deepEqual(trace.splice(0), []);
   assert.equal(printed.mock.calls.at(-1).arguments[0], "window: it could not be shown");
 });
 

@@ -50,18 +50,23 @@
 //   as a whole word.
 // - Before a run that sends a file or may call a tool outside READ_ONLY, the script opens a
 //   window on the owner's screen (adobe-window.ps1 beside this file; Windows only) that
-//   shows the files, the tools, the quoted yes and its credits, and waits for a click.
-//   "Stop", a closed window, no click within WINDOW_SECONDS, or no window at all (another
-//   system, no desktop) ends the run with exit code 2: nothing is copied and no session
-//   starts. No flag, environment variable or file skips it, and a click is for the one run
-//   that asked: nothing is kept. A read-only run opens no window.
+//   shows the files, the tools, the quoted yes and its credits, and waits for a click of
+//   the mouse on "Go ahead" (no key presses that button). "Stop", a closed window, no click
+//   within WINDOW_SECONDS, or no window at all (another system, no desktop) ends the run
+//   with exit code 2: nothing is copied and no session starts. No flag and no environment
+//   variable skips it, and no file switches it off: the files that decide are this script
+//   and adobe-window.ps1 themselves. A click is for the one run that asked: nothing is
+//   kept. A read-only run opens no window.
 // The script cannot know what the owner said. It checks that a yes is there and names the
 // files; whether the owner gave it is the recipe's gate (recipes/photos.md).
 // What the window does not stop. It is a second channel, independent of the text an agent
 // writes, not a proof of who clicked. An agent that controls the desktop (computer use, a
-// program that sends clicks or keys to a window) can click it, and an agent with a shell
-// can start a session of its own without this script. The window shows the owner a yes
-// they did not give; it does not make quoting one impossible.
+// program that sends clicks to a window) can click it. An agent that can change this
+// script or adobe-window.ps1 can change what they do. An agent with a shell can start a
+// session of its own without this script. And an agent can ask the owner to click: the
+// trial's button is not called "Go ahead" for that reason, and a real run's window says
+// that it is one. The window shows the owner a yes they did not give; it does not make
+// quoting one impossible.
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { copyFileSync, createWriteStream, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
@@ -508,16 +513,23 @@ export const WINDOW_SECONDS = 300;
 export const POWERSHELL = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe";
 export const WINDOW_FILE = join(dirname(fileURLToPath(import.meta.url)), "adobe-window.ps1");
 
-// A character that does not show, or that changes the order in which text shows (a
-// right-to-left override, say), is written out: the window shows what the child will get.
-const shown = (text) => String(text).replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, (c) => `<U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}>`);
+// The window shows as they are: printable ASCII, Latin letters (é, æ, ø) and punctuation.
+// Every other character is written out as its code: one that does not show (a zero-width
+// space, a filler), one that changes the order in which text shows (a right-to-left
+// override, a letter of a right-to-left script), a letter that looks like a Latin one.
+// So the owner reads what the child will get. The rule names what may show, not what may not.
+const PLAIN = /[\x20-\x7e\p{Script=Latin}\p{P}]/u;
+export const shown = (text) => [...String(text)].map((c) => (PLAIN.test(c) ? c : `<U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}>`)).join("");
 
 // What the window shows for a run: the files by name and folder, every Adobe tool the
 // session may call, the yes as the child will get it and the credits it states.
 export function windowText(o, trial = false) {
   const credits = creditsIn(o.ownerYes);
   const body = [
-    ...(trial ? ["THIS IS A TRIAL of the window, with sample text. Nothing is sent and nothing starts, whatever you click.", ""] : []),
+    trial
+      ? "THIS IS A TRIAL of the window, with sample text. Nothing is sent and nothing starts, whatever you click."
+      : "THIS IS A REAL RUN, not a trial of the window: \"Go ahead\" starts it.",
+    "",
     "An agent has asked the adobe-session script to start an Adobe session that sends a file of yours or may change something in your Adobe account.",
     "",
     `Files it sends to Adobe (${o.send.length}):`,
@@ -531,10 +543,18 @@ export function windowText(o, trial = false) {
     `    "${shown(o.ownerYes ?? "")}"`,
     `Credits named in that yes: ${credits.length ? credits.join(", ") : "none found"}`,
     "",
-    `Click "Go ahead" only if you gave this yes in the chat. "Stop", closing this window or no click within ${WINDOW_SECONDS / 60} minutes starts nothing.`,
+    trial
+      ? `Click "${TRIAL_BUTTON}" with the mouse to show that the window works. A real run has a "Go ahead" button instead: this trial never does.`
+      : `Click "Go ahead" with the mouse only if you gave this yes in the chat. "Stop", closing this window or no click within ${WINDOW_SECONDS / 60} minutes starts nothing.`,
   ].join("\r\n");
-  return { title: trial ? "adobe-session: a trial of this window" : "adobe-session: go ahead?", body, go: "Go ahead", stop: "Stop", wait: "Stops by itself in {s} seconds", seconds: WINDOW_SECONDS, arm: 2 };
+  // "Go ahead" is on a real run's window and on no other: an owner asked to click it in a
+  // "test" is looking at a real run.
+  return {
+    title: trial ? "adobe-session: a trial of this window" : "adobe-session: go ahead?", body,
+    go: trial ? TRIAL_BUTTON : "Go ahead", stop: "Stop", wait: "Stops by itself in {s} seconds", seconds: WINDOW_SECONDS, arm: 2,
+  };
 }
+export const TRIAL_BUTTON = "It works (trial)";
 const WINDOW_SAMPLE = Object.freeze({
   command: "run", send: [{ name: "example-photo.jpg", from: "C:\\example\\photos\\example-photo.jpg" }],
   allow: ["image_select_subject", "font_search"], ownerYes: "Yes: example-photo.jpg to my Adobe account, masks, 0 credits (sample text)",
@@ -557,6 +577,9 @@ export function showWindow(text, { start = spawn, platform = process.platform, e
   return new Promise((done) => {
     if (platform !== "win32" || !exists(POWERSHELL) || !exists(WINDOW_FILE)) return done("no-window");
     let child;
+    // "-ExecutionPolicy Bypass" is for this one process and this one file of the script's
+    // own: without it Windows' default policy runs no script file at all, and the window
+    // would never open. "-NoProfile": no profile script of the user's runs in it.
     try {
       child = start(POWERSHELL, ["-NoLogo", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-STA", "-File", WINDOW_FILE], {
         stdio: ["pipe", "pipe", "ignore"], windowsHide: true, env: { SystemRoot: "C:\\Windows" },
@@ -619,7 +642,8 @@ export async function main(argv, { show = showWindow, launch = session } = {}) {
     let answer;
     try { answer = await show(windowText(WINDOW_SAMPLE, true)); } catch { answer = "failed"; }
     const ended = ["go", "stop", "closed", "timeout"].includes(answer);
-    console.log(ended ? `window: shown, and it ended with "${answer}". Nothing was started` : "window: it could not be shown");
+    const said = answer === "go" ? `a click on "${TRIAL_BUTTON}"` : `"${answer}"`;
+    console.log(ended ? `window: shown, and it ended with ${said}. Nothing was started` : "window: it could not be shown");
     return ended ? 0 : 3;
   }
   const brief = o.command === "run" ? readBrief(o.brief) : "";
@@ -648,8 +672,14 @@ export async function main(argv, { show = showWindow, launch = session } = {}) {
   return end.code;
 }
 
-async function session(o, run, clicked) {
+// The session's own check of the click, beside ownerClick: without a go-ahead from the
+// window, a run that needs one starts no session, whoever calls.
+export function clickHeld(o, clicked) {
   if (windowNeeded(o) && clicked !== "go") throw fail("the owner's window gave no go-ahead: nothing was started");
+}
+
+async function session(o, run, clicked) {
+  clickHeld(o, clicked);
   plainFolder(run.control);
   stageFiles(run.stage, o.send);
   mkdirSync(run.results);

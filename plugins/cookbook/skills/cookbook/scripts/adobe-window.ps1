@@ -7,9 +7,10 @@
 #      "stop", "closed" (the window was closed without a click) or "timeout".
 #
 # It takes no argument, reads no file and no environment variable, and keeps nothing: a
-# click is for the one run that asked. "Stop" has the focus and is the button for Enter and
-# Esc, and the go-ahead button stays off for the first seconds, so a key meant for another
-# window does not start a run. Any error ends it without "go".
+# click is for the one run that asked. Only the mouse presses the go-ahead button: it
+# answers a left mouse button let go over it, which no key raises, and it stays off for the
+# first seconds. "Stop" has the focus and is the button for Enter and Esc. So a key meant
+# for another window never starts a run. Any error ends it without "go".
 # ASCII only: Windows PowerShell 5.1 reads a script without a byte-order mark in the system
 # code page. The text to show arrives escaped (\uXXXX) for the same reason.
 $ErrorActionPreference = 'Stop'
@@ -61,6 +62,9 @@ $go.Text = [string]$in.go
 $go.Location = New-Object System.Drawing.Point(530, 450)
 $go.Size = New-Object System.Drawing.Size(158, 36)
 $go.Enabled = $false
+$go.TabStop = $false
+$go.UseMnemonic = $false
+$stop.UseMnemonic = $false
 $form.Controls.Add($go)
 
 $form.AcceptButton = $stop
@@ -73,7 +77,12 @@ $waitText = [string]$in.wait
 $wait.Text = $waitText.Replace('{s}', [string]$script:left)
 
 $stop.Add_Click({ $script:answer = 'stop'; $form.Close() })
-$go.Add_Click({ if ($go.Enabled) { $script:answer = 'go'; $form.Close() } })
+# Not Click: Enter, Space and a default button all raise Click on a button that has the
+# focus, and the arrow keys can move the focus here. MouseUp comes from the mouse alone.
+$go.Add_MouseUp({
+  $left = $_.Button -eq [System.Windows.Forms.MouseButtons]::Left
+  if ($go.Enabled -and $left -and $go.ClientRectangle.Contains($_.Location)) { $script:answer = 'go'; $form.Close() }
+})
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 1000

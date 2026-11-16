@@ -23,22 +23,29 @@ https://github.com/TOKYO-BEANS/claude-cookbook/pull/57#discussion_r4582883218
 - The checks of `--owner-yes` are unchanged: the window is added and nothing is removed.
   `stageFiles` is split into its checks (`checkStage`, made before the window and again
   after the click) and the copy; what it accepts and refuses is the same.
-- Nothing skips the window: no flag, no environment variable, no file, and a click is not
-  remembered. The script reads no environment variable. The window's process is Windows
-  PowerShell by its fixed path with a fixed environment (`SystemRoot` and nothing of the
-  caller's); the text goes in on standard input, not on a command line. Its answer counts
-  as a go-ahead only with a clean exit and a random mark made for that one run.
+- Nothing skips the window: no flag and no environment variable, no file switches it off,
+  and a click is not remembered. The script's own text reads no environment variable
+  (`claude` and `taskkill` are still found through `PATH`, and the temporary and home
+  folders through the system's variables, as before; none of that decides about the
+  window). The window's process is Windows PowerShell by its fixed path with a fixed
+  environment (`SystemRoot` and nothing of the caller's); the text goes in on standard
+  input, not on a command line. Its answer counts as a go-ahead only with a clean exit and
+  a random mark made for that one run. The session checks the click again itself
+  (`clickHeld`).
 - The window is `scripts/adobe-window.ps1` beside the script: Windows Forms through Windows
-  PowerShell 5.1, no dependency. "Stop" has the focus and takes Enter and Esc; "Go ahead"
-  is off for the first two seconds. A character that does not show, or that turns text
-  around, is written out (`<U+202E>`).
+  PowerShell 5.1, no dependency. Only the mouse presses "Go ahead": the button answers a
+  left mouse button let go over it, has no place in the Tab order, and is off for the first
+  two seconds. "Stop" has the focus and takes Enter and Esc. Only ASCII, Latin letters and
+  punctuation show as they are; every other character is written out (`<U+202E>`).
 - `--dry-run` opens no window and prints, under `window`, whether a real run would and the
   text it would show. A new command, `window`, shows the window alone with sample text and
-  starts nothing: the trial below.
+  starts nothing: the trial below. Its button is "It works (trial)"; "Go ahead" is on a
+  real run's window only, and that window's first line says that it is a real run.
 - What the window does not stop is said in the script's header, on the setup page and on
-  the new page: an agent that controls the desktop can click it, and an agent with a shell
-  can start a session of its own without the script. It is a second, independent channel,
-  not a proof of identity.
+  the new page: an agent that controls the desktop can click it, an agent that can change
+  the script or the window's file can change what they do, an agent with a shell can start
+  a session of its own without the script, and an agent can ask the owner to click. It is
+  a second, independent channel, not a proof of identity.
 - Pages. `recipes/photos-adobe-connector.md` and `recipes/photos-adobe-connector-setup.md`
   say that such a run waits for the click, and the setup page says what the window does not
   stop. Both were within 30 bytes of the 4,000 limit of `scripts/check.mjs` and the full
@@ -55,7 +62,7 @@ https://github.com/TOKYO-BEANS/claude-cookbook/pull/57#discussion_r4582883218
 - Plugin 0.31.3.
 
 **Tried by hand, 16 November 2026**, with the owner told first each time (question tool,
-"Open it now (Recommended)" twice). `node scripts/adobe-session.mjs window`:
+"Open it now (Recommended)" three times). `node scripts/adobe-session.mjs window`:
 - First try: no window appeared, and the command ended after five minutes with "timeout"
   and started nothing. Failure, found by a probe: the script starts the window's process
   with its console hidden (`windowsHide`), and Windows then hides the first showing of the
@@ -66,12 +73,17 @@ https://github.com/TOKYO-BEANS/claude-cookbook/pull/57#discussion_r4582883218
   the real window stayed hidden. Owner: nobody; the fix above replaced it.
 - Second try, after the fix: the window appeared, the owner clicked "Go ahead", and the
   command printed `window: shown, and it ended with "go". Nothing was started`, exit 0,
-  five seconds after it started. Evidence:
-  `~/.local/share/claude-cookbook/evidence/2026-11-16-adobe-owner-window/`
-  (`window-trial.txt`, `window-hidden-probe.txt`).
-- Not tried by hand: "Stop", the close button and the five-minute limit on a real run. The
-  tests cover how the script reads each of them; the first try above showed the time limit
-  ending a window nobody could click.
+  five seconds after it started (the trial's button was still called "Go ahead" then).
+- Third try, after the review's fixes (the mouse-only button, the trial's own button; the
+  owner told first again, "Open it now (Recommended)"): the owner clicked with the mouse and
+  the command printed `window: shown, and it ended with a click on "It works (trial)".
+  Nothing was started`, exit 0, six seconds after it started.
+- Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-adobe-owner-window/`
+  (`window-trial.txt`, `window-trial-mouse.txt`, `window-hidden-probe.txt`,
+  `mouse-probe.txt`, `dry-run-gated.json`).
+- Not tried by hand: "Stop", the close button, a key on the window, and the window of a
+  real run. The tests cover how the script reads each answer, the probe covers the keys,
+  and the first try above showed the time limit ending a window nobody could click.
 
 **From #57** (the entry below), after it merged. #57 merged as `c004774` on 16 November
 2026, by `gh pr merge --squash --match-head-commit a8e1b2c`, not through `sa-release`: its
@@ -95,6 +107,22 @@ not verified (1 vacuous, 1 unsupported)").
   made those three calls, sent no file, was denied nothing and exited 0
   (`proof-installed-0.31.2/run-output.txt`, `out/`, `out.adobe-session/`). USD 0.18 of plan
   usage as Claude Code reports it; the connector's calls report no cost: unsettled.
+
+**Reviewed before the first push** by a `cookbook:review` subagent that did not build it
+and was told not to open the window. Nothing high. It found no way for a run started from
+the command line to reach the session without a go-ahead, and the checks of the yes
+unchanged. One medium, fixed: once "Go ahead" switched on, Tab or an arrow key could move
+the focus to it and Enter or Space pressed it (the button answered `Click`); it answers the
+mouse alone now, and a probe on an off-screen copy of the window showed `PerformClick`,
+`Click`, a right button, a left button outside the button and a switched-off button all
+leaving the answer at "closed", and a left button over it giving "go"
+(`mouse-probe.txt` in the evidence folder). Four low, all taken: the wording on files and
+environment variables claimed more than the code does (both above); the rule for
+characters that do not show listed what may not show and missed fillers and
+right-to-left letters, and now lists what may; the trial had the same "Go ahead" button as
+a real run, so an owner could be asked to click it "as a test"; and the session's own
+check of the click was tested by its text alone. Also taken from its notes: the page says
+to give the command more time than the window's five minutes.
 
 **Review rounds.** Three, set before the first push.
 
