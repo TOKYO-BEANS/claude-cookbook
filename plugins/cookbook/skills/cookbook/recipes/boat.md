@@ -19,9 +19,10 @@ plan since 16 November 2026. No plugin, no MCP server and no skill pack: the CLI
 - **An upload is a scanned copy of a listed repository.** `--push` sends the files git
   tracks, with their uncommitted edits, and never an untracked file. Gitleaks reads the copy
   first: a finding, or a scan with no result, stops the run, and a finding goes to the owner.
-  The repository must be on the upload list ([where it is](boat-setup.md)). Add one once,
+  The repository must be on the upload list ([where and how](boat-setup.md)). Add one once,
   after checking that it is public or the owner's own and tracks no customer data; one that
-  does needs the owner's yes.
+  does needs the owner's yes. A file shaped like data (a spreadsheet, a database, a dump,
+  an archive) stops the run until the list names it: look at it first.
 - **Tests that need an install:** `-- bash -c 'npm ci --ignore-scripts && npm test'`, from
   the committed lockfile; install scripts on only when the tests need them. The install
   stays in the sandbox.

@@ -21,8 +21,10 @@
   copy and run `boat --version`.
 - **The upload list** of `boat-run.mjs` is `~/.local/share/boat-run/upload-allowed.txt`, one
   `github.com/owner/name` a line, `#` for a comment; a repository with no origin is listed
-  by its folder. It is outside every repository on purpose. Its `slots` folder beside it
-  holds one file per run under way.
+  by its folder. After the name, `data:` and the data-shaped files that were looked at and
+  hold no customer data, each a path or a folder ending in `/`
+  (`... data: fixtures/prices.csv db/migrations/`). It is outside every repository on
+  purpose. Its `slots` folder beside it holds one file per run under way.
 - The API key ends on 10 February 2027 (the catalog carries the date). A 401 means it ran
   out: the owner makes a new one in the dashboard and saves it through the masked key window.
 - Proven on 12 November 2026: `boat run --type small` had a sandbox ready in under a second

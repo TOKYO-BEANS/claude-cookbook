@@ -15,6 +15,12 @@ In its first week boat had run for 223 seconds in all.
 - Private code: "Standing yes, code only". The code of the owner's own repositories may be
   pushed, with `--no-env`; customer data and credentials still need a yes per task.
 
+**The owner's two answers on the security review threads (question dialog, 16 November
+2026), after three review rounds were used.**
+- The upload list can go stale: "Add a data-file check (Recommended)". Built, see below.
+- An approval step before every run: "Accept: no approval per run (Recommended)". Runs stay
+  unprompted inside the script's limits; the yes is written in that thread.
+
 **What changed.**
 - `skills/cookbook/scripts/boat-run.mjs`, the one route to a sandbox for a job, after two
   findings of GitHub's security review on #70 (an upload of the folder with no safeguard;
@@ -24,7 +30,7 @@ In its first week boat had run for 223 seconds in all.
   on or the wallet holds money or the plan cannot be read. `--push` sends a copy: tracked
   files with their uncommitted edits (`git stash create`, `git archive`), no untracked
   file, no symbolic link, and only after Gitleaks passed it with its default rules.
-  26 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
+  31 tests in `scripts/boat-run.test.mjs`. The numbers are mine, inside the owner's
   allowance; the owner can change them.
 - After the next review round on the script itself: `--keep` is gone (a kept sandbox ran on
   outside the limits); each run holds a file of its own and counts the others, so two that
@@ -32,6 +38,12 @@ In its first week boat had run for 223 seconds in all.
   `--push` needs the repository on an upload list outside every repository
   (`~/.local/share/boat-run/upload-allowed.txt`), because no script can tell code from
   customer data. This repository is on the list of this PC (it is public).
+- After the fourth round: the reserve counts the other nine places as full runs; the copy's
+  own `.gitleaksignore` is moved out for the scan (it did quiet Gitleaks: checked by hand,
+  and the test now writes the finding's real fingerprint); a state folder that cannot be
+  written is "not started", not a crash. And, on the owner's answer below, every upload is
+  read for data-shaped files (spreadsheets, databases, dumps, mail exports, archives): one
+  that the list does not name for that repository stops the run.
 - `scripts/stack-updates-connect.test.mjs`: three made-up key-shaped strings are now joined
   when the test runs. Gitleaks flagged them as `generic-api-key` on the first upload of this
   repository, and the script rightly refused the run. They were test values (alphabet runs),

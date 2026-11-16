@@ -11,7 +11,9 @@
 //   scan with no result, stops the run. The copy is removed afterwards.
 // - --push needs the repository on the upload list, a file on this PC outside every
 //   repository: the script cannot tell code from customer data, so a repository is listed
-//   once, on purpose, and only when it tracks none.
+//   once, on purpose, and only when it tracks none. A list goes stale, so every upload is
+//   also read for files shaped like data (a spreadsheet, a database, a dump, a mail export,
+//   an archive): one that the list does not name for that repository stops the run.
 // - The sandbox is always deleted when the command ends: a kept one would run on outside
 //   these limits.
 // - Nothing starts while the plan cannot be read, while something could bill past it, or
@@ -19,7 +21,7 @@
 //   the command's own.
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,7 +79,10 @@ export function gate(run, plan) {
     return `one run takes at most ${LIMITS.runSeconds} seconds of the plan's time (${run.type}: a timeout of ${Math.floor(LIMITS.runSeconds / RATE[run.type])}); more needs the owner's yes`;
   }
   if (p.activeSandboxes >= LIMITS.active) return `${LIMITS.active} sandboxes are running already; more at once needs the owner's yes`;
-  if (p.subscriptionRemainingSeconds - cost < p.subscriptionQuotaSeconds * LIMITS.reserve) {
+  // boat's figure does not yet hold what the runs under way will take: count every other
+  // place as taken by a run of the full hour.
+  const underWay = (LIMITS.active - 1) * LIMITS.runSeconds;
+  if (p.subscriptionRemainingSeconds - cost - underWay < p.subscriptionQuotaSeconds * LIMITS.reserve) {
     return `a fifth of the month's time is kept back for the vetting step, and this run would go into it; the owner's yes first`;
   }
   return null;
@@ -129,8 +134,22 @@ export function stage(folder) {
 }
 
 // Gitleaks on the copy, with its default rules: no ignore file of the repository's own, and
-// a "gitleaks:allow" comment in a file does not quiet it.
+// a "gitleaks:allow" comment in a file does not quiet it. Gitleaks also reads a
+// .gitleaksignore at the top of the folder it scans, so the copy's is moved out for the scan
+// and put back for the upload.
 export function scan(dir, tmp) {
+  const own = join(dir, ".gitleaksignore");
+  const aside = join(tmp, "gitleaksignore-of-the-copy");
+  const had = existsSync(own);
+  if (had) renameSync(own, aside);
+  try {
+    return scanCopy(dir, tmp);
+  } finally {
+    if (had) renameSync(aside, own);
+  }
+}
+
+function scanCopy(dir, tmp) {
   const cfg = join(tmp, "gitleaks.toml");
   const none = join(tmp, "gitleaks-ignore");
   const report = join(tmp, "gitleaks.json");
@@ -193,10 +212,43 @@ export function normalKey(text) {
   return String(text).trim().replace(/\\/g, "/").replace(/^[a-z+]+:\/\//i, "").replace(/^[^@/]+@/, "").replace(/^([^/:]+):(?!\/)/, "$1/").replace(/\.git$/i, "").replace(/\/+$/, "").toLowerCase();
 }
 
-// One repository on a line; "#" starts a comment. A whole line must match: no patterns.
-export function onList(key, listText) {
-  if (!key) return false;
-  return String(listText).split(/\r?\n/).map((l) => normalKey(l.replace(/#.*$/, ""))).some((l) => l !== "" && l === key);
+// One repository on a line; "#" starts a comment. The whole name must match: no patterns.
+// After the name, "data:" and the data-shaped files that were looked at and may go, each a
+// path in the repository or a folder ending in "/" (no spaces in a path).
+// null when the repository is not listed, else { data: [paths] }.
+export function listEntry(key, listText) {
+  if (!key) return null;
+  for (const raw of String(listText).split(/\r?\n/)) {
+    const line = raw.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    const cut = line.search(/\sdata:(\s|$)/);
+    const name = normalKey(cut < 0 ? line : line.slice(0, cut));
+    if (name !== key) continue;
+    const data = cut < 0 ? [] : line.slice(cut).replace(/^\sdata:/, "").trim().split(/\s+/).filter(Boolean).map((d) => d.replace(/\\/g, "/").replace(/^\.\//, ""));
+    return { data };
+  }
+  return null;
+}
+
+export const onList = (key, listText) => listEntry(key, listText) !== null;
+
+// File names that hold records more often than code.
+export const DATA_SHAPED = /\.(csv|tsv|xls|xlsx|xlsm|xlsb|ods|numbers|sqlite|sqlite3|db|mdb|accdb|sql|dump|bak|parquet|avro|orc|ndjson|jsonl|pst|ost|mbox|eml|msg|vcf|zip|7z|rar|tar|gz|tgz|bz2|xz)$/i;
+
+// The data-shaped files in a folder, as paths with "/" from its top.
+export function dataFiles(dir, at = "") {
+  const found = [];
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const rel = at ? `${at}/${e.name}` : e.name;
+    if (e.isDirectory()) found.push(...dataFiles(join(dir, e.name), rel));
+    else if (DATA_SHAPED.test(e.name)) found.push(rel);
+  }
+  return found.sort();
+}
+
+// A file is named by its whole path, or by a folder above it that ends in "/".
+export function unnamed(files, named) {
+  return files.filter((f) => !named.some((n) => (n.endsWith("/") ? f.startsWith(n) : f === n)));
 }
 
 function isAlive(pid) {
@@ -234,9 +286,11 @@ const REAL = {
     try {
       list = readFileSync(UPLOAD_LIST, "utf8");
     } catch { /* no list yet: nothing is allowed */ }
-    return { ok: onList(key, list), key, list: UPLOAD_LIST };
+    const entry = listEntry(key, list);
+    return { ok: entry !== null, key, list: UPLOAD_LIST, data: entry ? entry.data : [] };
   },
   stage,
+  dataFiles,
   scan,
   boat: (argv) => {
     const r = boat(argv, { stdio: "inherit" });
@@ -261,7 +315,12 @@ export function main(argv, deps = REAL) {
   }
   const refusal = gate(run, plan);
   if (refusal) return stop(refusal);
-  const slot = deps.slot();
+  let slot;
+  try {
+    slot = deps.slot();
+  } catch (e) {
+    return stop(`no result (the count of runs under way could not be kept: ${oneLine(e?.code || e?.message)})`);
+  }
   if (!slot) return stop(`${LIMITS.active} runs from this PC are under way; more at once needs the owner's yes`);
   let staged = null;
   try {
@@ -271,6 +330,11 @@ export function main(argv, deps = REAL) {
         return stop(`${permit.key ? oneLine(permit.key) : "this folder"} is not on the upload list (${oneLine(permit.list)}): a repository is listed once, when it tracks code and no customer data; one that tracks customer data needs the owner's yes`);
       }
       staged = deps.stage(run.push);
+      const data = unnamed(deps.dataFiles(staged.dir), permit.data || []);
+      if (data.length > 0) {
+        const some = data.slice(0, 5).map(oneLine).join("; ");
+        return stop(`the upload holds ${data.length} data-shaped file${data.length === 1 ? "" : "s"} the upload list does not name (${some}${data.length > 5 ? "; ..." : ""}): look at each; name it on the list only when it holds no customer data, and take one that does to the owner`);
+      }
       const result = deps.scan(staged.dir, staged.tmp);
       if (!result.ok) return stop(`the secret scan of the upload: ${result.reason}`);
     }

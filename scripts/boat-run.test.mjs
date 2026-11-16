@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { LIMITS, boatArgv, gate, main, normalKey, onList, parseArgs, repoKey, scan, stage, takeSlot } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
+import { DATA_SHAPED, LIMITS, boatArgv, dataFiles, gate, listEntry, main, normalKey, onList, parseArgs, repoKey, scan, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
 // The plan as `boat limits --json` printed it on 16 November 2026, without the unused keys.
 const plan = (over = {}) => ({
@@ -58,10 +58,11 @@ test("at most ten sandboxes at once", () => {
   assert.match(gate(args("--timeout", "60", "--", "x"), plan({ activeSandboxes: 10 })), /10 sandboxes/);
 });
 
-test("a fifth of the month's time is kept back for the vetting step", () => {
+test("a fifth of the month's time is kept back for the vetting step, with the other nine places counted as full", () => {
   const run = args("--type", "default", "--timeout", "1000", "--", "x");
-  assert.equal(gate(run, plan({ subscriptionRemainingSeconds: 401000 })), null);
-  assert.match(gate(run, plan({ subscriptionRemainingSeconds: 400999 })), /kept back/);
+  // 400,000 kept back, 1,000 for this run, 9 x 3,600 for runs that may be under way.
+  assert.equal(gate(run, plan({ subscriptionRemainingSeconds: 433400 })), null);
+  assert.match(gate(run, plan({ subscriptionRemainingSeconds: 433399 })), /kept back/);
 });
 
 test("no run while something could bill past the plan, or while the plan cannot be read", () => {
@@ -181,9 +182,16 @@ test("the scan passes a plain copy and stops on a key, naming the rule and file 
     const body = "MIIEpAIBAAKCAQEA7bq98Q2n1x0Jw3kPz5m4Vt8sYcLr6uHdEoGf";
     const key = [["-----BEGIN", "RSA PRIVATE KEY-----"].join(" "), ...Array(6).fill(body), ["-----END", "RSA PRIVATE KEY-----"].join(" "), ""].join("\n");
     writeFileSync(join(dir, "deploy.pem"), key);
-    // A repository's own ignore file does not quiet the scan.
-    writeFileSync(join(dir, ".gitleaksignore"), "deploy.pem\n");
+    const first = scan(dir, tmp);
+    assert.equal(first.ok, false);
+    // A repository's own ignore file does not quiet the scan: the finding's real fingerprint,
+    // as Gitleaks reported it, is written there, and the scan still stops. The file goes up
+    // with the copy as it was.
+    const ignore = JSON.parse(readFileSync(join(tmp, "gitleaks.json"), "utf8")).map((f) => f.Fingerprint).join("\n") + "\n";
+    assert.match(ignore, /private-key/);
+    writeFileSync(join(dir, ".gitleaksignore"), ignore);
     const r = scan(dir, tmp);
+    assert.equal(readFileSync(join(dir, ".gitleaksignore"), "utf8"), ignore);
     assert.equal(r.ok, false);
     assert.match(r.reason, /^1 finding \(private-key in shop\/deploy\.pem\): a security finding goes to the owner$/);
     assert.ok(!r.reason.includes(body));
@@ -271,6 +279,38 @@ test("only a whole line of the list allows a repository: no patterns, no prefixe
   assert.ok(!onList("github.com/some-org/shop", "github.com/some-org/*\n*\n"));
 });
 
+test("a list line may name the data-shaped files that were looked at, by path or by folder", () => {
+  const list = "github.com/some-org/shop  data: fixtures/prices.csv db/migrations/ .\\docs\\export.xlsx  # looked at 16 Nov\ngithub.com/some-org/tools\ngithub.com/some-org/site data:\n";
+  assert.deepEqual(listEntry("github.com/some-org/shop", list), { data: ["fixtures/prices.csv", "db/migrations/", "docs/export.xlsx"] });
+  assert.deepEqual(listEntry("github.com/some-org/tools", list), { data: [] });
+  assert.deepEqual(listEntry("github.com/some-org/site", list), { data: [] });
+  assert.equal(listEntry("github.com/some-org/other", list), null);
+  // "data:" is not part of a name, and a name that merely ends like one is another repository.
+  assert.equal(listEntry("github.com/some-org/shop data: fixtures/prices.csv", list), null);
+  assert.ok(!onList("github.com/some-org/shopdata:", list));
+});
+
+test("a named file is that file, a named folder is everything under it, and nothing else", () => {
+  const files = ["db/migrations/001.sql", "db/migrations/old/000.sql", "db/dump.sql", "fixtures/prices.csv", "fixtures/prices.csv.bak", "fixtures2/prices.csv"];
+  assert.deepEqual(unnamed(files, ["fixtures/prices.csv", "db/migrations/"]), ["db/dump.sql", "fixtures/prices.csv.bak", "fixtures2/prices.csv"]);
+  assert.deepEqual(unnamed(files, ["fixtures", "db"]), files, "a folder without its slash names nothing under it");
+  assert.deepEqual(unnamed(files, []), files);
+  assert.deepEqual(unnamed([], ["x/"]), []);
+});
+
+test("data-shaped files are found at any depth by their name, in any case; code and text are not", () => {
+  const dir = mkdtempSync(join(tmpdir(), "boat-run-data-"));
+  try {
+    mkdirSync(join(dir, "src", "deep"), { recursive: true });
+    for (const f of ["app.js", "README.md", "package.json", "data.json", "src/list.txt", "src/Customers.CSV", "src/deep/orders.sqlite", "backup.tar.gz", "export.xlsx", "schema.sql"]) writeFileSync(join(dir, f), "x");
+    assert.deepEqual(dataFiles(dir), ["backup.tar.gz", "export.xlsx", "schema.sql", "src/Customers.CSV", "src/deep/orders.sqlite"]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  for (const yes of ["a.csv", "a.TSV", "a.xls", "a.parquet", "mail.pst", "people.vcf", "a.jsonl", "a.dump", "a.zip", "a.db"]) assert.ok(DATA_SHAPED.test(yes), yes);
+  for (const no of ["a.js", "a.json", "a.yaml", "a.md", "csv.js", "a.csv.md", "sql", "a.svg", "a.png", "a.lock"]) assert.ok(!DATA_SHAPED.test(no), no);
+});
+
 test("a repository's name on the list: its origin, or its folder when it has none; none outside git", () => {
   const { root, dir } = repo();
   try {
@@ -297,7 +337,8 @@ function world(over = {}) {
   const deps = {
     limits: () => plan(),
     slot: () => ({ release: () => released.push("slot") }),
-    permit: (folder) => { calls.push(["permit", folder]); return { ok: true, key: "github.com/some-org/shop", list: "/state/upload-allowed.txt" }; },
+    permit: (folder) => { calls.push(["permit", folder]); return { ok: true, key: "github.com/some-org/shop", list: "/state/upload-allowed.txt", data: ["fixtures/prices.csv"] }; },
+    dataFiles: (dir) => { calls.push(["data", dir]); return ["fixtures/prices.csv"]; },
     stage: (folder) => { calls.push(["stage", folder]); return { dir: "/tmp/s/shop", remove: () => removed.push("/tmp/s/shop") }; },
     scan: (dir) => { calls.push(["scan", dir]); return { ok: true }; },
     boat: (argv) => { calls.push(["boat", ...argv]); return 0; },
@@ -316,8 +357,8 @@ test("a run without an upload: the gate, then boat, and the command's exit code 
 test("a run with an upload: staged, scanned, pushed from the staged copy, and the copy removed", () => {
   const w = world();
   assert.equal(main(["--timeout", "120", "--push", ".", "--", "npm", "test"], w.deps), 0);
-  assert.deepEqual(w.calls.map((c) => c[0]), ["permit", "stage", "scan", "boat"]);
-  assert.deepEqual(w.calls[3].slice(1), ["run", "--type", "small", "--no-env", "--timeout", "120", "--push", "/tmp/s/shop", "--", "npm", "test"]);
+  assert.deepEqual(w.calls.map((c) => c[0]), ["permit", "stage", "data", "scan", "boat"]);
+  assert.deepEqual(w.calls[4].slice(1), ["run", "--type", "small", "--no-env", "--timeout", "120", "--push", "/tmp/s/shop", "--", "npm", "test"]);
   assert.deepEqual(w.removed, ["/tmp/s/shop"]);
 });
 
@@ -360,6 +401,25 @@ test("a repository that is not on the upload list is not copied, scanned or sent
   // A run with no upload needs no place on the list.
   const none = world({ permit: () => { throw new Error("not asked"); } });
   assert.equal(main(["--timeout", "120", "--", "node", "-v"], none.deps), 0);
+});
+
+test("a count of runs that cannot be kept starts nothing and says so, with exit 2", () => {
+  const w = world({ slot: () => { throw Object.assign(new Error("EACCES: permission denied, open 'C:\\state\\slots\\run-1-x'"), { code: "EACCES" }); } });
+  assert.equal(main(["--timeout", "120", "--", "x"], w.deps), 2);
+  assert.deepEqual(w.calls, []);
+  assert.match(w.out.join("\n"), /^BOAT-RUN: not started: no result \(the count of runs under way could not be kept: EACCES\)$/);
+});
+
+test("a data-shaped file the list does not name stops the upload before the scan, and the copy is removed", () => {
+  const w = world({ dataFiles: () => ["fixtures/prices.csv", "exports/customers.xlsx", "db/dump.sql"] });
+  assert.equal(main(["--timeout", "120", "--push", ".", "--", "npm", "test"], w.deps), 2);
+  assert.ok(!w.calls.some((c) => c[0] === "scan" || c[0] === "boat"));
+  assert.deepEqual(w.removed, ["/tmp/s/shop"]);
+  assert.match(w.out.join("\n"), /^BOAT-RUN: not started: the upload holds 2 data-shaped files the upload list does not name \(exports\/customers\.xlsx; db\/dump\.sql\)/);
+  // Six of them: five are shown and the rest is marked.
+  const many = world({ dataFiles: () => ["a.csv", "b.csv", "c.csv", "d.csv", "e.csv", "f.csv"] });
+  assert.equal(main(["--timeout", "120", "--push", ".", "--", "x"], many.deps), 2);
+  assert.match(many.out.join("\n"), /holds 6 data-shaped files .*\(a\.csv; b\.csv; c\.csv; d\.csv; e\.csv; \.\.\.\)/);
 });
 
 test("no free slot starts nothing", () => {
