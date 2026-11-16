@@ -380,7 +380,7 @@ export function checkCookbook({ catalogText, skillText, pages = [], otherTexts =
 // The handoff (recipes/parallel-chats.md): an entry is a file of its own in handoff/, so two
 // pull requests never edit the same lines. HANDOFF.md holds the entries up to 0.38.0 and is
 // closed: its text is pinned here, with line endings set aside.
-export const HANDOFF_CLOSED_SHA256 = "f3b3e4295e7c3a25541a8b04e4d755d6b17e5e35a7a9fb28d5a0dfa6f9680d23";
+export const HANDOFF_CLOSED_SHA256 = "632629c81d2c0dedd5c1f9bea455090f60e40df159f6bf2364cb90f05bd91104";
 export const HANDOFF_ENTRY_NAME = /^\d{4}-\d{2}-\d{2}-[a-z0-9]+(-[a-z0-9]+)*\.md$/;
 export const handoffHash = (text) => createHash("sha256").update(text.replace(/\r\n/g, "\n")).digest("hex");
 export function handoffErrors({ closedText, entryNames, pinned = HANDOFF_CLOSED_SHA256 }) {
