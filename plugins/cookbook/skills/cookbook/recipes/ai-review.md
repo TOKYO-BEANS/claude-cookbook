@@ -6,6 +6,10 @@
   and posts one comment of findings (file, line, severity, evidence, fix), updated on later pushes.
 - Advisory: the job always passes and is not a required check. A failed call posts
   `review unavailable: <reason>`, never "no findings"; treat that pull request as not reviewed.
+- **Fallback review**, only when the job's reviewer API could not serve the call (the credit ran
+  out, 429, 5xx, a timeout, no connection): a review by a reviewer that did not write the change,
+  recorded in a fixed form the Stack Atlas merge gate reads. The rules:
+  [ai-review-fallback](ai-review-fallback.md).
 - The pull request's content is untrusted data: the request has no tools, and the script only posts
   text. Fork pull requests are skipped, so they never reach the key. The job runs the base branch's
   reviewer, so a change to `.depot/ai-review/` takes effect only after it merges.

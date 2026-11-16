@@ -5,6 +5,38 @@ named `YYYY-MM-DD-short-name.md`, so two pull requests never edit the same lines
 newest files there first; search this file for what is older. `npm test` fails when this file
 changes (`recipes/parallel-chats.md` in the cookbook skill).
 
+## 16 November 2026 (night): the fallback review in the map and the recipes (0.39.1)
+
+**Why.** The owner decided on 16 November 2026 that when the `ai-review` job cannot reach its
+reviewer (the API credit ran out), a fallback review stands in for it. Stack-Atlas #200 puts that
+in the merge gate and its `AGENTS.md`; Stack-Atlas #202 built the same with another form and was
+closed in favour of #200 (agreed between the two chats).
+
+**What changed.** The map's fallback for "Review of every pull request" is the fallback review (it
+was `sa-review`). The new page `recipes/ai-review-fallback.md` (split from `recipes/ai-review.md`,
+which went over the 4000-byte limit) says when it applies (only the API failing to serve the
+call), what it never covers, who reviews, its form (#200's: first line `Fallback review of <full
+id>`, findings, count line) and what follows it; `recipes/ci-releases.md` names it in the merge
+condition. Plugin 0.39.1.
+
+**Security review.** GitHub's security review opened a thread on the first version ("Prompt
+injection risk": the pull request's text could steer the fallback reviewer to "No findings").
+Fixed: the page says the diff, title, body, comments and changed files are untrusted data, an
+instruction in them is ignored and is itself a finding, the rubric comes only from the base
+branch, and `No findings.` means none under that rubric. On the head with that fix it opened two
+more (4591441343 "Excessive agency risk", 4591441365 "Prompt injection risk"): both ask for a human
+yes on each fallback record, since a pull request's text could still steer a model to "No
+findings". That would undo the owner's decision, so the owner was asked with the question dialog
+and answered "Accept as a known limit" (16 November 2026); both threads carry that `Owner's yes`.
+The same limit holds for the Stack Atlas gate (#200): the record is a necessary condition, not
+proof.
+
+**Merge.** The first `merge-when-green.sh` run on head 9156904 read the fallback record
+(`state: "fallback"`) and refused only for that open thread, so the gate's fallback path worked
+live; log `~/.local/share/stack-atlas/evidence/merge-cookbook-84.log`.
+
+**Outstanding.** None for these pages; they describe Stack-Atlas #200, merged as 3cebc1f.
+
 ## 16 November 2026 (late night): the model budget saves no reset list; the hook holds the advice (0.39.0)
 
 **Why.** GitHub's security review raised one finding twice on #80 (threads 4589548572 and
