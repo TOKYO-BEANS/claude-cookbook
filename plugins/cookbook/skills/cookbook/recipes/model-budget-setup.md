@@ -15,20 +15,16 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
 
 - **The reading.** `GET https://api.anthropic.com/api/oauth/usage` with Claude Code's stored
   sign-in returns the week (`weekly_all`), the Fable limit (`weekly_scoped`, "Fable"), Fable's
-  part of the week (`weekly_scoped_shares`) and the reset time; `?cedar_ember=1` adds banked
-  resets.
+  part of the week (`weekly_scoped_shares`) and the reset time.
 - **Its limit.** A read that succeeds closes the endpoint to this sign-in for about two
-  minutes (429 at 103 seconds, 200 at 119). T3 Code reads it every minute and its Claude Code
-  probe every five, so T3 Code takes every slot: half of its own reads answer 429, and a read
-  from the script gets through only in the seconds before T3 Code's next one. From T3 Code's
-  server trace and one timed read.
+  minutes (429 at 103 seconds, 200 at 119). T3 Code reads it every minute, so it takes every
+  slot: half of its own reads answer 429, and the script's gets through only just before
+  T3 Code's next one.
 - **T3 Code's saved reading.** `~/.t3/caches/claudeAgent.json`, key `usageLimits`: `windows`
-  (`seven_day`, `seven_day_fable`, `five_hour` when open, `monthly_spend` when credits are on),
-  `resetCredits.options` when resets are banked, `unavailable` when its probe failed. Rewritten
-  every minute and not signed: the script uses it only when it has no signed reading
-  under an hour old and cannot read one, checks every value and stores none. Its figures
-  trailed a direct read by one and two points while `checkedAt` was seconds old: `checkedAt`
-  is when T3 Code asked, not the age of the figures.
+  (`seven_day`, `seven_day_fable`, `five_hour` when open), `unavailable` when its probe
+  failed. Rewritten every minute, not signed: the script uses it only with no signed reading
+  under an hour old and none to be read, checks every value and stores none. `checkedAt` is
+  when T3 Code asked, not the age of the figures: they trailed a direct read by two points.
 - **A thread switches itself.** `t3_thread_configure` then `t3_thread_send` with `queue`: the
   queued turn ran on Opus 5.5 with no one at the keyboard.
 
@@ -42,10 +38,12 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
   the owner's decision, not built.
 - **The status line's `rate_limits`.** It has the week and the session window, not the Fable
   limit.
-- **Reading more often, or a retry.** While T3 Code runs the endpoint is closed nearly all the
-  time, and each read that gets through costs T3 Code its next two.
-- **A lock around the read.** Its takeover after a crash was not race-free. Dropped: a failed
-  read writes only its own mark file, so it cannot replace a reading.
+- **Reading more often, or a retry.** Each read that gets through costs T3 Code its next two.
+- **The banked resets.** To the script's read the endpoint answers `eligible: false`;
+  T3 Code, reading as Claude Code, is shown them, but its file has them only every other
+  minute, and advice built on them changed every minute. The script reads none ("not read").
+- **A lock around the read.** Its takeover after a crash was not race-free. A failed read
+  now writes only its own mark file, so it cannot replace a reading.
 
 ## Weighed, not in the stack: several subscriptions through one hub
 

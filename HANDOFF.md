@@ -1,5 +1,38 @@
 # Handoff
 
+## 16 November 2026 (evening): the model budget leaves T3 Code's reset list out (0.35.5)
+
+**Why.** #72 merged as `aaf25de` (release event `verified`, execution 1570; merged by hand on
+the owner's "Merge #72 once", past a neutral Graphify Formal Verification titled "0/5
+PR-changed function(s) verified"; the gate allowed it with every security thread closed by a
+fix or the owner's yes). Plugin 0.35.4 was installed, and the first live runs disagreed: "use
+Fable" and, twenty seconds later, "use Opus", from the same T3 Code reading.
+
+**What was found.** T3 Code's file holds the banked resets (`resetCredits`) only in the minutes
+its own read of them got through, about every other one (sampled for seven minutes). With a
+Fable reset banked and Fable ahead of pace, the advice therefore changed every minute, and each
+change tells a thread to switch model. One timed read of the endpoint by the script (16:28:10
+UTC, 200) showed why the script itself never saw a reset: to its read the endpoint answers
+`cedar_ember.eligible: false` with no grants, while T3 Code, reading as Claude Code, is shown
+one weekly and one Fable reset. So "Banked resets: none" in 0.35.0 to 0.35.4 was never a
+reading.
+
+**What changed.** `parseT3` no longer takes the reset list from T3 Code's file, so the advice is
+the same in every minute. A reading says whether the resets were read (`resetsRead`), and the
+line says "not read (see T3 Code: Usage, Limits)" when they were not, never "none".
+
+**Verification.** 54 tests in `scripts/model-budget.test.mjs`; `npm test`.
+
+**Outstanding (Claude, next chat).** The script cannot see the banked resets, so the rules for
+when to redeem one never fire and a banked Fable reset does not lift the pace rule. Clears when
+the resets have a source that holds from minute to minute: either the script's read is made
+eligible (the difference from T3 Code's read is the `claude-cli` User-Agent and
+`skip_spend=1`; which of the two matters is not known), or the last list seen in T3 Code's
+file is kept between its reads. Each is a decision with a cost: the first names the script as
+another client, the second stores what an unsigned file said. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-reading/`
+(`merge-by-hand-cookbook-72.sh` and `.log`, `raw-grants-read.mjs` and `.json`, `timed-read.mjs`).
+
 ## 16 November 2026 (afternoon): the model budget reads T3 Code's saved reading (0.35.4)
 
 **Why.** The usage read answered 429 on nearly every try, so the budget said "unknown" and no

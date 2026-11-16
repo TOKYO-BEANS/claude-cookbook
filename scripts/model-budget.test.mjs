@@ -202,9 +202,17 @@ test("usage credits switched on is a warning: a limit hit would be billed", () =
 });
 
 test("line says the reading, the model and the banked resets", () => {
-  const u = usage();
+  const u = usage({ grants: [] });
   const text = line(u, decide(u, NOW), NOW, "UTC");
   assert.equal(text, "Model budget (16 Nov 12:00): week 37% used, Fable 59% of its share, pace 58%; weekly reset Thu 19 Nov 10:00. Use Fable 5.2 high: Fable is on pace. Banked resets: none.");
+});
+
+test("line: banked resets the reading does not hold are \"not read\", never \"none\"", () => {
+  // The endpoint answered "not eligible" to the script's own read on 16 November 2026 while T3 Code showed two resets.
+  const refused = parseUsage({ ...raw(), cedar_ember: { eligible: false, ineligible_reason: "x", grants: [] } });
+  assert.equal(refused.resetsRead, false);
+  assert.equal(usage({ grants: [] }).resetsRead, true);
+  for (const u of [usage(), refused, parseT3(t3(), NOW).usage]) assert.match(line(u, decide(u, NOW), NOW, "UTC"), /Banked resets: not read \(see T3 Code: Usage, Limits\)\.$/);
 });
 
 test("line rounds a time to the nearest minute", () => {
@@ -332,13 +340,15 @@ const seedT3 = (home, json) => {
 };
 const never = async () => { throw new Error("must not be called"); };
 
-test("parseT3 reads the week, the Fable share, the session window, banked resets and credits", () => {
-  const r = parseT3(t3({ session: 12, credits: true, options: [option(), option({ creditId: "g2", label: "5-hour reset", availableCount: 2, expiresAt: undefined })] }), NOW);
+test("parseT3 reads the week, the Fable share, the session window and credits, and leaves the banked resets out", () => {
+  const r = parseT3(t3({ session: 12, credits: true, options: [option(), option({ creditId: "g2", label: "5-hour reset", availableCount: 2 })] }), NOW);
   assert.equal(r.at, NOW - 60000);
   assert.deepEqual(r.usage.week, { used: 43, resetsAt: RESET });
   assert.deepEqual(r.usage.fable, { used: 69, usedOfWeek: 34.5, allowanceOfWeek: 50 });
   assert.deepEqual(r.usage.session, { used: 12, resetsAt: NOW + 3 * HOUR });
-  assert.deepEqual(r.usage.grants, [{ id: "g1", kind: "fable", left: 1, endsAt: Date.parse("2026-12-10T22:00:00Z") }, { id: "g2", kind: "session", left: 2, endsAt: null }]);
+  // T3 Code's file holds the banked resets only every other minute: they are never taken from it.
+  assert.deepEqual([r.usage.grants, r.usage.resetsRead], [[], false]);
+  assert.deepEqual(decide(parseT3(t3({ fable: 80 }), NOW).usage, NOW).model, decide(parseT3(t3({ fable: 80, options: [option()] }), NOW).usage, NOW).model, "the advice is the same in a minute with resets in the file and one without");
   assert.equal(r.usage.credits, true);
   const plain = parseT3(t3({ fable: null }), NOW).usage;
   assert.deepEqual([plain.fable, plain.session, plain.grants, plain.credits], [null, null, [], false]);
@@ -365,9 +375,6 @@ test("parseT3: a file that is odd in any way is no reading", () => {
     edit((l) => { delete l.windows[0].resetsAt; }),
   ];
   for (const json of odd) assert.equal(parseT3(json, NOW), null, JSON.stringify(json).slice(0, 120));
-  // A reset it cannot place is left out; the reading stands.
-  const r = parseT3(t3({ options: [option({ creditId: "../x" }), option({ label: "Mystery reset" }), option({ availableCount: 0 }), null, option({ creditId: "ok-1" })] }), NOW);
-  assert.deepEqual(r.usage.grants.map((g) => g.id), ["ok-1"]);
 });
 
 test("readUsage: a signed reading always comes before T3 Code's, which stands in only when there is none", async (t) => {
