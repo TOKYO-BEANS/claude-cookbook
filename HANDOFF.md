@@ -1,87 +1,136 @@
 # Handoff
 
-## 16 November 2026 (night): Codex is the second provider, and a consult has its page (0.32.0)
+## 16 November 2026 (night): a consult is defined on top of the Codex page (0.32.1)
 
 **Why.** The owner said on 16 November 2026: "we use codex now, to be able to do the consult
-thing". Two options pages still said that only the Claude provider is on.
+thing". Two options pages still said that only the Claude provider is on. While this job was
+open, another job merged the entry below (#62): Codex as a second model, with its own page
+and map row. This change was rebuilt on that page and does not stand beside it.
 
 **What "the consult thing" is here.** Nothing on this PC is named "consult": tstack
 (`t3dotgg/tstack`, still at `11e37a7`) is not installed, and none of its nine skills carries
 the name. Its two skills that ask another provider's model are `sol-loop` (one GPT Sol
-reviewer in a loop) and `council` (three providers). The Cookbook now defines a consult as
-one read-only question to Codex through T3 `delegate_task`, as advice.
+reviewer in a loop) and `council` (three providers). A consult is now the name for the second
+opinion in the Codex row: one question about our own work to Codex, as advice.
 
 **What changed.**
-- `recipes/consult.md` (new): when to consult and when not, the call
-  (`providerInstanceId: "codex"`, model `gpt-6-astra`; from a Codex session, Claude), the
-  brief, the three-round limit, what a consult does not replace (the `ai-review` job, the
-  merge condition, a security finding, a stop). `recipes/consult-limits.md` (new): what may be
-  sent, the model and cost limits. There is no fallback: without a second provider, say that
-  no second opinion was had.
-- The map: a new row "A second opinion from another provider's model (a consult)"; the
-  fallback of "One bounded side piece" now names Codex.
-- `catalog.json`: a new tool, Codex (active, recipe: the consult page); T3 Code's purpose
-  names both providers.
+- `recipes/codex-consult.md` (new): when to consult and when not, the call, the brief, the
+  three-round limit, and what a consult does not replace (the `ai-review` job, the merge
+  condition, a security finding, a stop). Every rule of `recipes/codex.md` holds for it: a
+  supervised start, never on text from outside, no unattended run without the owner's yes.
+- `recipes/codex-limits.md` (new): what may be sent, the refused models, the cost.
+- The map: the Codex row names the consult and links its page. `recipes/codex.md`,
+  `recipes/dispatch.md` and `recipes/debugging.md` point to it.
 - `options/check.md` and `options/ship.md`: the two "only the Claude provider is on"
-  sentences are corrected. `options/plan-and-build.md` has the consult's bullet.
-  `recipes/dispatch.md` and `recipes/debugging.md` point to the consult page.
-- Plugin 0.32.0.
+  sentences are corrected. `options/plan-and-build.md` names tstack's two skills among what
+  was weighed. The catalog is as #62 left it.
+- Plugin 0.32.1.
 
-**`sol-loop` and `council`: still not in use.** `sol-loop` names GPT Sol and forbids another
-model, and the ChatGPT sign-in refused `gpt-6.1-sol` ("model is not supported when using
-Codex with a ChatGPT account"); running it would take an API key or another plan, which is
-spending and the owner's decision. `council` needs three providers and two are on. Neither
-checks the merge condition in code, and the review of a pull request keeps its owner.
+**`sol-loop` and `council`: still not in use.** tstack is not installed. `sol-loop` picks the
+latest GPT Sol, and the ChatGPT sign-in refused `gpt-6.1-sol` ("model is not supported when
+using Codex with a ChatGPT account"; `gpt-6-luna` was refused the same way, and #62 records
+that `gpt-5.6-sol` answers). It starts its reviewer in the session's own mode, round after
+round, and an unattended Codex run has no owner's yes. `council` needs three providers and
+two are on. Neither checks the merge condition in code.
 
-**What was found.**
-- T3 Code's `orchestrator_capabilities` (16 November 2026): Claude and Codex can run a child
-  task; every other provider is switched off. Codex CLI 0.169.0, "Logged in using ChatGPT",
-  `model = "gpt-6-astra"` in its configuration.
-- Cost: Codex is included in a ChatGPT plan and draws on its allowance; credits are a
-  pay-as-you-go add-on that someone has to buy (chatgpt.com/codex/pricing and OpenAI's help
-  pages, read on 16 November 2026). Nothing in this job spent money.
-- The Codex part in the catalog has no update feed: the app updates itself, and its GitHub
-  releases are tagged `rust-v<version>`, which `feeds.mjs` does not parse.
+**The owner's decision, 16 November 2026.** GitHub's security review (discussion 4584893393
+on #63) found that a session may start a consult on its own judgement, which sends
+repository code to another provider, and asked for a confirmation before every consult. Put
+to the owner with the question tool, three options. Answer: "Standing yes, with limits
+(Recommended)". `recipes/codex-limits.md` carries it: a consult on the session's own
+judgement is allowed for code in the owner's own repositories; secrets, customer data,
+personal data and files outside the repository are never sent; anything else is asked
+first. That yes is about who may start a consult and what it may read. It is not the yes for
+an unattended run, which #62 leaves open with the owner.
 
 **Verification.**
-- One real consult on this change, by the new page's rules: `delegate_task` to Codex
-  (`gpt-6-astra`), read-only, completed. Verdict CHANGES with two findings, both agreed and
-  fixed before the first commit: the page told an agent to try another model and to fall
-  back to a subagent, which T3 Code's own rules forbid (now: stop and report, no fallback);
-  and it sent every consult to Codex, also from a session that runs on Codex (now: the other
-  provider). Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-codex-consult/`.
 - `npm test` passed.
-- AI review of the first commit (comment 6914545236 on #63): one medium and one low finding,
-  both fixed in the second commit. Medium: "read-only" was a sentence in the brief and
-  nothing in the call enforces it. The page now says so: read-only is asked for, not
-  enforced; the checkout and the branch are compared before and after; committed work can go
-  to the child in its own checkout (`isolation: "worktree"`). The map, the catalog and the
-  options pages no longer call the route read-only as if it were a property. Low: the
-  `ignored` note on `codex-chat-import` contradicted the new Codex tool. After the first
-  consult the commit that followed held only this change's ten files.
+- One real consult on this change: `delegate_task` to Codex (`gpt-6-astra`), completed, two
+  findings, both agreed and fixed (the page told an agent to try another model, which T3
+  Code's rules forbid; and it sent a consult to Codex also from a session that runs on Codex).
+- AI review of the first commit (comment 6914545236): one medium and one low finding. The
+  medium one, that "read-only" was only a sentence in the brief, is settled by #62's rule:
+  the supervised mode gives a read-only sandbox. The page says so, and still has the checkout
+  compared before and after.
+- GitHub's security review, second finding (discussion 4584893402): the page told an agent
+  to report a refusal with a line of Codex's configuration file. Fixed: the model tried and
+  the exact refusal text only.
+- Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-codex-consult/`.
 
-- GitHub's security review of the second commit: two findings on `recipes/consult.md`.
-  (1) Excessive agency (discussion 4584893393): a session may start a consult on its own
-  judgement, which sends repository code to another provider; the review asked for the
-  owner's confirmation before every consult. Put to the owner with the question tool, three
-  options. Answer: "Standing yes, with limits (Recommended)". The new page
-  `recipes/consult-limits.md` carries it: a consult on the session's own judgement is
-  allowed for code in the owner's own repositories; secrets, customer data, personal data and
-  files outside the repository are never sent; anything else is asked first, naming the
-  provider, the model and what would be sent. (2) Disclosure (discussion 4584893402): the
-  page told an agent to report a refusal with a line of Codex's configuration file. Fixed: a
-  refusal is reported with the model tried and the exact refusal text only, and the contents
-  of a configuration file are never pasted.
-- The limits moved to `recipes/consult-limits.md`, since `recipes/consult.md` had reached the
-  page size limit.
+**Failures and dead ends.**
+- The consult above ran unattended, in the session's own full-access mode, at about 10:55
+  UTC, before #62 and its supervised rule reached the default branch (11:03 UTC). The commit
+  that followed held only this change's files and the branch on the remote had not moved.
+  It is no precedent: the rule is a supervised start. Owner: Claude. Nothing to clear.
+- Two pages named `consult.md` and `consult-limits.md`, a second map row and a second
+  catalog entry for Codex were written before #62 was seen. They are gone: one row, one
+  catalog entry, pages under the Codex recipe.
+- A reply on #63 said that `delegate_task` has no read-only mode. That was wrong (#62 tested
+  one) and is corrected in a later comment there.
 
 **Outstanding.**
-- A consult from a Codex session to Claude has not been run. Owner: Claude. Clears with the
-  first real call from a Codex session; until then the page marks it as not proven.
+- A supervised consult, with the owner clicking, has not been run by this job; #62 tested the
+  mode. Owner: Claude. Clears with the first consult under the rule.
 - Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
-  Codex provider is switched on". The provider is on and `sol-loop` still cannot run (GPT Sol
-  is refused on the ChatGPT sign-in). Owner: Claude. Clears with a line in that repository's
-  next pull request.
+  Codex provider is switched on". The provider is on and `sol-loop` is still not in use.
+  Owner: Claude. Clears with a line in that repository's next pull request.
+
+## 16 November 2026 (late): Codex added as a second model (0.32.0)
+
+**Why.** The owner's job, with a yes, 16 November 2026: "bring Codex's global setup in line
+with Claude's, so a task delegated to Codex from T3 Code follows the same rules as Claude
+does", and "Whether Codex belongs in the stack as a second opinion, and for which jobs, is
+decided in the Cookbook, through a pull request there."
+
+**What changed.**
+- `catalog.json`: Codex, a trial, with no update feed (the desktop app updates itself). No new
+  spend: it runs on the ChatGPT account the owner already has.
+- The map: one new row, "a second opinion on our own work from a model that is not Claude",
+  owner Codex as a supervised T3 `delegate_task` run, fallback a `cookbook:review` subagent.
+  No other owner changes.
+- `recipes/codex.md`: what it is for and not for, how to start it, where its rules come from,
+  the model route, the proof. `options/plan-and-build.md`: why, and what was weighed.
+- Plugin 0.32.0.
+
+**Done outside the repository.** In `~/.codex` (backups in
+`~/.codex/backups/claude-parity-20261116/`): `AGENTS.md` now holds no rules, only pointers to
+`~/.claude/CLAUDE.md`, this Cookbook and a repository's `CLAUDE.md`, plus what differs for
+Codex; `TOOL-STACK.md` is a pointer to the Cookbook; `config.toml` gained the Parallel Search
+and Stagehand servers (keys at run time, as in Claude) and lost the unused
+`[model_providers.context-mode]` block, which held a device key as a literal.
+`approval_policy = "never"` and `sandbox_mode = "danger-full-access"` were read and left as
+the owner set them (they match Claude's `bypassPermissions`); changing them needs the owner.
+The owner named both values in the job ("The config has `approval_policy = "never"` and
+`sandbox_mode = "danger-full-access"`") and reserved any change to them ("Ask the owner
+before: ... changing Codex's approval or sandbox settings"). So the recipe keeps Codex
+to our own work: it reads and reports, a piece that edits is not among its jobs, and text
+from outside (a fork's pull request, an issue, a web page, a dependency) never goes to it
+but to a `cookbook:review` subagent. T3 Code's one narrower mode was tested:
+`runtimeMode: "approval-required"` gave a read-only sandbox with `approval_policy =
+"untrusted"`, and the first command waited for a person. There is no unattended read-only
+mode, so the recipe requires the supervised mode for this job. An unattended full-access
+run for it needs the owner's yes, which is not recorded; the question was put to the owner
+on 16 November 2026.
+
+**Verified.** A delegated run on each model (`gpt-5.6-sol`, `gpt-6-astra`) answered eleven
+questions on the rules correctly from its own instructions and named the files it read;
+both listed the two new servers. Evidence:
+`~/.local/share/stack-atlas/evidence/codex-parity-20261116/`.
+
+**Outstanding.**
+- Servers and skills connected in Codex that are not in the catalog (`agit`, `aikido`,
+  `firecrawl-local`, `magic-workflow`, `shinkai`, `windmill`, `n8n`, the Waggle plugin, the
+  Disler, Caveman and RTK skills and guides). Codex is told not to use them. Removing them is
+  an uninstall. Owner: the owner. Clears with a yes.
+- The gateway's device key is still in one older backup,
+  `~/.codex/config.toml.bak-20261116-before-gateway-removal`, and passed through a session.
+  Owner: the owner. Clears when it is revoked at the gateway, or when the owner says the
+  account is closed, and that backup is deleted.
+- Not proven, and so not a job in the recipe: a Codex piece that writes code.
+- Unattended Codex runs for the map row. Owner: the owner. Clears with the owner's yes to
+  full-access unattended runs on our own work (then record it in `recipes/codex.md`), or
+  when T3 Code gains a read-only unattended mode, or when the owner changes Codex's sandbox
+  setting. Until then the row means a supervised run.
 
 ## 16 November 2026 (evening): Macroscope weighed and not added (0.31.5)
 

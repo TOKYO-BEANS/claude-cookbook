@@ -3,9 +3,9 @@
 Six fixed profiles for running the pieces of a task (dispatcher phase B1, 3 November 2026). The
 tables, the brief and report template, each side chat's start-up self-check and the proofs are in
 `dispatch-profiles.md` in the skill's folder (10 KB: read it 30 lines at a time, or it comes back
-cut). In T3 Code two providers are on, Claude and Codex (16 November 2026). A piece that needs
-Codex's model or its own checkout goes to `delegate_task`; an opinion asked of Codex is a
-consult, with its own rules: [consult](consult.md). The subagents work the same.
+cut). In T3 Code a piece that needs its own checkout goes to `delegate_task`; the subagents
+work the same. Codex, the second provider there since 16 November 2026, takes no piece of
+work: it gives a second opinion, a consult, under its own rules ([codex](codex.md)).
 
 - **Subagents**, limited to a tool list and cheap to start: `cookbook:mechanical` (Haiku, low: one
   bounded edit or test run), `cookbook:research` (Sonnet, medium: a cited public answer from
