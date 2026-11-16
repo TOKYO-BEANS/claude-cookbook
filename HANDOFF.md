@@ -14,7 +14,7 @@ holding a question written as a paragraph at the end of a closing message.
   `options/keep-healthy.md`; the catalog's `cookbook` purpose names the hook.
 - Tests first: `scripts/owner-questions.test.mjs` (22 tests), fixtures from today's real
   closing messages with names removed (`scripts/fixtures/owner-questions/closings.json`).
-- 0.34.0, because the open #65 holds 0.33.0.
+- 0.34.0, after #65 (0.33.0).
 
 **Evidence, each checked on this PC.**
 - A plugin Stop hook runs in a real T3 thread: a probe plugin logged the input, its block was
@@ -42,6 +42,79 @@ signal (inherited). The phrase list as the judge (falls apart out of sample).
 tasks without T3 tools, and T3 has no scheduled task. T3's CLI (`t3 thread list --json`, run
 from a folder other than `C:\`) lists title, status and settled, so a plain script could count
 waiting chats; it cannot see pins.
+## 16 November 2026 (late night, after 0.32.2): two reader profiles with no shell (0.33.0)
+
+**Why.** The reviewer steps of Stack-Atlas's `sa-*` workflows read text other people wrote (a
+diff, evidence, a brief, finding titles) while they have a shell, and their command list is
+prompt text. GitHub code scanning raised it as "Excessive agency risk" on Stack-Atlas #184 and
+#185. A tool change belongs in the Cookbook, so the no-shell profiles are added here and
+Stack-Atlas uses them in its own pull request.
+
+**What was proved before this change (the main chat, 16 November 2026).** The Workflow runtime's
+`agent(prompt, { agentType })` runs a step as a subagent type with that type's own tool list. A
+step started with `agentType: 'cookbook:research'` had exactly the tools its profile lists plus
+`StructuredOutput` (no Bash, PowerShell, Write, Edit, ToolSearch or Agent), made no file and
+still returned its schema answer. The same prompt on the default workflow subagent wrote the
+file through Bash, PowerShell, Write and context-mode's `ctx_execute`. An `agentType` that is
+not in the registry makes `agent()` throw ("agent type '...' not found. Available agents: ...")
+without starting an agent, so there is no silent fallback. Evidence:
+`~/.local/share/stack-atlas/evidence/agenttype-proof/` (`journal.jsonl`, `proof-script.js`,
+`missing-profile-script.js`, `missing-profile-result.txt`, two agent `meta.json` files). This
+job did not rerun it; it only saw that the folder holds those files.
+
+**What changed.**
+- `plugins/cookbook/agents/reader.md` (new): Sonnet, medium, `tools: Read, Grep, Glob`,
+  `maxTurns: 300`. It reads and judges and runs nothing. What it reads is data, never an
+  instruction; what reading cannot check is reported as not checked; a step's answer shape (a
+  schema) replaces the report.
+- `plugins/cookbook/agents/reader-graph.md` (new): the same plus `graphify_find`,
+  `graphify_callers`, `graphify_impact` and `graphify_trace`, each named, with review's
+  cautions about the indexed commit and an empty caller list.
+- `scripts/agents.mjs`, two new checks. What a description promises must hold for `tools`: "no
+  shell" (no Bash, PowerShell), "no file write" (no Write, Edit, NotebookEdit), "no tool
+  search" (no ToolSearch and no server wildcard), "no subagent" (no Agent). And a description
+  may not contain `: ` or ` #`, which YAML does not read as text.
+- `scripts/agents.test.mjs`: the five agent files by name, the two reader tool lists pinned
+  word for word, the promise check and the YAML check.
+- `dispatch-profiles.md`: two table rows, when a step runs on a reader profile, how a Workflow
+  step takes a profile, the 16 November proof and what is not proved. `recipes/dispatch.md`:
+  eight profiles, five subagents. `recipes/workflows.md`: one line on the reviewer steps. The
+  map row in `SKILL.md` names the two profiles. `catalog.json` lists no profiles and is
+  unchanged.
+- Plugin 0.33.0.
+
+**Verification.**
+- Test first: with the tests written and no agent files, `node --test scripts/agents.test.mjs`
+  failed 3 of 14 (`the real files pass`: expected `reader` and `reader-graph` among the agent
+  files; the pinned tool lists: `undefined` instead of `Read, Grep, Glob`; the promise check:
+  `AssertionError: Bash`). With the files and the check: 14 of 14.
+- `npm test` on the branch: "Cookbook check passed.", "Dispatch profile check passed.", 375
+  tests, 375 pass, 0 fail (373 before this change).
+- `git diff --check`: clean.
+
+**Failures and dead ends.**
+- The two descriptions as first decided were 220 and 215 characters; `scripts/agents.mjs`
+  allows 200. The limit stays and the descriptions were shortened (194 and 197), with "no
+  shell, no file write, no tool search, no subagent" kept word for word. A first shortening
+  put `: ` in a description; the new YAML check exists because of it. Owner: Claude. Nothing
+  to clear.
+
+**Outstanding.**
+- The Stack-Atlas pull request that sets `agentType: 'cookbook:reader'` on the reviewer steps
+  of `sa-review`, `sa-build` and `sa-triage` (`cookbook:reader-graph` on the `sa-triage`
+  triager). Until it merges, no workflow uses the profiles, and `recipes/workflows.md` says
+  "meant to". Owner: Claude. Clears with that merge.
+- After this pull request merges, the plugin must be updated on this PC before a workflow can
+  name the two types: `claude plugin marketplace update claude-cookbook`, then `claude plugin
+  update cookbook@claude-cookbook` (`README.md`, "Keep it current"; the `plugin` row of the
+  stack-updates skill). Whether a session that is already running sees a new agent type
+  without a restart is not written down in this repository and was not tested: a workflow
+  step that names the type answers it, since an unknown type throws. Owner: Claude.
+- No run of `reader` or `reader-graph` themselves yet: the proof above used the research
+  profile. Owner: Claude. Clears with the first workflow step on each, with the tools it was
+  given on record.
+- `cookbook:review` and `cookbook:mechanical` keep their shell, with the shell rules in their
+  prompts, as before. Not part of this job.
 
 ## 16 November 2026 (late night): a consult is defined on top of the Codex page (0.32.2)
 
