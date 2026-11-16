@@ -73,6 +73,34 @@ restarted; one on 0.35.4 can still be told to switch model back and forth.
 `one-read.mjs` and `read-1-skip-spend.json` (the timed read), `toggle-advice.mjs` and
 `.log`, `watch-advice.mjs` and its logs.
 
+## 16 November 2026 (night): the owner's product name out of the files (0.36.4)
+
+**Why.** The 0.36.3 entry below left one name: the owner's own product, in two places on
+`main`. This repository is public. The owner, asked on 16 November 2026, chose to take it
+out.
+
+**What changed.** Prose only, no code.
+- `recipes/sign-ins-mail-and-access.md`: the Cloudflare Access paragraph named the one site
+  in `site-login/access.json` by its key and, in brackets, by the product. It now says the
+  file has one site, the owner's own product in production, and that `<site>` in
+  `agent-browser access <site>` is that site's key in the file.
+- One line of an older entry below ("Memory indexes") says "a second project's".
+- **Nothing on the PC changed.** The key is in use: `~/.local/share/site-login/access.json`
+  holds it, `access.mjs` there reads it, and the two key names it points at are in the DPAPI
+  store. All three are outside every repository, so no rename was needed and the login was
+  not touched. The key's name is a reference note in memory on this PC.
+
+**Verification.** `git grep -i` for the name over the tree finds nothing. `npm test` in a
+boat sandbox: 504 tests, 503 passed, 1 skipped (no Gitleaks there), on the second run; the
+first did not start ("boat limits did not answer in time"). The page is 2,246 bytes, under
+the 4,000-byte limit. No login call was made: nothing the login reads was changed. Log:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-product-name/boat-npm-test-1.log`.
+
+**Outstanding.**
+- **Git history keeps the old text**, as for the first site: the name is in earlier commits
+  of `main` and in merged pull requests' diffs. History is not rewritten (no force-push):
+  known and left as it is.
+
 ## 16 November 2026 (night): the first site's name out of the files; a project part names a key (0.36.3)
 
 **Why.** #75 took a customer's site name out of `options/check.md`. The same site, and the
@@ -109,6 +137,13 @@ map file the answer is "unreadable" and says which file is missing. Log:
 `~/.local/share/claude-cookbook/evidence/2026-11-16-project-key/live-read.log` (the
 repository's name is replaced in it).
 
+**Merged.** #77 merged as bcd9fae through `sa-release` on the first run (the review gate
+allowed a partial review that was answered in the pull request; no new review threads).
+Release event verified, execution 1576; plugin 0.36.3 installed. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-project-key/release-cookbook-77-merge.log`,
+and `live-read-installed-0.36.3.log` beside it (the installed plugin reading the project part
+through the map on this PC).
+
 **Outstanding.**
 - **Git history keeps the old text.** The names are in earlier commits of `main` and in the
   merged pull requests' diffs. History is not rewritten here (no force-push): this is known
@@ -121,8 +156,8 @@ repository's name is replaced in it).
   for that project, not this one.
 - One more name is in two places and was not part of this job: the owner's own product, in
   `recipes/sign-ins-mail-and-access.md` (a site key of the site login, in use) and in one
-  line of an older entry here. The owner, asked on 16 November 2026: take it out. A job of
-  its own, opened as a new chat once this pull request is merged.
+  line of an older entry here. The owner, asked on 16 November 2026: take it out. Done in
+  0.36.4, the entry above.
 
 ## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.2)
 
@@ -1771,8 +1806,8 @@ the `cookbook` skill from the installed 0.30.0. The installed plugin was 0.29.0 
 started and 0.30.0 when that session ran: the chat that merged #52 installed it on the owner's
 yes.
 
-**Memory indexes.** Stack-Atlas's went from 18,165 to 5,635 bytes and Probiz's from 16,117 to
-4,624: one short line per memory. Where a long line named something its memory file did not,
+**Memory indexes.** Stack-Atlas's went from 18,165 to 5,635 bytes and a second project's from
+16,117 to 4,624: one short line per memory. Where a long line named something its memory file did not,
 the line's text was added to that file (13 files). Removed, because wrong or about something
 that is gone: `jev-router-setup`, `claude-code-addons`, `claude-compaction-plugins` (it said
 Jev compaction runs in Stack-Atlas only), `deploy-approval-timing`, `fixer-paid-checks` and
