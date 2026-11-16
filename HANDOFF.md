@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026 (night): the key read no longer waits on a script scan (0.36.5)
+## 16 November 2026 (night): the key read no longer waits on a script scan (0.37.1)
 
 **Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`
 took 32 seconds once and over 90 once, and `boat-run` refused three of six runs at its
@@ -71,6 +71,188 @@ start, each scan can wait about 30 seconds. `with-key.mjs` read a key by startin
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-with-key-stall/`:
 `FINDINGS.md`, the probes (`stall-probe.mjs`, `sampler.mjs`, `phase-split.ps1`,
 `storm.mjs`, `storm-compare.mjs`, `eventlog-gaps.mjs`, `dpapi-ffi.mjs`) and their logs.
+
+## 16 November 2026 (night): the Codex start check is a script, and a hook requires it (0.37.0)
+
+**Why.** `recipes/codex.md` listed the check of where Claude may start Codex as commands to run
+by hand. GitHub's security review left a thread on #64 that was answered, not fixed: the
+repository name in those commands must be validated against a strict pattern and never reach a
+shell. Since #71 the page asked for a second hand step, the comparison of the marketplace
+clone's plugin version with `main`'s. The owner's job: the check is a tested script that a
+delegation cannot skip.
+
+**What changed.**
+- `skills/cookbook/scripts/codex-start-check.mjs` (`node … <repo> [<folder>]`). The name comes
+  from the task. One that is not letters, digits, `.`, `_` and `-` (no slash, no leading
+  hyphen, not `.` or `..`, 100 characters at most) is refused before anything is asked; it is
+  one part of one argument of `gh api`, under the fixed owner, with no shell. The answer is
+  yes only when the checkout's object files name GitHub's default head of `TOKYO-BEANS/<repo>` and
+  every `AGENTS.md`, `AGENTS.override.md` and `CLAUDE.md` on disk, at any depth and in any
+  spelling of the name, is the file at that head, line endings aside. It then compares the
+  clone's plugin version with `main`'s. Exit 0: yes. Exit 3: yes, and the clone is not on
+  `main`'s version. Exit 1: no, with one of ten fixed reasons. A step that fails or cannot
+  run is a no. The output is fixed phrases: nothing from the checkout, the brief or GitHub is
+  printed.
+- **It does not do it the way the page did, on purpose.** The page compared through the
+  checkout's own Git (`git fetch origin`, `git diff`, `git status`). Three things were wrong
+  with that for a checkout that may be hostile, the second and third found by the review
+  before the first push:
+  - A checkout can hide a changed file from `git diff` and `git status` (`git update-index
+    --assume-unchanged` or `--skip-worktree`), a nested repository is not looked into, a
+    replaced object or a `core.worktree` setting changes what Git compares, and another
+    spelling (`agents.md`) is the same file on a Windows disk but not to a Git pathspec.
+  - A checkout's Git configuration can start programs (`core.sshCommand` on a fetch, and
+    more). So the script runs no Git command at all and never fetches. It walks the folder
+    itself, from the folder that holds `.git`; it reads the head's tree and each file from
+    GitHub's API; and it looks the head up in `.git`'s object files (a loose object, a pack
+    index, a linked worktree's shared folder, an alternate). A head that is not there is a
+    no with the reason "after git fetch origin there, check again": the fetch is the
+    session's step, as on the old page.
+  - On Windows a bare program name is looked up in the current folder first, so a `gh.exe`
+    planted in the checkout could answer for GitHub. `gh` is taken from the first absolute
+    folder of `PATH` that is not inside the checkout, and run in its own folder, with
+    `--hostname github.com` and without `GH_HOST`, `GH_REPO` and the enterprise tokens.
+- **Two additions to what is compared**, both the safe side. A link (a junction on Windows)
+  that leads out of the checkout or into its `.git` is followed, and an instruction file
+  behind it is a no; a folder named `.git` below the top is read like any folder. And every
+  file under a folder named `.codex` or `.agents` must be the head's as well: Codex can load
+  project settings, hooks and skills from there, and one of 83 checkouts on this PC held an
+  untracked `.codex` folder. More than 60 such files at the head is a no.
+- `hooks/codex-start-gate.mjs` (the decision is `codex-start-gate-lib.mjs`), a `PreToolUse`
+  hook on T3's `delegate_task`, `create_threads` and `t3_thread_launch`. A start that names
+  nothing (T3's tool text: it inherits the session, which is Claude) or names `claudeAgent`
+  and a `claude-` model is left alone. Anything else counts as Codex: the brief must carry
+  exactly one line `Repository: TOKYO-BEANS/<repo>`, the start must be in this thread's own
+  checkout (`CLAUDE_PROJECT_DIR`; no `isolation: "worktree"`, other project, other machine or
+  new top-level thread, because that checkout cannot be checked before it exists), and the
+  script must say yes. Otherwise the call is denied with a fixed sentence. When the clone is
+  behind `main` the call goes ahead with a note to the session. The entry file answers
+  whatever happens, and `hooks.json` sets `onFailure: "block"` (Claude Code 2.1.295 or
+  later; 2.1.325 here), so a hook that cannot start or runs out of time (150 s) blocks too.
+- `recipes/codex.md`: the hand commands are out; the page runs the script and says what each
+  answer means, and that the brief carries the `Repository:` line. The point on the clone's
+  version is now the script's exit 3. `recipes/codex-setup.md`: what the check reads and what
+  requires it. `recipes/codex-consult.md`: the line in the brief.
+- Plugin 0.37.0.
+
+**What "cannot skip" means here.** A delegation to Codex is started in one place: a Claude
+session calls T3 Code's MCP tool `delegate_task` (the recipe's route), or `create_threads` or
+`t3_thread_launch` with a Codex target. Claude Code runs a plugin's `PreToolUse` hooks before
+every tool call, in every permission mode, also for a subagent's calls, and a denial stops the
+call. So in a Claude session that has this plugin at 0.37.0 or later, those three calls cannot
+start Codex without the check: that is in code, and the page is no longer the control there.
+It is not in code anywhere else:
+- **Not reached by the hook.** A message to a Codex thread that already exists
+  (`t3_thread_send`), a thread switched to Codex (`t3_thread_configure`), a scheduled task on
+  such a thread, the `codex` command from a shell, Codex behind another MCP server, a thread
+  the owner starts by hand, a session that itself runs on Codex, and a session with hooks
+  turned off (`disableAllHooks`). There the page's rule ("run the script before every
+  start") is the only control. Reason: these calls name a thread, not a provider, or pass no
+  Claude hook at all. Owner: T3 Code's maker for a check at every start; Claude for the first
+  three. Clears if T3 Code gets a start hook of its own, or with a hook that reads the target
+  thread's provider (it would need T3's API from inside a hook).
+- **Checked once, at the start.** A file planted after the check, while Codex runs, is not
+  seen. Reason: a check before a start cannot see later. Owner: Claude. Nothing planned; the
+  consult's "do not edit the files it reads" stands.
+- **Proved by tests and by running the hook program, not by a denied call in a live T3
+  thread.** The matcher, the input shape and `onFailure` are from Claude Code's hook reference
+  and T3's tool definitions as read on 16 November 2026. Whether `CLAUDE_PROJECT_DIR` is
+  always the worktree a shared `delegate_task` runs in, and whether a start that names no
+  provider can ever be Codex, rest on those texts. Owner: Claude. Clears with one refused and
+  one allowed `delegate_task` in a session on the new plugin (a supervised start waits for
+  the owner's click, and this job starts no Codex run).
+- **Windows with Node in its usual folder only.** The hook's command is
+  `C:/Program Files/nodejs/node.exe` (an absolute path, because the desktop app starts hooks
+  with a minimal `PATH`) and a hook that cannot start blocks. On a machine without that file
+  the three T3 tools are blocked for every call, Claude's included. Reason: the gate fails
+  closed, and the plugin runs on this PC only. Owner: Claude. Clears if the plugin is ever
+  used on another machine: a launcher that finds Node.
+- **A field T3 adds to one of the three tools blocks every call that uses it,** Claude's
+  included, until the hook knows the field: an unknown key may name a provider. Reason: the
+  gate fails closed. Owner: Claude. Clears when seen: read the field in T3's tool definition
+  and add it to the key lists in `codex-start-gate-lib.mjs`, with a test.
+- **A T3 tool renamed, or a fourth one that starts an agent,** is not matched. Owner: Claude.
+  Clears when seen: add it to the matcher and to `STARTERS`.
+- **A provider id for Claude that is not `claudeAgent`** (or `claudeAgent_<id>`) counts as
+  Codex and needs the line and the check: the safe side. Owner: Claude.
+- **The script trusts** GitHub's API answers, the `gh` sign-in and `PATH`. The lookup of the
+  head in `.git` shows that an honest checkout is a clone of the repository; a tampered
+  `.git` can fake it (a file named after the head is enough), and the comparison of the
+  files does not lean on it. A pointer in `.git` that names another machine or is longer
+  than 4 KB is not followed.
+- **The remedy for a head that is not there is the session's own `git fetch origin`,** which
+  runs under the checkout's Git configuration, as every Git command of the session does.
+  The script never runs it. Owner: Claude. In a checkout that is not one of T3's own
+  worktrees of the owner's repositories, do not fetch: the piece goes to `cookbook:review`.
+- **Always a no:** a checkout with a submodule or a nested repository that holds an
+  instruction file, an installed package that ships one, more than 60 `.codex`/`.agents`
+  files, an instruction file that is a symbolic link, and on Windows a file left on disk in
+  another spelling after a rename (`Agents.md` for `AGENTS.md`). Such a piece goes to a
+  `cookbook:review` subagent. Owner: Claude. Clears only if it gets in the way.
+- **Not matched, not verified:** whether `schedule_task`, `run_scheduled_task_now` or
+  `t3_thread_transfer` can start an agent on another provider (their inputs name no provider),
+  and whether a start on another machine that names no provider can be Codex. Owner: Claude.
+  Clears with T3's tool definitions when one of them is next used for Codex.
+- **Not checked:** what else Codex 0.169 may read from a project folder beyond the three file
+  names and the two folders (its binary names `project_doc_fallback_filenames`; the owner's
+  `config.toml` sets none). Owner: Claude. Clears with a read of Codex's documentation on
+  project files when Codex is next updated.
+
+**Reviews before the first push.** Two `cookbook:review` subagents that did not build it.
+The first read the version that compared through Git and found two high findings (the
+checkout's Git configuration runs programs during the check; a planted `gh.exe` or `git.exe`
+runs on Windows), one medium (links and `.git`-named folders hide files) and one low (the
+hook let a call through when its own entry test failed). All four were fixed by the rewrite
+above. The second read the rewrite: the four closed, no high or medium, eight low. Fixed:
+`gh` pinned to github.com, `.git` pointers bounded and never followed to another machine, a
+folder that only looks like a link is walked, one check per repository in a `create_threads`
+call, the wording of three statements, a test of the real `gh` lookup. The rest are the
+limits listed above.
+
+**The review in CI, round one** (`ai-review` on the first push): two low findings, both fixed
+in the next commit. A target with a key the hook does not know (`provider`, `instanceId`) was
+taken for Claude: now only the known keys are, and anything else is checked. And the Node
+path, now stated on the setup page and above. GitHub's security review opened no thread on
+that push.
+
+**Graphify's review** (advisory, on the second push): four points and two coupling notes
+(`inner()` calls 10 functions, `decide()` 7; left as they are: each is one straight list of
+steps). Fixed: a `.git` pointer that is a link or not a plain file got past the 4 KB cap and
+is now not read, and the setup page says where the session may run the fetch a missing head
+asks for. Answered: `onFailure` is in Claude Code's hook reference ("Block the action when a
+hook fails", 2.1.295 or later) and in the installed 2.1.325; the Node path was already stated.
+
+**The review in CI, round three, and a merge that did not happen.** The review of the third
+push had two low findings. The gate allowed the merge (all checks passed, no security review
+thread, Graphify's check "No PR-changed functions were verified" set aside), but `main` had
+moved in the same minute and the merge failed on a conflict: nothing merged. `main` was
+merged into the branch, and the two findings were fixed in that push instead of a follow-up.
+A `create_threads` or `delegate_task` call with a key the hook does not know is not taken to
+run in this thread's own checkout. And the check has one time limit of 100 seconds, below
+the hook's 150: out of time is a no with its own fixed reason ("the check ran out of time",
+the tenth), and each `gh` call gets what is left, 20 seconds at most.
+
+**The review in CI, round four** (past the three rounds set at the start, because of the
+merge that failed): one medium finding, fixed in the next push. A call that named its
+provider under a key the hook does not know, with no `target`, was still taken for Claude
+(`{ prompt, modelSelection: { provider: "codex" } }` in `create_threads`, a top-level
+`provider` in `delegate_task`). Now a start is plainly Claude only when the call and the
+thread hold nothing but the keys T3 has today; any other key means a denial.
+
+**Verification.** `npm test` with `main` merged in: 553 tests, 552 pass, 0 fail, 1 skipped (an
+older symbolic-link test that Windows skips); the test file again after the round-four fix: 50
+pass. Of these, 50 are new (`scripts/codex-start-check.test.mjs`), on
+real Git repositories with a stand-in for GitHub; the first run of the file failed before the
+script existed. Six deliberate breakages of the script (links not followed, `.git` skipped at
+any depth, the head not required, other spellings ignored, a cut-short tree accepted, `gh`
+from the checkout) each failed a test. Run for real on this repository's worktree: a clean
+checkout is a yes (exit 3 while the clone was behind `main`), another repository's name, a
+name with shell characters, a planted `Agents.MD` and a planted `.codex/config.toml` are each
+a no; the hook program denied the Codex call with the planted file, let it through clean, also
+with a minimal `PATH`, and printed nothing for a Claude call. `main` moved six times during
+the job; once the script answered "not in the checkout's object files" until the fetch.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/real-runs.txt`.
 
 ## 16 November 2026 (night): the owner's product name out of the files (0.36.4)
 
