@@ -22,12 +22,12 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
   T3 Code's next one.
 - **T3 Code's saved reading.** `~/.t3/caches/claudeAgent.json`, key `usageLimits`: `windows`
   (`seven_day`, `seven_day_fable`, `five_hour` when open), `unavailable` when its probe
-  failed. Rewritten every minute, not signed: the script uses its figures only with no signed
-  reading under an hour old and none to be read, checks every value and stores no figure.
-  `checkedAt` is when T3 Code asked, not the age of the figures: they trailed a direct read
-  by two points. T3 Code gets them from Claude Code (`get_usage`). A signed reading under an
-  hour old comes first, so the advice can trail them by 50 minutes (Fable 90% signed, 97%
-  there): kept, as the signing answers a security finding.
+  failed. The file is rewritten every minute, its limits asked for every three to six
+  (`checkedAt`: when asked; the figures trailed a direct read by two points). Not signed: the
+  script uses its figures only with no signed reading under an hour old and none to be read,
+  checks every value and stores no figure. T3 Code gets them from Claude Code (`get_usage`).
+  A signed reading under an hour old comes first, so the advice can trail them by 50 minutes
+  (Fable 90% signed, 97% there): kept, as the signing answers a security finding.
 - **The banked resets** are the list T3 Code last saved, kept by the script:
   [model-budget-resets](model-budget-resets.md).
 - **A thread switches itself.** `t3_thread_configure` then `t3_thread_send` with `queue`: the

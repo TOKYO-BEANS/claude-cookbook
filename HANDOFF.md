@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.3)
+## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.4)
 
 **Why.** The owner decided on 16 November 2026 that when the `ai-review` job cannot reach its
 reviewer (the API credit ran out), a fallback review stands in for it. Stack-Atlas #200 puts that
@@ -12,7 +12,7 @@ was `sa-review`). The new page `recipes/ai-review-fallback.md` (split from `reci
 which went over the 4000-byte limit) says when it applies (only the API failing to serve the
 call), what it never covers, who reviews, its form (#200's: first line `Fallback review of <full
 id>`, findings, count line) and what follows it; `recipes/ci-releases.md` names it in the merge
-condition. Plugin 0.38.3.
+condition. Plugin 0.38.4.
 
 **Security review.** GitHub's security review opened a thread on the first version ("Prompt
 injection risk": the pull request's text could steer the fallback reviewer to "No findings").
@@ -26,6 +26,70 @@ live; log `~/.local/share/stack-atlas/evidence/merge-cookbook-84.log`.
 
 **Outstanding.** None for these pages; they describe Stack-Atlas #200, merged as 3cebc1f.
 
+## 16 November 2026 (night): the setup page says both rates; the record of #82 (0.38.3)
+
+**Why.** `sa-review`'s one low finding on #82 was left for a follow-up:
+`model-budget-setup.md` said T3 Code's file is "rewritten every minute". That is the file;
+the limits in it (`usageLimits.checkedAt`) are asked for every three to six minutes.
+
+**What changed.** Documentation and handoff only: no change to `model-budget.mjs` or the
+hook, so the advice is as in 0.38.0.
+- `model-budget-setup.md` says both: the file is rewritten every minute, its limits asked
+  for every three to six. The page costs 3,992 of its 4,000 bytes as a Read result.
+- One sentence of the 0.38.1 entry below is corrected from the finished
+  `sample-sources.log`. Claude Code's copy did not stay at 19:00:20 "throughout": it stayed
+  until the sample of 19:24:40 UTC (1,459 seconds, 24 minutes old) and was rewritten at
+  19:24:48, one second after T3 Code's limits probe of 19:24:47. T3 Code's probes in the
+  log: 19:05:24, 19:10:28, 19:13:42, 19:19:39, 19:24:47. The log ends "distinct Claude Code
+  readings in 1500 s: 2". That second matching pair (after 19:00:20 in both files) supports
+  that entry's finding: one read fills both files.
+- The 0.38.1 entry's outstanding line for the low finding is marked cleared.
+
+**Verification.** `npm test` on the head merged with `main`: 583 passed, 0 failed, 2 skipped,
+in 416 seconds (`npm-test-85.log`). The log facts above were read from `sample-sources.log` itself, and
+#82's from GitHub and `merge-by-hand-cookbook-82.log`. `sa-review`'s result on that head
+is a comment on the pull request (#85). The version is 0.38.3 because `main` took 0.38.2
+(#78) while this was in review.
+
+**Failure, kept on record.** The first `sa-review` (run `cookbook-0.38.2-review`, on
+`9682934`) ended `unknown`: its own `npm test` did not finish.
+`scripts/vetting.test.mjs` stopped at 596 seconds on a loaded PC (36 `node` processes).
+The same file alone passed, 23 of 23, in 500 seconds (`vetting-test-85.log`), and the full
+suite had passed before the push: 564 passed, 0 failed, 1 skipped, in 557 seconds against
+the usual 150 (`npm-test-85-first.log`). Its one low finding was that difference, not a
+fault in the change. Owner: Claude. A second run on the merged head follows the push.
+
+**Outstanding.**
+- The AI review job has no API credit (unchanged): `sa-review` is the fallback and the
+  merge is asked of the owner for each pull request.
+- The known limit of the 0.38.1 entry stands (the advice can trail T3 Code's newer figures
+  by up to 50 minutes).
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-claude-usage-reading/`
+(the 0.38.1 folder; this job's files have `85` or `0.38.2-review` in their names).
+
+**Recorded here, from the job before (#82).** All on 16 November 2026, times UTC; each fact
+checked against that evidence folder and against GitHub.
+- The AI review of #82 was `review unavailable` (no API credit). `sa-review`, run
+  `cookbook-82-review`, passed on `22e3200` with one low finding, none blocking
+  (`result-cookbook-82-review.json`). Asked with the question dialog, for #82 only, the
+  owner answered "Merge #82 once on sa-review (Recommended)"; the question named the low
+  finding as going to a follow-up (this one).
+- 19:29: #82 merged by hand as `d178f0b`, head `9c0ee1e`, with
+  `merge-by-hand-cookbook-82.sh` (`merge-by-hand-cookbook-82.log`). Every check passed
+  but Graphify Formal Verification, neutral "Formal verification did not run" (outside the
+  gate, as in `merge-when-green.sh`). The gate refused for the unavailable review and
+  nothing else; the head differed from the reviewed commit in `HANDOFF.md` only; no
+  security review thread, and none new during the merge. Release event `verified`,
+  execution 1585.
+- 19:33: plugin 0.38.1 installed (`claude plugin marketplace update claude-cookbook`,
+  `claude plugin update cookbook@claude-cookbook`; the install record says 0.38.1, updated
+  19:33:48). Its script ran: the installed hook gave this job's session its line ("use
+  Fable 5.2 high"), and `model-budget.mjs` from the installed 0.38.1 folder printed the
+  same advice at 19:37 (week 13%, Fable 5% of its share, one weekly reset banked).
+- Not on GitHub until this job: #82 had one comment, the `review unavailable` one. The
+  fallback review's result and the owner's answer were added there as a comment after the
+  merge, with these facts.
 ## 16 November 2026 (night): the key read no longer waits on a script scan (0.38.2)
 
 **Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`
@@ -130,8 +194,11 @@ T3 Code's newer reading said 97%, so the hook said "use Fable" where the newer f
   its last reply, or from its own saved copy, and saves nothing. T3 Code's file moves on and
   Claude Code's copy does not: from 19:05:24 T3 Code's limits were newer. Sampled every
   15 seconds from 19:05 to 19:30 UTC (`sample-sources.log`): T3 Code asked for the limits
-  every three to six minutes (19:05:24, 19:10:28, 19:13:42, 19:19:39), and Claude Code's
-  copy stayed at 19:00:20 throughout, over 23 minutes old at the end.
+  every three to six minutes (19:05:24, 19:10:28, 19:13:42, 19:19:39, 19:24:47), and Claude
+  Code's copy stayed at 19:00:20 until 19:24 (24 minutes old), then was rewritten at
+  19:24:48, one second after T3 Code's probe of 19:24:47: a second matching pair, one read
+  filling both files again. (Corrected in 0.38.3 from the finished log; this said "stayed
+  at 19:00:20 throughout, over 23 minutes old at the end".)
 - So Claude Code's copy is there whenever a Claude Code thread has asked in the last hour
   (T3 Code's probe is what fills it), and is never newer than T3 Code's figures.
 - Fable's part of the week was 49 of its 50 in Claude Code's copy; for T3 Code's the script
@@ -169,7 +236,7 @@ weekly reset banked, and the hook said "use Fable 5.2 high".
 - `sa-review`'s low finding: `model-budget-setup.md` says T3 Code's file is "rewritten every
   minute"; that is the file, while the limits in it are asked for every three to six
   minutes. Owner: Claude. Clears with a follow-up that says both (not pushed into a
-  reviewed head).
+  reviewed head). **Cleared in 0.38.3:** the page says both.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-claude-usage-reading/`.
 
