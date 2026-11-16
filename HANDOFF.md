@@ -1,5 +1,20 @@
 # Handoff
 
+## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.1)
+
+**Why.** The owner decided on Stack-Atlas #199 (16 November 2026): "in a case like this we fallback
+to you on the sub account do the review your self". When the `ai-review` job cannot run (the API
+credit ran out), Claude reviews the head itself. Stack Atlas puts it in the merge gate and its
+`AGENTS.md` (the Stack Atlas pull request "Merge gate: Claude's fallback review stands in for an
+unavailable ai-review").
+
+**What changed.** The map's fallback for "Review of every pull request" is Claude's own fallback
+review in its fixed form (it was `sa-review`); `recipes/ai-review.md` says when it applies, its
+form and what it never covers; `recipes/ci-releases.md` names it in the merge condition. Plugin
+0.38.1.
+
+**Outstanding.** None for this page.
+
 ## 16 November 2026 (night): the model budget keeps T3 Code's reset list (0.38.0)
 
 **Why.** Since 0.36.1 the script read no banked resets ("not read"): no "Redeem" line came,

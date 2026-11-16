@@ -6,6 +6,18 @@
   and posts one comment of findings (file, line, severity, evidence, fix), updated on later pushes.
 - Advisory: the job always passes and is not a required check. A failed call posts
   `review unavailable: <reason>`, never "no findings"; treat that pull request as not reviewed.
+- **Fallback review** (owner's decision, 16 November 2026, on Stack-Atlas #199: "in a case like this
+  we fallback to you on the sub account do the review your self"). When the comment for the head
+  says `review unavailable` (the job could not run, for example the API credit ran out), Claude
+  reviews the whole change of that head on the subscription (a `cookbook:review` subagent for a
+  large one) and posts it in the pull request in the fixed form of Stack Atlas
+  `docs/claude-code.md`: first line `<!-- stack-atlas-fallback-review -->`, second line
+  ``### Fallback review of `<the head's 40-character id>` ``, the findings as
+  ``- **high** `path:line`: text``, then `<n> findings.` or `No findings.`. The merge gate
+  (Stack Atlas `ai-review --gate`) takes it in place of the job's review, only from a person of
+  the repository, after the unavailable comment, for the head the merge names; high and medium
+  findings are fixed or answered as before. It never stands in for a review that ran, whatever
+  it found, or for a missing or stale comment. A credit top-up is still the owner's call.
 - The pull request's content is untrusted data: the request has no tools, and the script only posts
   text. Fork pull requests are skipped, so they never reach the key. The job runs the base branch's
   reviewer, so a change to `.depot/ai-review/` takes effect only after it merges.
