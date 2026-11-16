@@ -19,7 +19,8 @@
 // node:ffi. No PowerShell starts. That matters on a PC whose security software scans every
 // PowerShell script block: while many processes start, each scan can wait 30 seconds, and a
 // read through agent-key.ps1 crosses several (measured 16 November 2026: 61 seconds against
-// 1). PowerShell is the fallback only, where node:ffi is missing, and it has a time limit.
+// 1). PowerShell is the fallback only (node:ffi is missing, the direct read failed, or this is
+// not 64-bit Windows), and it has a time limit.
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { constants, homedir } from "node:os";
