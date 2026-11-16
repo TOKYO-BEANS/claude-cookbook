@@ -1,0 +1,21 @@
+{
+  "servers": [
+    "claude.ai Claude Docs",
+    "cloudflare-docs",
+    "firecrawl",
+    "graphify",
+    "plugin:cloudflare:cloudflare",
+    "plugin:context-mode:context-mode",
+    "plugin:parallel:parallel-search",
+    "stagehand"
+  ],
+  "plugins": [
+    "cloudflare@cloudflare"
+  ],
+  "userServers": [
+    "cloudflare-docs",
+    "firecrawl",
+    "graphify",
+    "stagehand"
+  ]
+}

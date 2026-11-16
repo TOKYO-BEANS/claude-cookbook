@@ -1,5 +1,96 @@
 # Handoff
 
+## 16 November 2026: each MCP server measured; Firecrawl deferred, OpenSEO in its projects only (0.31.2)
+
+**Why.** After the Adobe connector came back "on demand only" (#55) the owner asked: "shouldnt
+we do exactly that for all things? or is that too much?". The answer then: not for all, and
+with a measurement per server first. This is that job.
+
+**Measured** (Claude Code 2.1.325, Opus 5.5, the plan login, tool search on): the input tokens
+of a new headless session's first request with the user's own settings, plugins and servers.
+With all nine servers 67,356; with none 48,100. A server's cost is every server on minus that
+one left out, two runs each (three for every server on); repeats agreed to within 10 tokens.
+
+| Server | Tokens | Sessions that called it (of 557 in 30 days) | Calls |
+| --- | --- | --- | --- |
+| firecrawl | 11,407 | 35 | 204 |
+| OpenSEO | 2,303 (2,339 with its skills) | 32 | 186 |
+| parallel-search | 1,783 | 75 | 471 |
+| Claude Docs | 1,656 | 5 | 54 |
+| graphify | 965 | 78 | 478 |
+| context-mode | 885 | 79 | 3,455 |
+| cloudflare (plugin) | 91 (272 with its skills) | 10 | 23 |
+| cloudflare-docs | 52 | 10 | 30 |
+| stagehand | 39 | 1 | 3 |
+
+- The servers cost 19,256 tokens together, not the 8,000 to 15,000 estimated on 15 November.
+- Why two plain runs differed by thousands of tokens: a server reaches a session a moment
+  after it starts, and a prompt sent at once is answered without the ones still connecting.
+  The script holds the prompt back until the debug log shows each server connected.
+- Tool search already keeps tool definitions out. Firecrawl was the exception: its author
+  marks five tools to load in full. `"alwaysLoad": false` in the user's entry for the server
+  overrules that (Claude Code's MCP docs, 2.1.287 or later): measured 57,325, so 10,031 saved,
+  with all 33 tools still listed.
+- T3 Code's own server is not in a headless run: not measured.
+
+**Asked once** (question tool, 16 November 2026), each with the saving, the use and the cost
+of the move. Firecrawl: "Defer (Recommended)". OpenSEO: "Only in its projects (Recommended)".
+Claude Docs: "Leave as is (Recommended)". Cloudflare (both) and Stagehand: "Leave all three
+(Recommended)".
+
+**What changed on this PC.**
+- `firecrawl` in `~/.claude.json` has `"alwaysLoad": false` (`claude mcp remove`, then
+  `add-json`, user scope; the headers helper is unchanged).
+- `openseo@openseo` is `false` in `~/.claude/settings.json` (`claude plugin disable`). It was
+  already `true` in the `.claude/settings.local.json` of Camilla-Hjemmeside and Molebo -
+  Shopify, which now decide. The register's note that it moved on 2 November had not held.
+- Nothing else: no deny entry, no connector, no sign-in.
+
+**What changed here.** `scripts/measure/servers.mjs` with `servers.json` (this PC's servers)
+and `scripts/measure-servers.test.mjs`; a new page `recipes/connecting-load.md` (the table and
+the three ways out of a session start), linked from `connecting.md`; one bullet each on
+`firecrawl.md` (load the tool with `ToolSearch` first), `seo.md` (where OpenSEO loads) and
+`scripted-runs.md` (hold the prompt back); the register's Firecrawl row and a new OpenSEO row.
+
+**Verification.**
+- After the moves a session start is 55,308 tokens (two runs, 55,307 and 55,309): 12,048 fewer.
+- A new session found `firecrawl_scrape` through `ToolSearch` and called it: every tool
+  result ok, no call denied.
+- Start-up probes without a prompt (no cost): OpenSEO connects in both site folders and not
+  in an empty one. In a child session (`--setting-sources "" --plugin-dir <cache folder>`) it
+  connects with its stored sign-in.
+- `npm test` passes (355 tests, 11 of them in `scripts/measure-servers.test.mjs`).
+
+**Spend.** USD 7.96 at list prices, on the plan login: 31 measuring runs (7.37, limit 15) and
+the Firecrawl call (0.59, and four Firecrawl credits).
+
+**Not proved.** An OpenSEO call from a child session (it connected; no call was made, since
+its calls spend credits). OpenSEO in a T3 worktree thread of its two projects: the local
+settings file is not in git, so it will not load there; open SEO work in the project folder.
+
+**Dead end.** The `claude-code-guide` agent had no web tool in this session and answered
+nothing; the docs were read through Parallel instead.
+
+**Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-mcp-on-demand/` (`RESULT.md`,
+`runs/`, `runs-after/`, `checks/`, the census). Copies from before:
+`~/.local/share/backups/mcp-on-demand-20261116/`.
+
+**From #58** (the entry below). It merged as `d951c09`. The release check of that commit is
+`verified` and acknowledged (execution 1534; `sa-release` itself ended `unknown` for the
+skipped `ai-review` job, as on every merge commit). No plugin file changed, so the installed
+plugin stayed 0.31.1. Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`.
+
+**Outstanding.**
+- The merge commit, the release check and the install (0.31.2) of this pull request go into
+  the next Cookbook pull request.
+- Not this job's: pull request #57 (the Adobe follow-up, from another chat) is open and
+  conflicts with `main`.
+- Stagehand's review is on 28 November (the owner chose to keep it, do not ask again). It
+  starts a process with the Browserbase key at every session start, for 39 tokens and one
+  session in 557: a point for that review.
+- Unproven: a T3 scheduled task bound to a thread with a cheaper model.
+- The older list in the entries below stands.
+
 ## 15 November 2026 (late night): the measuring script, two findings from the last review of #56
 
 No plugin file changes, so the plugin stays 0.31.1.
