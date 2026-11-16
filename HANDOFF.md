@@ -11,11 +11,13 @@ a repository's `CLAUDE.md` as rules) were not. This change fixes them.
 **What changed.**
 - `recipes/codex.md`, "Where it may start": Codex loads the working tree's `AGENTS.md` into
   its instructions by itself, so a sentence that asks it to distrust that file is not a
-  control. The control is where Claude starts it: only in a checkout whose `origin` is a
-  `github.com/TOKYO-BEANS/` repository and whose `AGENTS.md` and `CLAUDE.md` equal the default
-  branch's (`git fetch origin`, `git diff --quiet origin/HEAD -- AGENTS.md CLAUDE.md`). A
-  check that fails or cannot run means no Codex there: the piece goes to a `cookbook:review`
-  subagent.
+  control. The control is where Claude starts it: only in a checkout whose instruction files
+  (`AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`, at any depth, tracked or not) equal those
+  of GitHub's default head of a `TOKYO-BEANS` repository. The head comes from GitHub
+  (`gh api repos/TOKYO-BEANS/<repo>/commits/HEAD`), with the name taken from the task, so a
+  local remote or ref cannot stand in for it. Tried on a Stack Atlas worktree: clean passes,
+  an untracked nested `AGENTS.md` is caught. A step that fails or cannot run means no Codex
+  there: the piece goes to a `cookbook:review` subagent.
 - The page was at its size limit, so the rules, tools, model route and proof moved to
   `recipes/codex-setup.md`. There: project files add to the global rules and never override
   one or lift a stop, and `~/.codex/AGENTS.md` tells Codex the same as a second line.
@@ -25,8 +27,12 @@ a repository's `CLAUDE.md` as rules) were not. This change fixes them.
 (`gh api repos/<owner>/<repo>/pulls/<n>/comments`) as well as the `ai-review` comment. A
 security comment is fixed before the merge or goes to the owner.
 
-**Outstanding.** The four threads on #62 are answered and left open for the owner; a
-security comment is never dismissed by Claude.
+**Outstanding.**
+- The four threads on #62 and the one on #64 are answered and left open for the owner; a
+  security comment is never dismissed by Claude.
+- The start check is three commands on a page, run by Claude. Owner: Claude. Clears when it
+  is a tested script that the delegation cannot skip; that belongs with the next job in
+  Stack Atlas (the merge gate that does not read review threads).
 
 ## 16 November 2026 (late): Codex added as a second model (0.32.0)
 

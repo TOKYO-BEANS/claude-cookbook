@@ -6,14 +6,18 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
 - **Use it for:** a design, a plan or a diagnosis; a second review of our own risky change,
   beside the `ai-review` job and never instead of it; a cross-check where two Claude answers
   disagree. It reads and reports: the brief says "change no file".
-- **Where it may start:** only in a checkout of the owner's whose instruction files are the
-  reviewed ones. Codex loads the working tree's `AGENTS.md` into its instructions by itself,
-  before it reads any rule of ours, so check both before every start:
-  - `git remote get-url origin` is a `github.com/TOKYO-BEANS/` repository;
-  - after `git fetch origin`, `git diff --quiet origin/HEAD -- AGENTS.md CLAUDE.md` exits 0.
+- **Where it may start:** only in a checkout whose instruction files are the reviewed ones of
+  one of the owner's repositories. Codex loads every `AGENTS.md` and `AGENTS.override.md` on
+  its path into its instructions by itself, before it reads any rule of ours. Before every
+  start, with `<repo>` taken from the task and never from the checkout:
+  - `gh api repos/TOKYO-BEANS/<repo>/commits/HEAD --jq .sha` gives GitHub's default head;
+    after `git fetch origin`, `git cat-file -e <sha>` finds it;
+  - `git diff --quiet <sha> -- <files>` exits 0, and
+    `git status --porcelain --untracked-files=all --ignored -- <files>` prints nothing, where
+    `<files>` is `':(glob)**/AGENTS.md' ':(glob)**/AGENTS.override.md' ':(glob)**/CLAUDE.md'`.
 
-  If either fails or cannot run (no `origin/HEAD`, no remote), do not start Codex there: the
-  piece goes to a `cookbook:review` subagent.
+  If a step fails or cannot run, do not start Codex there: the piece goes to a
+  `cookbook:review` subagent.
 - **Start it supervised:** `orchestrator_capabilities` once per thread, then `delegate_task`
   with `providerInstanceId: "codex"`, a model it lists (`gpt-5.6-sol`, `gpt-6-astra`) and
   `runtimeMode: "approval-required"`. That gives a read-only sandbox and
