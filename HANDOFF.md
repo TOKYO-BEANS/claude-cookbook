@@ -167,6 +167,61 @@ provider under a key the hook does not know, with no `target`, was still taken f
 `provider` in `delegate_task`). Now a start is plainly Claude only when the call and the
 thread hold nothing but the keys T3 has today; any other key means a denial.
 
+**Merged.** #76 merged as `1029960` through `sa-release` on the second run. The first run was
+allowed by the gate and failed on a conflict, because `main` had moved in the same minute:
+nothing merged. `main` moved six times under this job, twice into a conflict with a head
+that was ready. Release event verified and acknowledged, execution 1579; no new review thread
+after the merge. The workflow itself ended `unknown`, as it does on this repository: on the
+merge commit the `ai-review` job is skipped and Graphify's formal verification reports
+"skipping". Log:
+`~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/release-cookbook-76-merge-2.log`
+(the failed run: `release-cookbook-76-merge.log`). The thread on #64 is answered with what was
+built and stays open, on a merged pull request.
+
+**The review of the last head, and the record** (plugin 0.37.1, the pull request after #76):
+one low finding. The Codex page still wrote the start as `delegate_task` with
+`providerInstanceId: "codex"`, which a session could read as a top-level key, and the hook
+denies an unknown top-level key. The page now writes `target: { providerInstanceId: "codex",
+model }`, and a test runs the call the page writes down through the hook. `npm test` on
+the record: 555 tests, 554 pass, 0 fail, 1 skipped.
+
+**Installed.** Plugin 0.37.0 on 16 November 2026 at 18:15 UTC, with the owner's yes for that
+version (question dialog, the option "Update to 0.37.0"). The update moves the second number,
+which the `stack-updates` rules read as a major version, so it is not routine. Read back from
+disk: 0.37.0 at `1029960`, with the hook's files. The hook is live in sessions started after
+that. Three things are open:
+- **The installed page (0.37.0) still writes the start without `target`.** A session that
+  reads `providerInstanceId: "codex"` there as a top-level key is denied by the gate, whose
+  sentence names the cause ("no call with a field this hook does not know"). The corrected
+  page is 0.37.1, this pull request. Installing 0.37.1 needs the owner's yes again: a change
+  of the third number of a 0.y.z version reads as a minor version, and it has no release
+  notes. Owner: the owner, asked with the question dialog after the merge.
+- **A live denial in a T3 thread is not shown yet.** The session that did this job had
+  started before the update. Its probe (a Codex delegation to the provider instance T3 lists
+  as disabled, with no `Repository:` line, so that nothing could start either way) was
+  refused by T3 itself: the hook was not in that session. Owner: Claude. Clears with the
+  same probe from a session started after the update: it must come back with the hook's
+  sentence about the brief.
+- **Codex reads the Cookbook from the marketplace clone,** which the update moved to
+  `1029960` as well.
+
+**The AI review ran out of credit** at about 18:07 UTC on 16 November 2026 ("credit balance
+is too low"): this pull request and another chat's got `review unavailable`. The owner's
+answer in the question dialog, word for word: "wait and im not going to add credits, do these
+reviews for now, also we migth need to go down to opus 5.5 medium to high." Read by the chat
+that did this job as: nothing is bought; until the credit is back a `cookbook:review`
+subagent (Opus, high) reads the pull request in place of the review in CI; the last part is a
+thought about the model, not an instruction. Applied to this pull request only; no rule was
+changed, and the gate in code still refuses a pull request whose review is unavailable, so
+this one is to be merged by hand on the hand review, once every check on its head has passed
+and with no security review thread open. That review found one medium finding (this
+"Installed" text was out of date: the plugin had been installed after it was written) and
+three low (two reasons stated imprecisely, and this paragraph spoke of the merge as done),
+all in this entry and corrected. The script of the merge by hand, and its log with the
+release check once it has run, are in
+`~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/`
+(`merge-by-hand-cookbook-81.sh`, `.log`). Whether it merged is on the pull request itself.
+
 **Verification.** `npm test` with `main` merged in: 553 tests, 552 pass, 0 fail, 1 skipped (an
 older symbolic-link test that Windows skips); the test file again after the round-four fix: 50
 pass. Of these, 50 are new (`scripts/codex-start-check.test.mjs`), on
@@ -204,6 +259,11 @@ boat sandbox: 504 tests, 503 passed, 1 skipped (no Gitleaks there), on the secon
 first did not start ("boat limits did not answer in time"). The page is 2,246 bytes, under
 the 4,000-byte limit. No login call was made: nothing the login reads was changed. Log:
 `~/.local/share/claude-cookbook/evidence/2026-11-16-product-name/boat-npm-test-1.log`.
+
+**Merged.** #79 merged as 9e3d353 through `sa-release` on the first run (the AI review covered
+the whole change, no findings; no new review threads). Release event verified, execution 1578;
+plugin 0.36.4 installed. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-16-product-name/release-cookbook-79-merge.log`.
 
 **Outstanding.**
 - **Git history keeps the old text**, as for the first site: the name is in earlier commits
