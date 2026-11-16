@@ -15,6 +15,9 @@ fair trial; they never pick an owner.
 - **One side piece: the Cookbook dispatch profiles.** A fixed model, effort and tool list per
   kind of piece. Weighed: an untyped subagent (inherits every tool and the session's model); a
   T3 delegate (a whole thread for a small piece).
+- **A second opinion: Codex.** Another vendor's model, already in T3 Code on a paid account, and
+  it reads the same rules. Weighed: a second Claude model (shares Claude's blind spots); a
+  hosted reviewer (see "check").
 - **Code structure: Graphify.** Callers, impact and linked tests from an index, and the `sa-*`
   workflows and the standard already call it. Weighed: Sourcegraph (a hosted service for many
   repositories; ours are few); Serena or another language-server MCP (precise per language,

@@ -1,5 +1,62 @@
 # Handoff
 
+## 16 November 2026 (late): Codex added as a second model (0.32.0)
+
+**Why.** The owner's job, with a yes, 16 November 2026: "bring Codex's global setup in line
+with Claude's, so a task delegated to Codex from T3 Code follows the same rules as Claude
+does", and "Whether Codex belongs in the stack as a second opinion, and for which jobs, is
+decided in the Cookbook, through a pull request there."
+
+**What changed.**
+- `catalog.json`: Codex, a trial, with no update feed (the desktop app updates itself). No new
+  spend: it runs on the ChatGPT account the owner already has.
+- The map: one new row, "a second opinion on our own work from a model that is not Claude",
+  owner Codex as a supervised T3 `delegate_task` run, fallback a `cookbook:review` subagent.
+  No other owner changes.
+- `recipes/codex.md`: what it is for and not for, how to start it, where its rules come from,
+  the model route, the proof. `options/plan-and-build.md`: why, and what was weighed.
+- Plugin 0.32.0.
+
+**Done outside the repository.** In `~/.codex` (backups in
+`~/.codex/backups/claude-parity-20261116/`): `AGENTS.md` now holds no rules, only pointers to
+`~/.claude/CLAUDE.md`, this Cookbook and a repository's `CLAUDE.md`, plus what differs for
+Codex; `TOOL-STACK.md` is a pointer to the Cookbook; `config.toml` gained the Parallel Search
+and Stagehand servers (keys at run time, as in Claude) and lost the unused
+`[model_providers.context-mode]` block, which held a device key as a literal.
+`approval_policy = "never"` and `sandbox_mode = "danger-full-access"` were read and left as
+the owner set them (they match Claude's `bypassPermissions`); changing them needs the owner.
+The owner named both values in the job ("The config has `approval_policy = "never"` and
+`sandbox_mode = "danger-full-access"`") and reserved any change to them ("Ask the owner
+before: ... changing Codex's approval or sandbox settings"). So the recipe keeps Codex
+to our own work: it reads and reports, a piece that edits is not among its jobs, and text
+from outside (a fork's pull request, an issue, a web page, a dependency) never goes to it
+but to a `cookbook:review` subagent. T3 Code's one narrower mode was tested:
+`runtimeMode: "approval-required"` gave a read-only sandbox with `approval_policy =
+"untrusted"`, and the first command waited for a person. There is no unattended read-only
+mode, so the recipe requires the supervised mode for this job. An unattended full-access
+run for it needs the owner's yes, which is not recorded; the question was put to the owner
+on 16 November 2026.
+
+**Verified.** A delegated run on each model (`gpt-5.6-sol`, `gpt-6-astra`) answered eleven
+questions on the rules correctly from its own instructions and named the files it read;
+both listed the two new servers. Evidence:
+`~/.local/share/stack-atlas/evidence/codex-parity-20261116/`.
+
+**Outstanding.**
+- Servers and skills connected in Codex that are not in the catalog (`agit`, `aikido`,
+  `firecrawl-local`, `magic-workflow`, `shinkai`, `windmill`, `n8n`, the Waggle plugin, the
+  Disler, Caveman and RTK skills and guides). Codex is told not to use them. Removing them is
+  an uninstall. Owner: the owner. Clears with a yes.
+- The gateway's device key is still in one older backup,
+  `~/.codex/config.toml.bak-20261116-before-gateway-removal`, and passed through a session.
+  Owner: the owner. Clears when it is revoked at the gateway, or when the owner says the
+  account is closed, and that backup is deleted.
+- Not proven, and so not a job in the recipe: a Codex piece that writes code.
+- Unattended Codex runs for the map row. Owner: the owner. Clears with the owner's yes to
+  full-access unattended runs on our own work (then record it in `recipes/codex.md`), or
+  when T3 Code gains a read-only unattended mode, or when the owner changes Codex's sandbox
+  setting. Until then the row means a supervised run.
+
 ## 16 November 2026 (evening): Macroscope weighed and not added (0.31.5)
 
 **Why.** The owner asked whether the hosted reviewer Macroscope should be part of the
