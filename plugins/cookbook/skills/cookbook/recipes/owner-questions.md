@@ -33,7 +33,7 @@ gets the dialog rule only.
 `owner_item` (open at 0.6 or more) and `declares_done` (0.5, or a done phrase). Measured on 79
 real closing messages, labels never sent: on 30 held out, Jev found 11 of 11 owner items with 3
 false alarms (0.900); the fixed phrase list found 8 of 11 with 7 (0.667). A false alarm costs
-one short extra turn; a miss is the failure this hook exists for.
+one short extra turn; a miss is what this hook is for.
 
 **The key** is the Cookbook's own `jev-compaction`. Reading it from the DPAPI store takes 2 to
 27 seconds, so the hook starts a broker once (`owner-questions-broker.mjs`, through
