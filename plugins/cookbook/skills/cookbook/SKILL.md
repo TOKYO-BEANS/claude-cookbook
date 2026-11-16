@@ -26,7 +26,8 @@ fallback and say that you did.
 | **Plan and build** | | | |
 | Plan, build or debug a change | **Superpowers** skills | the same steps inline | [building](recipes/building.md), [debugging](recipes/debugging.md) |
 | Several agents on one job | the named **`sa-*`** workflows, within their budgets | plain parallel subagents | [workflows](recipes/workflows.md) |
-| One bounded side piece: an edit, a cited answer, a read-only review | a Cookbook dispatch profile (`cookbook:mechanical`, `cookbook:research`, `cookbook:review`) | T3 `delegate_task`, only for another provider's model or its own checkout | [dispatch](recipes/dispatch.md) |
+| One bounded side piece: an edit, a cited answer, a read-only review | a Cookbook dispatch profile (`cookbook:mechanical`, `cookbook:research`, `cookbook:review`) | T3 `delegate_task`, for a piece on Codex's model or in its own checkout | [dispatch](recipes/dispatch.md) |
+| A second opinion from another provider's model (a consult) | T3 `delegate_task`, read-only: to **Codex** (`gpt-6-astra`) from a Claude session, to Claude from a Codex session; advice, never a check | none: say that no second opinion was had | [consult](recipes/consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a Claude API call with a typed answer | [judgement](recipes/judgement.md) |

@@ -1,5 +1,64 @@
 # Handoff
 
+## 16 November 2026 (night): Codex is the second provider, and a consult has its page (0.32.0)
+
+**Why.** The owner said on 16 November 2026: "we use codex now, to be able to do the consult
+thing". Two options pages still said that only the Claude provider is on.
+
+**What "the consult thing" is here.** Nothing on this PC is named "consult": tstack
+(`t3dotgg/tstack`, still at `11e37a7`) is not installed, and none of its nine skills carries
+the name. Its two skills that ask another provider's model are `sol-loop` (one GPT Sol
+reviewer in a loop) and `council` (three providers). The Cookbook now defines a consult as
+one read-only question to Codex through T3 `delegate_task`, as advice.
+
+**What changed.**
+- `recipes/consult.md` (new): when to consult and when not, the call
+  (`providerInstanceId: "codex"`, model `gpt-6-astra`; from a Codex session, Claude), the
+  brief, the three-round limit, what a consult does not replace (the `ai-review` job, the
+  merge condition, a security finding, a stop), and the model and cost limits. There is no
+  fallback: without a second provider, say that no second opinion was had.
+- The map: a new row "A second opinion from another provider's model (a consult)"; the
+  fallback of "One bounded side piece" now names Codex.
+- `catalog.json`: a new tool, Codex (active, recipe: the consult page); T3 Code's purpose
+  names both providers.
+- `options/check.md` and `options/ship.md`: the two "only the Claude provider is on"
+  sentences are corrected. `options/plan-and-build.md` has the consult's bullet.
+  `recipes/dispatch.md` and `recipes/debugging.md` point to the consult page.
+- Plugin 0.32.0.
+
+**`sol-loop` and `council`: still not in use.** `sol-loop` names GPT Sol and forbids another
+model, and the ChatGPT sign-in refused `gpt-6.1-sol` ("model is not supported when using
+Codex with a ChatGPT account"); running it would take an API key or another plan, which is
+spending and the owner's decision. `council` needs three providers and two are on. Neither
+checks the merge condition in code, and the review of a pull request keeps its owner.
+
+**What was found.**
+- T3 Code's `orchestrator_capabilities` (16 November 2026): Claude and Codex can run a child
+  task; every other provider is switched off. Codex CLI 0.169.0, "Logged in using ChatGPT",
+  `model = "gpt-6-astra"` in its configuration.
+- Cost: Codex is included in a ChatGPT plan and draws on its allowance; credits are a
+  pay-as-you-go add-on that someone has to buy (chatgpt.com/codex/pricing and OpenAI's help
+  pages, read on 16 November 2026). Nothing in this job spent money.
+- The Codex part in the catalog has no update feed: the app updates itself, and its GitHub
+  releases are tagged `rust-v<version>`, which `feeds.mjs` does not parse.
+
+**Verification.**
+- One real consult on this change, by the new page's rules: `delegate_task` to Codex
+  (`gpt-6-astra`), read-only, completed. Verdict CHANGES with two findings, both agreed and
+  fixed before the first commit: the page told an agent to try another model and to fall
+  back to a subagent, which T3 Code's own rules forbid (now: stop and report, no fallback);
+  and it sent every consult to Codex, also from a session that runs on Codex (now: the other
+  provider). Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-codex-consult/`.
+- `npm test` passed.
+
+**Outstanding.**
+- A consult from a Codex session to Claude has not been run. Owner: Claude. Clears with the
+  first real call from a Codex session; until then the page marks it as not proven.
+- Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
+  Codex provider is switched on". The provider is on and `sol-loop` still cannot run (GPT Sol
+  is refused on the ChatGPT sign-in). Owner: Claude. Clears with a line in that repository's
+  next pull request.
+
 ## 16 November 2026 (evening): Macroscope weighed and not added (0.31.5)
 
 **Why.** The owner asked whether the hosted reviewer Macroscope should be part of the

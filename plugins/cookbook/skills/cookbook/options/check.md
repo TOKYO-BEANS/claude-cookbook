@@ -12,9 +12,9 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   merge condition. Weighed: CodeRabbit (ruled out by the owner: do not use it); Greptile and
   similar hosted reviewers (one more service reading every private diff); Macroscope (the same,
   paid per review, and its GitHub app asks for write access to code and workflows; installed
-  and removed on 16 November 2026); tstack's `sol-loop` and `council` (a second provider's
-  model through T3 Code: only the Claude provider is on, and switching another on costs
-  money); `sa-review` (the fallback, and the owner of a range that has no pull request).
+  and removed on 16 November 2026); tstack's `sol-loop` and `council` (not in use, though
+  Codex is now on: the reasons are in "ship"; a consult is advice, never the review);
+  `sa-review` (the fallback, and the owner of a range that has no pull request).
 - **Our code: CodeQL.** Native to GitHub and required through the ruleset. Weighed: Semgrep
   Code (its code rules were dropped so that one scanner owns the job); Snyk Code (a second vendor).
 - **Dependencies: Semgrep Supply Chain.** It blocks only on a reachable high or critical
