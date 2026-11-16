@@ -75,6 +75,11 @@ minute, nothing old enough to touch. Its thread is set to Sonnet 5.5 after that 
 - Whether the 17 November run uses Sonnet 5.5 (a thread's model for a scheduled run is not yet
   proven, `recipes/scheduled-runs.md`): read that run's `executedModel`. Owner: Claude, in the
   next Cookbook chat.
+- Graphify Formal Verification ends neutral ("No PR-changed functions were verified") on every
+  Cookbook pull request that changes code, and the merge gate counts that as not passing. Three
+  merges went past it by hand on one-time yeses (#57, #60, #66). Changing the gate loosens a
+  check: the owner's decision, asked at the close of this job; until then, ask per pull
+  request.
 - The SessionStart hook still runs plain `node`; aligning it with the absolute path is its own
   small change.
 
