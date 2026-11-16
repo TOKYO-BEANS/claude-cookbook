@@ -48,8 +48,8 @@ repository's name is replaced in it).
   for that project, not this one.
 - One more name is in two places and was not part of this job: the owner's own product, in
   `recipes/sign-ins-mail-and-access.md` (a site key of the site login, in use) and in one
-  line of an older entry here. Whether it is there on the owner's word is not known. A job
-  of its own, opened as a new chat on 16 November 2026.
+  line of an older entry here. The owner, asked on 16 November 2026: take it out. A job of
+  its own, opened as a new chat once this pull request is merged.
 
 ## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.2)
 
