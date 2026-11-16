@@ -522,9 +522,17 @@ const PLAIN = /[\x20-\x7e\p{Script=Latin}\p{P}]/u;
 export const shown = (text) => [...String(text)].map((c) => (PLAIN.test(c) ? c : `<U+${c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}>`)).join("");
 
 // What the window shows for a run: the files by name and folder, every Adobe tool the
-// session may call, the yes as the child will get it and the credits it states.
-export function windowText(o, trial = false) {
+// session may call, the yes as the child will get it and the credits it states. The
+// folder is where the file really is, links in the path followed (a folder that is a
+// junction to another place would otherwise show its own harmless name while the copy
+// comes from that other place); when that is not the folder the caller gave, both show.
+export function windowText(o, trial = false, realPath = real) {
   const credits = creditsIn(o.ownerYes);
+  const fileLine = (s) => {
+    const given = dirname(s.from);
+    const really = dirname(realPath(s.from));
+    return `    ${shown(s.name)}    from ${shown(really)}${really === given ? "" : `    (given as ${shown(given)})`}`;
+  };
   const body = [
     trial
       ? "THIS IS A TRIAL of the window, with sample text. Nothing is sent and nothing starts, whatever you click."
@@ -533,7 +541,7 @@ export function windowText(o, trial = false) {
     "An agent has asked the adobe-session script to start an Adobe session that sends a file of yours or may change something in your Adobe account.",
     "",
     `Files it sends to Adobe (${o.send.length}):`,
-    ...(o.send.length ? o.send.map((s) => `    ${shown(s.name)}    from ${shown(dirname(s.from))}`) : ["    none"]),
+    ...(o.send.length ? o.send.map(fileLine) : ["    none"]),
     "",
     `Adobe tools the session may call (${o.allow.length}):`,
     ...gatedOf(o.allow).map((n) => `    ${shown(n)}    NOT read-only`),

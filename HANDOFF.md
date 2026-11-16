@@ -132,6 +132,14 @@ to give the command more time than the window's five minutes.
 
 **Review rounds.** Three, set before the first push.
 
+**Review round 1**, on `59e020a` (the commit that took `main` in). The AI review: one low
+finding, fixed. The window showed the folder a `--send` file was given in; with a folder in
+that path that is a link to another place, it showed the link's harmless name while the
+copy came from the other place. It now shows the folder the file is really in, and the
+given one beside it when they differ. Graphify's review: no issues by static checks, and
+three notes on coupling (`parseArgs`, `windowText` and `main` call more functions than
+before), which are not findings about behaviour and were left.
+
 **Proved for this pull request.** `npm test` passes (372 tests with `main` taken in). `--dry-run` of a run with
 a file and `image_select_subject` printed `"opens": true` and the window's text and made
 no folder; a read-only one printed `"opens": false`. The trial above. No upload was made,

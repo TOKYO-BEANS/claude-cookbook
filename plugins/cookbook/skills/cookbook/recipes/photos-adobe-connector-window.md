@@ -12,7 +12,8 @@ independent of that agent showed that the owner said it
 - **When.** A run with a `--send` file, or with a tool in `--allow` that is not in the
   script's `READ_ONLY` list. It opens after every other check has passed and before anything
   is copied or started. A read-only run and `tools` open no window.
-- **What it shows.** That it is a real run; each file by name and folder; every Adobe tool
+- **What it shows.** That it is a real run; each file by name and the folder it is really
+  in (links followed; the folder that was given beside it, when different); every Adobe tool
   the session may call (marked read-only or not); the yes as the child session will get it;
   the credits that yes states. Only ASCII, Latin letters and punctuation show as they are:
   any other character is written out as its code (`<U+202E>`), so text that does not show

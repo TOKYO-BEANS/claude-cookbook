@@ -528,6 +528,12 @@ test("the window shows the files, the tools, the quoted yes and its credits", ()
   assert.deepEqual([trial.go, trial.stop, TRIAL_BUTTON], ["It works (trial)", "Stop", "It works (trial)"]);
   assert.ok(!trial.body.includes('Click "Go ahead"') && trial.body.includes('this trial never does'));
   assert.notEqual(trial.title, text.title);
+  // The folder shown is where the file really is: a folder in its path that is a link to
+  // another place shows that place, and the folder that was given beside it.
+  const elsewhere = join(HOME, "private", "1598.jpg");
+  const linked = windowText(gatedRun(), false, (path) => (path === PHOTO ? elsewhere : path)).body.split("\r\n");
+  assert.ok(linked.includes(`    1598.jpg    from ${dirname(elsewhere)}    (given as ${dirname(PHOTO)})`));
+  assert.ok(!linked.includes(`    1598.jpg    from ${dirname(PHOTO)}`));
   // Every number of credits the yes states is shown; a run without a file says "none".
   assert.deepEqual(creditsIn("Yes, my Adobe account, masks, 0 credits, or up to 300 credits"), [0, 300]);
   assert.deepEqual(creditsIn("credits are fine, 1,000 credits"), []);
