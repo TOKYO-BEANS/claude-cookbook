@@ -139,6 +139,13 @@ taken for Claude: now only the known keys are, and anything else is checked. And
 path, now stated on the setup page and above. GitHub's security review opened no thread on
 that push.
 
+**Graphify's review** (advisory, on the second push): four points and two coupling notes
+(`inner()` calls 10 functions, `decide()` 7; left as they are: each is one straight list of
+steps). Fixed: a `.git` pointer that is a link or not a plain file got past the 4 KB cap and
+is now not read, and the setup page says where the session may run the fetch a missing head
+asks for. Answered: `onFailure` is in Claude Code's hook reference ("Block the action when a
+hook fails", 2.1.295 or later) and in the installed 2.1.325; the Node path was already stated.
+
 **Verification.** `npm test`: 547 tests, 546 pass, 0 fail, 1 skipped (an older symbolic-link
 test that Windows skips). Of these, 46 are new (`scripts/codex-start-check.test.mjs`), on
 real Git repositories with a stand-in for GitHub; the first run of the file failed before the

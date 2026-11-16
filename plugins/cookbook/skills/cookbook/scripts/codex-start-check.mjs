@@ -157,9 +157,15 @@ function topOf(folder) {
   }
 }
 
-// A pointer file of `.git` is a line or two: more than 4 KB is not read.
+// A pointer file of `.git` is a line or two: more than 4 KB is not read, and neither is
+// anything that is not a plain file (a link to a large file, a pipe that never answers).
+function plainFile(file) {
+  const entry = lstatSync(file);
+  if (!entry.isFile()) throw new Error("not a plain file");
+  return entry;
+}
 function smallFile(file) {
-  if (lstatSync(file).size > 4096) throw new Error("too large");
+  if (plainFile(file).size > 4096) throw new Error("too large");
   return readFileSync(file, "utf8");
 }
 
@@ -173,6 +179,7 @@ function localFolder(from, pointer) {
 
 // Is `sha` in this pack index (version 2: a table of counts by first byte, then the sorted ids)?
 function inPackIndex(file, sha) {
+  plainFile(file);
   const fd = openSync(file, "r");
   try {
     const head = Buffer.alloc(8 + 1024);

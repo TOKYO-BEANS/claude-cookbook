@@ -15,7 +15,9 @@
   checkout, always github.com), and looks the head up in `.git`'s object files; it never
   fetches. An ignored
   file, another spelling (`agents.md`), a nested repository and a link that leads out of the
-  checkout count. Its output is fixed phrases.
+  checkout count. Its output is fixed phrases. The fetch a missing head asks for is the
+  session's own Git, under the checkout's configuration: only in a worktree T3 made of the
+  owner's repository; anywhere else the piece goes to `cookbook:review`.
 - **What requires it.** The hook `hooks/codex-start-gate.mjs` (`PreToolUse`, a failed hook
   blocks) runs before T3's `delegate_task`, `create_threads` and `t3_thread_launch`, in a
   Claude session with this plugin. A start it cannot check is denied. It does not reach: a

@@ -256,8 +256,22 @@ test("a .git pointer that names another machine, or is not a line or two, is not
   const shared = join(s.root, "shared");
   git(s.root, "clone", "-q", "--shared", s.checkout, shared);
   assert.equal(check(s, { checkout: shared }).start, true);
-  writeFileSync(join(shared, ".git", "objects", "info", "alternates"), "//example.invalid/share/objects\n");
+  const alternates = join(shared, ".git", "objects", "info", "alternates");
+  const borrowed = readFileSync(alternates, "utf8");
+  writeFileSync(alternates, "//example.invalid/share/objects\n");
   refused(check(s, { checkout: shared }), "head-missing");
+
+  // A pointer that is a link is not read: its own size says nothing about what it leads to.
+  // (Windows needs a privilege for a link to a file; there the case is left out.)
+  writeFileSync(join(s.root, "real-alternates"), borrowed);
+  unlinkSync(alternates);
+  let linked = true;
+  try {
+    symlinkSync(join(s.root, "real-alternates"), alternates, "file");
+  } catch {
+    linked = false;
+  }
+  if (linked) refused(check(s, { checkout: shared }), "head-missing");
 });
 
 test("an untracked instruction file at any depth: do not start", (t) => {
