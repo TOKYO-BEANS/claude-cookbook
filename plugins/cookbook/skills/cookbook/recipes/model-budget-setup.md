@@ -25,9 +25,11 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
   failed. Rewritten every minute, not signed: the script uses its figures only with no signed
   reading under an hour old and none to be read, checks every value and stores no figure.
   `checkedAt` is when T3 Code asked, not the age of the figures: they trailed a direct read
-  by two points.
-- **The banked resets** are T3 Code's list, used while its file shows it and saved nowhere;
-  the hook holds the advice meanwhile: [model-budget-resets](model-budget-resets.md).
+  by two points. T3 Code gets them from Claude Code (`get_usage`). A signed reading under an
+  hour old comes first, so the advice can trail them by 50 minutes (Fable 90% signed, 97%
+  there): kept, as the signing answers a security finding.
+- **The banked resets** are T3 Code's list, read while its file shows it, never saved:
+  [model-budget-resets](model-budget-resets.md).
 - **A thread switches itself.** `t3_thread_configure` then `t3_thread_send` with `queue`: the
   queued turn ran on Opus 5.5 with no one at the keyboard.
 
