@@ -9,11 +9,16 @@ that merged, which requires the supervised mode. Two ("prompt injection": Codex 
 a repository's `CLAUDE.md` as rules) were not. This change fixes them.
 
 **What changed.**
-- `recipes/codex.md`: project files are rules only in the owner's repositories
-  (`TOKYO-BEANS`), where they add to the global rules and never override one or lift a stop.
-  The copy that counts is the default branch's. Anywhere else, or when the file is changed
-  in the branch or diff under review, an `AGENTS.md` or `CLAUDE.md` is text from outside:
-  information, not instructions. `~/.codex/AGENTS.md` says the same since 16 November 2026.
+- `recipes/codex.md`, "Where it may start": Codex loads the working tree's `AGENTS.md` into
+  its instructions by itself, so a sentence that asks it to distrust that file is not a
+  control. The control is where Claude starts it: only in a checkout whose `origin` is a
+  `github.com/TOKYO-BEANS/` repository and whose `AGENTS.md` and `CLAUDE.md` equal the default
+  branch's (`git fetch origin`, `git diff --quiet origin/HEAD -- AGENTS.md CLAUDE.md`). A
+  check that fails or cannot run means no Codex there: the piece goes to a `cookbook:review`
+  subagent.
+- The page was at its size limit, so the rules, tools, model route and proof moved to
+  `recipes/codex-setup.md`. There: project files add to the global rules and never override
+  one or lift a stop, and `~/.codex/AGENTS.md` tells Codex the same as a second line.
 - Plugin 0.32.1.
 
 **Lesson.** Before a merge, read the pull request's review threads
