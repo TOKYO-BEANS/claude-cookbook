@@ -42,8 +42,8 @@ Claude Docs: "Leave as is (Recommended)". Cloudflare (both) and Stagehand: "Leav
 - `firecrawl` in `~/.claude.json` has `"alwaysLoad": false` (`claude mcp remove`, then
   `add-json`, user scope; the headers helper is unchanged).
 - `openseo@openseo` is `false` in `~/.claude/settings.json` (`claude plugin disable`). It was
-  already `true` in the `.claude/settings.local.json` of Camilla-Hjemmeside and Molebo -
-  Shopify, which now decide. The register's note that it moved on 2 November had not held.
+  already `true` in the `.claude/settings.local.json` of the two site projects that use it,
+  which now decide. The register's note that it moved on 2 November had not held.
 - Nothing else: no deny entry, no connector, no sign-in.
 
 **What changed here.** `scripts/measure/servers.mjs` with `servers.json` (this PC's servers)
@@ -105,6 +105,12 @@ Read of a file in the run's folder was refused, without it the Read worked. A me
 with the hook gave 55,035 tokens against 55,030 without, so the hook is not in the context.
 None of the 32 measuring runs before it called a tool (each made one request). The rule is
 on `recipes/scripted-runs-rules.md`.
+
+**After round 3**, the AI review of `f3d0826`, one low: `recipes/seo.md` named the two site
+projects, and this repository is public (the register says: no project names or paths). The
+names are gone from the page and from this entry; they are in memory on this PC. They were
+in three pushed commits of this pull request's branch (`78fa830` to `f3d0826`), which a
+squash merge keeps out of `main`; the owner was told. A fourth push, for this alone.
 
 **Spend.** USD 8.32 at list prices, on the plan login: 33 measuring runs (7.71, limit 15), the
 hook proof (0.02) and
