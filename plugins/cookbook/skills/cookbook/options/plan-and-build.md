@@ -41,5 +41,5 @@ fair trial; they never pick an owner.
   defined inline (Adobe refuses a direct connection).
 - **Skills: Superpowers `writing-skills`.** It tests a skill the way code is tested. Weighed:
   the bundled `skill-creator` (the fallback: it ships with the app).
-- **Model per turn: the thread's setting.** No router that works inside T3 Code was found: a
-  mod sees a T3 Code session as headless and skips it.
+- **Model per turn: the model budget.** Weighed: a T3 Code router, both apps' fallbacks,
+  CLIProxyAPI ([model-budget-setup](../recipes/model-budget-setup.md)).
