@@ -4,10 +4,11 @@
 - GitHub goes through `gh` and Git only: pull requests, checks, the API (`gh api`), search.
 - **The merge condition.** A pull request merges, without asking the owner, when every check on
   its head commit has passed, an `ai-review` comment for that commit exists and is not
-  `review unavailable`, each high or medium finding in it is fixed or answered in the pull
-  request, and no security review thread on it is open (two points down). A high finding still
-  disputed after two replies goes to the owner. Never skip, weaken or reword a check to get
-  through.
+  `review unavailable` (or, when its reviewer's API could not serve the call, a fallback review of
+  that commit stands in for it: [ai-review-fallback](ai-review-fallback.md)), each high or medium
+  finding in it is fixed or answered in the pull request, and no security review thread on it is
+  open (two points down). A high finding still disputed after two replies goes to the owner. Never
+  skip, weaken or reword a check to get through.
 - **A security finding is fixed, never answered away.** "Answered" is for a finding that is not
   about security. A security finding, from the review or a scanner, is fixed in the pull
   request; one Claude would dispute, dismiss or accept goes to the owner before any merge. A
