@@ -1,6 +1,190 @@
 # Handoff
 
-## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.1)
+## 16 November 2026 (night): the key read no longer waits on a script scan (0.38.2)
+
+**Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`
+took 32 seconds once and over 90 once, and `boat-run` refused three of six runs at its
+60-second limit. The 37-second refusal in #70's entry was the same fault.
+
+**The cause, found before anything was changed.** The PC's security software scans every
+PowerShell script block (AMSI; it is the only scanner registered), and while many processes
+start, each scan can wait about 30 seconds. `with-key.mjs` read a key by starting
+`agent-key.ps1`, which crosses several scans: the script itself and each module import.
+- Windows' PowerShell event log: in every slow read PowerShell was ready in under 2 seconds
+  and then waited before compiling the script. 33 of the day's 313 reads took over 3
+  seconds; 14 waits sit at 30.2 to 30.4 seconds, a time limit inside the scanner.
+- A traced read of 32.7 seconds: 9.7 before the script's first line, 18.0 in
+  `Import-Module`, 0.07 decrypting. A one-line block made in memory waited 12.7 seconds; a
+  plain file read in the same run took 5 ms. So: the scan, not file access and not DPAPI.
+- Made to happen on demand: 16 workers starting `git --version` for 45 seconds gave one
+  read of 47 seconds; with no burst, 27 runs took 0.7 to 2.5 seconds.
+- Ruled out: two and four key reads at the same moment (0.9 to 2.0 seconds), and
+  PowerShell's own start.
+
+**What changed.**
+- The helpers were in no repository. On the owner's word (16 November 2026) they live here:
+  `skills/cookbook/scripts/with-key.mjs` and `agent-key.ps1` (the latter byte for byte as it
+  was on the PC). Callers keep using the copies in `~/.local/bin`.
+- `with-key.mjs` reads the key in its own process: Node calls `CryptUnprotectData` through
+  `node:ffi` (Node 26.13.1, no flag; experimental). No PowerShell starts. The store and its
+  files are unchanged. Same checks as `agent-key.ps1`: the name pattern, no link.
+- The PowerShell route stays as the fallback where `node:ffi` is missing. It is ended after
+  15 seconds and the launcher says why. A failure message holds only the launcher's own
+  words or an error code, never what PowerShell printed.
+- `recipes/keys.md` (new; the map row links it); `catalog.json` notes for the two copies.
+- From the reviews: a program that cannot start ends the launcher with code 127 and one
+  line, not a stack trace (Graphify); a failed read removes a value the caller already had
+  under the variable's name; loading `node:ffi` leaves the process's warning handling as it
+  was; a missing `agent-key.ps1` is named (`sa-review`, three low findings).
+- GitHub's security review wrote two threads. "Prints a key" was the `--headers` mode:
+  taken out. "Starts any program it is given" is the launcher's purpose: the owner's yes
+  (16 November 2026) is in the thread.
+
+**Verification.**
+- 20 tests in `scripts/with-key.test.mjs` (19 pass, the link test skips on this PC: no right
+  to make a link). On Windows they read a synthetic DPAPI key by the direct route with
+  PowerShell forbidden, start the launcher as a process by five spellings of its path, and
+  save a key with `agent-key.ps1` and read it by both routes. CI runs on Linux with Node 24:
+  the Windows tests skip there, the rest run.
+- The real `boat` key, both routes side by side during a 60-second burst of process starts:
+  PowerShell 1 read in 86.8 seconds; the new launcher 38 reads, 0.6 to 1.4 seconds, none
+  failed. The key from both routes has the same SHA-256.
+- `npm test` passed on this PC.
+
+**Outstanding.**
+- The merge, the release check, the copy to `~/.local/bin` and the proof from there are
+  reported in the chat of this pull request and in the next entry.
+- Other PowerShell key reads still stall the same way: an MCP `headersHelper` that calls
+  `agent-key.ps1 -Mode headers`, and the launchers `firecrawl-secure.mjs`,
+  `parallel-secure.mjs` and `browserbase-key.ps1` in `~/.local/bin`, which are in no
+  repository either. Owner: Claude. Cleared by a read without PowerShell for each. A
+  `--headers` mode in `with-key.mjs` was written and taken out again: GitHub's security
+  review flags a mode that prints a key, so that design goes to the owner first.
+- The first commit of this pull request carried a stray file,
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` (the AI review caught it). A test ran
+  PowerShell with a temporary home folder, and PowerShell then writes its module cache into
+  the working directory. It held no path under the user's profile. Removed; the test's
+  temporary home now has `AppData\Local`, which keeps the cache there. The squash merge
+  leaves it out of `main`; it stays readable in the pull request's first commit.
+- `with-key.mjs` still starts the program without its variable when the key cannot be read
+  (the owner-questions broker relies on it) and still ends with code 1 when a signal kills
+  its child. Unchanged here. Owner: Claude.
+- The `ai-review` job answered `review unavailable` from the second push on: the review
+  key's credit balance is too low. `sa-review` reviewed instead. Until the credits are
+  back, every pull request needs that fallback. Owner: the owner (it is spending).
+- `node:ffi` is experimental. If a Node update changes it, reads fall back to PowerShell and
+  can stall again, for at most 15 seconds, with the reason on stderr.
+- A recommendation for whoever manages the security software, not acted on: its script scan
+  holds PowerShell up to 30 seconds per block under load. Its settings were not touched.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-with-key-stall/`:
+`FINDINGS.md`, the probes (`stall-probe.mjs`, `sampler.mjs`, `phase-split.ps1`,
+`storm.mjs`, `storm-compare.mjs`, `eventlog-gaps.mjs`, `dpapi-ffi.mjs`) and their logs.
+
+## 16 November 2026 (night): Claude Code's saved usage reading weighed; the record of #80 (0.38.1)
+
+**Why.** The 0.38.0 entry left one item: should `model-budget.mjs` take its stand-in figures
+from Claude Code's own saved reading (`cachedUsageUtilization` in `~/.claude.json`, with
+Fable's part of the week), before or in place of T3 Code's file? With it, one thing seen the
+same evening: the script's signed reading (Fable 90%) stood in for up to an hour while
+T3 Code's newer reading said 97%, so the hook said "use Fable" where the newer figures said
+"redeem".
+
+**What was found** (16 November 2026, from both programs' code and a sampled run, no guess).
+- Claude Code writes `cachedUsageUtilization` only after its own read of `api/oauth/usage`
+  gets through, at most once a minute (it skips the write while its copy is under 60 seconds
+  old), and itself ignores a copy over an hour old or of another account (`claude.exe`
+  2.1.325, the functions around the key).
+- T3 Code does not read the endpoint for the figures: it asks a running Claude Code with the
+  SDK's `get_usage` request (`claudeUsageResponseToLimits` in T3 Code's `server.asar`), and
+  that request is the read that writes Claude Code's copy. One read fills both files: Claude
+  Code's `fetchedAtMs` and T3 Code's `usageLimits.checkedAt` were both 19:00:20 UTC. T3 Code
+  reads the endpoint itself only for the reset list (`readClaudeResetCredits`).
+- When that read is refused (429), Claude Code answers T3 Code from the rate-limit headers of
+  its last reply, or from its own saved copy, and saves nothing. T3 Code's file moves on and
+  Claude Code's copy does not: from 19:05:24 T3 Code's limits were newer. Sampled every
+  15 seconds from 19:05 to 19:30 UTC (`sample-sources.log`): T3 Code asked for the limits
+  every three to six minutes (19:05:24, 19:10:28, 19:13:42, 19:19:39), and Claude Code's
+  copy stayed at 19:00:20 throughout, over 23 minutes old at the end.
+- So Claude Code's copy is there whenever a Claude Code thread has asked in the last hour
+  (T3 Code's probe is what fills it), and is never newer than T3 Code's figures.
+- Fable's part of the week was 49 of its 50 in Claude Code's copy; for T3 Code's the script
+  takes half the Fable share (48.5). The script uses the part in one place: whether a Fable
+  reset would leave the week spent. Half a point there changes no advice below 99% of the
+  week.
+
+**Decision: dropped, by Claude.** Claude Code's copy is the same reading as T3 Code's file,
+never newer and often older; what it adds changes no advice; and it would be a second
+unsigned file to read and answer for. The evening's case is not about which unsigned file:
+it is the order. A signed reading under an hour old stands before any unsigned one, however
+new; that order answers GitHub's security review (the signing came from its findings on
+#67), and Claude Code's copy would have stood behind the signed reading too. Letting a newer
+unsigned reading pass over a signed one would undo that answer: not done. The lag is
+recorded as a known limit on `model-budget-setup.md`. The recipes now say why Claude Code's
+copy is not used (`model-budget-resets.md`) and where T3 Code's figures come from
+(`model-budget-setup.md`).
+
+**Verification.** `npm test`: 564 passed, 0 failed, 1 skipped (`npm-test.log`). The
+sampler (`sample-sources.mjs`, `sample-sources.log`) is in the evidence folder. No change
+to the script or the hook, so the advice is as in 0.38.0. `sa-review` on `22e3200` (run
+`cookbook-82-review`): tests and Semgrep passed, CodeQL no alert, one low finding (below).
+
+**The Fable reset was redeemed.** At 19:14:31 UTC T3 Code's file said `availableCount: 0`
+for a moment and the hook said "Model budget changed: use Opus 5.5 high" (a count of 0 is
+"none", so it replaced the kept list). By 19:24 the script read week 11%, Fable 0%, one
+weekly reset banked, and the hook said "use Fable 5.2 high".
+
+**Outstanding.**
+- The AI review job has no API credit (from the 0.38.0 entry, unchanged): a Stack Atlas
+  chat works on it; `sa-review` is the fallback and the merge is asked of the owner.
+- Known limit, kept: with a signed reading 10 to 60 minutes old, the advice can trail
+  T3 Code's newer figures for up to 50 minutes. Clears only if the owner wants an unsigned
+  reading to pass over a signed one; not asked, since Claude does not recommend it.
+- `sa-review`'s low finding: `model-budget-setup.md` says T3 Code's file is "rewritten every
+  minute"; that is the file, while the limits in it are asked for every three to six
+  minutes. Owner: Claude. Clears with a follow-up that says both (not pushed into a
+  reviewed head).
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-claude-usage-reading/`.
+
+**Recorded here, from the job before (#80).** All on 16 November 2026, times UTC; each fact
+checked against the logs and against GitHub.
+- 18:22: GitHub's security review raised a second thread on `c2ac9f8`, the same finding as
+  the first (do not keep the reset list from T3 Code's unsigned file). The merge script
+  refused on it first (`merge-by-hand-cookbook-80-refused.log`: "1 security review
+  thread(s) have no fix on the head and no owner's yes"); at 18:28 the owner's answer on
+  the source, "Keep T3 Code's list (Recommended)", was written in it as the owner's yes.
+- About 18:28: the gates allowed the merge and it ended "MERGE FAILED": #81 had merged to
+  `main` at 18:25 (0.37.1) and the plugin's version file conflicted. `main` was merged in
+  once more (`62d3fd5`; the change stayed 0.38.0). The merge script now compares the pull
+  request's own changes with the reviewed commit file by file, and allows a difference in
+  `HANDOFF.md` and the plugin's version file only.
+- 18:56: #80 merged by hand as `aac9c72` on the owner's two answers ("Merge #80 once",
+  "Merge once on sa-review"): Graphify Formal Verification neutral ("0/4 PR-changed
+  function(s) verified · 4 not verified (2 vacuous, 2 unsupported)"), every other check
+  passed, both security threads with the owner's yes, no new thread during the merge.
+  Release event `verified`, execution 1583 (`merge-by-hand-cookbook-80.log`).
+- 18:57: plugin 0.38.0 installed (`claude plugin marketplace update claude-cookbook`,
+  `claude plugin update cookbook@claude-cookbook`).
+- 18:58 to 19:01: the installed hook at a session start, a prompt and a tool event
+  2.5 minutes later, and a second session start: one advice throughout, the later events
+  silent, no figures; the reset list was in T3 Code's file and then not
+  (`installed-hook-0.38.0.log`: "distinct advice lines in 150 s: 1; states of the reset
+  list seen: 2"). On the final code before the merge: `toggle-advice-final.log` (12
+  readings, one line) and `watch-advice-final.log` (240 s, one line).
+- That advice was the first real "Redeem" line: Fable at 97% of its share (T3 Code's
+  reading), the week at 59% (the record's "58 to 59%": no log shows 58), pace 62%, the weekly reset on Thursday 19 November at
+  10:00 UTC. Asked with the question dialog at 18:30, the owner answered "I redeem it now"
+  (the Fable reset; the click is the owner's, in T3 Code). At 19:01 it was not yet
+  redeemed.
+- A reading note: the script's own signed reading (Fable 90%) stood in for up to an hour
+  while T3 Code's newer reading said 97%, so for that time the hook said "use Fable" where
+  the newer figures said "redeem". That is the order of sources since 0.35.4 (a signed
+  reading under an hour old before T3 Code's), not new in 0.38.0; weighed above.
+- Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-resets/`
+  (`after-merge-record.md` and the logs it names).
+
+## 16 November 2026 (night): the fallback review in the map and the recipes (0.38.3)
 
 **Why.** The owner decided on Stack-Atlas #199 (16 November 2026): "in a case like this we fallback
 to you on the sub account do the review your self". When the `ai-review` job cannot run (the API
@@ -11,7 +195,7 @@ unavailable ai-review").
 **What changed.** The map's fallback for "Review of every pull request" is Claude's own fallback
 review in its fixed form (it was `sa-review`); `recipes/ai-review.md` says when it applies, its
 form and what it never covers; `recipes/ci-releases.md` names it in the merge condition. Plugin
-0.38.1.
+0.38.3.
 
 **Outstanding.** None for this page.
 
@@ -107,7 +291,7 @@ the change read the whole diff, no finding. The commit after it changes this fil
 - Figures: Claude Code's own saved reading (`cachedUsageUtilization` in `~/.claude.json`)
   has Fable's part of the week, which T3 Code's file lacks. Not used; a possible better
   stand-in for the figures than T3 Code's file. Owner: Claude. Clears when weighed in a
-  job of its own.
+  job of its own. Weighed in 0.38.1: dropped (the same reading as T3 Code's, never newer).
 
 **Limits (known).**
 - Whoever can write T3 Code's file as the owner can have a session told to ask for a reset,
@@ -219,7 +403,12 @@ It is not in code anywhere else:
   always the worktree a shared `delegate_task` runs in, and whether a start that names no
   provider can ever be Codex, rest on those texts. Owner: Claude. Clears with one refused and
   one allowed `delegate_task` in a session on the new plugin (a supervised start waits for
-  the owner's click, and this job starts no Codex run).
+  the owner's click, and this job starts no Codex run). **Partly closed** by the live probe
+  below (under "Installed"): the matcher meets T3's real tool name and the hook loads and
+  denies in a T3 thread. Still open: whether `CLAUDE_PROJECT_DIR` is always the worktree a
+  shared `delegate_task` runs in (the probe did not log it, and the hook falls back to the
+  call's `cwd`), and whether a start that names no provider can be Codex (both probes named
+  the Codex instance).
 - **Windows with Node in its usual folder only.** The hook's command is
   `C:/Program Files/nodejs/node.exe` (an absolute path, because the desktop app starts hooks
   with a minimal `PATH`) and a hook that cannot start blocks. On a machine without that file
@@ -320,21 +509,31 @@ the record: 555 tests, 554 pass, 0 fail, 1 skipped.
 version (question dialog, the option "Update to 0.37.0"). The update moves the second number,
 which the `stack-updates` rules read as a major version, so it is not routine. Read back from
 disk: 0.37.0 at `1029960`, with the hook's files. The hook is live in sessions started after
-that. Three things are open:
+that. Two things were open, both now closed, and one note:
 - **The installed page (0.37.0) still writes the start without `target`.** A session that
   reads `providerInstanceId: "codex"` there as a top-level key is denied by the gate, whose
   sentence names the cause ("no call with a field this hook does not know"). The corrected
   page is 0.37.1, this pull request. Installing 0.37.1 needs the owner's yes again: a change
   of the third number of a 0.y.z version reads as a minor version, and it has no release
-  notes. Owner: the owner, asked with the question dialog after the merge.
-- **A live denial in a T3 thread is not shown yet.** The session that did this job had
-  started before the update. Its probe (a Codex delegation to the provider instance T3 lists
-  as disabled, with no `Repository:` line, so that nothing could start either way) was
-  refused by T3 itself: the hook was not in that session. Owner: Claude. Clears with the
-  same probe from a session started after the update: it must come back with the hook's
-  sentence about the brief.
+  notes. Owner: the owner, asked with the question dialog after the merge. **Closed:** the
+  owner said yes to 0.37.1, but by then `main` was at 0.38.0 (#80) and another chat had
+  already installed 0.38.0 at `aac9c72` (18:58 UTC), which holds the corrected page. Nothing
+  was installed on that yes.
+- **A live denial in a T3 thread is shown** (closed on 16 November 2026, about 19:21 UTC). The
+  session that did this job had started before the update, and its probe was refused by T3
+  itself: the hook was not in that session. A T3 thread started after the update, with
+  0.38.0 installed and the `PreToolUse` entry in its `hooks.json`, ran two `delegate_task`
+  calls to the Codex provider instance T3 lists as disabled (`runtimeMode:
+  "approval-required"`), so that nothing could start either way. Without a `Repository:`
+  line: denied by the hook ("Codex is not started: the brief needs exactly one line of the
+  form Repository: TOKYO-BEANS/<name> ..."). With `Repository: TOKYO-BEANS/claude-cookbook`,
+  from the thread's clean worktree at `main`: the hook let it through and T3 refused the
+  disabled provider (`provider_unavailable`). So the matcher meets T3's real tool name, the
+  hook loads in this host, and the folder the hook checked was a clean checkout of this
+  repository at `main` (which variable named it was not logged). Nothing started. Evidence:
+  `live-probe.txt` in the evidence folder below.
 - **Codex reads the Cookbook from the marketplace clone,** which the update moved to
-  `1029960` as well.
+  `1029960` as well; the 0.38.0 update moved it to `aac9c72`. A note, not an open item.
 
 **The AI review ran out of credit** at about 18:07 UTC on 16 November 2026 ("credit balance
 is too low"): this pull request and another chat's got `review unavailable`. The owner's
@@ -351,7 +550,8 @@ three low (two reasons stated imprecisely, and this paragraph spoke of the merge
 all in this entry and corrected. The script of the merge by hand, and its log with the
 release check once it has run, are in
 `~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/`
-(`merge-by-hand-cookbook-81.sh`, `.log`). Whether it merged is on the pull request itself.
+(`merge-by-hand-cookbook-81.sh`, `.log`). **Merged:** #81 merged by hand as `aff4114`; release
+event verified and acknowledged, execution 1582 (`merge-by-hand-cookbook-81.log`).
 
 **Verification.** `npm test` with `main` merged in: 553 tests, 552 pass, 0 fail, 1 skipped (an
 older symbolic-link test that Windows skips); the test file again after the round-four fix: 50
