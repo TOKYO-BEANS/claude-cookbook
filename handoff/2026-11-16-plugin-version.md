@@ -13,8 +13,9 @@ a throwaway marketplace; the table is in the evidence folder):
   12 characters of the commit as `version` and the whole commit as `gitCommitSha`.
 - That commit is the head of the repository, not the newest commit under the plugin's
   folder. A commit that changes nothing in the plugin is an update too.
-- `claude plugin update` alone answers "already at the latest version" until `claude plugin
-  marketplace update` has run: it reads the marketplace's local clone.
+- `claude plugin update` alone answered "already at the latest version" until `claude plugin
+  marketplace update` had run, for that marketplace (registered by hand as a `git` source).
+  On the real install, a GitHub marketplace, the one command refreshed the clone itself.
 - A copy with a number moves to the commit at its next update ("updated from 1.0.0 to
   08f026ea2d9d"), and back when a number returns.
 - A `url` source and a `git-subdir` source with no version record their own repository's head
@@ -52,8 +53,8 @@ a PC is named by its 12 characters.
   `main` past the required checks, and Claude Code's own rule already gives every merge a
   version.
 - The update check follows what Claude Code does, so the Cookbook's plugin reads "behind"
-  after any merge until the two update commands have run, also after a merge that changed
-  nothing in the plugin.
+  after any merge until the plugin has updated, also after a merge that changed nothing in
+  the plugin.
 - Nothing became looser in "install without asking": a plugin installed by commit has no
   release notes, so it is never a routine update. Before this, the Cookbook's 0.x steps asked
   as well: a step of the second number counted as major, and a step of the third had only
@@ -70,14 +71,25 @@ a PC is named by its 12 characters.
   read" became "a Cookbook commit that cannot be read", with more refused shapes than before.
 
 **Verification.** See the pull request for the checks of its head and the reviews.
-- `npm test` on this PC: see the pull request text for the count.
 - The changed Codex start check was run for real in this checkout: exit 0, "main's version",
   with the clone and `main` both on `20b4777`.
 - New tests: feeds (7), compare (5), inventory (1), the run and `verify` path end to end (1),
   the check (1), the Codex start check (1 new, 3 rewritten). The three new compare tests that
   can fail against the old `compare.mjs` were run against it, and failed.
-- After the merge, on the real install: recorded in the pull request, not here (this file
-  merges with it).
+- Merged as `9853430` (#90) through `sa-release`: review gate allowed on a fallback review
+  of the head (three rounds; the CI review was out of credit), release event verified and
+  acknowledged.
+- After the merge, on the real install: `claude plugin update cookbook@claude-cookbook`
+  answered "updated from 0.40.0 to 9853430351c2"; the registry holds that version and
+  `main`'s head as `gitCommitSha`. The daily check, run from the updated plugin against a
+  copy of the real state, read `cookbook/plugin` as current: installed and latest the same
+  commit, not behind, no feed error, in none of the report's lists. The state held a number
+  before that run, so it was also the move from a number to a commit: a new baseline,
+  nothing reported.
+- `npm test` on this PC, first pushed head: 636 tests, 631 passed, 4 skipped, 1 failed, the
+  Windows key test in `scripts/with-key.test.mjs`, which timed out on a loaded PC and which
+  this change does not touch. The two later heads ran the affected test files only; CI ran
+  the suite on each.
 
 **Outstanding.**
 - **A pull request opened before this, with a `version` line,** fails `npm test` after merging
@@ -87,8 +99,10 @@ a PC is named by its 12 characters.
 - **Old cache folders.** Every update now makes a folder under
   `~/.claude/plugins/cache/claude-cookbook/cookbook/`; Claude Code removes one 14 days after it
   was replaced. Not measured: how much disk that is on a day of 20 merges.
-- **Stack Atlas and the other repositories were not searched** for a reader of the Cookbook's
-  version number. Owner: Claude; clears: a search there, or the first failure.
+- **Other readers of the number.** Searched after the merge, on this PC: the Stack Atlas
+  tools clone, the release-maintenance scripts and the `sa-*` workflows have no code that reads
+  the plugin's manifest or its registry entry (old plans and review diffs mention it). Not
+  searched: the product repositories. Owner: Claude; clears: the first failure there.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-plugin-version/`
 (`measurement.md`, the two commit lists, the registry at the end).
