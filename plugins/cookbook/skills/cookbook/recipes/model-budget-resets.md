@@ -35,5 +35,8 @@ Part of [model-budget](model-budget.md). Measured on 16 November 2026.
 - **Reading as Claude Code** (the `claude-cli` User-Agent). First-hand and signed, but it
   names the script as another client, past a gate Anthropic set; and the script's read gets
   through only now and then while T3 Code runs.
-- **Claude Code's own saved reading** (`cachedUsageUtilization` in `~/.claude.json`). It has
-  the limits and Fable's part of the week, and no resets.
+- **Claude Code's own saved reading** (`cachedUsageUtilization` in `~/.claude.json`), for the
+  figures or the resets. T3 Code gets its figures by asking Claude Code (`get_usage`), and
+  that one read writes both files; a refused read moves T3 Code's alone. So Claude Code's is
+  never newer, has no resets, and adds only Fable's part of the week, which changes no
+  advice (weighed 16 November 2026).
