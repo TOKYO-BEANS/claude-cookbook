@@ -4,9 +4,10 @@
 // answers "classify this closing text" on a local named pipe. It never returns the key.
 // The pipe's name is random and kept in the owner's profile, so another account cannot take
 // it first. The broker exits after IDLE_MS without a request, after MAX_LIFE_MS in all (so a
-// rotated key is picked up), after NO_KEY_LIFE_MS without a key, and at once when a hook of
-// another question version asks (so an updated plugin starts its own).
-import { randomBytes } from "node:crypto";
+// rotated key is picked up) and after NO_KEY_LIFE_MS without a key. Each question version has
+// its own pipe; a request of another version is answered "version" (a failure, not "nothing
+// open").
+import { createHash, randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -21,7 +22,7 @@ export const NO_KEY_LIFE_MS = 10 * 60_000;
 const SOCKET_MS = 15_000;
 const MAX_REQUEST = 64 * 1024;
 
-export function pipeName(stateDir) {
+export function pipeName(stateDir, version = VERSION) {
   const file = join(stateDir, "pipe.json");
   let id = null;
   try {
@@ -34,7 +35,9 @@ export function pipeName(stateDir) {
     mkdirSync(stateDir, { recursive: true });
     writeFileSync(file, JSON.stringify({ id }));
   }
-  const name = `cookbook-owner-questions-${id}`;
+  // Each question version has its own pipe, so sessions started before a plugin update and
+  // after it each keep a broker of their own; the old one exits when it goes idle.
+  const name = `cookbook-owner-questions-${id}-${createHash("sha256").update(version).digest("hex").slice(0, 8)}`;
   return process.platform === "win32" ? `\\\\.\\pipe\\${name}` : join(tmpdir(), `${name}.sock`);
 }
 
@@ -72,7 +75,7 @@ export function startBroker({ pipe, ask, idleMs = IDLE_MS, maxLifeMs = MAX_LIFE_
           req = {};
         }
         if (req.v !== version) {
-          socket.end(`${JSON.stringify({ ok: false, error: "version" })}\n`, stop);
+          socket.end(`${JSON.stringify({ ok: false, error: "version" })}\n`);
           return;
         }
         try {

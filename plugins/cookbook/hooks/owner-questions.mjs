@@ -49,8 +49,7 @@ async function classify(text) {
   const deadline = Date.now() + BUDGET_MS;
   const pipe = pipeName(stateDir);
   let answer = await askBroker(text, { pipe, timeoutMs: 7000 });
-  if (answer.ok || !["no broker", "version"].includes(answer.error)) return answer;
-  if (answer.error === "version") await new Promise((r) => setTimeout(r, 300)); // the old broker is closing
+  if (answer.ok || answer.error !== "no broker") return answer;
   const start = startBroker(pipe);
   // Only a start made now is waited for: a cold start reads the key (2 to 27 s). A start that
   // cannot happen, or one an earlier turn made, falls back at once.

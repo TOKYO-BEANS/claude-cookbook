@@ -38,8 +38,8 @@ one short extra turn; a miss is what this hook is for.
 **The key** is the Cookbook's own `jev-compaction`. Reading it from the DPAPI store takes 2 to
 27 seconds, so the hook starts a broker once (`owner-questions-broker.mjs`, through
 `with-key.mjs`) that holds the key in memory only and answers on a local named pipe, its
-random name kept in the profile (`pipe.json`). It exits after 3 hours idle, 20 hours in all, 10
-minutes without a key, or when a hook of another question version asks. A warm check takes
+random name kept in the profile (`pipe.json`), one pipe per question version. It exits after 3
+hours idle, 20 hours in all, or 10 minutes without a key. A warm check takes
 under a second; the hook's own limit is 12 seconds (20 in `hooks.json`).
 
 **A Jev failure is not "nothing open".** No broker, a timeout or an error falls back to the

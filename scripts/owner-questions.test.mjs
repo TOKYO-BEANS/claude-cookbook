@@ -255,21 +255,26 @@ test("the broker answers on its pipe; no broker is a failure, not 'nothing open'
   }
 });
 
-test("a broker of another question version answers 'version' and stops", async () => {
+test("a broker of another question version answers 'version' and keeps serving its own", async () => {
   const pipe = process.platform === "win32" ? `\\\\.\\pipe\\owner-questions-test-v-${process.pid}` : join(tmpdir(), `oqv-${process.pid}.sock`);
-  const server = await startBroker({ pipe, ask: async () => ({ ok: true, answers: {} }), idleMs: 60_000, version: "old" });
-  const closed = new Promise((r) => server.on("close", r));
-  assert.deepEqual(await askBroker("abc", { pipe, timeoutMs: 2000 }), { ok: false, error: "version" });
-  await closed;
+  const server = await startBroker({ pipe, ask: async () => ({ ok: true, answers: { owner_item: 0, declares_done: 0 } }), idleMs: 60_000, version: "old" });
+  try {
+    assert.deepEqual(await askBroker("abc", { pipe, timeoutMs: 2000 }), { ok: false, error: "version" });
+    assert.equal((await askBroker("abc", { pipe, timeoutMs: 2000, version: "old" })).ok, true, "sessions of the old version still get answers");
+  } finally {
+    server.close();
+  }
 });
 
 test("the pipe name is random, kept in the profile, and the same on the next read", async () => {
   const { pipeName } = await import("../plugins/cookbook/hooks/owner-questions-broker.mjs");
   const dir = join(tmpdir(), `oq-state-${process.pid}-${Date.now()}`);
   const a = pipeName(dir);
-  assert.match(a, /cookbook-owner-questions-[0-9a-f]{32}/);
+  assert.match(a, /cookbook-owner-questions-[0-9a-f]{32}-[0-9a-f]{8}/);
   assert.equal(pipeName(dir), a);
   assert.notEqual(pipeName(`${dir}-2`), a);
+  assert.notEqual(pipeName(dir, "jev-x/q9"), a, "each question version has its own pipe: old and new sessions never stop each other's broker");
+  assert.equal(pipeName(dir, "jev-x/q9"), pipeName(dir, "jev-x/q9"));
 });
 
 test("hooks.json runs the Stop hook with absolute paths and a time limit", () => {
