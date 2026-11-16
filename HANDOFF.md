@@ -17,11 +17,12 @@ points.
 
 **What changed.** `readUsage` takes the script's own signed reading while it is under ten
 minutes old, else a session start reads over the network (one read per ten minutes, failed or
-not). When that gives nothing, the newer of the script's older reading and T3 Code's saved one
-stands in, under an hour old (`parseT3`: every value checked, anything odd is no reading,
-nothing from it stored). The first version took T3 Code's reading ahead of the network read;
+not). When that gives nothing, the script's own signed reading stands in while it is under an
+hour old, and T3 Code's saved one (under an hour old too) only when the script has none
+(`parseT3`: every value checked, anything odd is no reading, nothing from it stored). The first version took T3 Code's reading ahead of the network read;
 GitHub's security review flagged an unsigned file as a fresh source, and its suggested fix was
-taken: T3 Code's reading only when no signed one can be had. A prompt or tool event still
+taken: T3 Code's reading only when there is no signed one under an hour old and none can be
+read. A prompt or tool event still
 never reads over the network, and now has T3 Code's reading too. The
 `usage.lock` and its takeover are gone: the reading (`usage.json`) and the mark of a failed read
 (`usage-tried.json`) are two signed files, so a failed read cannot replace a reading. The

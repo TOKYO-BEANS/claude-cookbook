@@ -398,19 +398,22 @@ test("readUsage: a signed reading always comes before T3 Code's, which stands in
   assert.equal(own.usage.week.used, 37);
 });
 
-test("readUsage: with no fresh signed reading the newer of the two saved ones stands in, under an hour old", async (t) => {
+test("readUsage: a signed reading under an hour old stands in before T3 Code's, however new T3 Code's is", async (t) => {
   const home = tmp(t);
   const stateDir = join(home, "state");
   mkdirSync(stateDir, { recursive: true });
   seedHome(home);
   const sign = (at) => writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at, usage: parseUsage(raw()) }));
   const read = () => readUsage({ home, stateDir, now: NOW, fetchImpl: never, cacheOnly: true });
-  sign(NOW - 20 * 60000);
-  seedT3(home, t3({ checkedAt: NOW - 30 * 60000 }));
-  assert.equal((await read()).source, "stale", "the script's own older reading is the newer one");
-  seedT3(home, t3({ checkedAt: NOW - 15 * 60000 }));
-  assert.equal((await read()).source, "t3");
+  seedT3(home, t3({ checkedAt: NOW - 1000 }));
+  sign(NOW - 50 * 60000);
+  const signed = await read();
+  assert.equal(signed.source, "stale", "the unsigned file cannot pass over a signed reading by being newer");
+  assert.equal(signed.usage.week.used, 37);
   sign(NOW - RULES.staleMs - 1);
+  const stand = await read();
+  assert.equal(stand.source, "t3", "with no signed reading under an hour old, T3 Code's stands in");
+  assert.equal(stand.usage.week.used, 43);
   seedT3(home, t3({ checkedAt: NOW - RULES.staleMs - 1 }));
   const gone = await read();
   assert.equal(gone.usage, undefined);

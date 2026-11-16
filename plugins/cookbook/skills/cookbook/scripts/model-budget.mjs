@@ -283,10 +283,10 @@ const readT3 = (file, now) => {
 
 // The reading: the script's own signed one while it is under ten minutes old, else a read over
 // the network (never with cacheOnly, and at most one per ten minutes, failed or not). When that
-// gives nothing, a reading under an hour old stands in: the script's own older one ("stale") or
-// T3 Code's ("t3"), whichever is newer. T3 Code's file is not signed, so it is never taken
-// ahead of a signed reading. A failure is { error }; it is never a made-up reading and never
-// the cause's text.
+// gives nothing, a reading under an hour old stands in: the script's own older one ("stale"),
+// and T3 Code's ("t3") only when the script has none. T3 Code's file is not signed, so it is
+// never taken ahead of a signed reading under an hour old, however new its own is. A failure
+// is { error }; it is never a made-up reading and never the cause's text.
 //
 // A read that succeeds closes the endpoint to this sign-in for about two minutes, and T3 Code
 // reads it every minute: while T3 Code runs, a read from here mostly answers 429 and T3 Code's
@@ -302,10 +302,11 @@ export async function readUsage({ home = homedir(), stateDir = join(home, ".loca
   // A reading from before the weekly reset says nothing about this week.
   const saved = own && own.at <= now && own.usage.week.resetsAt > now ? own : null;
   if (fresh(saved)) return { ...saved, source: "cache" };
-  // Second best, for when there is no fresh signed reading and none can be read: the newer of
-  // the script's own older reading and T3 Code's, under an hour old.
-  const t3 = readT3(t3File, now);
-  const old = [saved && { ...saved, source: "stale" }, t3 && { ...t3, source: "t3" }].filter((r) => r && now - r.at < RULES.staleMs).sort((a, b) => b.at - a.at)[0];
+  // Second best, for when there is no fresh signed reading and none can be read: the script's
+  // own signed reading while it is under an hour old, and T3 Code's only when there is none.
+  const young = (r) => r !== null && now - r.at < RULES.staleMs;
+  const t3 = young(saved) ? null : readT3(t3File, now);
+  const old = young(saved) ? { ...saved, source: "stale" } : young(t3) ? { ...t3, source: "t3" } : null;
   const fall = (error) => old ?? { error };
   if (cacheOnly) return fall("no fresh reading saved");
   const mark = readMark(markFile, token);
