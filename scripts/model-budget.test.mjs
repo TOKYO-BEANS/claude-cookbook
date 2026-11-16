@@ -867,6 +867,38 @@ test("hook: after a renewed sign-in the kept list is missing for a minute or two
   assert.match(event("SessionStart", "tok-secret-5").additionalContext, /^Model budget: use Opus 5\.5 high\. /);
 });
 
+test("hook: a session that started without the list is held back too, once the list has come", (t) => {
+  const home = tmp(t);
+  const stateDir = seedMark(home);
+  const fableReset = () => [option({ expiresAt: new Date(Date.now() + 20 * 24 * HOUR).toISOString() })];
+  const saved = (options, fable) => seedT3(home, t3({ fable, options, checkedAt: Date.now() - 1000, reset: Date.now() + 70 * HOUR }));
+  const event = (name, token) => runHook(home, { hook_event_name: name, session_id: "s-12" }, { cache: null, token }).context;
+  const state = () => JSON.parse(readFileSync(join(stateDir, "sessions", "s-12.json"), "utf8"));
+  // Fable on pace: the advice is Fable with the list and without it.
+  saved(null, 59);
+  assert.match(event("SessionStart").additionalContext, /^Model budget: use Fable 5\.2 high\. /);
+  assert.equal(state().resets, false);
+  saved(fableReset(), 59);
+  assert.equal(event("PostToolUse"), null, "the list came and the advice is the same: nothing is said");
+  assert.equal(state().resets, true, "but the session now knows the list");
+  // Fable moves ahead of pace: only the banked Fable reset keeps the advice on Fable.
+  saved(fableReset(), 80);
+  assert.equal(event("PostToolUse"), null);
+  // A renewed sign-in, and no list in T3 Code's file this minute.
+  saved(null, 80);
+  assert.equal(event("PostToolUse", "tok-secret-2"), null, "held back: the list is missing for under five minutes");
+  assert.deepEqual([state().resets, typeof state().lostAt], [false, "number"]);
+  saved(fableReset(), 80);
+  assert.equal(event("UserPromptSubmit", "tok-secret-2"), null);
+  assert.deepEqual([state().resets, state().lostAt], [true, undefined]);
+  // The list goes missing while the advice is the same, and the advice changes later in the same gap: held back as well.
+  saved(null, 59);
+  assert.equal(event("PostToolUse", "tok-secret-3"), null);
+  assert.deepEqual([state().resets, typeof state().lostAt], [false, "number"]);
+  saved(null, 80);
+  assert.equal(event("PostToolUse", "tok-secret-3"), null, "the gap began under five minutes ago");
+});
+
 test("the script says that the banked resets are T3 Code's list", (t) => {
   const home = tmp(t);
   seedHome(home);

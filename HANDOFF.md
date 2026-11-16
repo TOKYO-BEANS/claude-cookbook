@@ -45,18 +45,22 @@ and "Not now".
   holds only what the endpoint said.
 - The hook: a change of advice that comes while the list is missing waits five minutes
   (`GRACE_MS`), unless a limit is spent or the session starts. That covers the minute or two
-  after a renewed sign-in.
+  after a renewed sign-in. The session's file keeps whether the list was read at its last
+  event, and since when it is missing, on every event, said or not (the AI review's second
+  finding on #80: a session that started without the list was not held back later).
 - The script run by hand says "The banked resets are the list T3 Code last saved."
 - `recipes/model-budget-resets.md` is new (the source, the cost, what was not chosen);
   `model-budget.md` and `model-budget-setup.md` point to it.
 
-**Verification.** 63 tests in `scripts/model-budget.test.mjs` (9 new, failing first; the
+**Verification.** 64 tests in `scripts/model-budget.test.mjs` (10 new, failing first; the
 grace test fails with the grace set to 0); `npm test`. On T3 Code's real file, with the list
 taken out of a copy in every other reading: one line of advice in 12 readings, where 0.35.4
 gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live with
 `watch-advice.mjs`, for seven minutes and then a longer run: one line of advice, through
 changes of source (T3 Code's reading, a signed one, the signed one over ten minutes old) and
-through the minutes from 17:44 UTC on in which T3 Code's file had no list.
+through the sixteen minutes from 17:44 UTC in which T3 Code's file had no list, its return
+and a second minute without it (`watch-advice-0.37.0-25min.log`; the logs carry the version
+this change had before #76 took 0.37.0).
 
 **Owner decision on the merge (question dialog, 16 November 2026).** Asked as a condition
 before the check came: "Merge #80 once (Recommended)", for a neutral Graphify Formal

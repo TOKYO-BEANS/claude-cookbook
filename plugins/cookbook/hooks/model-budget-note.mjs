@@ -65,17 +65,19 @@ try {
       // The kept list of banked resets cannot be read for a minute or two after Claude Code renews
       // the sign-in (its file is signed with it), until T3 Code's file shows the list again. A
       // change of advice that comes while the list is missing waits GRACE_MS, unless a limit is spent.
-      const lostAt = Number.isFinite(state.lostAt) && state.lostAt <= now ? state.lostAt : now;
-      const waits = event !== "SessionStart" && seen !== null && seen !== key && seen !== "unknown" && state.resets === true && !resets && d.model !== "wait" && !d.held && now - lostAt < GRACE_MS;
-      if (waits) {
-        if (state.lostAt !== lostAt) writeFileSync(seenFile, JSON.stringify({ ...state, lostAt }));
-      } else {
+      // The session's file says whether the list was read at its last event (resets) and, while it
+      // is missing after having been read, since when (lostAt); both are kept current on every
+      // event, said or not.
+      const before = Number.isFinite(state.lostAt) && state.lostAt <= now ? state.lostAt : undefined;
+      const lostAt = resets ? undefined : state.resets === true ? now : before;
+      const waits = event !== "SessionStart" && seen !== null && seen !== key && seen !== "unknown" && lostAt !== undefined && d.model !== "wait" && !d.held && now - lostAt < GRACE_MS;
+      if (!waits) {
         if (event === "SessionStart" || seen === null) text = `${said} ${POINTER}`;
         else if (seen !== key) text = `Model budget changed. ${said} ${POINTER}`;
-        if (text || state.lostAt !== undefined) {
-          mkdirSync(sessions, { recursive: true });
-          writeFileSync(seenFile, JSON.stringify({ key: text ? key : seen, at: text ? now : state.at, resets: text ? resets : state.resets }));
-        }
+      }
+      if (text || state.resets !== resets || state.lostAt !== lostAt) {
+        mkdirSync(sessions, { recursive: true });
+        writeFileSync(seenFile, JSON.stringify({ key: text ? key : seen, at: text ? now : state.at, resets, lostAt }));
       }
     }
     if (text) process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: text } })}\n`);
