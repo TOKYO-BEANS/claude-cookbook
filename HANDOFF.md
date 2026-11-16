@@ -307,7 +307,12 @@ It is not in code anywhere else:
   always the worktree a shared `delegate_task` runs in, and whether a start that names no
   provider can ever be Codex, rest on those texts. Owner: Claude. Clears with one refused and
   one allowed `delegate_task` in a session on the new plugin (a supervised start waits for
-  the owner's click, and this job starts no Codex run).
+  the owner's click, and this job starts no Codex run). **Partly closed** by the live probe
+  below (under "Installed"): the matcher meets T3's real tool name and the hook loads and
+  denies in a T3 thread. Still open: whether `CLAUDE_PROJECT_DIR` is always the worktree a
+  shared `delegate_task` runs in (the probe did not log it, and the hook falls back to the
+  call's `cwd`), and whether a start that names no provider can be Codex (both probes named
+  the Codex instance).
 - **Windows with Node in its usual folder only.** The hook's command is
   `C:/Program Files/nodejs/node.exe` (an absolute path, because the desktop app starts hooks
   with a minimal `PATH`) and a hook that cannot start blocks. On a machine without that file
@@ -408,21 +413,31 @@ the record: 555 tests, 554 pass, 0 fail, 1 skipped.
 version (question dialog, the option "Update to 0.37.0"). The update moves the second number,
 which the `stack-updates` rules read as a major version, so it is not routine. Read back from
 disk: 0.37.0 at `1029960`, with the hook's files. The hook is live in sessions started after
-that. Three things are open:
+that. Two things were open, both now closed, and one note:
 - **The installed page (0.37.0) still writes the start without `target`.** A session that
   reads `providerInstanceId: "codex"` there as a top-level key is denied by the gate, whose
   sentence names the cause ("no call with a field this hook does not know"). The corrected
   page is 0.37.1, this pull request. Installing 0.37.1 needs the owner's yes again: a change
   of the third number of a 0.y.z version reads as a minor version, and it has no release
-  notes. Owner: the owner, asked with the question dialog after the merge.
-- **A live denial in a T3 thread is not shown yet.** The session that did this job had
-  started before the update. Its probe (a Codex delegation to the provider instance T3 lists
-  as disabled, with no `Repository:` line, so that nothing could start either way) was
-  refused by T3 itself: the hook was not in that session. Owner: Claude. Clears with the
-  same probe from a session started after the update: it must come back with the hook's
-  sentence about the brief.
+  notes. Owner: the owner, asked with the question dialog after the merge. **Closed:** the
+  owner said yes to 0.37.1, but by then `main` was at 0.38.0 (#80) and another chat had
+  already installed 0.38.0 at `aac9c72` (18:58 UTC), which holds the corrected page. Nothing
+  was installed on that yes.
+- **A live denial in a T3 thread is shown** (closed on 16 November 2026, about 19:21 UTC). The
+  session that did this job had started before the update, and its probe was refused by T3
+  itself: the hook was not in that session. A T3 thread started after the update, with
+  0.38.0 installed and the `PreToolUse` entry in its `hooks.json`, ran two `delegate_task`
+  calls to the Codex provider instance T3 lists as disabled (`runtimeMode:
+  "approval-required"`), so that nothing could start either way. Without a `Repository:`
+  line: denied by the hook ("Codex is not started: the brief needs exactly one line of the
+  form Repository: TOKYO-BEANS/<name> ..."). With `Repository: TOKYO-BEANS/claude-cookbook`,
+  from the thread's clean worktree at `main`: the hook let it through and T3 refused the
+  disabled provider (`provider_unavailable`). So the matcher meets T3's real tool name, the
+  hook loads in this host, and the folder the hook checked was a clean checkout of this
+  repository at `main` (which variable named it was not logged). Nothing started. Evidence:
+  `live-probe.txt` in the evidence folder below.
 - **Codex reads the Cookbook from the marketplace clone,** which the update moved to
-  `1029960` as well.
+  `1029960` as well; the 0.38.0 update moved it to `aac9c72`. A note, not an open item.
 
 **The AI review ran out of credit** at about 18:07 UTC on 16 November 2026 ("credit balance
 is too low"): this pull request and another chat's got `review unavailable`. The owner's
@@ -439,7 +454,8 @@ three low (two reasons stated imprecisely, and this paragraph spoke of the merge
 all in this entry and corrected. The script of the merge by hand, and its log with the
 release check once it has run, are in
 `~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/`
-(`merge-by-hand-cookbook-81.sh`, `.log`). Whether it merged is on the pull request itself.
+(`merge-by-hand-cookbook-81.sh`, `.log`). **Merged:** #81 merged by hand as `aff4114`; release
+event verified and acknowledged, execution 1582 (`merge-by-hand-cookbook-81.log`).
 
 **Verification.** `npm test` with `main` merged in: 553 tests, 552 pass, 0 fail, 1 skipped (an
 older symbolic-link test that Windows skips); the test file again after the round-four fix: 50
