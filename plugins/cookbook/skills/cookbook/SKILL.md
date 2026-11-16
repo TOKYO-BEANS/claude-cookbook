@@ -37,7 +37,7 @@ fallback and say that you did.
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
-| The model for a session or a piece | the thread's model setting in **T3 Code**; a dispatch profile per piece | — | — |
+| The model for a session or a piece: Fable or Opus, and when a banked limit reset is used | the model budget script and its hook, which set the thread's model in **T3 Code**; a dispatch profile per piece | the thread's model as it is, said aloud | [model-budget](recipes/model-budget.md) |
 | **Check** | | | |
 | Tests, builds and container images | **Depot** CI | GitHub Actions, only as a documented exception | [ci-releases](recipes/ci-releases.md) |
 | Review of every pull request | the `ai-review` Depot job | **sa-review**, when its comment is `review unavailable` | [ai-review](recipes/ai-review.md) |
