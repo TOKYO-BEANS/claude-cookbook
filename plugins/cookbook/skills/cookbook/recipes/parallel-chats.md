@@ -10,7 +10,7 @@ been started by another chat, two of them on one subject.
 `hooks/owner-answers.mjs` in this plugin keeps
 `~/.local/share/claude-cookbook/owner-answers/ledger.jsonl`: a note for each question dialog,
 with the chat, the repository, the time and whether it was answered. **No question and no
-answer is kept**, only a hash of the question's words. A note is removed after 72 hours.
+answer is kept.** A note is removed after 72 hours.
 
 Before a question dialog the hook stops the call once and names the other chats of the same
 repository that put questions to the owner (72 hours; open ones 12 hours). The list is a
@@ -28,7 +28,8 @@ it was given.
   again.
 - None of them is yours: call `AskUserQuestion` again, and it passes.
 
-The hook judges nothing and shows no text a chat wrote. The cost is one short turn, and a
+The hook judges nothing and shows no text a chat wrote: counts, dates and chat ids in the
+host's own shape. The cost is one short turn, and a
 look at another chat, when another chat has asked something new. An error in the hook lets
 the call go ahead. Nothing is noted outside a repository or told across two, so the same
 question can still reach the owner once per repository.

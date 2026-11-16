@@ -1,14 +1,16 @@
 // The owner-answers hooks (recipes/parallel-chats.md). Several chats work at once and none
 // sees the others, so the owner got the same question in two of them. Three things here:
 //  - when a question dialog is shown and when it is answered, a note goes into one local list:
-//    which chat, which repository, when. No question, no option and no answer is ever kept;
+//    which chat, which repository, when. No question, no option and no answer is ever kept,
+//    not even as a hash on its own;
 //  - before a question dialog, a chat is told once which other chats of its repository put
 //    questions to the owner, so it can read the owner's answer there, in the chat itself;
 //  - before a chat starts a new chat, it is told once to look at the chats that exist.
 // The list is a pointer, never a source: any chat on this PC could write the file, so what
 // the owner answered is read only from the host's own record of the chat that asked. Every
-// value this module puts in front of a model is a number, a date, or an id of a fixed
-// alphabet. Pure functions; owner-answers-store.mjs does the reading and writing.
+// value this module puts in front of a model is a number, a date, or a chat id in one of
+// the host's own shapes (hexadecimal digits). Pure functions; owner-answers-store.mjs does
+// the reading and writing.
 import { createHash } from "node:crypto";
 
 export const WINDOW_MS = 72 * 3_600_000; // a note points other chats at a chat for three days
@@ -22,15 +24,20 @@ const str = (v) => (typeof v === "string" ? v : "");
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 const sha = (text) => createHash("sha256").update(text).digest("hex");
 
-// A question is kept as a hash of its words alone (case, spacing and punctuation set aside):
-// enough to say "the same wording", nothing that can be read back.
-export const questionHash = (question) => sha(str(question).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()).slice(0, 32);
+// A note's id ties "shown" to "answered" for one question of one chat. It is a hash of the
+// chat's session and the question's words together, so it says nothing of the question to
+// anyone who does not hold that session's id.
+const words = (question) => str(question).normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 export const sessionKey = (session) => sha(str(session)).slice(0, 24);
-export const entryId = (session, question) => sha(`${sessionKey(session)}\n${questionHash(question)}`).slice(0, 16);
+export const entryId = (session, question) => sha(`${str(session)}\n${words(question)}`).slice(0, 16);
 
 // The shapes a note's fields may have. Anything else in the file is not a note.
 const HEX = (n) => new RegExp(`^[0-9a-f]{${n}}$`);
-const CHAT_ID = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,99}$/;
+// A chat's id as T3 Code writes it: a UUID or a run of hexadecimal digits, after "mcp:",
+// "mcp:launch:" or "thread:" at most. Letters a to f spell nothing a model could follow.
+const CHAT_ID = /^(?:(?:mcp|launch|thread):){0,2}[0-9a-f]{8}[0-9a-f-]{0,56}$/;
+const FIRST_AT = Date.parse("2026-01-01T00:00:00Z");
+export const CLOCK_SLACK_MS = 5 * 60_000; // a note dated later than this past now is not one
 const REPO = /^[a-z0-9_.-]{1,100}\/[a-z0-9_.-]{1,100}$/;
 export const chatId = (v) => (CHAT_ID.test(str(v)) ? str(v) : "");
 
@@ -56,11 +63,11 @@ export function parseLedger(text) {
     } catch {
       continue;
     }
-    if (!isObject(e) || !HEX(16).test(str(e.id)) || !Number.isFinite(e.at) || e.at <= 0) continue;
+    if (!isObject(e) || !HEX(16).test(str(e.id)) || !Number.isSafeInteger(e.at) || e.at < FIRST_AT) continue;
     if (e.state !== "asked" && e.state !== "answered") continue;
-    if (!HEX(24).test(str(e.session)) || !REPO.test(str(e.repo)) || !HEX(32).test(str(e.q))) continue;
+    if (!HEX(24).test(str(e.session)) || !REPO.test(str(e.repo))) continue;
     if (e.state === "asked" && byId.get(e.id)?.state === "answered") continue;
-    byId.set(e.id, { id: e.id, at: e.at, state: e.state, session: e.session, thread: chatId(e.thread), repo: e.repo, q: e.q });
+    byId.set(e.id, { id: e.id, at: e.at, state: e.state, session: e.session, thread: chatId(e.thread), repo: e.repo });
   }
   return [...byId.values()];
 }
@@ -75,7 +82,7 @@ export function candidates(entries, { session, thread = "", repo = "", now, show
   const mine = sessionKey(session);
   return entries
     .filter((e) => e.repo === repo && e.session !== mine && !(thread && e.thread === thread) && !seen.has(shownMark(e)))
-    .filter((e) => (e.state === "answered" ? now - e.at <= WINDOW_MS : now - e.at <= OPEN_MS))
+    .filter((e) => e.at <= now + CLOCK_SLACK_MS && (e.state === "answered" ? now - e.at <= WINDOW_MS : now - e.at <= OPEN_MS))
     .sort((a, b) => b.at - a.at);
 }
 
@@ -87,15 +94,14 @@ function stamp(at) {
 }
 
 // One line per chat, made of counts, a date and the chat's id: nothing a chat wrote.
-export function chatLines(found, hashes = []) {
+export function chatLines(found) {
   const byChat = new Map();
   for (const e of found) {
     const key = e.thread || `session:${e.session}`;
-    const c = byChat.get(key) ?? { thread: e.thread, answered: 0, open: 0, last: 0, same: false };
+    const c = byChat.get(key) ?? { thread: e.thread, answered: 0, open: 0, last: 0 };
     if (e.state === "answered") c.answered += 1;
     else c.open += 1;
     c.last = Math.max(c.last, e.at);
-    if (hashes.includes(e.q)) c.same = true;
     byChat.set(key, c);
   }
   return [...byChat.values()]
@@ -103,7 +109,7 @@ export function chatLines(found, hashes = []) {
     .map((c) => {
       const who = c.thread ? `chat ${c.thread}` : "a chat outside T3 Code";
       const counts = [c.answered ? `${c.answered} answered` : "", c.open ? `${c.open} open, no answer yet` : ""].filter(Boolean).join(", ");
-      return `- ${who}: ${counts}; last ${stamp(c.last)}${c.same ? "; one has the very wording of your question" : ""}`;
+      return `- ${who}: ${counts}; last ${stamp(c.last)}`;
     });
 }
 
@@ -126,7 +132,7 @@ const questionsOf = (input) => (Array.isArray(input?.tool_input?.questions) ? in
 
 function noteFor(q, { input, env, now, repo, state }) {
   const session = str(input.session_id);
-  return { id: entryId(session, q.question), at: now, state, session: sessionKey(session), thread: chatId(env.T3CODE_THREAD_ID), repo, q: questionHash(q.question) };
+  return { id: entryId(session, q.question), at: now, state, session: sessionKey(session), thread: chatId(env.T3CODE_THREAD_ID), repo };
 }
 
 // Before a dialog: { output, append, state }. A denial tells everything not yet told.
@@ -138,7 +144,7 @@ export function decideAsk({ input, env = {}, now, ledgerText, state = {}, repo =
   const found = candidates(parseLedger(ledgerText), { session: str(input.session_id), thread: chatId(env.T3CODE_THREAD_ID), repo, now, shown });
   if (found.length) {
     return {
-      output: deny(askReason(chatLines(found, questions.map((q) => questionHash(q.question))))),
+      output: deny(askReason(chatLines(found))),
       append: [],
       state: { ...state, shown: [...shown, ...found.map(shownMark)].slice(-2000) },
     };

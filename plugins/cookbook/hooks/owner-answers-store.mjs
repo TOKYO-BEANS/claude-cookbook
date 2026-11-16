@@ -1,11 +1,11 @@
 // Where the owner-answers hooks keep their list (recipes/parallel-chats.md): one folder on
 // this PC, outside every repository and outside ~/.claude. It holds notes that a dialog was
-// shown (ids, hashes, times), never a question or an answer.
+// shown (ids and times), never a question or an answer.
 import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { WINDOW_MS, parseLedger, repoLabel } from "./owner-answers-lib.mjs";
+import { CLOCK_SLACK_MS, WINDOW_MS, parseLedger, repoLabel } from "./owner-answers-lib.mjs";
 
 const LEDGER_LIMIT = 1_000_000; // bytes
 const KEEP_AT_MOST = 3000; // records
@@ -169,7 +169,8 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
         oldest = 0;
       }
       if (Date.now() - oldest > WINDOW_MS || text.length > LEDGER_LIMIT) {
-        const keep = parseLedger(text).filter((e) => Date.now() - e.at <= WINDOW_MS).sort((a, b) => a.at - b.at).slice(-KEEP_AT_MOST);
+        const now = Date.now();
+        const keep = parseLedger(text).filter((e) => now - e.at <= WINDOW_MS && e.at <= now + CLOCK_SLACK_MS).sort((a, b) => a.at - b.at).slice(-KEEP_AT_MOST);
         replace(ledger, keep.map((e) => `${JSON.stringify(e)}\n`).join(""));
       }
     },

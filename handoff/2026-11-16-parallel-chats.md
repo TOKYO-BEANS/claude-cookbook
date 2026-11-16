@@ -26,7 +26,7 @@ chats before a job starts.
   `PreToolUse` and `PostToolUse` in `hooks.json`:
   - when a question dialog is shown and when it is answered, it writes a note to
     `~/.local/share/claude-cookbook/owner-answers/ledger.jsonl`: the chat, the repository, the
-    time, the state and a hash of the question's words. No question, option or answer;
+    time and the state. No question, option or answer, not even as a hash on its own;
   - before a question dialog it denies the call once and names the other chats of the same
     repository that put questions to the owner (72 hours; open ones 12 hours), with the two
     T3 tools that show what was asked and answered there; the second call passes;
@@ -45,8 +45,8 @@ quoting the text did not settle them, and the finding was right: any chat on thi
 write that file, so a chat gone wrong could plant an "owner's answer" that other chats act
 on. The third push keeps no text at all. The list is a pointer; the answer is read from the
 host's own record of the chat that asked, which a chat cannot write. Every value the hook
-puts in front of a model is a count, a date or an id of a fixed alphabet (tested with
-planted lines). What it costs: a chat may have to read another chat before it asks, and a
+puts in front of a model is a count, a date or a chat id in T3 Code's own shape, which is
+hexadecimal digits (tested with planted lines). A note with a time in the future is no note. What it costs: a chat may have to read another chat before it asks, and a
 question asked in one repository is not seen from another.
 
 **Decisions that were mine.**
