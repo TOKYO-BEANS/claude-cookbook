@@ -72,6 +72,7 @@ restarted; one on 0.35.4 can still be told to switch model back and forth.
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-model-budget-resets/`:
 `one-read.mjs` and `read-1-skip-spend.json` (the timed read), `toggle-advice.mjs` and
 `.log`, `watch-advice.mjs` and its logs.
+
 ## 16 November 2026 (night): the first site's name out of the files; a project part names a key (0.36.3)
 
 **Why.** #75 took a customer's site name out of `options/check.md`. The same site, and the
