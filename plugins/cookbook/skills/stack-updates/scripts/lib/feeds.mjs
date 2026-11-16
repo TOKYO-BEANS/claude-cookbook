@@ -375,10 +375,12 @@ export async function releaseNotes(feed, from, to, { fetcher, gh, hosts } = {}) 
         return notesOf(await commitsText(needRepo(feed.repository), needPath(feed.path), from, to, deps), { subjects: true });
       case "marketplace": {
         const at = await marketplaceLocation(feed, deps);
-        // A plugin installed by commit moves with every commit of its repository: the two
-        // ends are heads, so the subjects between them are read with no path.
-        const path = (await pluginVersion(at, deps)) ? at.dir : "";
-        return notesOf(await commitsText(at.repo, path, from, to, deps), { subjects: true });
+        // A plugin installed by commit moves with every commit of its repository. The
+        // subjects of a whole repository are not this plugin's notes, and reading them would
+        // put text that anyone with a commit there wrote in front of the read stage's model.
+        // Such a plugin has no release text: the report links the commit.
+        if (!(await pluginVersion(at, deps))) return { text: "" };
+        return notesOf(await commitsText(at.repo, at.dir, from, to, deps), { subjects: true });
       }
       case "changelog":
         return notesOf((await changelogPage(feed, deps)).text);

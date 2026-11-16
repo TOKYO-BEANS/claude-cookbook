@@ -26,8 +26,10 @@ a throwaway marketplace; the table is in the evidence folder):
 - The update check, in `skills/stack-updates/scripts/lib/`:
   - `feeds.mjs`: a marketplace plugin with no version is read as the head of its source, with
     no path (`pluginVersion`, `marketplaceLatest`). A version that is there and is not x.y.z
-    is still "could not check", never read as "no version". The release text of such a plugin
-    is the commit subjects of the whole repository between the two heads.
+    is still "could not check", never read as "no version". Such a plugin has no release
+    text: the subjects of a whole repository are not its notes, and GitHub's security review
+    of the second head was right that they would put text anyone with a commit there wrote
+    in front of the read stage's model. The report links the commit.
   - `compare.mjs`: for such a plugin the registry's commit is the position: equal is current,
     unequal is behind, and a commit a session recorded is not used. A marketplace plugin that
     drops its version, or takes one again, starts from a new baseline, so no "0.40.0 to a
