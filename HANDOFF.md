@@ -1,6 +1,6 @@
 # Handoff
 
-## 15 November 2026 (night): the owner's yes is read by whole words and a number of credits (0.31.1)
+## 16 November 2026: the owner's yes is read by whole words and a number of credits (0.31.2)
 
 **Why.** Two things #55 left open, both in how `scripts/adobe-session.mjs` reads the owner's
 yes (`yesGaps`). This pull request closes them and removes no stop: a yes that passed before
@@ -41,14 +41,40 @@ prompt, fenced; the review proposed stripping instructions from it). The second 
 earlier finding on the brief with another proposed fix; the owner accepted it with the same
 answer. That acceptance covers that comment and no other finding.
 
-**From the entry below (#55).** It merged as `e5a2527` on 15 November 2026. The release
-check of that commit is `verified` (execution 1532); the `sa-release` run
-`cookbook-55-merge` ended `unknown` because the `ai-review` job is skipped on a merge
-commit, as on every one. Plugin 0.31.0 was then installed on this PC and proved: a run from
-the installed path made three read-only Adobe calls (`adobe_mandatory_init`,
-`get_account_type`, `font_search`) and exited 0. Evidence:
+**From #55** (the Adobe connector on demand, 0.31.0, three entries below). It merged as
+`e5a2527` on 15 November 2026. The release check of that commit is `verified` (execution
+1532); the `sa-release` run `cookbook-55-merge` ended `unknown` because the `ai-review` job
+is skipped on a merge commit, as on every one. Plugin 0.31.0 was then installed on this PC
+and proved: a run from the installed path made three read-only Adobe calls
+(`adobe_mandatory_init`, `get_account_type`, `font_search`) and exited 0. Evidence:
 `~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-connector-on-demand/`
 (`proof-installed-0.31.0/`, `release/`).
+
+**From #56 and #58** (the two entries below), which merged while this pull request was
+open. #56 took 0.31.1, so this one is 0.31.2; this branch took `main` in by a merge commit
+(`HANDOFF.md` was the only conflict). #58 merged as `d951c09`; the release check of that
+commit is `verified` and acknowledged (execution 1534; log `release-cookbook-58-merge.log`
+in `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`).
+
+**The merge gate stopped this pull request, and the owner decided.** The `sa-release` run
+`cookbook-57-merge` (15 November 2026, late) ended `failed` and merged nothing: the check
+`Graphify Formal Verification` had run on the head commit (`0fed36e`) and ended neutral
+("0/2 PR-changed function(s) verified · 2 not verified (1 vacuous, 1 unsupported)"). The
+merge script sets that check aside only when its title says it did not run; a neutral one
+that ran counts as not passed. It cannot pass here: it proves that old and new code behave
+the same, and this change alters behaviour on purpose. Every other check had passed and
+the AI review had no findings. Put to the owner with the question tool: merge #57 once as
+an exception for this pull request only, change the gate first in Stack Atlas, or leave it
+open? Answer: "Merge #57 once (Recommended)". That covers this pull request and no other;
+the gate is unchanged. The run is recorded in
+`~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-yes-whole-words/release/`.
+- Dead end: getting that check to pass on a pull request that changes what a function does.
+  Reason: above. Owner: the owner (a change to the gate loosens a check). Clears when the
+  gate in Stack Atlas (`merge-when-green.sh`, `outsideGate`) has a rule for a run that
+  found nothing different, or Graphify reports such a run as passed.
+- Seen beside it: Graphify posts that check about four minutes after a push. #55 and #58
+  merged before it arrived (on #58's head it ended neutral 102 seconds after the merge), so
+  the gate never saw it there. Not changed here: it is Stack Atlas's script.
 
 **Reviewed before the first push** by a `cookbook:review` subagent that did not build it:
 nothing high; one medium (this entry did not show the owner's words on 0; they are quoted
@@ -56,7 +82,11 @@ above now) and five low, all taken: the credits pattern read "1 000" and a minus
 numbers, "Adobe" was still a plain substring, a letter outside a–z did not join a word, a
 comment claimed more than the word list does, and three behaviours had no test.
 
-**Proved for this pull request.** `npm test` passes (329 tests). `--dry-run` refuses a yes with the word
+**Review round 1** (of three), on `0fed36e`: the AI review had no findings, Graphify's
+review none, and GitHub's security review did not comment.
+
+**Proved for this pull request.** `npm test` passes (346 tests with `main` taken in).
+`--dry-run` refuses a yes with the word
 "credits" and no number, and one that says "the background is fine" for the cut-out, and
 accepts "0 credits" with "masks". No upload was made and no `--owner-yes` was passed to a
 real run.
@@ -69,16 +99,185 @@ real run.
   or cancelling it is the owner's decision.
 - The merge commit, the release check, the install and the proof run of this pull request go
   into the next Cookbook pull request.
-- Next job, in its own chat: a fixed set of tasks measured before and after.
-- Stagehand's review date is 28 November (`connector-register.md`): with calls from only one
-  or two projects it moves to project scope.
-- The Proton Pass CLI was reported signed out by the daily update check on the morning of
-  15 November; not rechecked.
-- `dispatch-profiles.md` and `connector-register.md` (about 10 KB each) are still read in
-  ranges.
+- The merge gate and a `Graphify Formal Verification` that ran and ended neutral (above):
+  a Stack Atlas job, and the owner's yes, since it changes a check.
+- The fixed set of tasks measured before and after is done (#56, two entries below); the
+  rest of that entry's outstanding list stands: what was not measured, the unproven T3
+  scheduled task, Stagehand's review date of 28 November (the owner chose to keep it: do
+  not ask again), the Proton Pass CLI reported signed out on 15 November and not rechecked,
+  the two register pages still read in ranges, the token counter not retried.
+## 15 November 2026 (late night): the measuring script, two findings from the last review of #56
+
+No plugin file changes, so the plugin stays 0.31.1.
+
+**What changed** in `scripts/measure/measure.mjs`, both from the AI review of #56's head
+commit (two low findings, left for this pull request because #56's three rounds were spent):
+- `run` does not score a run that ended in an error (`is_error`, or a subtype other than
+  `success`, such as a run cut off by the spend cap): it prints the subtype, stops the batch
+  and keeps the run as a `discarded` row, so its cost counts against the batch limit (a run
+  with no result at all is counted at the full cap) while the report leaves it out and names
+  it. The AI review's first round (medium) asked for the cost to count: without it, a task
+  that kept hitting the cap could have passed the limit across reruns. Round 2 (two low): a
+  result that reports no cost is also counted at the cap, and a run that succeeds without a
+  cost is not scored; `report` applies its check for another task set or model to every row,
+  the discarded ones included. Scored, such a run would have counted as wrong answers. None of the
+  48 runs of the first measurement was one (every row: exit 0, `isError` false, `success`).
+- `--side` must be `before` or `after`; any other name stops the command before a run. A row
+  under another name would have cost money and been left out of the report.
+
+**Verification.** `npm test` passes (344 tests, 17 of them in `scripts/measure.test.mjs`).
+No paid run was made for this pull request.
+
+**From #56** (the entry below). It merged as `187cfc2`. The release check
+of that commit is `verified` and acknowledged (execution 1533; `sa-release` itself ended
+`unknown` for the skipped `ai-review` job, as on every merge commit; log
+`release-cookbook-56-merge.log` in the evidence folder). Plugin 0.31.1 was installed the same
+night (from 0.31.0, which the Adobe job had installed) and proved with a new headless
+session that loaded it from `cookbook/0.31.1` (`newsession-0.31.1.jsonl`). Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`.
+
+**Outstanding.** The list in the entry below stands, less its first item. The merge commit
+and the release check of this pull request go into the next Cookbook pull request. The order
+the owner set on 15 November 2026 is complete.
+
+## 15 November 2026 (night): a fixed set of tasks, measured before and after (0.31.1)
+
+The last step of the order the owner set on 15 November 2026 (the map #51, the removals #52,
+the diet #53, the visual check's recipe #54, then this).
+
+**What was compared.** "Before" is the global rules file as it was before the diet (36,078
+bytes, from `~/.local/share/backups/claude-md-diet-20261115/CLAUDE.md`) with Cookbook 0.28.4
+(`52aead6`, a 94,928-byte skill). "After" is today's file (8,411 bytes) with Cookbook 0.30.2
+(`b75dbaf`, an 11,730-byte map and one page per recipe). The removed tools were not
+reinstalled (an install needs the owner's yes), so the removal step (#52) is not in these
+numbers; what is recorded for it is the tool count of a full session start, 205 before and
+173 after (`evidence/2026-11-15-remove-jobless-tools/`).
+
+**The task set**, chosen by the owner with the question tool ("12 tasks, twice
+(Recommended)"), is in `scripts/measure/tasks.json`: six tool choices (who calls a function,
+a JS-heavy page, merging a finished pull request, vetting outside code, a scripted
+`claude -p` run, a live Wix change), four stops (a paid plan, dismissing a finding, merging
+without waiting, publishing without a visual check) and two rule lookups (a new key,
+force-push). Each task asks for the answer in named fields. The key (38 checks, each a
+pattern on one field) was written before any run and holds only answers both rule sets give.
+
+**How.** `scripts/measure/measure.mjs`: headless runs on the Claude plan login, Opus 5.5,
+tools Skill, Read, Glob and Grep only, no MCP servers, no user settings or plugins, a cap of
+USD 1 a run and a stop at USD 30 for the batch. Each side is a folder with that side's rules
+file and plugin. 12 tasks, two sides, two repeats: 48 runs, none failed, no tool call denied.
+
+**Results** (sums over the 24 runs of a side; the table per task is in the evidence folder).
+
+| | Before | After | Change |
+| --- | --- | --- | --- |
+| Checks passed | 76 of 76 | 76 of 76 | none |
+| Input tokens, all requests | 1,627,339 | 1,109,261 | 32% fewer |
+| First request of a run (mean) | 22,254 | 12,459 | 44% smaller |
+| Largest request of a run (mean) | 50,190 | 17,544 | 65% smaller |
+| Output tokens | 10,615 | 10,635 | the same |
+| Requests (turns) | 62 | 94 | 52% more |
+| Seconds (as Claude Code reports them) | 140 | 152 | 9% more |
+| Cost at list prices (plan usage, no invoice) | USD 7.75 | USD 2.46 | 68% lower |
+
+- Nothing was lost and nothing was gained in correctness on this set: both sides passed every
+  check, stops and rules that left the global file included. The set cannot show a gain: its
+  key holds only answers both sides give.
+- The saving is in size and cost, not in speed. After loads a short map and then reads the
+  page of the job (19 page reads and 7 searches in 24 runs); before loaded the whole skill and
+  read nothing else. That is why after needs more requests and a little more time.
+- Two tasks cost after more input tokens than before, as means: merging without waiting
+  (65,671 against 51,129) and force-push (64,879 against 51,090). In both, after took five
+  requests to find the rule on a page, and one of before's two runs answered from the global
+  file without loading the skill. Their cost was still lower (USD 0.12 against 0.24).
+- Before was less steady: three of its second-repeat runs skipped the skill (22,000 tokens
+  against 80,000 with it). After loaded the skill in 22 of 24 runs; the two without were the
+  dismissal stop, which both sides answer from the global file.
+- The first request shrank by 9,795 tokens, which matches the diet's own measurement (9,798).
+
+**A flaw found before the batch, and fixed.** `--setting-sources project` does not keep the
+user's `~/.claude/CLAUDE.md` out: a probe run named both rules files, so both sides had
+today's file on top. The first trial run and two probes are void (kept in `void/`). The runs
+now pass `--settings` with `claudeMdExcludes`; `measure.mjs probe` showed one rules file per
+side before the batch. The rule is on `recipes/scripted-runs-rules.md`.
+
+**Spend.** The batch: USD 10.21 at list prices, on the plan login (`apiKeySource` `none` in
+every run). Outside it, the void trial, the probes and the scope proof: USD 0.87.
+
+**To measure a later change:** build the two sides (`git archive <commit> plugins/cookbook`
+into `<side>/plugin`, the rules file as `<side>/work/CLAUDE.md`), then `probe`, `run` and
+`report`. Results compare within one task set only: a changed task or check takes a new
+`set` name.
+
+**Verification.** `npm test` passes (341 tests, 14 of them in `scripts/measure.test.mjs`; the run's allow list is one of the things they pin). The 48
+stored answers were scored again from the raw streams after the last change to the parser:
+152 of 152, none moved.
+
+**Checks and review on the pull request (#56).** The first push failed `Depot CI / test`: a new
+test assumed a Windows path; the Read rule and its test now hold on Linux too. CodeQL then
+raised one high finding (`js/clear-text-logging`, alert 3): the probe printed the stream's
+`apiKeySource` label. It is no key, but the finding was fixed, not answered: the runner records
+only whether a run was on the plan login. AI review round 1 (of three), two low findings, both
+fixed: a `--cap`, `--limit` or `--reps` that is no positive number stops the command (it would
+have switched the batch stop off), as does a flag without a value; and `run` and `report`
+refuse a folder that holds results of another task set or model. Round 2, from GitHub's
+security review: a run wrote its whole stream to the output folder, and the model's text can
+quote the rules file it was given. The stream, the run's stderr and the probe's stream are now
+written only with `--transcripts yes`, and a search is recorded without its pattern; by
+default the folder holds numbers, tool names and which checks passed. The first measurement
+was made before this, so its folder holds every stream; it is on this PC only, in no
+repository. Round 3, the last: requests are counted for the model the session reports, so an
+alias in `--model` no longer leaves the request columns at 0, and a run with a result but no
+counted request stops the batch; the header comment names both scripted-runs pages.
+
+**After the third round, one more finding, about isolation, so it was fixed here and not in a
+follow-up.** The runs allowed `Glob` and `Grep` without a path, so a run could have searched
+any file the user can read, the user's own rules file included. None did: the 48 stored
+streams hold 26 file-tool calls (19 Read, 7 Grep), every one inside the run's own side
+folder, so the numbers above stand. The fix: only `Skill` and the one Read rule are allowed.
+One capped run proved it (`checks/scope-probe-read-rule-only.jsonl` in the evidence
+folder): Grep, Glob and Read worked inside the side folder and all three were refused
+outside it. The rule is on `recipes/scripted-runs-rules.md`.
+
+**And one from GitHub's security review on that commit:** `probe` printed the model's answer,
+which holds the paths and first headings of the rules files. It now prints a verdict it
+works out itself (clean or not, how many rules files, whether the side's own and the user's
+own are among them) and ends with exit code 1 when a side is not clean; the answer is shown
+only with `--transcripts yes`. The line `run` prints per run names the tools without their
+arguments; the pages read stay in `summary.jsonl`.
+
+**Evidence:** `~/.local/share/claude-cookbook/evidence/2026-11-15-before-after-tasks/`
+(`RESULT.md`, `runs/report.md`, `runs/summary.jsonl`, one stream per run, both sides in
+`arms/`, the void runs in `void/`).
+
+**From #55** (the entry below, the Adobe connector on demand, 0.31.0). It merged as `e5a2527`
+while this job ran; this branch took `main` in by a merge commit, and the plugin is 0.31.1.
+The release check of `e5a2527` is `verified` and acknowledged (execution 1532; log in
+`~/.local/share/claude-cookbook/evidence/2026-11-15-adobe-connector-on-demand/release/`).
+Plugin 0.31.0 was not installed on this PC when this was written. The measurement's "after"
+side is 0.30.2, as stated: #55 added one map row and three pages after it.
+
+**From #54.** It merged as `b75dbaf`; the release check of that commit is `verified` and
+acknowledged (execution 1530; `sa-release` itself ended `unknown` for the skipped
+`ai-review` job, as on every merge commit). Plugin 0.30.2 was installed the same evening and
+proved with a new headless session. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-15-visual-check-recipe/`.
+
+**Outstanding.**
+- The merge commit, the release check and the install of this pull request (0.31.1) go into
+  the next Cookbook pull request.
+- Not measured: the removal step by itself, and a session with every MCP server on (two such
+  runs differ by thousands of tokens). A per-server measurement belongs to a job of its own
+  (memory `whole-design-one-owner`).
+- "Adobe for creativity" stays connected in claude.ai: #55 reversed the earlier request to
+  disconnect it. Nothing waits on the owner there.
+- Open from #55, the owner's: the yes for the first photo run through the script, and keeping
+  or cancelling the Adobe plan (a 7-day trial from 10 November 2026 that turns paid on day 7).
 - Unproven: a T3 scheduled task bound to a thread with a cheaper model.
-- Not retried: the Claude API's token counter for measuring what a file costs a session. It
-  needs a workspace ID in the request.
+- Stagehand's review date is 28 November (`connector-register.md`); the owner chose to keep
+  it, do not ask again.
+- Still open from #54: the Proton Pass CLI was reported signed out on the morning of
+  15 November and not rechecked; `dispatch-profiles.md` and `connector-register.md` are
+  still read in ranges; the Claude API's token counter was not retried.
 
 ## 15 November 2026 (late evening): the Adobe connector is back, on demand only (0.31.0)
 
