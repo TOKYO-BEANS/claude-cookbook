@@ -53,8 +53,8 @@ a PC is named by its 12 characters.
   `main` past the required checks, and Claude Code's own rule already gives every merge a
   version.
 - The update check follows what Claude Code does, so the Cookbook's plugin reads "behind"
-  after any merge until the two update commands have run, also after a merge that changed
-  nothing in the plugin.
+  after any merge until the plugin has updated, also after a merge that changed nothing in
+  the plugin.
 - Nothing became looser in "install without asking": a plugin installed by commit has no
   release notes, so it is never a routine update. Before this, the Cookbook's 0.x steps asked
   as well: a step of the second number counted as major, and a step of the third had only
@@ -99,8 +99,10 @@ a PC is named by its 12 characters.
 - **Old cache folders.** Every update now makes a folder under
   `~/.claude/plugins/cache/claude-cookbook/cookbook/`; Claude Code removes one 14 days after it
   was replaced. Not measured: how much disk that is on a day of 20 merges.
-- **Stack Atlas and the other repositories were not searched** for a reader of the Cookbook's
-  version number. Owner: Claude; clears: a search there, or the first failure.
+- **Other readers of the number.** Searched after the merge, on this PC: the Stack Atlas
+  tools clone, the release-maintenance scripts and the `sa-*` workflows have no code that reads
+  the plugin's manifest or its registry entry (old plans and review diffs mention it). Not
+  searched: the product repositories. Owner: Claude; clears: the first failure there.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-plugin-version/`
 (`measurement.md`, the two commit lists, the registry at the end).
