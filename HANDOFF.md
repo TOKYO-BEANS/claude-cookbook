@@ -1,5 +1,47 @@
 # Handoff
 
+## 16 November 2026: open questions for the owner, kept by a Stop hook (0.34.0)
+
+**Why.** The owner asked for one place that always shows what waits on them, guaranteed in
+every chat and not only when asked. On 15 November 14 finished chats sat unsettled, three still
+holding a question written as a paragraph at the end of a closing message.
+
+**What changed.**
+- `hooks/owner-questions.mjs` (Stop hook, beside the SessionStart one), with
+  `owner-questions-lib.mjs` (pure decisions), `owner-questions-jev.mjs` (two Nouls) and
+  `owner-questions-broker.mjs` (holds the Jev key in memory, answers on a named pipe).
+- `recipes/owner-questions.md` and a map row under "Keep healthy"; a note in
+  `options/keep-healthy.md`; the catalog's `cookbook` purpose names the hook.
+- Tests first: `scripts/owner-questions.test.mjs` (22 tests), fixtures from today's real
+  closing messages with names removed (`scripts/fixtures/owner-questions/closings.json`).
+- 0.34.0, after #65 (0.33.0).
+
+**Evidence, each checked on this PC.**
+- A plugin Stop hook runs in a real T3 thread: a probe plugin logged the input, its block was
+  obeyed, and the second stop came with `stop_hook_active: true`; the input carries
+  `last_assistant_message`. The probe is uninstalled; its log is in
+  `~/.local/share/stop-hook-proof/probe-2026-11-16.jsonl`.
+- The sidebar, captured from the live window: one list across projects, pinned chats on top,
+  a pending dialog shows "Waiting", about 28 title characters visible, hence the 2-character
+  marker `❓ ` instead of `ANSWER: `.
+- A `claude -p` started inside a T3 thread inherits `CLAUDE_CODE_ENTRYPOINT=t3-code` and the
+  thread id, so the environment cannot tell it apart; the transcript can (no T3 tools listed).
+- A detached process outlives a hook (written 15 s after the hook ended).
+- Jev against the phrase list, 49 labelled plus 30 held-out closings (labels never sent). Held
+  out: Jev (v1 wording, 0.6) 0.900 with no miss; phrase list 0.667 with 3 misses. A narrower
+  wording (v2) missed one. Bar written first: 0.92 with at most one miss; Jev missed none but
+  stayed under 0.92 by false alarms, and was chosen because a false alarm costs one short turn.
+- Key read from the DPAPI store: 2 to 27 s, hence the broker. End to end: cold 2.2 s, warm
+  0.5 s.
+- About 250 Jev calls a day (T3 turns, 11 to 16 November), about USD 0.01 a day.
+
+**Dead ends.** Reading the key at every turn (too slow). The environment as the scripted-run
+signal (inherited). The phrase list as the judge (falls apart out of sample).
+
+**Backstop.** No daily agent run can reach T3's sidebar: the three daily runs are Claude Desktop
+tasks without T3 tools, and T3 has no scheduled task. T3's CLI (`t3 thread list --json`, run
+from a folder other than `C:\`) lists title, status and settled, so a plain script could count
+waiting chats; it cannot see pins.
 ## 16 November 2026 (late night, after 0.32.2): two reader profiles with no shell (0.33.0)
 
 **Why.** The reviewer steps of Stack-Atlas's `sa-*` workflows read text other people wrote (a

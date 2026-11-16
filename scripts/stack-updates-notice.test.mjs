@@ -162,7 +162,9 @@ test("the hook: one JSON line with the note for the state under the user's home,
   assert.match(out.hookSpecificOutput.additionalContext, new RegExp(`updates\\.mjs" page 1 ${today}`));
   // hooks.json runs exactly this file, at session start only.
   const hooks = JSON.parse(readFileSync(HOOKS_JSON, "utf8")).hooks;
-  assert.deepEqual(Object.keys(hooks), ["SessionStart"]);
+  assert.deepEqual(Object.keys(hooks), ["SessionStart", "Stop"]);
+  const runsNotice = (event) => hooks[event].some((m) => m.hooks.some((h) => h.command.includes("stack-updates-notice.mjs")));
+  assert.deepEqual(Object.keys(hooks).filter(runsNotice), ["SessionStart"], "the notice runs at session start only");
   assert.equal(hooks.SessionStart[0].matcher, "startup");
   assert.equal(hooks.SessionStart[0].hooks[0].command, 'node "${CLAUDE_PLUGIN_ROOT}/hooks/stack-updates-notice.mjs"');
 });

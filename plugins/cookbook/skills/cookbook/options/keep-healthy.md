@@ -14,6 +14,11 @@ day, not assumed.
   reviewed in pull requests; the owner's preferences live in auto-memory, one fact per file.
   Weighed: Graphify notes and Parallel memory (shared stores for a single user); Mem0 and similar
   memory services (a hosted copy of private context).
+- **Open questions: the sidebar plus a Stop hook.** Rules alone were forgotten (14 finished
+  chats on 15 November 2026, three still holding a question). Weighed: an owner-facing page or
+  queue (ruled out by the owner); a fixed phrase list (0.667 on held-out closings, so only the
+  fallback); a model prompt hook (a full model call at every turn's end); a daily agent sweep
+  (a recurring run, which is the owner's call).
 - **Scheduled scripts: Windows Task Scheduler.** Checked: `stack-updates-daily` runs there
   every day with no model. It reaches the DPAPI store and the pinned CLIs. Weighed: a
   Cloudflare Cron Trigger (right for a hosted product's own periodic work, cannot reach this
