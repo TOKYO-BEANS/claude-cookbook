@@ -1,5 +1,10 @@
 # Handoff
 
+**This file is closed.** From 0.40.0 an entry is a file of its own in [`handoff/`](handoff/),
+named `YYYY-MM-DD-short-name.md`, so two pull requests never edit the same lines. Read the
+newest files there first; search this file for what is older. `npm test` fails when this file
+changes (`recipes/parallel-chats.md` in the cookbook skill).
+
 ## 16 November 2026 (night): the fallback review in the map and the recipes (0.39.1)
 
 **Why.** The owner decided on 16 November 2026 that when the `ai-review` job cannot reach its
