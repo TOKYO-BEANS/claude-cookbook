@@ -1,5 +1,41 @@
 # Handoff
 
+## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
+
+**Why.** The plan has one weekly limit and a Fable limit inside it (Fable may take half the
+week, and its use is gone for Opus too). The owner wants the work never to stop on a limit,
+no bought usage, Fable spent fully before the week resets, and a banked reset used where it
+is worth most, without deciding any of it.
+
+**What changed.** `skills/cookbook/scripts/model-budget.mjs` reads the usage endpoint with
+Claude Code's stored sign-in (at most once per ten minutes, cached in
+`~/.local/share/model-budget`, the token never stored) and applies fixed rules: Fable on pace,
+Opus when ahead or from 90% of the Fable share, wait when spent, and when to redeem each kind
+of banked reset. `hooks/model-budget-note.mjs` gives a session the advice alone (no figures,
+times or counts: GitHub's security review on #67 flagged usage details going into the
+session) at start and when it changes (SessionStart, UserPromptSubmit, PostToolUse). After
+two more security findings: only a session start reads over the network (later events read
+the cache only), and the cache is signed with the sign-in token (HMAC), so a tampered file
+is ignored. One usage read at a time across processes (a `usage.lock`), and a reset
+suggested only when it lets work run, after two AI review findings. Recipe pages `model-budget.md`
+and `model-budget-setup.md`; the map row "The model for a session or a piece" now points
+there. T3 Code's settings were set outside the repository: default Fable 5.2 high, fallback
+Opus 5.5 high, auto-resume of limited threads on (backup of the earlier file in
+`~/.local/share/backups/t3-settings/`).
+
+**Verification.** 41 tests in `scripts/model-budget.test.mjs`; a live run printed week 38%,
+Fable 61%, pace 58%, "Use Fable 5.2 high". The self-switch was proved: `t3_thread_configure`
+to Opus, then a queued `t3_thread_send`; the queued turn ran on `claude-opus-5-5` (transcript
+of the session, 12:54:32 UTC).
+
+**Outstanding.** Redeeming a reset stays the owner's click (T3 Code: Usage, Limits, Use reset):
+a session asks with the question dialog. Automatic redemption would post to an undocumented
+endpoint on the owner's account; asked of the owner on 16 November 2026. Several
+subscriptions through CLIProxyAPI: weighed, not set up (spending, ban risk).
+
+**Dead ends.** Claude Code's `fallbackModel` never acts on a usage limit; the status line has
+no Fable limit; the usage endpoint answers 429 when read often.
+
 ## 16 November 2026: open questions for the owner, kept by a Stop hook (0.34.0)
 
 **Why.** The owner asked for one place that always shows what waits on them, guaranteed in

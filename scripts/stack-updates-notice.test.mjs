@@ -160,13 +160,10 @@ test("the hook: one JSON line with the note for the state under the user's home,
   assert.equal(out.hookSpecificOutput.hookEventName, "SessionStart");
   assert.match(out.hookSpecificOutput.additionalContext, /^Daily update check: one report the owner has not seen\./);
   assert.match(out.hookSpecificOutput.additionalContext, new RegExp(`updates\\.mjs" page 1 ${today}`));
-  // hooks.json runs exactly this file, at session start only.
+  // hooks.json runs this file at session start (startup) only, and under no other event.
   const hooks = JSON.parse(readFileSync(HOOKS_JSON, "utf8")).hooks;
-  assert.deepEqual(Object.keys(hooks), ["SessionStart", "Stop"]);
-  const runsNotice = (event) => hooks[event].some((m) => m.hooks.some((h) => h.command.includes("stack-updates-notice.mjs")));
-  assert.deepEqual(Object.keys(hooks).filter(runsNotice), ["SessionStart"], "the notice runs at session start only");
-  assert.equal(hooks.SessionStart[0].matcher, "startup");
-  assert.equal(hooks.SessionStart[0].hooks[0].command, 'node "${CLAUDE_PLUGIN_ROOT}/hooks/stack-updates-notice.mjs"');
+  const runs = Object.entries(hooks).flatMap(([event, groups]) => groups.flatMap((g) => g.hooks.filter((h) => h.command.includes("stack-updates-notice.mjs")).map((h) => ({ event, matcher: g.matcher, command: h.command }))));
+  assert.deepEqual(runs, [{ event: "SessionStart", matcher: "startup", command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/stack-updates-notice.mjs"' }]);
 });
 
 // ---- the launcher ---------------------------------------------------------------------
