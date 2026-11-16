@@ -1,11 +1,12 @@
 # Handoff
 
-## 16 November 2026 (night): a consult is defined on top of the Codex page (0.32.1)
+## 16 November 2026 (late night): a consult is defined on top of the Codex page (0.32.2)
 
 **Why.** The owner said on 16 November 2026: "we use codex now, to be able to do the consult
 thing". Two options pages still said that only the Claude provider is on. While this job was
-open, another job merged the entry below (#62): Codex as a second model, with its own page
-and map row. This change was rebuilt on that page and does not stand beside it.
+open, another job merged the two entries below (#62 and #64): Codex as a second model, with
+its own pages and map row, and the check of where Codex may start. This change was rebuilt
+on those pages and does not stand beside them.
 
 **What "the consult thing" is here.** Nothing on this PC is named "consult": tstack
 (`t3dotgg/tstack`, still at `11e37a7`) is not installed, and none of its nine skills carries
@@ -24,7 +25,7 @@ opinion in the Codex row: one question about our own work to Codex, as advice.
 - `options/check.md` and `options/ship.md`: the two "only the Claude provider is on"
   sentences are corrected. `options/plan-and-build.md` names tstack's two skills among what
   was weighed. The catalog is as #62 left it.
-- Plugin 0.32.1.
+- Plugin 0.32.2.
 
 **`sol-loop` and `council`: still not in use.** tstack is not installed. `sol-loop` picks the
 latest GPT Sol, and the ChatGPT sign-in refused `gpt-6.1-sol` ("model is not supported when
@@ -80,6 +81,9 @@ an unattended run, which #62 leaves open with the owner.
   UTC, before #62 and its supervised rule reached the default branch (11:03 UTC). The commit
   that followed held only this change's files and the branch on the remote had not moved.
   It is no precedent: the rule is a supervised start. Owner: Claude. Nothing to clear.
+- That consult, and the test of the supervised mode, were started without the check of where
+  Codex may start: #64 brought it to the default branch afterwards. This branch changes no
+  instruction file, and the check passes on it now.
 - Two pages named `consult.md` and `consult-limits.md`, a second map row and a second
   catalog entry for Codex were written before #62 was seen. They are gone: one row, one
   catalog entry, pages under the Codex recipe.
@@ -99,6 +103,39 @@ an unattended run, which #62 leaves open with the owner.
 - Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
   Codex provider is switched on". The provider is on and `sol-loop` is still not in use.
   Owner: Claude. Clears with a line in that repository's next pull request.
+## 16 November 2026 (night): Codex and project instruction files (0.32.1)
+
+**Why.** GitHub's security review commented four times on #62, and #62 was merged (as
+`ef4390b`) before those comments were read: the merge script's gate reads the `ai-review`
+comment, not review threads. Two comments ("excessive agency") were already met by the head
+that merged, which requires the supervised mode. Two ("prompt injection": Codex told to read
+a repository's `CLAUDE.md` as rules) were not. This change fixes them.
+
+**What changed.**
+- `recipes/codex.md`, "Where it may start": Codex loads the working tree's `AGENTS.md` into
+  its instructions by itself, so a sentence that asks it to distrust that file is not a
+  control. The control is where Claude starts it: only in a checkout whose instruction files
+  (`AGENTS.md`, `AGENTS.override.md`, `CLAUDE.md`, at any depth, tracked or not) equal those
+  of GitHub's default head of a `TOKYO-BEANS` repository. The head comes from GitHub
+  (`gh api repos/TOKYO-BEANS/<repo>/commits/HEAD`), with the name taken from the task, so a
+  local remote or ref cannot stand in for it. Tried on a Stack Atlas worktree: clean passes,
+  an untracked nested `AGENTS.md` is caught. A step that fails or cannot run means no Codex
+  there: the piece goes to a `cookbook:review` subagent.
+- The page was at its size limit, so the rules, tools, model route and proof moved to
+  `recipes/codex-setup.md`. There: project files add to the global rules and never override
+  one or lift a stop, and `~/.codex/AGENTS.md` tells Codex the same as a second line.
+- Plugin 0.32.1.
+
+**Lesson.** Before a merge, read the pull request's review threads
+(`gh api repos/<owner>/<repo>/pulls/<n>/comments`) as well as the `ai-review` comment. A
+security comment is fixed before the merge or goes to the owner.
+
+**Outstanding.**
+- The four threads on #62 and the one on #64 are answered and left open for the owner; a
+  security comment is never dismissed by Claude.
+- The start check is three commands on a page, run by Claude. Owner: Claude. Clears when it
+  is a tested script that the delegation cannot skip; that belongs with the next job in
+  Stack Atlas (the merge gate that does not read review threads).
 
 ## 16 November 2026 (late): Codex added as a second model (0.32.0)
 

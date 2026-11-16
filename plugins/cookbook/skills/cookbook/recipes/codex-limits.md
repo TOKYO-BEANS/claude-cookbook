@@ -6,8 +6,8 @@ Part of [codex](codex.md) and [codex-consult](codex-consult.md).
 
 Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 
-- **On every run:** its own start-up reading (the Codex page): the global rules file, the
-  Cookbook's pages, the repository's instruction files and the memory files.
+- **On every run:** its own start-up reading ([codex-setup](codex-setup.md)): the global rules
+  file, the Cookbook's pages, the repository's instruction files and the memory files.
 - **For the question:** the brief, and the files the child reads to answer it.
 - **The sandbox is read-only, not fenced.** The child can read any file the owner's account
   can. The first command of a supervised run waited for the owner's click (seen twice,

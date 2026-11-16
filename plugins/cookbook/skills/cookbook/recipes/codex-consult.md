@@ -1,8 +1,8 @@
 # Codex: a consult
 
-Part of [codex](codex.md). Everything on that page holds for a consult: the supervised start
-(`runtimeMode: "approval-required"`), never on text from outside, and no unattended run
-without the owner's recorded yes, which does not exist.
+Part of [codex](codex.md). Everything on that page holds for a consult: the check of where
+Codex may start, the supervised start (`runtimeMode: "approval-required"`), never on text
+from outside, and no unattended run without the owner's recorded yes, which does not exist.
 
 A consult is the name for the second opinion in the map's row: one question about our own work
 to Codex, a model that is not Claude. The answer is advice: the session that asked checks each
