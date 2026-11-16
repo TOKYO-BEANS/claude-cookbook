@@ -7,9 +7,11 @@ Part of [model-budget](model-budget.md). Measured on 16 November 2026.
   `skip_spend=1` changes nothing (one timed read, 200). T3 Code's read differs only in its
   User-Agent, `claude-cli/<version> (external, cli)`, and is shown them.
 - **T3 Code's file** (`~/.t3/caches/claudeAgent.json`, `usageLimits.resetCredits`) has the
-  list only in the minutes T3 Code's own read got through, about every other one. No key is
-  "not read"; a count of 0 is "none". Taken as it stands, the list made the advice change
-  every minute (0.35.4).
+  list only in the minutes T3 Code's own read got through: every other one at times, none
+  for ten minutes and more at others. No key is "not read"; a count of 0 is "none"; a list
+  the script does not understand in full (a renamed label, entries that do not add up to
+  the count) is "not read" too and replaces nothing. Taken as it stands, the list made the
+  advice change every minute (0.35.4).
 - **What the script does** (the owner's choice, 16 November 2026: "Keep T3 Code's list").
   When T3 Code's file shows a list newer than the kept one, the script saves it in
   `~/.local/share/model-budget/resets.json`, signed like its other files, and adds the kept

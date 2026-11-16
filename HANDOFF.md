@@ -34,7 +34,10 @@ and "Not now".
 
 **What changed.**
 - `parseT3` gives the reset list beside the reading (`resets`: null when the file has no
-  list, an empty list when T3 Code read none), never in it.
+  list, an empty list when T3 Code read none), never in it. A list that is not understood
+  in full (a label the script does not know, an odd value, entries that do not add up to
+  the file's count) is null too, so it is never "none" and never replaces a kept list (the
+  AI review's medium finding on #80).
 - `readUsage` keeps the newest list T3 Code's file showed in
   `~/.local/share/model-budget/resets.json` (signed like the script's other files; only the
   list and the time it was seen, no figure) and adds it to every reading, whatever the
@@ -58,9 +61,10 @@ taken out of a copy in every other reading: one line of advice in 12 readings, w
 gives two, changing each time (`toggle-advice.mjs`, `toggle-advice.log`). Live with
 `watch-advice.mjs`, for seven minutes and then a longer run: one line of advice, through
 changes of source (T3 Code's reading, a signed one, the signed one over ten minutes old) and
-through the sixteen minutes from 17:44 UTC in which T3 Code's file had no list, its return
-and a second minute without it (`watch-advice-0.37.0-25min.log`; the logs carry the version
-this change had before #76 took 0.37.0).
+through the sixteen minutes from 17:44 UTC in which T3 Code's file had no list and three
+more comings and goings of it: "distinct advice lines in 1500 s: 1; states of the reset
+list seen: 2" (`watch-advice-0.37.0-25min.log`; the logs carry the version this change had
+before #76 took 0.37.0).
 
 **Owner decision on the merge (question dialog, 16 November 2026).** Asked as a condition
 before the check came: "Merge #80 once (Recommended)", for a neutral Graphify Formal

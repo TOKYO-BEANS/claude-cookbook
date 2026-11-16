@@ -244,15 +244,24 @@ const validGrant = (g) =>
 
 // The banked resets in T3 Code's file: null when the file has no list (T3 Code leaves it out in
 // every minute its own read of them was refused, about every other one), else one entry per
-// kind, an empty list when T3 Code read that there are none. An entry that is odd is dropped.
+// kind, an empty list when T3 Code read that there are none (a count of 0). A list that is not
+// understood in full is null as well, "not read": an entry with a label this script does not
+// know (T3 Code may rename one) or an odd value, two entries of one kind, or entries that do
+// not add up to the file's own count. It is never read as a shorter list or as "none", so it
+// never replaces a kept list.
 const t3Resets = (credits) => {
-  if (credits === null || typeof credits !== "object" || Array.isArray(credits)) return null;
-  const options = Array.isArray(credits.options) ? credits.options : [];
-  return options
-    .filter((o) => o !== null && typeof o === "object" && typeof o.label === "string" && Object.hasOwn(T3_RESETS, o.label))
-    .map((o) => ({ id: o.creditId, kind: T3_RESETS[o.label], left: o.availableCount, endsAt: time(o.expiresAt) }))
-    .filter(validGrant)
-    .slice(0, KINDS.length);
+  if (credits === null || typeof credits !== "object" || Array.isArray(credits) || !Number.isInteger(credits.availableCount) || credits.availableCount < 0) return null;
+  if (credits.options === undefined) return credits.availableCount === 0 ? [] : null;
+  if (!Array.isArray(credits.options) || credits.options.length > KINDS.length) return null;
+  const grants = [];
+  for (const o of credits.options) {
+    if (o === null || typeof o !== "object" || typeof o.label !== "string" || !Object.hasOwn(T3_RESETS, o.label)) return null;
+    if (o.expiresAt !== undefined && time(o.expiresAt) === null) return null;
+    const g = { id: o.creditId, kind: T3_RESETS[o.label], left: o.availableCount, endsAt: time(o.expiresAt) };
+    if (!validGrant(g) || grants.some((x) => x.kind === g.kind)) return null;
+    grants.push(g);
+  }
+  return grants.reduce((n, g) => n + g.left, 0) === credits.availableCount ? grants : null;
 };
 
 export function parseT3(json, now) {

@@ -328,7 +328,7 @@ const t3 = ({ week = 43, fable = 69, session = null, credits = false, options = 
       ...(fable === null ? [] : [{ id: "seven_day_fable", kind: "weekly", label: "Weekly · Fable", windowDurationMins: 10080, usedPercent: fable, resetsAt: new Date(reset).toISOString() }]),
       ...(credits ? [{ id: "monthly_spend", kind: "monthly", label: "Monthly spend", usedPercent: 3 }] : []),
     ],
-    ...(options === null ? {} : { resetCredits: { availableCount: options.length, options } }),
+    ...(options === null ? {} : { resetCredits: { availableCount: options.reduce((n, o) => n + (Number.isInteger(o?.availableCount) ? o.availableCount : 0), 0), options } }),
     ...(unavailable === null ? {} : { unavailable: { reason: unavailable } }),
   },
 });
@@ -339,6 +339,7 @@ const seedT3 = (home, json) => {
   writeFileSync(join(home, ".t3", "caches", "claudeAgent.json"), typeof json === "string" ? json : JSON.stringify(json), { mode: 0o600 });
 };
 const never = async () => { throw new Error("must not be called"); };
+const FABLE_RESET = { id: "g1", kind: "fable", left: 1, endsAt: Date.parse("2026-12-10T22:00:00Z") };
 
 test("parseT3 reads the week, the Fable share, the session window and credits, and gives the banked resets beside the reading", () => {
   const r = parseT3(t3({ session: 12, credits: true, options: [option(), option({ creditId: "g2", label: "5-hour reset", availableCount: 2, expiresAt: undefined })] }), NOW);
@@ -361,20 +362,43 @@ test("parseT3 reads the week, the Fable share, the session window and credits, a
   assert.equal(decide(parseT3(t3({ fable: 95 }), NOW).usage, NOW).model, "opus", "the rules read it like a reading from the endpoint");
 });
 
-test("parseT3: the reset list is null when the file has none, empty when T3 Code read none, and odd entries are dropped", () => {
+test("parseT3: the reset list is null when the file has none, empty when T3 Code read none, and null when it is not fully understood", () => {
   const withCredits = (resetCredits) => { const json = t3(); json.usageLimits.resetCredits = resetCredits; return json; };
+  const resets = (resetCredits) => parseT3(withCredits(resetCredits), NOW).resets;
   // T3 Code leaves the key out in a minute its own read was refused: that is "not read", not "none".
   assert.equal(parseT3(t3(), NOW).resets, null);
-  for (const odd of [null, "2", 2, [option()]]) assert.equal(parseT3(withCredits(odd), NOW).resets, null, JSON.stringify(odd));
-  // What T3 Code writes when the account holds no reset: a count and no options.
-  assert.deepEqual(parseT3(withCredits({ availableCount: 0 }), NOW).resets, []);
-  assert.deepEqual(parseT3(t3({ options: [] }), NOW).resets, []);
+  for (const odd of [null, "2", 2, [option()]]) assert.equal(resets(odd), null, JSON.stringify(odd));
+  // What T3 Code writes when the account holds no reset: a count of 0 and no options.
+  assert.deepEqual(resets({ availableCount: 0 }), []);
+  assert.deepEqual(resets({ availableCount: 0, options: [] }), []);
   const kinds = parseT3(t3({ options: ["5-hour reset", "Fable reset", "Weekly reset", "Full reset"].map((label, i) => option({ creditId: `g${i}`, label })) }), NOW).resets;
   assert.deepEqual(kinds.map((g) => g.kind), ["session", "fable", "weekly", "full"]);
-  const mixed = parseT3(t3({ options: [option({ creditId: "../x" }), option({ label: "Mystery reset" }), option({ label: "constructor" }), option({ availableCount: 0 }), option({ availableCount: 1.5 }), null, "g1", option({ creditId: "ok-1" })] }), NOW).resets;
-  assert.deepEqual(mixed, [{ id: "ok-1", kind: "fable", left: 1, endsAt: Date.parse("2026-12-10T22:00:00Z") }]);
-  const many = parseT3(t3({ options: Array.from({ length: 30 }, (_, i) => option({ creditId: `g${i}` })) }), NOW).resets;
-  assert.equal(many.length, 4, "T3 Code lists one entry per kind: no more are taken");
+  assert.deepEqual(resets({ availableCount: 3, options: [option({ availableCount: 3 })] }), [{ ...FABLE_RESET, left: 3 }]);
+  // A list that is not understood in full is "not read", never a shorter list and never "none":
+  // T3 Code may rename a label or change the shape in an update.
+  const good = option();
+  const notRead = [
+    { availableCount: 2 },
+    { options: [] },
+    { availableCount: "0" },
+    { availableCount: 1, options: "none" },
+    { availableCount: 1, options: [] },
+    { availableCount: 0, options: [good] },
+    { availableCount: 2, options: [good] },
+    { options: [good] },
+    { availableCount: 1, options: [option({ label: "Fable refill" })] },
+    { availableCount: 1, options: [option({ label: "constructor" })] },
+    { availableCount: 2, options: [good, option({ creditId: "g2", label: "Mystery reset" })] },
+    { availableCount: 1, options: [option({ creditId: "../x" })] },
+    { availableCount: 1, options: [good, option({ creditId: "g2", label: "Weekly reset", availableCount: 0 })] },
+    { availableCount: 1, options: [option({ availableCount: 1.5 })] },
+    { availableCount: 1, options: [good, null] },
+    { availableCount: 1, options: [good, "g1"] },
+    { availableCount: 2, options: [good, option({ creditId: "g2" })] },
+    { availableCount: 1, options: [option({ expiresAt: "soon" })] },
+    { availableCount: 30, options: Array.from({ length: 30 }, (_, i) => option({ creditId: `g${i}` })) },
+  ];
+  for (const odd of notRead) assert.equal(resets(odd), null, JSON.stringify(odd).slice(0, 140));
 });
 
 test("parseT3: a file that is odd in any way is no reading", () => {
@@ -448,7 +472,6 @@ test("readUsage: a signed reading under an hour old stands in before T3 Code's, 
   assert.match(gone.error, /no fresh reading/);
 });
 
-const FABLE_RESET = { id: "g1", kind: "fable", left: 1, endsAt: Date.parse("2026-12-10T22:00:00Z") };
 const payload = (file) => JSON.parse(JSON.parse(readFileSync(file, "utf8")).payload);
 
 test("readUsage: the reset list in T3 Code's file goes with every reading, whatever the source of the figures", async (t) => {
@@ -512,6 +535,14 @@ test("readUsage: a newer list replaces the kept one, an empty one means none, an
   // The owner used the Fable reset: T3 Code's next read shows what is left.
   const weekly = await read(NOW + 120000, t3({ options: [option({ creditId: "w1", label: "Weekly reset" })], checkedAt: NOW + 119000 }));
   assert.deepEqual(weekly.grants.map((g) => [g.id, g.kind]), [["w1", "weekly"]]);
+  // A list in a shape that is not understood (a renamed label, a count with no entries) replaces nothing.
+  const count = t3({ checkedAt: NOW + 149000 });
+  count.usageLimits.resetCredits = { availableCount: 2 };
+  for (const [now, json] of [[NOW + 150000, count], [NOW + 180000, t3({ options: [option({ label: "Fable refill" })], checkedAt: NOW + 179000 })]]) {
+    const kept = await read(now, json);
+    assert.deepEqual([kept.grants.map((g) => g.id), kept.resetsRead], [["w1"], true]);
+    assert.equal(payload(join(stateDir, "resets.json")).seen, NOW + 119000);
+  }
   const none = t3({ checkedAt: NOW + 239000 });
   none.usageLimits.resetCredits = { availableCount: 0 };
   const empty = await read(NOW + 240000, none);
