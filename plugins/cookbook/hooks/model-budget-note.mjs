@@ -50,7 +50,8 @@ try {
       }
     } else {
       const d = decide(r.usage, now);
-      const key = [d.model, d.redeem?.id ?? "", d.wait?.until ?? ""].join("|");
+      // Every input of the advice text is in the key, so a change of advice is always said.
+      const key = [d.model, d.redeem?.id ?? "", d.wait?.until ?? "", d.held ? "held" : ""].join("|");
       const said = advice(d);
       if (event === "SessionStart" || seen === null) text = `${said} ${POINTER}`;
       else if (seen !== key) text = `Model budget changed. ${said} ${POINTER}`;

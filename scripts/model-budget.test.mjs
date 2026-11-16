@@ -430,6 +430,18 @@ test("hook: a subagent's event is not told and does not use up the change", (t) 
   assert.match(main.context.additionalContext, /^Model budget changed\./);
 });
 
+test("hook: a session told to use Opus until a reset is redeemed is told to stop when the limit is spent", (t) => {
+  const home = tmp(t);
+  const weekly = grant({ id: "w1", gives_back_weekly: false, type: "weekly" });
+  const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-8" }, { cache: live({ week: 96, fable: 100, grants: [weekly] }) });
+  assert.match(start.context.additionalContext, /until then use Opus 5\.5 high/);
+  const spent = live({ week: 99, fable: 100, grants: [weekly] });
+  const told = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-8" }, { cache: spent });
+  assert.match(told.context.additionalContext, /^Model budget changed\. .*until then nothing runs: stop at a safe point/);
+  const again = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-8" }, { cache: spent });
+  assert.equal(again.stdout, "");
+});
+
 test("hook: when a session's saved reading goes stale it says unknown once", (t) => {
   const home = tmp(t);
   runHook(home, { hook_event_name: "SessionStart", session_id: "s-7" });
