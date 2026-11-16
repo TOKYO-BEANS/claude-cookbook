@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { main as header } from "../plugins/cookbook/skills/cookbook/scripts/key-header.mjs";
+import { HEADER_KEYS, main as header } from "../plugins/cookbook/skills/cookbook/scripts/key-header.mjs";
 import { loadFfi } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -43,7 +43,7 @@ function protect(text) {
 // Runs the helper in this process with a pipe for stdout, as an MCP client starts it.
 async function run(argv, deps) {
   const out = []; const err = [];
-  const code = await header(argv, { isTTY: false, write: (text) => out.push(text), say: (line) => err.push(line), ...deps });
+  const code = await header(argv, { isTTY: false, allowed: new Set(["k", "absent"]), write: (text) => out.push(text), say: (line) => err.push(line), ...deps });
   return { code, out: out.join(""), err: err.join("") };
 }
 
@@ -61,6 +61,20 @@ test("a key that cannot be read prints nothing, says why on stderr and ends with
     const got = await run(["absent"], { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell });
     assert.deepEqual(got, { code: 1, out: "", err: "key-header: could not read key \"absent\" (no key is saved as \"absent\")\n" });
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("only a key the source lists for a header is printed: any other name is refused and not read", async () => {
+  assert.deepEqual([...HEADER_KEYS], ["firecrawl"], "a new name here is a decision: the helper can print that key");
+  const read = [];
+  const readKey = async (name) => { read.push(name); return { key: "synthetic-key" }; };
+  for (const name of ["anthropic-api", "k", "FIRECRAWL", "firecrawl "]) {
+    const got = await run([name], { allowed: undefined, readKey });
+    assert.equal(got.code, 2, name);
+    assert.equal(got.out, "");
+    assert.match(got.err, /key-header: ".*" is not a key this helper prints \(it prints: firecrawl\)\n$/);
+  }
+  assert.deepEqual(read, []);
+  assert.deepEqual(await run(["firecrawl"], { allowed: undefined, readKey }), { code: 0, out: "{\"Authorization\":\"Bearer synthetic-key\"}\n", err: "" });
 });
 
 test("the helper refuses to print to a terminal, and reads no key for it", async () => {
@@ -83,17 +97,21 @@ test("usage: exactly one key name", async () => {
 
 test("Windows: the helper as a process prints the header by the direct route", needsFfi, () => {
   const value = "synthetic-header-key-æøå";
-  const dir = home({ "synthetic.dpapi": protect(value) });
+  const dir = home({ "firecrawl.dpapi": protect(value) });
+  const empty = home();
   try {
     const env = { ...process.env, USERPROFILE: dir };
-    const got = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "synthetic"], { env, encoding: "utf8", timeout: 60000 });
+    const got = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "firecrawl"], { env, encoding: "utf8", timeout: 60000 });
     assert.equal(got.status, 0, got.stderr);
     assert.deepEqual(JSON.parse(got.stdout), { Authorization: `Bearer ${value}` });
     assert.equal(got.stderr, "", "no warning about node:ffi on stderr");
-    const none = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "absent"], { env, encoding: "utf8", timeout: 60000 });
+    const none = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "firecrawl"], { env: { ...env, USERPROFILE: empty }, encoding: "utf8", timeout: 60000 });
     assert.equal(none.status, 1);
     assert.equal(none.stdout, "");
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+    const other = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "synthetic"], { env, encoding: "utf8", timeout: 60000 });
+    assert.equal(other.status, 2);
+    assert.equal(other.stdout, "");
+  } finally { for (const d of [dir, empty]) rmSync(d, { recursive: true, force: true }); }
 });
 
 // The two launchers. Each test gives them a home folder with a stand-in for the pinned CLI.

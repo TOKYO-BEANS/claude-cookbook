@@ -53,6 +53,11 @@
   `{"Authorization":"Bearer ..."}` for an MCP client's headers helper, read in its own
   process with no PowerShell. It is the one helper that prints a key. It refuses a
   terminal; a failed read prints nothing and ends with code 1.
+- From GitHub's security review of the first push (one thread, on the printing): the helper
+  prints only the keys its source lists, now `firecrawl`. Any other name in the store is
+  refused before a read, and neither an argument nor the environment widens the list. The
+  thread's other idea, a variable that switches printing on, was left out: whoever starts
+  the helper can set it, so it stops nothing.
 - `firecrawl-secure.mjs` and `parallel-secure.mjs` are in `skills/cookbook/scripts` and
   read through `with-key.mjs` in their own process: no PowerShell, one process less each.
   The Firecrawl launcher hands the stored key to `https://api.firecrawl.dev` only: it
@@ -71,15 +76,16 @@
   helper's entry removed).
 
 **Verification.**
-- 12 new tests: three in `scripts/with-key.test.mjs` (the letter case, the exit code for a
-  signal, the launcher as a process ended by SIGTERM) and nine in the new
-  `scripts/key-header.test.mjs` (the header's form, a failed read, a terminal, usage, the
+- 13 new tests: three in `scripts/with-key.test.mjs` (the letter case, the exit code for a
+  signal, the launcher as a process ended by SIGTERM) and ten in the new
+  `scripts/key-header.test.mjs` (the header's form, a failed read, the list of keys, a
+  terminal, usage, the
   helper as a process with a synthetic DPAPI key, and the two launchers with a stand-in
   CLI: no saved key, a self-hosted address, an address that only contains the hosted
   name). Each was seen failing first.
-- Both files on this PC: 32 tests, 30 pass, 2 skip (no right to make a link; no signals on
-  Windows). On Linux with Node 24, in a sandbox: 26 pass, 6 skip (the Windows ones); the
-  SIGTERM test runs there and gives 143.
+- Both files on this PC: 33 tests, 31 pass, 2 skip (no right to make a link; no signals on
+  Windows). On Linux with Node 24, in a sandbox, before the list of keys was added: 26
+  pass, 6 skip (the Windows ones); the SIGTERM test runs there and gives 143.
 - `npm test` on this PC, second run: 597 tests, 594 pass, 3 skipped. The first run had one
   failure, in a test that was not changed: "a key saved by agent-key.ps1 reads the same by
   both routes" starts real PowerShell, and that call was ended at the test's 140-second
@@ -108,7 +114,8 @@
     call. Cleared by importing `readKey` from `~/.local/bin/with-key.mjs`; saving and
     removing a grant stay on PowerShell (rare, and they write).
   - A product repository's Python key reader starts `agent-key.ps1 -Mode headers` with a
-    time limit. Cleared by reading the same JSON from `key-header.mjs`.
+    time limit. Cleared in that repository, and not through `key-header.mjs`, which
+    prints only the keys it lists: its program started through `with-key.mjs`.
   - An old chat-import script in `~/.local/share` (no repository, run by hand): left as
     it is.
 - The one 17-second call (above).

@@ -17,7 +17,8 @@ One store, and helpers that read it. Checked on 16 November 2026.
   Codex): `"C:/Program Files/nodejs/node.exe" C:/Users/<user>/.local/bin/key-header.mjs <name>`
   prints `{"Authorization":"Bearer ..."}`. It is the one helper that prints a key, because
   the client reads the helper's stdout. Never run it in a shell whose output is shown; it
-  refuses a terminal. A script that needs a key in its own process imports `readKey` from
+  refuses a terminal, and it prints only the keys its source lists (now `firecrawl`): a new
+  name is a pull request. A script that needs a key in its own process imports `readKey` from
   `with-key.mjs` and prints nothing.
 - **No read starts PowerShell.** The helpers call Windows' `CryptUnprotectData` themselves,
   through `node:ffi` (Node 26; experimental there). The reason: the PC's security software
