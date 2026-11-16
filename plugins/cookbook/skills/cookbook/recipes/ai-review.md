@@ -15,7 +15,8 @@
   stale or unreadable comment; or any other reason (a refusal, a cut or malformed answer, a diff
   that could not be prepared, a missing key, secret or workspace). A reviewer that did not write
   the change (a `cookbook:review` subagent, `sa-review` for a large one) reviews the whole diff of
-  the head and posts a comment after the unavailable one: first line
+  the head, and the record is posted through an owner's login (the gate counts it only from a login
+  on the owners list), after the unavailable comment: first line
   `Fallback review of <the head's full commit id>`, on a line of its own `No findings.` or
   `<n> findings.` (`1 finding.`), one line per finding as ``- **<severity>** `<path>:<line>`: <text>``.
   Critical, high and medium findings are fixed or answered as before. Never write that first line
