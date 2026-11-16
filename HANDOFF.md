@@ -37,6 +37,7 @@ nothing.
 - The Codex start check as a tested script that validates the repository name (the open
   security thread on #64) and compares the clone's version with `main`. Owner: Claude, as the
   next Cookbook job.
+
 ## 16 November 2026 (afternoon): model budget follow-up (0.35.1)
 
 **Why.** The low findings of #67's AI review, moved here under the review-round budget.
