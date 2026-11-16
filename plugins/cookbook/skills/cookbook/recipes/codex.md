@@ -19,13 +19,13 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
     from is behind `main`. Start it only for a piece that leans on no page changed since, or
     update the plugin first (`stack-updates` says when that needs the owner).
   - exit 1, `start Codex here: no` and the reason: do not start Codex there; the piece goes
-    to a `cookbook:review` subagent. For "not a commit of the checkout": `git fetch origin`,
-    then check again. A failed step is a no.
+    to a `cookbook:review` subagent. For "not in the checkout's object files":
+    `git fetch origin`, then check again. A failed step is a no.
 - **A hook requires it:** before T3 starts an agent that is not Claude, the plugin's hook runs
   the check and denies the call unless it passes. The brief carries one line
   `Repository: TOKYO-BEANS/<repo>`, and Codex runs in this thread's own checkout: no
-  `isolation: "worktree"`, other project, machine or top-level thread. What the hook does
-  not reach: [codex-setup](codex-setup.md).
+  `isolation: "worktree"`, other project or machine. What the hook does not reach:
+  [codex-setup](codex-setup.md).
 - **Start it supervised:** `orchestrator_capabilities` once per thread, then `delegate_task`
   with `providerInstanceId: "codex"`, a model it lists (`gpt-5.6-sol`, `gpt-6-astra`) and
   `runtimeMode: "approval-required"`. That gives a read-only sandbox and

@@ -12,7 +12,8 @@
 - **The start check** (`scripts/codex-start-check.mjs`) runs nothing of the checkout and no
   Git command, because a checkout's Git configuration can start programs. It reads the files
   from disk, the head's tree and files from GitHub (`gh`, from a folder outside the
-  checkout), and looks the head up in `.git`'s object files; it never fetches. An ignored
+  checkout, always github.com), and looks the head up in `.git`'s object files; it never
+  fetches. An ignored
   file, another spelling (`agents.md`), a nested repository and a link that leads out of the
   checkout count. Its output is fixed phrases.
 - **What requires it.** The hook `hooks/codex-start-gate.mjs` (`PreToolUse`, a failed hook

@@ -14,7 +14,7 @@ delegation cannot skip.
   from the task. One that is not letters, digits, `.`, `_` and `-` (no slash, no leading
   hyphen, not `.` or `..`, 100 characters at most) is refused before anything is asked; it is
   one part of one argument of `gh api`, under the fixed owner, with no shell. The answer is
-  yes only when GitHub's default head of `TOKYO-BEANS/<repo>` is a commit of the checkout and
+  yes only when the checkout's object files name GitHub's default head of `TOKYO-BEANS/<repo>` and
   every `AGENTS.md`, `AGENTS.override.md` and `CLAUDE.md` on disk, at any depth and in any
   spelling of the name, is the file at that head, line endings aside. It then compares the
   clone's plugin version with `main`'s. Exit 0: yes. Exit 3: yes, and the clone is not on
@@ -38,7 +38,8 @@ delegation cannot skip.
     session's step, as on the old page.
   - On Windows a bare program name is looked up in the current folder first, so a `gh.exe`
     planted in the checkout could answer for GitHub. `gh` is taken from the first absolute
-    folder of `PATH` that is not inside the checkout, and run in its own folder.
+    folder of `PATH` that is not inside the checkout, and run in its own folder, with
+    `--hostname github.com` and without `GH_HOST`, `GH_REPO` and the enterprise tokens.
 - **Two additions to what is compared**, both the safe side. A link (a junction on Windows)
   that leads out of the checkout or into its `.git` is followed, and an instruction file
   behind it is a no; a folder named `.git` below the top is read like any folder. And every
@@ -94,15 +95,51 @@ It is not in code anywhere else:
   Codex and needs the line and the check: the safe side. Owner: Claude.
 - **The script trusts** GitHub's API answers, the `gh` sign-in and `PATH`. The lookup of the
   head in `.git` shows that an honest checkout is a clone of the repository; a tampered
-  `.git` can fake it, and the comparison of the files does not lean on it.
+  `.git` can fake it (a file named after the head is enough), and the comparison of the
+  files does not lean on it. A pointer in `.git` that names another machine or is longer
+  than 4 KB is not followed.
+- **The remedy for a head that is not there is the session's own `git fetch origin`,** which
+  runs under the checkout's Git configuration, as every Git command of the session does.
+  The script never runs it. Owner: Claude. In a checkout that is not one of T3's own
+  worktrees of the owner's repositories, do not fetch: the piece goes to `cookbook:review`.
 - **Always a no:** a checkout with a submodule or a nested repository that holds an
-  instruction file, an installed package that ships one, or more than 60 `.codex`/`.agents`
-  files. Such a piece goes to a `cookbook:review` subagent. Owner: Claude. Clears only if it
-  gets in the way: compare a submodule against its own repository.
+  instruction file, an installed package that ships one, more than 60 `.codex`/`.agents`
+  files, an instruction file that is a symbolic link, and on Windows a file left on disk in
+  another spelling after a rename (`Agents.md` for `AGENTS.md`). Such a piece goes to a
+  `cookbook:review` subagent. Owner: Claude. Clears only if it gets in the way.
+- **Not matched, not verified:** whether `schedule_task`, `run_scheduled_task_now` or
+  `t3_thread_transfer` can start an agent on another provider (their inputs name no provider),
+  and whether a start on another machine that names no provider can be Codex. Owner: Claude.
+  Clears with T3's tool definitions when one of them is next used for Codex.
 - **Not checked:** what else Codex 0.169 may read from a project folder beyond the three file
   names and the two folders (its binary names `project_doc_fallback_filenames`; the owner's
   `config.toml` sets none). Owner: Claude. Clears with a read of Codex's documentation on
   project files when Codex is next updated.
+
+**Reviews before the first push.** Two `cookbook:review` subagents that did not build it.
+The first read the version that compared through Git and found two high findings (the
+checkout's Git configuration runs programs during the check; a planted `gh.exe` or `git.exe`
+runs on Windows), one medium (links and `.git`-named folders hide files) and one low (the
+hook let a call through when its own entry test failed). All four were fixed by the rewrite
+above. The second read the rewrite: the four closed, no high or medium, eight low. Fixed:
+`gh` pinned to github.com, `.git` pointers bounded and never followed to another machine, a
+folder that only looks like a link is walked, one check per repository in a `create_threads`
+call, the wording of three statements, a test of the real `gh` lookup. The rest are the
+limits listed above.
+
+**Verification.** `npm test`: 547 tests, 546 pass, 0 fail, 1 skipped (an older symbolic-link
+test that Windows skips). Of these, 46 are new (`scripts/codex-start-check.test.mjs`), on
+real Git repositories with a stand-in for GitHub; the first run of the file failed before the
+script existed. Six deliberate breakages of the script (links not followed, `.git` skipped at
+any depth, the head not required, other spellings ignored, a cut-short tree accepted, `gh`
+from the checkout) each failed a test. Run for real on this repository's worktree: a clean
+checkout is a yes (exit 3 while the clone was behind `main`), another repository's name, a
+name with shell characters, a planted `Agents.MD` and a planted `.codex/config.toml` are each
+a no; the hook program denied the Codex call with the planted file, let it through clean, also
+with a minimal `PATH`, and printed nothing for a Claude call. `main` moved four times during
+the job; once the script answered "not in the checkout's object files" until the fetch.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/codex-start-check-20261116/real-runs.txt`.
 
 ## 16 November 2026 (late evening): boat-run follow-up, one count and a time limit (0.36.2)
 
