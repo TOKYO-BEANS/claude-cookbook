@@ -11,7 +11,8 @@ Two owners, by what the run needs. Checked on 15 November 2026.
 - **An agent run: a T3 Code scheduled task** (`schedule_task`: a fixed time, an interval, once,
   or a webhook). The run is a thread in the project's sidebar, where the owner works, with the
   T3 tools. Proven: a `once` task ran on time in a thread of its own, in its own worktree, and
-  answered in 25 seconds.
+  answered in 25 seconds. Today: "Daily sidebar sweep" (07:45, Cookbook project;
+  [owner-questions.md](owner-questions.md)).
   - The task has no model field. That run used the project's default model; for a cheaper
     run, bind the task to a thread whose model is set (`bindToCurrentThread` with
     `freshSession`). Not yet proven.

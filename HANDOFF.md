@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026: open questions for the owner, kept by a Stop hook (0.34.0)
+## 16 November 2026: open questions for the owner, kept by a Stop hook (0.34.0, 0.34.1)
 
 **Why.** The owner asked for one place that always shows what waits on them, guaranteed in
 every chat and not only when asked. On 15 November 14 finished chats sat unsettled, three still
@@ -41,7 +41,42 @@ signal (inherited). The phrase list as the judge (falls apart out of sample).
 **Backstop.** No daily agent run can reach T3's sidebar: the three daily runs are Claude Desktop
 tasks without T3 tools, and T3 has no scheduled task. T3's CLI (`t3 thread list --json`, run
 from a folder other than `C:\`) lists title, status and settled, so a plain script could count
-waiting chats; it cannot see pins.
+waiting chats; it cannot see pins. The owner chose a daily T3 agent sweep (below).
+
+**Merged, released, installed and proved (after #66).**
+- Merged as `9366fab` by hand, on the owner's one-time yes: Graphify Formal Verification ended
+  neutral ("No PR-changed functions were verified") and was the only check not passing. The
+  gate is unchanged.
+- Review: an independent `cookbook:review` subagent (one high, two medium, all fixed with
+  tests) and three AI-review rounds. The medium finding on the hard-coded
+  `C:/Program Files/nodejs/node.exe` was answered twice: it follows the owner's absolute-path
+  rule, and a missing Node fails open.
+- Release check `verified` and acknowledged (execution 1556); the workflow itself ended
+  `unknown` for the skipped `ai-review` job, as on every merge commit.
+- Plugin 0.34.0 installed. Proved from the installed path in a new T3 thread: a "Decision for
+  you" closing was stopped once and the thread obeyed; a mid-job closing passed; a "say yes and
+  I start it" closing was stopped with Jev (0.99, 337 ms). The broker's first key read took
+  35 s, so the first two turns used the phrase list and said so. Log copy:
+  `~/.local/share/claude-cookbook/evidence/2026-11-16-owner-questions/hook-log-proof.jsonl`;
+  the Jev evaluation scores are beside it (no message text).
+- First real use: the pinned packaging chat that still waits on the owner is now
+  "❓ Packaging firm: go?" (its old title: "Packaging Kept In-House Decision"). The live sidebar
+  shows the new title after a short delay.
+- The global `CLAUDE.md` sidebar bullet names the marker and the hook.
+
+**The daily sidebar sweep** (the owner's choice on 16 November 2026, a recurring spend): a T3
+scheduled task in this project, "Daily sidebar sweep", 07:45 every day, unbound with a fresh
+session per run, so the runs share one thread. It marks, unmarks or settles chats idle for more
+than 2 hours, never answers or continues one, and settles its own thread. A run now: about a
+minute, nothing old enough to touch. Its thread is set to Sonnet 5.5 after that run.
+
+**Outstanding.**
+- Whether the 17 November run uses Sonnet 5.5 (a thread's model for a scheduled run is not yet
+  proven, `recipes/scheduled-runs.md`): read that run's `executedModel`. Owner: Claude, in the
+  next Cookbook chat.
+- The SessionStart hook still runs plain `node`; aligning it with the absolute path is its own
+  small change.
+
 ## 16 November 2026 (late night, after 0.32.2): two reader profiles with no shell (0.33.0)
 
 **Why.** The reviewer steps of Stack-Atlas's `sa-*` workflows read text other people wrote (a
