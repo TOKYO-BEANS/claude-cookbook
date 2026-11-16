@@ -5,7 +5,8 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
 
 - **Use it for:** a design, a plan or a diagnosis; a second review of our own risky change,
   beside the `ai-review` job and never instead of it; a cross-check where two Claude answers
-  disagree. It reads and reports: the brief says "change no file".
+  disagree. It reads and reports: the brief says "change no file". Asking it is a consult:
+  when, the brief and what may be sent are in [codex-consult](codex-consult.md).
 - **Where it may start:** only in a checkout whose instruction files are the reviewed ones of
   one of the owner's repositories. Codex loads every `AGENTS.md` and `AGENTS.override.md` on
   its path into its instructions by itself, before it reads any rule of ours. Before every
@@ -21,8 +22,9 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
 - **Start it supervised:** `orchestrator_capabilities` once per thread, then `delegate_task`
   with `providerInstanceId: "codex"`, a model it lists (`gpt-5.6-sol`, `gpt-6-astra`) and
   `runtimeMode: "approval-required"`. That gives a read-only sandbox and
-  `approval_policy = "untrusted"`: every command waits for the owner's click (tested
-  16 November 2026).
+  `approval_policy = "untrusted"`: the first command waited for the owner's click (tested
+  16 November 2026); that every later one waits is not proven
+  ([codex-limits](codex-limits.md)).
 - **An unattended run is not a job of this page.** Codex's own setting is
   `approval_policy = "never"` with `sandbox_mode = "danger-full-access"`, Claude's deny rules
   do not reach it, and no mode is read-only and unattended. Running it that way for this job

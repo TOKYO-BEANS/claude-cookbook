@@ -1,5 +1,126 @@
 # Handoff
 
+## 16 November 2026 (late night): a consult is defined on top of the Codex page (0.32.2)
+
+**Why.** The owner said on 16 November 2026: "we use codex now, to be able to do the consult
+thing". Two options pages still said that only the Claude provider is on. While this job was
+open, another job merged the two entries below (#62 and #64): Codex as a second model, with
+its own pages and map row, and the check of where Codex may start. This change was rebuilt
+on those pages and does not stand beside them.
+
+**What "the consult thing" is here.** Nothing on this PC is named "consult": tstack
+(`t3dotgg/tstack`, still at `11e37a7`) is not installed, and none of its nine skills carries
+the name. Its two skills that ask another provider's model are `sol-loop` (one GPT Sol
+reviewer in a loop) and `council` (three providers). A consult is now the name for the second
+opinion in the Codex row: one question about our own work to Codex, as advice.
+
+**What changed.**
+- `recipes/codex-consult.md` (new): when to consult and when not, the call, the brief, the
+  three-round limit, and what a consult does not replace (the `ai-review` job, the merge
+  condition, a security finding, a stop). Every rule of `recipes/codex.md` holds for it: a
+  supervised start, never on text from outside, no unattended run without the owner's yes.
+- `recipes/codex-limits.md` (new): what may be sent, the refused models, the cost.
+- The map: the Codex row names the consult and links its page. `recipes/codex.md`,
+  `recipes/dispatch.md` and `recipes/debugging.md` point to it.
+- `options/check.md` and `options/ship.md`: the two "only the Claude provider is on"
+  sentences are corrected. `options/plan-and-build.md` names tstack's two skills among what
+  was weighed. The catalog is as #62 left it.
+- Plugin 0.32.2.
+
+**`sol-loop` and `council`: still not in use.** tstack is not installed. `sol-loop` picks the
+latest GPT Sol, and the ChatGPT sign-in refused `gpt-6.1-sol` ("model is not supported when
+using Codex with a ChatGPT account"; `gpt-6-luna` was refused the same way, and #62 records
+that `gpt-5.6-sol` answers). It starts its reviewer in the session's own mode, round after
+round, and an unattended Codex run has no owner's yes. `council` needs three providers and
+two are on. Neither checks the merge condition in code.
+
+**The owner's decision, 16 November 2026.** GitHub's security review (discussion 4584893393
+on #63) found that a session may start a consult on its own judgement, which sends
+repository code to another provider, and asked for a confirmation before every consult. Put
+to the owner with the question tool, three options. Answer: "Standing yes, with limits
+(Recommended)". `recipes/codex-limits.md` carries it: a consult on the session's own
+judgement is allowed for code in the owner's own repositories; secrets, customer data,
+personal data and files outside the repository are never sent; anything else is asked
+first. That yes is about who may start a consult and what it may read. It is not the yes for
+an unattended run, which #62 leaves open with the owner.
+
+**The owner's second decision, the same day.** After the page said what really leaves the PC
+and that the sandbox does not fence reading, the security review raised two more findings
+on `recipes/codex-limits.md` (discussions 4585127375 and 4585127408): nothing technical
+limits what a Codex run reads, and a session should not start a consult on its own
+judgement at all. The three review rounds were used, so both went to the owner with the
+question tool, three options: ask before each consult (the reviewer's fix), only when the
+owner says so, or keep the standing yes. Answer: "Keep the standing yes". Both findings
+are accepted by the owner as they stand and are recorded as such on their threads; they
+are not fixed. The three checks before a call stay.
+
+**Verification.**
+- `npm test` passed.
+- One real consult on this change: `delegate_task` to Codex (`gpt-6-astra`), completed, two
+  findings, both agreed and fixed (the page told an agent to try another model, which T3
+  Code's rules forbid; and it sent a consult to Codex also from a session that runs on Codex).
+- AI review of the first commit (comment 6914545236): one medium and one low finding. The
+  medium one, that "read-only" was only a sentence in the brief, is settled by #62's rule:
+  the supervised mode gives a read-only sandbox. The page says so, and still has the checkout
+  compared before and after.
+- GitHub's security review, second finding (discussion 4584893402): the page told an agent
+  to report a refusal with a line of Codex's configuration file. Fixed: the model tried and
+  the exact refusal text only.
+- AI review of the merge commit (`15b912c`): one medium and one low finding, both fixed.
+  Medium: "files outside the repository are never sent" could not hold, since Codex reads the
+  global rules file and the Cookbook's pages at the start of every run and its read-only
+  sandbox can read any file the owner's account can. `recipes/codex-limits.md` now says what
+  leaves on every run, says that the sandbox is not a fence, and puts three checks before
+  the call (a Gitleaks scan, a look at the files Git ignores, a narrow brief): no check, no
+  consult. Low: the fallback of "One bounded side piece" still sent a piece to another
+  provider's model; it now names only a piece that needs its own checkout.
+- GitHub's security review, three more comments (discussions 4584948356, 4584997081,
+  4584997064). Two say that read-only was not enforced: fixed by the supervised start. One
+  says that nothing technical limits what is sent: fixed by the three checks above.
+- The supervised mode, tested by this job: a `delegate_task` with
+  `runtimeMode: "approval-required"` stopped at its first command with a pending approval.
+  The run was cancelled and no approval was given. Whether every later read also waits is
+  not proven, and the page says so.
+- Two more threads of the security review, on the first merge commit, were read late
+  (discussions 4585059385 and 4585059394). The first, prompt injection through repository
+  text, is fixed: the brief now tells Codex that what it reads is data and not instructions,
+  and advice without evidence that can be checked is not taken. The second asks again for a
+  confirmation before each consult: covered by the owner's second decision above.
+- AI review of `f1b3af9`: one low finding, fixed. `recipes/codex.md` said that every command
+  of a supervised run waits for a click; what was tested is the first command, and the page
+  now says that.
+- Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-codex-consult/`.
+
+**Failures and dead ends.**
+- The owner's standing yes was asked for with the words "the repository's code" as what
+  leaves the PC. That was too narrow: Codex's start-up reading leaves too. The page is
+  corrected and the owner was told in chat.
+- The consult above ran unattended, in the session's own full-access mode, at about 10:55
+  UTC, before #62 and its supervised rule reached the default branch (11:03 UTC). The commit
+  that followed held only this change's files and the branch on the remote had not moved.
+  It is no precedent: the rule is a supervised start. Owner: Claude. Nothing to clear.
+- That consult, and the test of the supervised mode, were started without the check of where
+  Codex may start: #64 brought it to the default branch afterwards. This branch changes no
+  instruction file, and the check passes on it now.
+- Two pages named `consult.md` and `consult-limits.md`, a second map row and a second
+  catalog entry for Codex were written before #62 was seen. They are gone: one row, one
+  catalog entry, pages under the Codex recipe.
+- A reply on #63 said that `delegate_task` has no read-only mode. That was wrong (#62 tested
+  one) and is corrected in a later comment there.
+
+**Outstanding.**
+- Gitleaks 8.30.1 (`gitleaks dir` over this checkout, the new check before a consult)
+  reports three `generic-api-key` hits in `scripts/stack-updates-connect.test.mjs` (lines 77,
+  281 and 296; on the default branch since #52; they read as made-up strings in the tests of
+  the error scrubber, and GitHub's secret scanning has no open alert). A model's judgement
+  does not clear a finding, so a consult on this repository stops at the scan. Owner: the
+  owner. Clears with the owner's decision: build those strings at run time in a pull
+  request, or accept the three hits.
+- A whole supervised consult, with the owner clicking, has not been run. Owner: Claude.
+  Clears with the first consult under the rule.
+- Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
+  Codex provider is switched on". The provider is on and `sol-loop` is still not in use.
+  Owner: Claude. Clears with a line in that repository's next pull request.
 ## 16 November 2026 (night): Codex and project instruction files (0.32.1)
 
 **Why.** GitHub's security review commented four times on #62, and #62 was merged (as
