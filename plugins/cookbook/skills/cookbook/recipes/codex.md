@@ -11,10 +11,13 @@ job here is narrow: a piece that gains from a model that is not Claude.
   clears a security finding.
 - **Start it:** `orchestrator_capabilities` once per thread, then `delegate_task` with
   `providerInstanceId: "codex"` and a model it lists (`gpt-5.6-sol`, `gpt-6-astra` on
-  16 November 2026). A piece that edits gets `isolation: "worktree"`: one writer per checkout.
-- **The brief** carries the task, the files and the report shape. It does not carry the rules:
-  Codex reads them itself. An answer from an agent is never the owner's yes, in either
-  direction.
+  16 November 2026).
+- **Read-only pieces.** Every use above reads and reports; the brief says "change no file". That
+  is an instruction, not a control: Codex runs as the owner set it (`approval_policy = "never"`,
+  `sandbox_mode = "danger-full-access"`), and Claude's deny rules do not reach it. A piece
+  that edits is not in this job until a write run is proven and added here.
+- **The brief** carries the task, the files and the report shape, not the rules: Codex reads
+  them itself. An answer from an agent is never the owner's yes, in either direction.
 - **One source for the rules.** `~/.codex/AGENTS.md` holds none. It tells Codex to read
   `~/.claude/CLAUDE.md` in full at the start of every task, then this map and its recipe pages
   from `~/.claude/plugins/marketplaces/claude-cookbook`, and a repository's `CLAUDE.md` beside

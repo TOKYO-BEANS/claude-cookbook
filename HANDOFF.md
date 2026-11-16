@@ -22,7 +22,10 @@ decided in the Cookbook, through a pull request there."
 Codex; `TOOL-STACK.md` is a pointer to the Cookbook; `config.toml` gained the Parallel Search
 and Stagehand servers (keys at run time, as in Claude) and lost the unused
 `[model_providers.context-mode]` block, which held a device key as a literal.
-`approval_policy` and `sandbox_mode` were not touched.
+`approval_policy = "never"` and `sandbox_mode = "danger-full-access"` were read and left as
+the owner set them (they match Claude's `bypassPermissions`); changing them needs the owner.
+So the Codex jobs in the recipe are read-only by brief, and a piece that edits is not among
+them.
 
 **Verified.** A delegated run on each model (`gpt-5.6-sol`, `gpt-6-astra`) answered eleven
 questions on the rules correctly from its own instructions and named the files it read;
@@ -34,10 +37,11 @@ both listed the two new servers. Evidence:
   `firecrawl-local`, `magic-workflow`, `shinkai`, `windmill`, `n8n`, the Waggle plugin, the
   Disler, Caveman and RTK skills and guides). Codex is told not to use them. Removing them is
   an uninstall. Owner: the owner. Clears with a yes.
-- The gateway's device key is still in two older backups of `config.toml` in `~/.codex` and
-  passed through a session. Owner: the owner. Clears when it is revoked at the gateway, or
-  when the owner says the account is closed, and the two backups are deleted.
-- Not proven: a Codex piece that writes code and opens a pull request.
+- The gateway's device key is still in one older backup,
+  `~/.codex/config.toml.bak-20261116-before-gateway-removal`, and passed through a session.
+  Owner: the owner. Clears when it is revoked at the gateway, or when the owner says the
+  account is closed, and that backup is deleted.
+- Not proven, and so not a job in the recipe: a Codex piece that writes code.
 
 ## 16 November 2026 (evening): Macroscope weighed and not added (0.31.5)
 

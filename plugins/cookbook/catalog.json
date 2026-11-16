@@ -66,7 +66,7 @@
     { "name": "browserbase", "reason": "marketplace still registered; Browserbase is used as the browse CLI only" },
     { "name": "upscayl-2.15.0", "reason": "tested and not adopted" },
     { "name": "firstmate", "reason": "a folder left in ~/.local/share, not in the stack" },
-    { "name": "codex-chat-import", "reason": "a folder left from Codex, not in the stack" },
+    { "name": "codex-chat-import", "reason": "a folder left in ~/.local/share by an old chat import; not a part of the Codex tool" },
     { "name": "agent-key.ps1", "reason": "the DPAPI key helper, a script and not a tool" },
     { "name": "with-key.mjs", "reason": "launcher that hands a stored key to a program at run time, not a tool" },
     { "name": "firecrawl-secure.mjs", "reason": "launcher behind the firecrawl shim, not a tool" },
