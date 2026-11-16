@@ -16,10 +16,12 @@ number is the same.
   the newest commit under `plugins/cookbook`: every merge is an update, one that changes
   nothing in the plugin too. A copy that still has a number moves to the commit at its next
   update.
-- **After a merge**, on this PC: `claude plugin marketplace update claude-cookbook`, then
-  `claude plugin update cookbook@claude-cookbook`. The second alone answered "already at the
-  latest version" in the measurement, because it reads the marketplace's local clone. A
-  running session keeps the copy it loaded until `/reload-plugins` or its next start.
+- **After a merge**, on this PC: `claude plugin update cookbook@claude-cookbook`. On
+  16 November 2026 it refreshed the marketplace's clone by itself ("updated from 0.40.0 to
+  9853430351c2"). When it answers "already at the latest version" while `main` has moved, as
+  it did for a marketplace registered by hand in the measurement, run `claude plugin
+  marketplace update claude-cookbook` first. A running session keeps the copy it loaded
+  until `/reload-plugins` or its next start.
 - **Names.** A pull request title and a handoff heading carry no number. The pull request's
   own number names the change; a copy on a PC is named by its 12 characters, which
   `git log` finds.
