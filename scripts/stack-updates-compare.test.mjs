@@ -756,3 +756,83 @@ test("the day a newest release was first seen: set once, restarted by a newer on
   failed.parts["browse/cli"].feed = "another-feed";
   assert.equal(day("2026-11-16", failed, at("0.11.4")).state.parts["browse/cli"].applyFailed, "0.11.4");
 });
+
+// ---- a marketplace plugin with no version: installed by commit -------------------
+
+// What Claude Code's registry holds for such a plugin: 12 characters of the commit as the
+// version, and the whole commit.
+const byCommit = (c) => read(c.repeat(12), { commit: SHA(c) });
+const alphaOf = (r) => ({
+  changes: r.result.changes.filter((c) => c.key === "alpha/plugin").map((c) => [c.kind, c.from, c.to, c.fromRef ?? null, c.toRef ?? null]),
+  still: r.result.stillBehind.filter((b) => b.key === "alpha/plugin"),
+  behind: r.result.behind.filter((b) => b.key === "alpha/plugin").map((b) => [b.installed, b.latest, b.since]),
+});
+
+test("a marketplace plugin with no version is where its registry commit says: equal is current, unequal is behind", () => {
+  const fri = day("2026-11-13", null, { installed: { "alpha/plugin": byCommit("a") }, latest: { "alpha/plugin": ok({ commit: SHA("a") }) } });
+  assert.deepEqual(alphaOf(fri), { changes: [], still: [], behind: [] });
+  assert.deepEqual([fri.state.parts["alpha/plugin"].installed, fri.state.parts["alpha/plugin"].latest], [SHA("a"), SHA("a")]);
+  // A new head: news once, from the installed commit, and behind in whole commits (what apply.mjs can judge).
+  const sat = day("2026-11-14", fri.state, { installed: { "alpha/plugin": byCommit("a") }, latest: { "alpha/plugin": ok({ commit: SHA("b") }) } });
+  assert.deepEqual(alphaOf(sat), { changes: [["new-release", SHA("a"), SHA("b"), SHA("a"), SHA("b")]], still: [], behind: [[SHA("a"), SHA("b"), "2026-11-14"]] });
+  // Updated: current again, and no second piece of news.
+  const sun = day("2026-11-15", sat.state, { installed: { "alpha/plugin": byCommit("b") }, latest: { "alpha/plugin": ok({ commit: SHA("b") }) } });
+  assert.deepEqual(alphaOf(sun), { changes: [], still: [], behind: [] });
+  assert.equal(sun.state.parts["alpha/plugin"].behindSince, null);
+  // Not updated: still behind, with the day it began.
+  const stale = day("2026-11-15", sat.state, { installed: { "alpha/plugin": byCommit("a") }, latest: { "alpha/plugin": ok({ commit: SHA("b") }) } });
+  assert.deepEqual(alphaOf(stale).behind, [[SHA("a"), SHA("b"), "2026-11-14"]]);
+});
+
+test("a plugin by commit that is behind on the first run is said, and the disk wins over a commit a session recorded", () => {
+  const first = day("2026-11-13", null, { installed: { "alpha/plugin": byCommit("a") }, latest: { "alpha/plugin": ok({ commit: SHA("b") }) } });
+  assert.deepEqual(alphaOf(first), { changes: [], still: [{ key: "alpha/plugin", installed: SHA("a"), latest: SHA("b"), since: "2026-11-13" }], behind: [[SHA("a"), SHA("b"), "2026-11-13"]] });
+  // A recorded commit that says "at the newest" does not hide a registry that is not.
+  const recorded = structuredClone(first.state);
+  recorded.parts["alpha/plugin"].installedCommit = SHA("c");
+  const lied = day("2026-11-14", recorded, { installed: { "alpha/plugin": byCommit("a") }, latest: { "alpha/plugin": ok({ commit: SHA("c") }) } });
+  assert.deepEqual(alphaOf(lied).behind, [[SHA("a"), SHA("c"), "2026-11-13"]]);
+  // And one that says "behind" does not keep a plugin behind that the registry shows at the head.
+  const fine = day("2026-11-14", recorded, { installed: { "alpha/plugin": byCommit("b") }, latest: { "alpha/plugin": ok({ commit: SHA("b") }) } });
+  assert.deepEqual(alphaOf(fine).behind, []);
+  assert.equal(fine.state.parts["alpha/plugin"].installedCommit, SHA("c"), "the record itself is left as it was");
+});
+
+test("a plugin by commit whose registry holds no whole commit: its position is unknown, never current and never behind by a guess", () => {
+  for (const installed of [read("aaaaaaaaaaaa"), read("aaaaaaaaaaaa", { commit: "aaaaaaaaaaaa" })]) {
+    const first = day("2026-11-13", null, { installed: { "alpha/plugin": installed }, latest: { "alpha/plugin": ok({ commit: SHA("b") }) } });
+    assert.deepEqual(alphaOf(first), { changes: [], still: [], behind: [] });
+  }
+});
+
+test("a marketplace plugin that drops its version starts from a new baseline, and so does one that takes a version again", () => {
+  const fri = day("2026-11-13", null);
+  assert.equal(fri.state.parts["alpha/plugin"].latest, "1.2.0");
+  // The version is gone: the copy on the PC still has its number, and its registry commit is not the head.
+  const sat = day("2026-11-14", fri.state, { latest: { "alpha/plugin": ok({ commit: SHA("e") }) } });
+  assert.deepEqual(alphaOf(sat), { changes: [], still: [{ key: "alpha/plugin", installed: SHA("a"), latest: SHA("e"), since: "2026-11-14" }], behind: [[SHA("a"), SHA("e"), "2026-11-14"]] });
+  assert.equal(sat.state.parts["alpha/plugin"].latest, SHA("e"));
+  assert.equal(sat.state.parts["alpha/plugin"].feed, fri.state.parts["alpha/plugin"].feed, "the feed itself is the same one");
+  // Updated to the head: current, with no news about "0.x to a commit".
+  const sun = day("2026-11-15", sat.state, { installed: { "alpha/plugin": byCommit("e") }, latest: { "alpha/plugin": ok({ commit: SHA("e") }) } });
+  assert.deepEqual(alphaOf(sun), { changes: [], still: [], behind: [] });
+  // Already at the head on the day the version goes: nothing at all.
+  const same = day("2026-11-14", fri.state, { installed: { "alpha/plugin": read("1.2.0", { commit: SHA("e") }) }, latest: { "alpha/plugin": ok({ commit: SHA("e") }) } });
+  assert.deepEqual(alphaOf(same), { changes: [], still: [], behind: [] });
+  // A version comes back: a baseline again, no "new release" from a commit to a number.
+  const back = day("2026-11-17", sun.state, { installed: { "alpha/plugin": read("2.0.0", { commit: SHA("f") }) }, latest: { "alpha/plugin": ok({ version: "2.0.0", commit: SHA("f") }) } });
+  assert.deepEqual(alphaOf(back), { changes: [], still: [], behind: [] });
+  assert.equal(back.state.parts["alpha/plugin"].latest, "2.0.0");
+  // A failed install is still remembered across the change.
+  const failedOnce = structuredClone(fri.state);
+  failedOnce.parts["alpha/plugin"].applyFailed = "1.2.0";
+  assert.equal(day("2026-11-14", failedOnce, { latest: { "alpha/plugin": ok({ commit: SHA("e") }) } }).state.parts["alpha/plugin"].applyFailed, "1.2.0");
+});
+
+test("only a marketplace feed is exact by commit: a commit feed with an unequal registry commit stays unknown", () => {
+  // The commit feed reads the newest commit under a path; the registry holds a head. Unequal says nothing.
+  const catalog = { version: 1, ignored: [], tools: [tool("port", "Port", [part("plugin", { kind: "plugin", id: "port@local" }, { kind: "commit", repository: "o/port", path: "plugins/port" })])] };
+  const run = (installed) => compare({ catalog, installed: { "port/plugin": installed }, latest: { "port/plugin": ok({ commit: SHA("b") }) }, unlisted: nothing, state: null, today: "2026-11-13" });
+  assert.deepEqual(run(byCommit("a")).result.behind, []);
+  assert.deepEqual(run(byCommit("b")).result.behind, []);
+});

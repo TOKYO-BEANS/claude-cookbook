@@ -376,6 +376,19 @@ test("plugin registry and lockfile strings: capped at 100 characters, no control
   assert.match(pinned.message, /usable/);
 });
 
+test("plugin registry: a plugin with no version is read as Claude Code records it, 12 characters of the commit and the whole commit", async () => {
+  const h = tempHome();
+  mkdirSync(join(h, ".claude", "plugins"), { recursive: true });
+  const put = (entry) => writeFileSync(join(h, ".claude", "plugins", "installed_plugins.json"), JSON.stringify({ version: 2, plugins: { "p@m": [entry] } }));
+  const sha = "08f026ea2d9d6620274b7e1e2c5f92db97c33d71";
+  // Written by Claude Code 2.1.325 on 16 November 2026 for a folder of the marketplace's own repository.
+  put({ scope: "user", installPath: "C:/cache/m/p/08f026ea2d9d", version: "08f026ea2d9d", installedAt: "2026-11-16T21:31:38.154Z", lastUpdated: "2026-11-16T21:32:33.243Z", gitCommitSha: sha });
+  assert.deepEqual(await readInstalled({ kind: "plugin", id: "p@m" }, "t/p", deps({ home: h })), { state: "read", version: "08f026ea2d9d", commit: sha });
+  // A folder of another repository (git-subdir): the version also carries a hash of the path.
+  put({ scope: "user", version: "6da98d8b8536-60093d52", gitCommitSha: "6da98d8b853686959448b0a4f5b61f4ea4333c67" });
+  assert.deepEqual(await readInstalled({ kind: "plugin", id: "p@m" }, "t/p", deps({ home: h })), { state: "read", version: "6da98d8b8536-60093d52", commit: "6da98d8b853686959448b0a4f5b61f4ea4333c67" });
+});
+
 // ---- the read stage's needs: stdin and a per-call environment --------------------
 
 import { runEnv } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";

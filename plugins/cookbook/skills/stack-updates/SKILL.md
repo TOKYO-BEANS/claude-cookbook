@@ -117,7 +117,9 @@ Steps, in an interactive session only (an unattended session installs nothing):
    --ignore-scripts`, the
    checksum). Install
    exactly the version the list names as `to`: a pinned copy's lockfile names that version, and
-   before a plugin update check that its marketplace offers exactly that version. A newer one has
+   before a plugin update check that its marketplace offers exactly that version. A plugin with
+   no version number is installed by commit: `to` is then the head of its repository, and the
+   marketplace must be on that commit. A newer one has
    not been judged by the rules: stop, and the next run will list it.
 4. Stop that install, and leave the old copy in place, when a scan finds a high or critical
    advisory, when the sandbox run shows a surprise or "no result" ("Vetting outside code: reading the sandbox report" in
@@ -175,6 +177,12 @@ node <this skill's folder>/scripts/updates.mjs record <tool id>/<part> <40-chara
 Registry plugins and command parts need nothing: their version or commit is read from disk on
 every run, and a recorded commit would override that read. `jev/compaction` is a local plugin
 port, so it needs a `record` like the others.
+
+A marketplace plugin with no `version` in its manifest or its marketplace entry is installed by
+commit (the Cookbook's own plugin is one). The registry then holds the head of the plugin's
+repository at the last update, and the feed reads that same head, so the plugin is behind
+whenever the two differ: after any commit there, also one outside the plugin's folder. For
+such a plugin the registry's commit is the answer, and a recorded commit is not used.
 
 ## Common mistakes
 

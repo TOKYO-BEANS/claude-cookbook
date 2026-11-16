@@ -178,20 +178,40 @@ async function marketplaceLocation(feed, { gh }) {
   const ref = sha ?? (typeof s.ref === "string" && REF.test(s.ref) ? s.ref : null);
   return { repo: ext, dir, ref, sha, entry };
 }
-async function marketplaceLatest(feed, { gh }) {
-  const { repo, dir, ref, sha, entry } = await marketplaceLocation(feed, { gh });
-  let version = null;
+// A plugin's version as Claude Code reads it: the manifest's, then the marketplace entry's.
+// null when neither names one: Claude Code then installs by commit.
+async function pluginVersion({ repo, dir, ref, entry }, { gh }) {
+  let manifest = null;
   try {
-    version = stable(JSON.parse(await ghFile(gh, repo, `${dir ? `${dir}/` : ""}.claude-plugin/plugin.json`, ref))?.version);
+    manifest = JSON.parse(await ghFile(gh, repo, `${dir ? `${dir}/` : ""}.claude-plugin/plugin.json`, ref));
+    if (!isObject(manifest)) throw new Error("Unexpected plugin manifest");
   } catch (e) {
     // Only a plugin with no manifest falls back to the marketplace entry's own version;
     // a manifest that could not be read leaves the part "could not check".
     if (e?.notFound !== true) throw e;
   }
-  version ??= stable(entry.version);
-  if (!version) throw new Error("No stable plugin version was found");
-  const commit = sha ?? (await headCommit(gh, repo, { sha: ref ?? undefined, path: dir }));
-  return { ok: true, version, commit, source: commitUrl(repo, commit) };
+  const version = stable(manifest?.version) ?? stable(entry.version);
+  if (version) return version;
+  // A version that is there and is not x.y.z cannot be compared.
+  const named = (v) => v !== undefined && v !== null;
+  if (named(manifest?.version) || named(entry.version)) throw new Error("No stable plugin version was found");
+  return null;
+}
+async function marketplaceLatest(feed, { gh }) {
+  const at = await marketplaceLocation(feed, { gh });
+  const { repo, dir, ref, sha } = at;
+  const version = await pluginVersion(at, { gh });
+  if (version) {
+    const commit = sha ?? (await headCommit(gh, repo, { sha: ref ?? undefined, path: dir }));
+    return { ok: true, version, commit, source: commitUrl(repo, commit) };
+  }
+  // No version: the registry of Claude Code records the head of the source, not the newest
+  // commit under the plugin's folder (measured with Claude Code 2.1.325 on 16 November 2026,
+  // for a folder of the marketplace's own repository, a `url` source and a `git-subdir`
+  // source). So the newest release is that head, with no path: a commit anywhere in the
+  // repository is an update.
+  const head = sha ?? (await headCommit(gh, repo, { sha: ref ?? undefined }));
+  return { ok: true, commit: head, source: commitUrl(repo, head) };
 }
 
 // Page text with markup and spacing removed, so a reflow is not a change.
@@ -354,8 +374,11 @@ export async function releaseNotes(feed, from, to, { fetcher, gh, hosts } = {}) 
       case "commit":
         return notesOf(await commitsText(needRepo(feed.repository), needPath(feed.path), from, to, deps), { subjects: true });
       case "marketplace": {
-        const { repo, dir } = await marketplaceLocation(feed, deps);
-        return notesOf(await commitsText(repo, dir, from, to, deps), { subjects: true });
+        const at = await marketplaceLocation(feed, deps);
+        // A plugin installed by commit moves with every commit of its repository: the two
+        // ends are heads, so the subjects between them are read with no path.
+        const path = (await pluginVersion(at, deps)) ? at.dir : "";
+        return notesOf(await commitsText(at.repo, path, from, to, deps), { subjects: true });
       }
       case "changelog":
         return notesOf((await changelogPage(feed, deps)).text);

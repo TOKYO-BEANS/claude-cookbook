@@ -1422,3 +1422,66 @@ test("a report too long to page fails before the state is saved: state.json is u
   assert.ok(!existsSync(join(folder, "report.md")));
   assert.ok(!readJson(join(folder, "result.json")).stages.includes("report"));
 });
+
+// ---- a plugin with no version: followed and verified by its commit ---------------
+
+test("a plugin installed by commit: current at the head, behind when the head moves, and `verify` counts only the registry at that commit", async (t) => {
+  const C3 = "c".repeat(40);
+  const home = tmp(t), state = tmp(t);
+  mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
+  // The record Claude Code 2.1.325 writes for a plugin with no version (16 November 2026).
+  const setInstalled = (sha) => writeFileSync(join(home, ".claude", "plugins", "installed_plugins.json"), JSON.stringify({ version: 2, plugins: { "book@book-market": [{
+    scope: "user", installPath: join(home, ".claude", "plugins", "cache", "book-market", "book", sha.slice(0, 12)), version: sha.slice(0, 12),
+    installedAt: "2026-11-13T06:00:00.000Z", lastUpdated: "2026-11-13T06:00:00.000Z", gitCommitSha: sha,
+  }] } }));
+  const cat = { version: 1, ignored: [], tools: [tool("book", "Book", [{ name: "plugin", installed: { kind: "plugin", id: "book@book-market" }, feed: { kind: "marketplace", repository: "o/book", plugin: "book" } }])] };
+  const file = (value) => ({ type: "file", encoding: "base64", content: Buffer.from(JSON.stringify(value)).toString("base64") });
+  const commit = (sha, message) => ({ sha, commit: { message, committer: { date: "2026-11-14T00:00:00Z" } } });
+  const headAt = (sha) => ({
+    ...fakes(),
+    gh: fakeGh({
+      "repos/o/book/contents/.claude-plugin/marketplace.json": file({ name: "book-market", plugins: [{ name: "book", source: "./plugins/book" }] }),
+      "repos/o/book/contents/plugins/book/.claude-plugin/plugin.json": file({ name: "book", description: "no version" }),
+      "repos/o/book/commits?per_page=1": [{ sha }],
+      [`repos/o/book/commits?sha=${sha}&per_page=30`]: [commit(sha, "A page changed"), commit(C1, "Where it was")],
+    }),
+  });
+  const on = (day, ...more) => ["--home", home, "--state", state, "--today", day, ...more];
+  const result = (day) => readJson(join(state, "runs", day, "result.json"));
+  const saved = () => readJson(join(state, "state.json")).parts["book/plugin"];
+
+  // Friday: installed at the head. Current, by whole commits.
+  setInstalled(C1);
+  const fri = headAt(C1);
+  assert.equal((await cli(["run", ...on("2026-11-13")], fri, cat)).code, 0);
+  assert.deepEqual([result("2026-11-13").changes, result("2026-11-13").stillBehind, result("2026-11-13").couldNotCheck], [[], [], []]);
+  assert.deepEqual([saved().installed, saved().latest, saved().behindSince], [C1, C1, null]);
+  assert.equal(fri.gh.calls.some((c) => /path=/.test(c[1])), false, "the head is asked for, never the folder's newest commit");
+
+  // Saturday: the head moved. News once, and behind.
+  const sat = await cli(["run", ...on("2026-11-14", "--no-read")], headAt(C2), cat);
+  assert.equal(sat.code, 0, sat.err);
+  assert.ok(sat.out.includes(`\nBook ${C1.slice(0, 7)} -> ${C2.slice(0, 7)}, plugin\n`), sat.out);
+  assert.deepEqual(result("2026-11-14").changes.map((c) => [c.kind, c.from, c.to, c.fromRef, c.toRef]), [["new-release", C1, C2, C1, C2]]);
+  assert.equal(saved().behindSince, "2026-11-14");
+
+  // Not updated yet: not an install.
+  const early = await cli(["verify", "book/plugin", "--owner-yes", C2.slice(0, 12), ...on("2026-11-14")], headAt(C2), cat);
+  assert.equal(early.code, 1);
+  assert.match(early.err, /Book is not at bbbbbbb \(it reads aaaaaaa\): recorded as a failed install/);
+  // Updated past the commit that was judged (the head moved again): never counted.
+  setInstalled(C3);
+  const past = await cli(["verify", "book/plugin", "--owner-yes", C2, ...on("2026-11-14")], headAt(C3), cat);
+  assert.equal(past.code, 1);
+  assert.match(past.err, /Book is not at bbbbbbb \(it reads ccccccc\)/);
+  // Exactly that commit in the registry: it counts.
+  setInstalled(C2);
+  const good = await cli(["verify", "book/plugin", "--owner-yes", C2, ...on("2026-11-14")], headAt(C2), cat);
+  assert.equal(good.code, 0, good.err);
+  assert.deepEqual([saved().behindSince, saved().applyFailed], [null, null]);
+
+  // Sunday: current again, nothing said about it.
+  const sun = await cli(["run", ...on("2026-11-15", "--no-read")], headAt(C2), cat);
+  assert.equal(sun.code, 0, sun.err);
+  assert.deepEqual([result("2026-11-15").changes, result("2026-11-15").stillBehind, result("2026-11-15").couldNotCheck], [[], [], []]);
+});
