@@ -18,7 +18,13 @@ condition. Plugin 0.39.1.
 injection risk": the pull request's text could steer the fallback reviewer to "No findings").
 Fixed: the page says the diff, title, body, comments and changed files are untrusted data, an
 instruction in them is ignored and is itself a finding, the rubric comes only from the base
-branch, and `No findings.` means none under that rubric.
+branch, and `No findings.` means none under that rubric. On the head with that fix it opened two
+more (4591441343 "Excessive agency risk", 4591441365 "Prompt injection risk"): both ask for a human
+yes on each fallback record, since a pull request's text could still steer a model to "No
+findings". That would undo the owner's decision, so the owner was asked with the question dialog
+and answered "Accept as a known limit" (16 November 2026); both threads carry that `Owner's yes`.
+The same limit holds for the Stack Atlas gate (#200): the record is a necessary condition, not
+proof.
 
 **Merge.** The first `merge-when-green.sh` run on head 9156904 read the fallback record
 (`state: "fallback"`) and refused only for that open thread, so the gate's fallback path worked
