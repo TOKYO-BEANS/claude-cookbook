@@ -6,7 +6,7 @@
 // decides, not a model. It only reads. It never prints or stores the sign-in, calls the one
 // address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
-import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -259,20 +259,38 @@ export function parseT3(json, now) {
   return { usage: { week, fable, session, grants, credits: windows.some((w) => w.id === "monthly_spend") }, at };
 }
 
-// The file must be a plain file of this user's: no link, and where the system can say so
-// (not on Windows), owned by the user and writable by no one else.
-const ownFile = (file) => {
-  const s = lstatSync(file, { throwIfNoEntry: false });
-  if (!s || !s.isFile() || s.size > T3_MAX_BYTES) return false;
-  return typeof process.getuid !== "function" || (s.uid === process.getuid() && (s.mode & 0o022) === 0);
+// The text of a plain file of this user's, or null: no link, and where the system can say so
+// (not on Windows), owned by the user and writable by no one else. The file is opened once, and
+// every check and the read are made on that one descriptor, so the file checked is the file
+// read. Where a link cannot be refused at the open (Windows), the opened file must be the one
+// lstat saw.
+const readOwnFile = (file) => {
+  const seen = lstatSync(file, { throwIfNoEntry: false });
+  if (!seen || !seen.isFile()) return null;
+  const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
+  try {
+    const s = fstatSync(fd);
+    if (!s.isFile() || s.size > T3_MAX_BYTES || s.ino !== seen.ino || s.dev !== seen.dev) return null;
+    if (typeof process.getuid === "function" && (s.uid !== process.getuid() || (s.mode & 0o022) !== 0)) return null;
+    const buf = Buffer.alloc(s.size);
+    let got = 0;
+    while (got < buf.length) {
+      const n = readSync(fd, buf, got, buf.length - got, got);
+      if (n === 0) break;
+      got += n;
+    }
+    return buf.toString("utf8", 0, got);
+  } finally {
+    closeSync(fd);
+  }
 };
 
 const readT3 = (file, now) => {
   // Two tries: a read that lands in the middle of T3 Code's own write finds half a file.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      if (!ownFile(file)) return null;
-      return parseT3(JSON.parse(readFileSync(file, "utf8")), now);
+      const text = readOwnFile(file);
+      return text === null ? null : parseT3(JSON.parse(text), now);
     } catch (e) {
       if (!(e instanceof SyntaxError) || attempt) return null;
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
