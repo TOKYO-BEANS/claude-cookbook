@@ -1485,3 +1485,50 @@ test("a plugin installed by commit: current at the head, behind when the head mo
   assert.equal(sun.code, 0, sun.err);
   assert.deepEqual([result("2026-11-15").changes, result("2026-11-15").stillBehind, result("2026-11-15").couldNotCheck], [[], [], []]);
 });
+
+test("a plugin installed by commit is never a routine update: releases do not bound two commits, so they are never its notes", async (t) => {
+  const { verdictOf } = await import("../plugins/cookbook/skills/stack-updates/scripts/updates.mjs");
+  // Text between two commits is "clean" for no one; commit subjects are still "none".
+  assert.equal(verdictOf(C1, C2, { text: "## v1.4.0\nAdds a flag.", whole: true }), "partial");
+  assert.equal(verdictOf("1.0.0", C2, { text: "Adds a flag.", whole: true }), "partial");
+  assert.equal(verdictOf(C1, C2, { text: "2026-11-14 A page changed", whole: true, subjects: true }), "none");
+  assert.equal(verdictOf(C1, C2, { text: "This breaks the old flow.", whole: true }), "risky");
+
+  // The whole path: the tool names a repository with a release whose notes are harmless, and
+  // the commit subjects cannot be read. The releases are not asked for, and nothing is routine
+  // however long the commit has been seen.
+  const home = tmp(t), state = tmp(t);
+  mkdirSync(join(home, ".claude", "plugins"), { recursive: true });
+  writeFileSync(join(home, ".claude", "plugins", "installed_plugins.json"), JSON.stringify({ version: 2, plugins: { "book@book-market": [{ scope: "user", version: C1.slice(0, 12), gitCommitSha: C1 }] } }));
+  const cat = { version: 1, ignored: [], tools: [tool("book", "Book", [{ name: "plugin", installed: { kind: "plugin", id: "book@book-market" }, feed: { kind: "marketplace", repository: "o/book", plugin: "book" } }], { repository: "o/book" })] };
+  const file = (value) => ({ type: "file", encoding: "base64", content: Buffer.from(JSON.stringify(value)).toString("base64") });
+  const headAt = (sha, more = {}) => ({
+    ...fakes(),
+    gh: fakeGh({
+      "repos/o/book/contents/.claude-plugin/marketplace.json": file({ name: "book-market", plugins: [{ name: "book", source: "./plugins/book" }] }),
+      "repos/o/book/contents/plugins/book/.claude-plugin/plugin.json": file({ name: "book" }),
+      "repos/o/book/commits?per_page=1": [{ sha }],
+      "repos/o/book/releases?per_page=30": [{ tag_name: "v1.4.0", draft: false, prerelease: false, published_at: "2026-11-01T00:00:00Z", body: "Adds a flag." }],
+      ...more,
+    }),
+  });
+  const on = (day, ...more) => ["--home", home, "--state", state, "--today", day, ...more];
+  const apply = (day) => readJson(join(state, "runs", day, "result.json")).apply;
+  assert.equal((await cli(["run", ...on("2026-11-13")], headAt(C1), cat)).code, 0);
+  // The subjects cannot be read (no answer for the commit list), day after day. The notes
+  // check runs (no --no-read): it is what would have read the releases.
+  for (const day of ["2026-11-14", "2026-11-17", "2026-11-18", "2026-11-20"]) {
+    const d = headAt(C2);
+    const r = await cli(["run", ...on(day)], d, cat);
+    assert.equal(r.code, 0, r.err);
+    assert.deepEqual(apply(day).routine, [], day);
+    assert.deepEqual([...apply(day).waiting, ...apply(day).ask].map((x) => x.key), ["book/plugin"], day);
+    assert.equal(d.gh.calls.some((c) => /\/releases/.test(c[1])), false, "the releases are never asked for between two commits");
+    assert.doesNotMatch(String(readJson(join(state, "state.json")).parts["book/plugin"].notes), /clean/);
+  }
+  // With the subjects readable it asks, for the stated reason: subjects are not release notes.
+  const subjects = { [`repos/o/book/commits?sha=${C2}&per_page=30`]: [{ sha: C2, commit: { message: "A page changed", committer: { date: "2026-11-14T00:00:00Z" } } }, { sha: C1, commit: { message: "Before", committer: { date: "2026-11-13T00:00:00Z" } } }] };
+  assert.equal((await cli(["run", ...on("2026-11-21")], headAt(C2, subjects), cat)).code, 0);
+  assert.deepEqual(apply("2026-11-21").routine, []);
+  assert.deepEqual(apply("2026-11-21").ask.map((x) => [x.key, x.from, x.to, x.reason]), [["book/plugin", C1, C2, "no release notes, and more than a patch release"]]);
+});

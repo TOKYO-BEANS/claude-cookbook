@@ -53,8 +53,13 @@ a PC is named by its 12 characters.
   after any merge until the two update commands have run, also after a merge that changed
   nothing in the plugin.
 - Nothing became looser in "install without asking": commit subjects are not release notes,
-  so a plugin installed by commit is never a routine update (`apply.mjs`, unchanged). Before
-  this, the Cookbook's 0.x steps counted as major and asked as well.
+  so a plugin installed by commit is never a routine update. Before this, the Cookbook's 0.x
+  steps counted as major and asked as well. The review of the first head found the one way
+  round that: when the feed's text could not be read, `notesFor` in `updates.mjs` fell back
+  to the repository's GitHub releases, which two commits do not bound, so every release on
+  the page counted as clean notes. Fixed in the same pull request: a commit-shaped change
+  never reads releases, and `verdictOf` never calls text between two commits "clean" unless
+  it is commit subjects (which count as "none").
 - **Two existing tests were changed, not loosened**, both in
   `scripts/codex-start-check.test.mjs`: the scene's marketplace clone is now a `.git` folder
   on a commit where it was a `plugin.json` with a number, and the last GitHub call asserted

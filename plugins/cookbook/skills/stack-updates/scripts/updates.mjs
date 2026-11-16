@@ -573,6 +573,10 @@ async function notesFor(ctx, c) {
   if (notes.text.trim()) return notes;
   const repo = e ? notesRepository(e.tool, e.part) : null;
   if (!repo || (e.part.feed?.kind === "github" && e.part.feed.repository === repo)) return notes;
+  // Releases are bounded by version numbers. Between two commits (a plugin installed by
+  // commit, a skill copy) they bound nothing: every release on the page would be read as
+  // this update's notes. So a commit-shaped change has its feed's text or none.
+  if (COMMIT.test(String(c.from)) || COMMIT.test(String(c.to))) return notes;
   const fallback = await releaseNotes({ kind: "github", repository: repo }, c.from, c.to, deps);
   if (fallback.text.trim()) return fallback;
   const error = notes.error ?? fallback.error;
@@ -724,6 +728,9 @@ export function verdictOf(from, to, notes) {
   // three words: "Remove an unused import" is how commits are written, not a warning.
   if (isRisky(from, to, text) || (notes.subjects !== true && warnsOf(text))) return "risky";
   if (notes.whole !== true) return "partial";
+  // Between two commits only commit subjects are bounded by the two ends. Any other text
+  // cannot be known to be this update's notes, so it is never "clean".
+  if (notes.subjects !== true && (COMMIT.test(String(from)) || COMMIT.test(String(to)))) return "partial";
   return notes.subjects === true ? "none" : "clean";
 }
 
