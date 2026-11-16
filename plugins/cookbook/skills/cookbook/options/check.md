@@ -14,7 +14,7 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   paid per review, and its GitHub app asks for write access to code and workflows; installed
   and removed on 16 November 2026); tstack's `sol-loop` and `council` (not in use, though
   Codex is now on: the reasons are in "ship"; a consult is advice, never the review);
-  `sa-review` (the fallback, and the owner of a range that has no pull request).
+  `sa-review` (the owner of a range with no pull request; the fallback is in the ai-review recipe).
 - **Our code: CodeQL.** Native to GitHub and required through the ruleset. Weighed: Semgrep
   Code (its code rules were dropped so that one scanner owns the job); Snyk Code (a second vendor).
 - **Dependencies: Semgrep Supply Chain.** It blocks only on a reachable high or critical
