@@ -10,8 +10,9 @@ decided in the Cookbook, through a pull request there."
 **What changed.**
 - `catalog.json`: Codex, a trial, with no update feed (the desktop app updates itself). No new
   spend: it runs on the ChatGPT account the owner already has.
-- The map: one new row, "a second opinion from a model that is not Claude", owner Codex
-  through T3 `delegate_task`, fallback a `cookbook:review` subagent. No other owner changes.
+- The map: one new row, "a second opinion on our own work from a model that is not Claude",
+  owner Codex through T3 `delegate_task`, fallback a `cookbook:review` subagent. No other
+  owner changes.
 - `recipes/codex.md`: what it is for and not for, how to start it, where its rules come from,
   the model route, the proof. `options/plan-and-build.md`: why, and what was weighed.
 - Plugin 0.32.0.
@@ -24,8 +25,15 @@ and Stagehand servers (keys at run time, as in Claude) and lost the unused
 `[model_providers.context-mode]` block, which held a device key as a literal.
 `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` were read and left as
 the owner set them (they match Claude's `bypassPermissions`); changing them needs the owner.
-So the Codex jobs in the recipe are read-only by brief, and a piece that edits is not among
-them.
+The owner named both values in the job ("The config has `approval_policy = "never"` and
+`sandbox_mode = "danger-full-access"`") and reserved any change to them ("Ask the owner
+before: ... changing Codex's approval or sandbox settings"). So the recipe keeps Codex
+to our own work: it reads and reports, a piece that edits is not among its jobs, and text
+from outside (a fork's pull request, an issue, a web page, a dependency) never goes to it
+but to a `cookbook:review` subagent. T3 Code's one narrower mode was tested:
+`runtimeMode: "approval-required"` gave a read-only sandbox with `approval_policy =
+"untrusted"`, and the first command waited for a person. There is no unattended read-only
+mode.
 
 **Verified.** A delegated run on each model (`gpt-5.6-sol`, `gpt-6-astra`) answered eleven
 questions on the rules correctly from its own instructions and named the files it read;
@@ -42,6 +50,8 @@ both listed the two new servers. Evidence:
   Owner: the owner. Clears when it is revoked at the gateway, or when the owner says the
   account is closed, and that backup is deleted.
 - Not proven, and so not a job in the recipe: a Codex piece that writes code.
+- An unattended read-only mode for Codex. Owner: the owner. Clears if T3 Code gains one, or
+  if the owner changes Codex's sandbox setting; until then the limits above hold.
 
 ## 16 November 2026 (evening): Macroscope weighed and not added (0.31.5)
 
