@@ -204,7 +204,12 @@ It is not in code anywhere else:
   always the worktree a shared `delegate_task` runs in, and whether a start that names no
   provider can ever be Codex, rest on those texts. Owner: Claude. Clears with one refused and
   one allowed `delegate_task` in a session on the new plugin (a supervised start waits for
-  the owner's click, and this job starts no Codex run).
+  the owner's click, and this job starts no Codex run). **Partly closed** by the live probe
+  below (under "Installed"): the matcher meets T3's real tool name and the hook loads and
+  denies in a T3 thread. Still open: whether `CLAUDE_PROJECT_DIR` is always the worktree a
+  shared `delegate_task` runs in (the probe did not log it, and the hook falls back to the
+  call's `cwd`), and whether a start that names no provider can be Codex (both probes named
+  the Codex instance).
 - **Windows with Node in its usual folder only.** The hook's command is
   `C:/Program Files/nodejs/node.exe` (an absolute path, because the desktop app starts hooks
   with a minimal `PATH`) and a hook that cannot start blocks. On a machine without that file
@@ -305,7 +310,7 @@ the record: 555 tests, 554 pass, 0 fail, 1 skipped.
 version (question dialog, the option "Update to 0.37.0"). The update moves the second number,
 which the `stack-updates` rules read as a major version, so it is not routine. Read back from
 disk: 0.37.0 at `1029960`, with the hook's files. The hook is live in sessions started after
-that. Three things were open; the first two are closed:
+that. Two things were open, both now closed, and one note:
 - **The installed page (0.37.0) still writes the start without `target`.** A session that
   reads `providerInstanceId: "codex"` there as a top-level key is denied by the gate, whose
   sentence names the cause ("no call with a field this hook does not know"). The corrected
@@ -325,10 +330,11 @@ that. Three things were open; the first two are closed:
   form Repository: TOKYO-BEANS/<name> ..."). With `Repository: TOKYO-BEANS/claude-cookbook`,
   from the thread's clean worktree at `main`: the hook let it through and T3 refused the
   disabled provider (`provider_unavailable`). So the matcher meets T3's real tool name, the
-  hook loads in this host, and `CLAUDE_PROJECT_DIR` was the thread's worktree. Nothing
-  started. Evidence: `live-probe.txt` in the evidence folder below.
+  hook loads in this host, and the folder the hook checked was a clean checkout of this
+  repository at `main` (which variable named it was not logged). Nothing started. Evidence:
+  `live-probe.txt` in the evidence folder below.
 - **Codex reads the Cookbook from the marketplace clone,** which the update moved to
-  `1029960` as well.
+  `1029960` as well; the 0.38.0 update moved it to `aac9c72`. A note, not an open item.
 
 **The AI review ran out of credit** at about 18:07 UTC on 16 November 2026 ("credit balance
 is too low"): this pull request and another chat's got `review unavailable`. The owner's
