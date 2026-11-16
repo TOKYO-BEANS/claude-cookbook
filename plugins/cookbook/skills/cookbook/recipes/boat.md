@@ -6,8 +6,8 @@ plan since 16 November 2026. No plugin, no MCP server and no skill pack: the CLI
 - **Use it by default** for whatever should not, or need not, run on this PC:
   - outside code before an install: a fixed step of every vetting
     ([vetting-sandbox.md](vetting-sandbox.md));
-  - a repository's tests before a push: `boat run --push . -- npm test` runs them on Linux,
-    where CI runs them, in seconds;
+  - a repository's tests before a push, on Linux, where CI runs them, in seconds: the command
+    below with `--push . -- npm test`;
   - a failure that shows only on Linux or only in CI, and a Linux-only tool;
   - a long build, test run or batch, and work that splits: one sandbox per part, side by side.
   A repository's required checks stay on Depot CI. Hosting stays on Cloudflare.
