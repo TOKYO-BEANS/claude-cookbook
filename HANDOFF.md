@@ -14,6 +14,10 @@ event `verified` (execution 1557); plugin 0.35.0 installed. Its first live read 
 (T3 Code reads the same endpoint with the same sign-in), and the hook said "unknown" as
 designed.
 
+**Owner decision, 16 November 2026.** A banked reset is not redeemed automatically: when the
+budget says it is worth using, the session asks the owner each time (the owner chose this over
+a script calling the undocumented reset endpoint).
+
 **Outstanding (Claude, next chat).** The usage endpoint kept answering 429 `rate_limit_error`
 (retry-after 0) from 13:20 to 13:45 UTC on 16 November 2026, whatever the User-Agent; it
 answered 200 at 12:42 and 12:52. While it does, the budget is "unknown" and threads keep their
