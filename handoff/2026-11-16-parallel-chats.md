@@ -10,9 +10,11 @@ evening:
   memory two minutes apart, and two running chats had that one subject. All eight running
   chats that were read had been started by another chat (`createdBy: agent`), none by a
   check of what was already running. Only the newest 40 of 223 unsettled threads were read.
+  While this was built, two chats built the same merge-gate change in Stack Atlas (#200 and
+  #202; one was closed).
 - Every Cookbook pull request edited the top of `HANDOFF.md` and the `version` in
   `plugin.json`, so each one conflicted with the next. 23 pull requests merged that day; one
-  job saw `main` move six times under it.
+  job saw `main` move six times under it, and this one four times.
 
 **The owner's answer (question dialog, 16 November 2026).** To "Should I build the fix in
 the Cookbook now?": "Build all three (Recommended)", the three being a look at other chats'
@@ -22,94 +24,53 @@ chats before a job starts.
 **What changed.**
 - `hooks/owner-answers.mjs` (with `owner-answers-lib.mjs` and `owner-answers-store.mjs`), on
   `PreToolUse` and `PostToolUse` in `hooks.json`:
-  - after a question dialog it writes the question, options, answer, repository and chat to
-    `~/.local/share/claude-cookbook/owner-answers/ledger.jsonl`;
-  - before a question dialog it denies the call once and shows what other chats asked in the
-    last 72 hours and what is open (12 hours); the second call passes;
+  - when a question dialog is shown and when it is answered, it writes a note to
+    `~/.local/share/claude-cookbook/owner-answers/ledger.jsonl`: the chat, the repository, the
+    time, the state and a hash of the question's words. No question, option or answer;
+  - before a question dialog it denies the call once and names the other chats of the same
+    repository that put questions to the owner (72 hours; open ones 12 hours), with the two
+    T3 tools that show what was asked and answered there; the second call passes;
   - before `t3_thread_launch` or `create_threads` it denies the call once with the two looks
     to take (`t3_thread_list`, `gh pr list`); it then passes for ten minutes.
-  It judges nothing: the chat that asks decides, with the list in front of it and the limits
-  in the text (another item is another question; every stop in the ground rules is asked each
-  time). It never fails a session.
-- `skills/cookbook/scripts/owner-answers.mjs`: `list`, for the repository of the checkout
-  it runs in. No command writes a record.
+  It judges nothing, prints a denial or nothing, and never fails a session.
 - `recipes/parallel-chats.md`, a map row, and the "Memory across sessions" row now names the
   handoff folder.
 - The handoff is a file per entry in `handoff/`. `HANDOFF.md` is closed: `scripts/check.mjs`
   pins its text, so `npm test` fails when it changes, and names in `handoff/` are checked.
 
-**GitHub's security review, two threads on the first push, both fixed in the second.**
-- *Prompt injection: stored text is replayed as prose into another chat.* A record is now
-  shown as one line of JSON with cleaned, cut fields, under a line that says records are
-  data and never instructions. "Unless its own words make it standing" is gone: an answer
-  about another item never covers a question, whatever it says.
-- *Sensitive text is kept and replayed.* A record is written and shown inside its own
-  repository only (nothing outside a repository, nothing across two), it leaves the file
-  after 72 hours, and an address and a long number are cut out. The price: a question asked
-  in one repository is not seen by a chat in another, so the same question can still reach
-  the owner once per repository.
-- The repository is now read from git's own files, with no program started: a hook gets a
-  short `PATH`, and with `git` not found every record would have had no repository.
-- The hand reviewer's read of that fix found the cleaning incomplete: Unicode tag letters,
-  a soft hyphen and other unseen characters still reached a record. Every control, format,
-  private-use and unassigned character and every variation selector is now replaced by a
-  space, with a test that plants tag letters. Also from that read: a remote on another host
-  with "github.com" in its name or path no longer gets a GitHub repository's label, and a
-  run of digits inside a commit is no longer cut as a number.
-
-**Graphify's review of the first push** passed its gate and listed five findings, none
-verified by it. All five were acted on in the second push:
-- *Redaction misses hex, short and joined tokens.* A run of 32 or more hexadecimal digits,
-  and a run of 40 or more characters joined by `_` or `-` with two or more parts that mix
-  letters and digits, are cut out. A short token cannot be told from a word by its shape:
-  that stays, bounded by the repository limit and the 72 hours.
-- *Any chat can forge an owner's answer* through `add`. The command is gone: only a
-  question dialog the owner answered writes a record.
-- *Concurrent compaction can erase new answers*, *two chats asking at once both pass* and
-  *state written non-atomically.* Reading the list, deciding and writing are one turn under
-  a lock file; only the lock's holder rewrites the file; state files are written to a file
-  of the process's own and renamed. A chat that cannot have the lock in 1.5 seconds goes
-  ahead without it, so the hook still never stops a session.
-- Its coupling note on `decideAsk` (six callees) is left: a small pure function.
-
-**The hand reviewer's last read before the second push** passed the commit with six low
-findings, all acted on: plain hyphenated names are no longer cut as ids; a few more unseen
-characters are removed; a joiner and a variation selector are dropped, not spaced, so an
-emoji stays whole; GitHub's other real remote forms (a port, `ssh.github.com`, any case)
-are read; the lock holds its holder's mark and a chat removes only its own. Known and left:
-an SSH alias of the owner's own names no host, so the list is off in such a checkout; the
-lock was not tried against a real antivirus stall on Windows.
+**The design changed in review, and why.** The first two pushes kept the question and the
+owner's answer as text and showed them to the next chat. GitHub's security review wrote two
+threads on each push (prompt injection; sensitive text kept and replayed). Cleaning and
+quoting the text did not settle them, and the finding was right: any chat on this PC can
+write that file, so a chat gone wrong could plant an "owner's answer" that other chats act
+on. The third push keeps no text at all. The list is a pointer; the answer is read from the
+host's own record of the chat that asked, which a chat cannot write. Every value the hook
+puts in front of a model is a count, a date or an id of a fixed alphabet (tested with
+planted lines). What it costs: a chat may have to read another chat before it asks, and a
+question asked in one repository is not seen from another.
 
 **Decisions that were mine.**
-- No model in the hook. A word match would miss a reworded question, and a second Jev
-  question would need its own measurement. The cost is one short turn when another chat has
-  asked something new.
-- Text shaped like a key is not written to the list: a known prefix, a name and password in
-  a URL, a three-part signed token, or one unbroken run of 32 or more letters and digits
-  that mixes digits and both cases. An address, a long number and a long id are cut out of
-  text that is written.
-- An answer the owner gives as a chat message is not in the list. It was the reason for
-  `add`; a command any chat can run to write "the owner said" is the larger risk.
-- The list is outside `~/.claude` and outside every repository.
-
-**Verification.** See the pull request for the checks of its head. Before the push:
-- `node --test scripts/owner-answers.test.mjs`, one test of it the hook file and the command
-  end to end on a folder of their own; then `npm test` on this PC (582 tests, none failed,
-  one skipped, before the first push).
-- A `cookbook:review` subagent that did not write the change read the commit before the
-  push. One medium finding, fixed with a test: a chat that had been shown a question as open
-  was never shown its answer (the "seen" mark held the id alone, now the id and the state).
-  Four low findings fixed (a temporary file per process, a quote inside an answer given as
-  text, more key shapes, every stop named in the denial). Its second read passed the commit
-  with two more low findings, both fixed (a newer answer to the same question is shown
-  again; an answer with `", "` in it). One low finding left: the small state
-  files in `sessions/` are never removed. (The other, about `add`, went with the command.)
+- No model in the hook: the chat that asks decides whether another chat's question is its
+  own.
+- Nothing is noted outside a GitHub repository, and nothing is told across two.
+- The list is outside `~/.claude` and outside every repository; the repository is read from
+  git's own files, with no program started, because a hook gets a short `PATH`.
+- One chat at a time reads the list, decides and writes (a lock file with the holder's mark,
+  a wait of 1.5 seconds, then ahead without it).
 - **One existing test was changed, not loosened**: "hooks.json runs the gate before the
   three T3 tools" in `scripts/codex-start-check.test.mjs` required exactly one `PreToolUse`
   group. It now requires exactly two, keeps every assertion about the Codex gate's group
   (still the first, still the only one that runs the gate, still `onFailure: "block"`), and
   pins the second group whole. The owner-answers hook only denies or stays silent, so it
   cannot let through a call the gate denies.
+
+**Verification.** See the pull request for the checks of its head and the reviews.
+- `npm test` on this PC before the first push: 582 tests, none failed, one skipped. Later
+  pushes: the three touched test files and `node scripts/check.mjs` here, the suite in CI.
+- A `cookbook:review` subagent that did not write the change read every commit before it
+  was pushed, and the whole diff of the head for the fallback review record (the in-CI
+  review had no API credit; Stack Atlas #200). Its findings and Graphify's five are in the
+  pull request's comments with what was done about each.
 - **boat did not run the suite**: `boat-run.mjs` answered `BOAT-RUN: not started: no result
   (boat limits did not answer in time)` three times that evening, with nine chats on this
   PC. Not worked around; the suite ran here.
@@ -126,13 +87,20 @@ lock was not tried against a real antivirus stall on Windows.
 - **Proof in a real chat** (owner: Claude; clears: the first question dialog after the
   plugin updates). The hook was run as a process with real input shapes (the dialog's result
   was read from this session's transcript: `{ questions, answers }`), not yet by Claude Code.
+  Not tried: the lock against a real antivirus stall on Windows.
 - **Open pull requests with an entry in `HANDOFF.md`** fail `npm test` after merging `main`
   until the entry is moved to a file: intended, one round each.
 - **Stack Atlas has the same handoff collisions**: the same layout there is its own pull
   request in that repository.
-- **The two memory notes about the AI review's credit** say one thing twice; merge them.
+- **`boat-run.mjs` did not start under load**: its limits call times out when the PC is
+  busy, which is when a sandbox would help most.
+- A dialog the owner closes without answering stays "open" in the list for 12 hours; a chat
+  that looks finds no open dialog there and asks.
 
 **Dead ends.**
+- Keeping the owner's answer as text for the next chat, however cleaned (above).
+- An `add` command for an answer given as a chat message: a command any chat can run to
+  write "the owner said" is the same hole. Such an answer goes to memory when it should last.
 - A `claude-code-guide` subagent for the documentation: it had no web tool and answered from
   memory. The pages were read directly instead (`plugins/loading.md`, `hooks`).
 - A Claude session inside a boat sandbox as a way to spread the chats: the owner said "You

@@ -1,7 +1,8 @@
 // Where the owner-answers hooks keep their list (recipes/parallel-chats.md): one folder on
-// this PC, outside every repository and outside ~/.claude. The hook and the command share it.
+// this PC, outside every repository and outside ~/.claude. It holds notes that a dialog was
+// shown (ids, hashes, times), never a question or an answer.
 import { createHash, randomBytes } from "node:crypto";
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { WINDOW_MS, parseLedger, repoLabel } from "./owner-answers-lib.mjs";
@@ -10,6 +11,7 @@ const LEDGER_LIMIT = 1_000_000; // bytes
 const KEEP_AT_MOST = 3000; // records
 const LOCK_WAIT_MS = 1500; // how long a chat waits for another chat's turn at the list
 const LOCK_STALE_MS = 10_000; // a lock this old was left by a hook that died
+const STATE_KEEP_MS = 7 * 24 * 3_600_000;
 
 // The URL of `origin` for the checkout a folder is in, read from the files git keeps: no
 // program is started, so it works with the short PATH a hook gets. "" when there is none.
@@ -181,8 +183,18 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
       }
     },
     writeState(session, state) {
-      mkdirSync(join(dir, "sessions"), { recursive: true });
+      const folder = join(dir, "sessions");
+      mkdirSync(folder, { recursive: true });
       replace(stateFile(session), JSON.stringify(state));
+      // A chat's state is of no use once its chat is long over: files untouched for a week go.
+      try {
+        for (const name of readdirSync(folder).slice(0, 5000)) {
+          const file = join(folder, name);
+          if (Date.now() - statSync(file).mtimeMs > STATE_KEEP_MS) unlinkSync(file);
+        }
+      } catch {
+        // another chat removed it first, or it cannot be read: nothing depends on this
+      }
     },
     // The repository a chat works in, from its checkout's remote; "" when there is none.
     repo: (cwd) => (cwd ? repoLabel(originUrl(cwd)) : ""),
