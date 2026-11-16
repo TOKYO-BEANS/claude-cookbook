@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Hook of the Cookbook plugin (SessionStart, UserPromptSubmit, PostToolUse): tells a session
-// which model the budget asks for. A session start gets the line; later events are silent
+// which model the budget asks for, and nothing about the account's usage (the figures are
+// printed only when the script is run). A session start gets the advice; later events are silent
 // until the advice changes, so a long turn hears it while it can still switch. It reads the
 // shared reading (at most one usage read per ten minutes for all sessions), writes only its
 // own state folder, and never fails a session: any error ends in silence and exit code 0.
@@ -25,7 +26,7 @@ try {
   const id = input?.session_id;
   // A subagent's events are not the thread's: only the main session is told, and only it marks the advice as said.
   if (EVENTS.includes(event) && typeof id === "string" && SESSION.test(id) && !input.agent_id) {
-    const { decide, line, readUsage, unknownLine } = await import(new URL("../skills/cookbook/scripts/model-budget.mjs", import.meta.url));
+    const { advice, decide, readUsage } = await import(new URL("../skills/cookbook/scripts/model-budget.mjs", import.meta.url));
     const sessions = join(homedir(), ".local", "share", "model-budget", "sessions");
     const seenFile = join(sessions, `${id}.json`);
     let seen = null;
@@ -38,12 +39,13 @@ try {
     const now = Date.now();
     const r = await readUsage({ now });
     let text = "";
+    // Only the advice goes into the session: no usage figures, times, counts or error text.
     if (!r.usage) {
-      if (event === "SessionStart") text = unknownLine(r.error);
+      if (event === "SessionStart") text = "Model budget: unknown. Keep this thread's model.";
     } else {
       const d = decide(r.usage, now);
       const key = [d.model, d.redeem?.id ?? "", d.wait?.until ?? ""].join("|");
-      const said = line(r.usage, d, now);
+      const said = advice(d);
       if (event === "SessionStart" || seen === null) text = `${said} ${POINTER}`;
       else if (seen !== key) text = `Model budget changed. ${said} ${POINTER}`;
       if (text) {

@@ -141,7 +141,15 @@ export function line(u, d, now, timeZone) {
   return `Model budget (${stamp(now, timeZone)}): ${reading}; weekly reset ${weekday(u.week.resetsAt, timeZone)}. ${act} Banked resets: ${banked.join(", ") || "none"}.${warn}`;
 }
 
-export const unknownLine = (error) => `Model budget: unknown (${error}). Keep this thread's model.`;
+// What a hook may put into a session: the action only, with no figures, times or counts.
+export function advice(d) {
+  const then = d.model === "wait" ? "nothing runs until the reset" : `use ${NAMES[d.model]}`;
+  if (d.redeem) return `Model budget: a banked ${KIND_LABEL[d.redeem.kind]} reset is worth using now: ask the owner to redeem it, and until then use ${NAMES.opus}; after it, ${then}.`;
+  if (d.model === "wait") return "Model budget: nothing left until the reset. Stop at a safe point.";
+  return `Model budget: use ${NAMES[d.model]}.`;
+}
+
+export const unknownLine =(error) => `Model budget: unknown (${error}). Keep this thread's model.`;
 
 const validUsage = (u) =>
   num(u?.week?.used) !== null && num(u?.week?.resetsAt) !== null && Array.isArray(u?.grants) &&

@@ -7,8 +7,9 @@ Opus 5.5 high, and a script chooses.
 
 - **The line.** `node <skill folder>/scripts/model-budget.mjs` (`--json` for the numbers)
   prints the week, the Fable share, the pace, the weekly reset, the model to use and the
-  banked resets. The plugin's hook gives every session that line at its start, and "Model
-  budget changed" when the advice changes during a session. Follow the line: it is
+  banked resets. The plugin's hook gives every session the advice alone (the model, or a
+  reset to ask for), with no figures, at its start, and again as "Model budget changed" when
+  it changes. Run the script only when the figures are needed. Follow the advice: it is
   arithmetic, not a view to weigh. A model the owner names in a message wins over it.
 - **The rules** (`RULES` in the script):
   - Fable while its share is no more than 10 points ahead of the week's pace. Spent evenly,

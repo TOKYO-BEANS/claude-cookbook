@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { RULES, decide, line, parseUsage, readUsage } from "../plugins/cookbook/skills/cookbook/scripts/model-budget.mjs";
+import { RULES, advice, decide, line, parseUsage, readUsage } from "../plugins/cookbook/skills/cookbook/scripts/model-budget.mjs";
 
 const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/model-budget-note.mjs", import.meta.url));
 const HOOKS_JSON = fileURLToPath(new URL("../plugins/cookbook/hooks/hooks.json", import.meta.url));
@@ -299,13 +299,22 @@ const runHook = (home, input, { cache = live(), cachedAt = Date.now() } = {}) =>
   return { ...run, context: run.stdout.trim() ? JSON.parse(run.stdout).hookSpecificOutput : null };
 };
 
-test("hook: a session start gets the budget line", (t) => {
+test("hook: a session start gets the advice and no usage figures, times or counts", (t) => {
   const home = tmp(t);
-  const r = runHook(home, { hook_event_name: "SessionStart", session_id: "s-1" });
+  const r = runHook(home, { hook_event_name: "SessionStart", session_id: "s-1" }, { cache: live({ grants: [grant({ id: "g9" })] }) });
   assert.equal(r.status, 0);
   assert.equal(r.context.hookEventName, "SessionStart");
-  assert.match(r.context.additionalContext, /^Model budget \(.*week 37% used, Fable 59% of its share/);
-  assert.match(r.context.additionalContext, /model-budget/);
+  const text = r.context.additionalContext;
+  assert.match(text, /^Model budget: use Fable 5\.2 high\. /);
+  assert.match(text, /model-budget/);
+  assert.doesNotMatch(text, /\d+%|\d{1,2}:\d{2}|week|share|pace|Banked|g9|expires/);
+});
+
+test("advice names the action only", () => {
+  assert.equal(advice(pick()), "Model budget: use Fable 5.2 high.");
+  assert.equal(advice(pick({ fable: 70 })), "Model budget: use Opus 5.5 high.");
+  assert.equal(advice(pick({ week: 100, fable: 100 })), "Model budget: nothing left until the reset. Stop at a safe point.");
+  assert.equal(advice(pick({ week: 60, fable: 96, grants: [grant()] })), "Model budget: a banked Fable reset is worth using now: ask the owner to redeem it, and until then use Opus 5.5 high; after it, use Fable 5.2 high.");
 });
 
 test("hook: later events are silent until the advice changes, then speak once", (t) => {
@@ -315,7 +324,7 @@ test("hook: later events are silent until the advice changes, then speak once", 
   assert.equal(same.stdout, "");
   const changed = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-2" }, { cache: live({ week: 50, fable: 93 }) });
   assert.equal(changed.context.hookEventName, "PostToolUse");
-  assert.match(changed.context.additionalContext, /^Model budget changed\. .*Use Opus 5\.5 high/);
+  assert.match(changed.context.additionalContext, /^Model budget changed\. Model budget: use Opus 5\.5 high\./);
   const again = runHook(home, { hook_event_name: "UserPromptSubmit", session_id: "s-2" }, { cache: live({ week: 50, fable: 93 }) });
   assert.equal(again.stdout, "");
 });
@@ -333,13 +342,13 @@ test("hook: a subagent's event is not told and does not use up the change", (t) 
 test("hook: a session it has not seen gets the line on its first event", (t) => {
   const home = tmp(t);
   const r = runHook(home, { hook_event_name: "UserPromptSubmit", session_id: "s-3" });
-  assert.match(r.context.additionalContext, /^Model budget \(/);
+  assert.match(r.context.additionalContext, /^Model budget: use /);
 });
 
 test("hook: an unknown reading is said at session start and is never a change", (t) => {
   const home = tmp(t);
   const start = runHook(home, { hook_event_name: "SessionStart", session_id: "s-4" }, { cache: null });
-  assert.match(start.context.additionalContext, /^Model budget: unknown \(no Claude sign-in/);
+  assert.match(start.context.additionalContext, /^Model budget: unknown\. Keep this thread's model\.$/);
   const tool = runHook(home, { hook_event_name: "PostToolUse", session_id: "s-4" }, { cache: null });
   assert.equal(tool.stdout, "");
 });
