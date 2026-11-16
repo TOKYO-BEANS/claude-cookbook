@@ -74,7 +74,8 @@ test("checks run one after another", async () => {
 });
 
 test("the error text never holds an Authorization header or a token-looking value", async () => {
-  const secret = ["abcDEF0123456789", "abcDEF0123456789-xyz"].join("_"); // made up; joined here so no scanner reads a key
+  // A repeated pattern: long and mixed enough for the scrubber, and plainly not a key.
+  const secret = "aB1aB1aB1aB1aB1a_aB1aB1aB1aB1aB1a-xyz";
   const bad = [
     `Authorization: Bearer ${secret}`,
     `request failed key=${secret} retry`,
@@ -278,8 +279,7 @@ const hex32 = "0123456789abcdef0123456789abcdef";
 test("scrub: key names with a prefix, separators =, : and whitespace, known prefixes, long mixed runs, e-mail", () => {
   const gone = (text, ...parts) => { const out = scrub(text); for (const p of parts) assert.ok(!out.includes(p), `${p} left in: ${out}`); return out; };
   gone(`FIRECRAWL_API_KEY=fc-${hex32}`, hex32);
-  const live = ["bb_live_abcdefghij", "0123456789ABCDEFGH"].join(""); // made up, joined here
-  gone(`BROWSERBASE_API_KEY=${live}`, live.slice(8, 28));
+  gone(`BROWSERBASE_API_KEY=bb_live_aB1aB1aB1aB1aB1aB1aB1aB1aB1a`, "aB1aB1aB1aB1aB1aB1aB");
   gone(`Invalid API key fc-${hex32}`, hex32);
   gone(`bad token: ghp_abcdefghijklmnopqrstuvwxyz0123456789`, "abcdefghijklmnop");
   gone(`github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz`, "abcdefghijklmnop");
@@ -294,7 +294,7 @@ test("scrub: key names with a prefix, separators =, : and whitespace, known pref
 });
 
 test("scrub: the cut at 4,000 characters cannot leave part of a secret", () => {
-  const secret = ["ABCDEFGHIJ0123456789", "abcdefghij0123456789"].join(""); // made up, joined here
+  const secret = "aB1cD2aB1cD2aB1cD2aB1cD2aB1cD2aB1cD2aB1c"; // a repeated pattern, plainly not a key
   assert.equal(secret.length, 40);
   const out = scrub(`${" ".repeat(3_975)}token=${secret}`);
   for (let i = 0; i + 6 <= secret.length; i++) assert.ok(!out.includes(secret.slice(i, i + 6)), out);

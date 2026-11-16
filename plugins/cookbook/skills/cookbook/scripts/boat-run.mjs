@@ -17,9 +17,12 @@
 // - The sandbox is always deleted when the command ends: a kept one would run on outside
 //   these limits.
 // - Nothing starts while the plan cannot be read, while something could bill past it, or
-//   past the limits. "BOAT-RUN: not started: <why>" and exit 2; otherwise the exit code is
-//   the command's own.
-import { spawnSync } from "node:child_process";
+//   past the limits. "BOAT-RUN: not started: <why>" and exit 75, a code commands rarely
+//   use; otherwise the exit code is the command's own.
+// - boat deletes the sandbox when the command ends, a timeout included, and says so on its
+//   last line. A run that ends without that line gets its sandbox deleted here, or a
+//   warning when that cannot be done.
+import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
@@ -32,6 +35,8 @@ export const LIMITS = {
   runSeconds: 3600, // of the plan's time for one run: the timeout times the size's rate
   reserve: 0.2, // of the month's time, kept back for the daily vetting step
 };
+// The exit code of a run that did not start (EX_TEMPFAIL): a command's own 1 or 2 is not it.
+export const NOT_STARTED = 75;
 // What a second of each size takes from the plan's time.
 export const RATE = { small: 0.5, default: 1, large: 2 };
 
@@ -267,12 +272,46 @@ function isAlive(pid) {
 
 // On the owner's PC the key comes from the encrypted store for this one process; elsewhere
 // `boat` is on the path.
-function boat(argv, options) {
+function boatCommand(argv) {
   const key = join(homedir(), ".local", "bin", "with-key.mjs");
   const exe = join(homedir(), ".local", "share", "boat", "boat.exe");
   const local = process.platform === "win32" && existsSync(key) && existsSync(exe);
-  const env = { ...process.env, BOAT_NO_UPDATE: "1" };
-  return local ? spawnSync(process.execPath, [key, "boat", "BOAT_API_KEY", exe, ...argv], { ...options, env }) : spawnSync("boat", argv, { ...options, env });
+  return { file: local ? process.execPath : "boat", args: local ? [key, "boat", "BOAT_API_KEY", exe, ...argv] : argv, env: { ...process.env, BOAT_NO_UPDATE: "1" } };
+}
+
+function boat(argv, options) {
+  const c = boatCommand(argv);
+  return spawnSync(c.file, c.args, { ...options, env: c.env });
+}
+
+// What boat's own lines say about a run: the sandbox's id from the "ready" line, which
+// comes before any output of the command, and whether the last line says it was deleted.
+// The lines between hold text from the command and are not read.
+export function runEnd(head, tail) {
+  const printable = (t) => String(t).replace(/[^\x0a\x20-\x7e]+/g, " ");
+  const first = /(?:^|\n) *(bx_[a-z0-9]{4,40}) ready\b/.exec(printable(head));
+  const id = first ? first[1] : null;
+  const last = printable(tail).split("\n").map((l) => l.trim()).filter(Boolean).pop() || "";
+  const gone = /(?:^| )(bx_[a-z0-9]{4,40}) deleted$/.exec(last);
+  return { id, deleted: Boolean(gone) && (id === null || gone[1] === id) };
+}
+
+// boat run with its output passed on as it comes; boat's own lines are on stderr.
+function boatRun(argv) {
+  return new Promise((done, failed) => {
+    const c = boatCommand(argv);
+    const child = spawn(c.file, c.args, { env: c.env, stdio: ["inherit", "inherit", "pipe"] });
+    let head = "";
+    let tail = "";
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(chunk);
+      const text = chunk.toString("latin1");
+      if (head.length < 2000) head += text.slice(0, 2000 - head.length);
+      tail = (tail + text).slice(-4000);
+    });
+    child.on("error", () => failed(new Error("boat did not run")));
+    child.on("close", (code) => done({ code: code ?? 1, ...runEnd(head, tail) }));
+  });
 }
 
 const STATE = process.env.BOAT_RUN_STATE || join(homedir(), ".local", "share", "boat-run");
@@ -297,18 +336,18 @@ const REAL = {
   stage,
   dataFiles,
   scan,
-  boat: (argv) => {
-    const r = boat(argv, { stdio: "inherit" });
-    if (r.error) throw new Error("boat did not run");
-    return r.status ?? 1;
+  boat: boatRun,
+  remove: (id) => {
+    const r = boat(["delete", id, "--yes"], { encoding: "utf8" });
+    return !r.error && r.status === 0;
   },
   say: (line) => console.error(line),
 };
 
-export function main(argv, deps = REAL) {
+export async function main(argv, deps = REAL) {
   const stop = (why) => {
     deps.say(`BOAT-RUN: not started: ${why}`);
-    return 2;
+    return NOT_STARTED;
   };
   const run = parseArgs(argv);
   if (run.error) return stop(run.error);
@@ -345,7 +384,13 @@ export function main(argv, deps = REAL) {
       const result = deps.scan(staged.dir, staged.tmp);
       if (!result.ok) return stop(`the secret scan of the upload: ${result.reason}`);
     }
-    return deps.boat(boatArgv(run, staged ? staged.dir : null));
+    const end = await deps.boat(boatArgv(run, staged ? staged.dir : null));
+    if (!end.deleted) {
+      const id = end.id ? oneLine(end.id) : null;
+      if (id && deps.remove(id)) deps.say(`BOAT-RUN: boat did not say the sandbox was deleted: ${id} is deleted now`);
+      else deps.say(`BOAT-RUN: the sandbox${id ? ` ${id}` : ""} may still exist: run 'boat list' and delete what this run left`);
+    }
+    return end.code;
   } catch (e) {
     return stop(oneLine(e?.message));
   } finally {
@@ -356,5 +401,5 @@ export function main(argv, deps = REAL) {
 
 // realpath on both sides, so a run through a junction or symlink still starts.
 if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
-  process.exitCode = main(process.argv.slice(2));
+  process.exitCode = await main(process.argv.slice(2));
 }
