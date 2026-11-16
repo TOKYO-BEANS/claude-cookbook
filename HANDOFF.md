@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026 (afternoon): the model budget reads T3 Code's saved reading (0.35.2)
+## 16 November 2026 (afternoon): the model budget reads T3 Code's saved reading (0.35.3)
 
 **Why.** The usage read answered 429 on nearly every try, so the budget said "unknown" and no
 thread switched model.
@@ -15,24 +15,66 @@ T3 Code its next two reads. T3 Code keeps its own reading in `~/.t3/caches/claud
 (`usageLimits`), rewritten every minute; its figures trailed the direct read by one and two
 points.
 
-**What changed.** `readUsage` takes the first reading under ten minutes old from: the script's
-own signed file, then T3 Code's saved reading (`parseT3`: every value checked, anything odd is
-no reading, nothing from it stored). Only with neither does a session start read over the
-network. A prompt or tool event still never does, and now has T3 Code's reading too. The
+**What changed.** `readUsage` takes the script's own signed reading while it is under ten
+minutes old, else a session start reads over the network (one read per ten minutes, failed or
+not). When that gives nothing, the newer of the script's older reading and T3 Code's saved one
+stands in, under an hour old (`parseT3`: every value checked, anything odd is no reading,
+nothing from it stored). The first version took T3 Code's reading ahead of the network read;
+GitHub's security review flagged an unsigned file as a fresh source, and its suggested fix was
+taken: T3 Code's reading only when no signed one can be had. A prompt or tool event still
+never reads over the network, and now has T3 Code's reading too. The
 `usage.lock` and its takeover are gone: the reading (`usage.json`) and the mark of a failed read
 (`usage-tried.json`) are two signed files, so a failed read cannot replace a reading. The
 script run by hand names the source when it is not a direct read. Three made-up values in
 `scripts/stack-updates-connect.test.mjs` that Gitleaks read as `generic-api-key` are now put
 together at run time (none was a key; `gitleaks dir` reports none).
 
-**Verification.** 52 tests in `scripts/model-budget.test.mjs`; `npm test`; a live run from
-T3 Code's reading with no network read.
+**Verification.** 52 tests in `scripts/model-budget.test.mjs`; `npm test`; a live run that
+took T3 Code's reading.
 
-**Limits (known, accepted).** T3 Code's file is not signed, so whoever can write it can move the
-advice among its fixed lines; it cannot add text. Its `checkedAt` is when T3 Code asked, not the
-age of the figures. A change of that file's shape in a T3 Code update means "no reading" and a
-direct read, which mostly answers 429 while T3 Code runs: the session then says "unknown", and
-`parseT3` is the place to fix.
+**Limits (known).** T3 Code's file is not signed: while the signed read is refused, whoever can
+write that file can move the advice among its fixed lines; it cannot add text. Its `checkedAt`
+is when T3 Code asked, not the age of the figures. A change of that file's shape in a T3 Code
+update means "no reading": the session then says "unknown" whenever the direct read is refused,
+and `parseT3` is the place to fix.
+
+## 16 November 2026 (later afternoon): a security review thread stops the merge (0.35.2)
+
+**Why.** On 16 November 2026 #62 merged with four `github-advanced-security` review threads
+unread, and #64 merged six seconds before a fifth arrived. The merge commands read the
+`ai-review` comment and the checks, never the review threads. The owner's job: a pull request
+cannot be merged by our merge commands while a security review thread on it is unanswered or
+unfixed, and the rule is where every merge loads it. This entry is the rule text; the gate is
+TOKYO-BEANS/Stack-Atlas#187 (`b643b8a`) and the merge script
+TOKYO-BEANS/release-maintenance#14 (`92a3bed`). It tightens the merge condition and loosens
+nothing.
+
+**What changed.**
+- `recipes/ci-releases.md`: the merge condition names the threads, and a new point holds the
+  rule. Only a reply in the thread closes it for the merge: `Fixed in <commit>` (a later
+  commit of the pull request that fixes the finding) or
+  `Owner's yes (<date>): <the owner's words>`, written only after the owner has said yes to
+  that thread. "With the owner" means that yes: telling or asking the owner, a planned
+  follow-up or an answer leaves the thread open.
+- `recipes/review-threads.md` (new, linked from that point; the first page is at its size
+  limit): what the threads are, how to read them (`pulls/<n>/comments`;
+  `gh pr view --json comments` does not show them), a fix, the owner's decision, what the gate
+  reads, and a thread that arrives after the merge.
+- `recipes/codex.md`: one point that was an interim step in Stack Atlas's handoff. Codex reads
+  the Cookbook of Claude's last plugin update, so before a start that leans on a page changed
+  since, compare the clone's plugin version with `main`. The next job turns the start check,
+  this comparison included, into a tested script.
+- Plugin 0.35.2.
+
+**Verification.** `npm test`: 449 tests pass, 0 fail, with the page-size check.
+
+**Outstanding.**
+- The installed plugin moves with the next plugin update. Until then a session loads the old
+  `ci-releases.md`; the gate in code refuses the merge either way. Owner: Claude, with the
+  `stack-updates` rules.
+- The Codex start check as a tested script that validates the repository name (the open
+  security thread on #64) and compares the clone's version with `main`. Owner: Claude, as the
+  next Cookbook job.
 
 ## 16 November 2026 (afternoon): model budget follow-up (0.35.1)
 
@@ -59,7 +101,7 @@ a script calling the undocumented reset endpoint).
 **Outstanding (Claude, next chat).** The usage endpoint kept answering 429 `rate_limit_error`
 (retry-after 0) from 13:20 to 13:45 UTC on 16 November 2026, whatever the User-Agent; it
 answered 200 at 12:42 and 12:52. While it does, the budget is "unknown" and threads keep their
-model. Cleared by 0.35.2 (the entry above).
+model. Cleared by 0.35.3 (the first entry).
 
 ## 16 November 2026 (afternoon): the model budget, Fable or Opus by a script (0.35.0)
 

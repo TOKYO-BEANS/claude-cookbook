@@ -36,5 +36,11 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
   judgement never clears a security finding.
 - **The brief** carries the task, the files and the report shape, not the rules: Codex reads
   them itself. An answer from an agent is never the owner's yes.
+- **Codex reads the Cookbook of Claude's last plugin update**, from the marketplace clone
+  (`~/.claude/plugins/marketplaces/claude-cookbook`), not `main`. Before a start that leans on
+  a page changed since, compare the `version` in the clone's
+  `plugins/cookbook/.claude-plugin/plugin.json` with `main`'s. When they differ, do not lean
+  on that page: update the plugin first (the `stack-updates` rules say when that needs the
+  owner), or give the piece to a `cookbook:review` subagent.
 - Where its rules and tools come from, the model route and the proof:
   [codex-setup](codex-setup.md).
