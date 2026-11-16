@@ -28,7 +28,7 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
   checks every value and stores no figure. T3 Code gets them from Claude Code (`get_usage`).
   A signed reading under an hour old comes first, so the advice can trail them by 50 minutes
   (Fable 90% signed, 97% there): kept, as the signing answers a security finding.
-- **The banked resets** are the list T3 Code last saved, kept by the script:
+- **The banked resets**: T3 Code's list, read while its file shows it, never saved:
   [model-budget-resets](model-budget-resets.md).
 - **A thread switches itself.** `t3_thread_configure` then `t3_thread_send` with `queue`: the
   queued turn ran on Opus 5.5 with no one at the keyboard.
