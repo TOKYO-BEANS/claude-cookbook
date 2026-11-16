@@ -16,6 +16,11 @@ at least once in that test.
   `--setting-sources ""` is what keeps user plugins from loading and their prompt hooks from
   receiving the prompt. `apiKeySource` in the stream's init event shows whether the run is on the
   plan login (`none`) or on a key.
+- A run that loads MCP servers holds its prompt back until they have connected
+  (`--input-format stream-json`, the prompt written to stdin once a `--debug-file` log shows
+  `MCP server "<name>": Successfully connected` for each). A prompt sent at once is answered
+  without the servers still connecting: runs then differ by thousands of tokens, and a tool may
+  be missing. Held back, repeats agreed to within 10 tokens (`scripts/measure/servers.mjs`).
 - A Bash result can end with a line the harness adds ("Shell cwd was reset to …"). A run told to
   end with a command's output copied it and dropped the output's first line until the prompt named
   both: keep every line from the first, leave out the harness line.

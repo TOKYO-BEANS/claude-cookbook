@@ -1,5 +1,8 @@
 # Firecrawl without surprises
 
+- Its tools wait behind tool search (`"alwaysLoad": false` in its entry, 16 November 2026: 10,031
+  tokens fewer in every session). Before the first call in a session, load the tool:
+  `ToolSearch` with `select:mcp__firecrawl__firecrawl_scrape` (or the tool you need).
 - Scrape, map and search cost credits; JSON/extract cost extra. Check the balance before batches.
 - Every crawl gets an explicit `limit`; every agent run an explicit `maxCredits` and
   `effort: "low"`.

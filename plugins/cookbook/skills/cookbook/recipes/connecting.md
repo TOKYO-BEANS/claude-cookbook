@@ -24,3 +24,5 @@
   packages parsed or exit code 128 ("No package sources found") is no result, not a clean one.
 - Install Trivy only from immutable releases, never `trivy-action` or `setup-trivy` (CVE-2026-33634).
 - An MCP server that only some projects need goes in project scope (`.mcp.json`), not user scope.
+  What each server costs a session start, and the three ways to keep one out of it:
+  [connecting-load.md](connecting-load.md).
