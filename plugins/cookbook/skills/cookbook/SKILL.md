@@ -82,6 +82,7 @@ fallback and say that you did.
 | **Keep healthy** | | | |
 | Big output kept out of the conversation | **context-mode** | ranged `Read` and `rg` | [context-mode](recipes/context-mode.md) |
 | Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor, by itself | [compaction](recipes/compaction.md) |
+| Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev**; the display is T3 Code's sidebar (`❓ ` marker, pins) | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
 | Memory across sessions | the project's `HANDOFF.md` for its state; auto-memory for the owner's preferences | — | — |
 | A plain script on a schedule | Windows Task Scheduler | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | An agent run on a schedule | a **T3 Code** scheduled task | a Claude Desktop scheduled task | [scheduled-runs](recipes/scheduled-runs.md) |

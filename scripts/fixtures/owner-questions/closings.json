@@ -1,0 +1,33 @@
+{
+  "_about": "Real closing messages from 13 to 16 November 2026, with project, client and product names replaced. owner: leaves something with the owner. done: declares the chat's job finished.",
+  "still-yours": {
+    "owner": true,
+    "done": false,
+    "text": "The site repository's #10 merge (`8c524c4`) is release-verified (execution 1488), and the ledger has it. Both of the pull requests you said yes to are now merged and verified.\n\nTwo things from that check you should know:\n\n- **Another session's merge shows as failed, and my merge caused it.** That session merged #14 18 seconds before I merged #10. My merge cancelled the CI run on its commit, `7b0612e`, and the ledger records a cancelled run as failed. Its changes are not unverified: my merge commit sits on top of #14, and tests and Semgrep passed on that combined code. Nothing needs repairing, but the other session may report its merge as failed.\n- **The live-site probe was unavailable.** The check could not read the site's pages during its probe. That means \"not checked\", not \"healthy\". #10 released nothing to the site, so it does not affect the verdict on this merge.\n\nNothing else is running on my side. Still yours: the trial folders in `~/.local/share`, and the `list` warning in `src/site/feed.ts` for another session."
+  },
+  "decision-for-you": {
+    "owner": true,
+    "done": false,
+    "text": "The feature work is finished and live, but the handoff record (PR #159, notes only) is not merged. The merge script waited an hour for a check that never finished, then hit its time limit and was stopped. I have not restarted it.\n\nThe check that never finished comes from a GitHub app that began running on this repository at 10:14 UTC today:\n\n- **Correctness Check:** passed.\n- **Approvability Check:** still \"in progress\" after more than an hour, with the text \"Waiting for concurrent review to complete…\".\n\nI did not install it; it was not on #157 or #158, and it is not in the Cookbook's map. All ten usual checks on #159 passed, and the AI review found nothing.\n\nMy rule is to merge only when every check has passed, so I'm leaving #159 open rather than merging past a pending check.\n\nDecision for you:\n\n1. **Did you add the app on purpose?** If yes, it should go into the Cookbook, and I need to know whether its Approvability check is meant to block merges (it looks stuck).\n2. **If not,** say so and I'll look into where it came from before anything else merges; removing an app is your call.\n\nEither way, #159 only adds the written record of the second deploy; nothing in production depends on it."
+  },
+  "need-a-yes": {
+    "owner": true,
+    "done": false,
+    "text": "Steps 1 and 3 are done and committed locally (nothing pushed yet); step 2 now waits on your yes.\n\n**I need a yes to two live runs:**\n1. **The proof run:** one tiny Workflow with two agents, outside the repository's workflows.\n   - One agent runs with an existing `agentType` whose tool list has no shell. It is told to try every route to a command to create a marker file, and to return a schema answer.\n   - The other is a control on the default workflow subagent with the same instructions.\n   - I check the disk myself: the control's marker must exist and the other must not.\n2. **One small live `sa-review` run** (3 agents) on this branch's range, once the reviewer profile exists.\n\nIf the proof fails I change nothing for step 2 and answer the three threads with what was found.\n\n**Done so far**\n- **Semgrep script:** removes an earlier run's report before the scan starts, so a report on disk always belongs to this run.\n- **Checks:** `npm test` (659 tests: 657 passed, 2 skipped), `npm run check` and `npm run lint` pass."
+  },
+  "done-with-leftovers": {
+    "owner": true,
+    "done": true,
+    "text": "This chat is done: the job is merged, checked and recorded, and nothing further is queued (a tool's review on 28 November is the next dated item).\n\n- **Merged:** #59 as `2ee5882`, by hand on your one-time yes; the merge gate is unchanged.\n- **Release check:** `verified` and acknowledged (execution 1536).\n- **Installed:** Cookbook 0.31.3 on this PC, proved with a new session.\n- **Spend:** USD 8.33 of plan usage at list prices (limit 15), plus four credits.\n\nStill open:\n- **Folder names on GitHub:** the two folder names remain in the old commits of the pull request's branch; `main` does not have them. Say if you want the branch deleted or a purge request to GitHub support.\n- **Graphify's verification check** will stop the automatic merge again on the next code change; changing that gate is a Stack Atlas job that needs your yes."
+  },
+  "done-clean": {
+    "owner": false,
+    "done": true,
+    "text": "This chat is done: #61 is merged as `def459c`, the release check is verified (execution 1539), plugin 0.31.4 is installed and proved from the installed path, and the handoff and memory are written. Nothing further is queued."
+  },
+  "mid-job": {
+    "owner": false,
+    "done": false,
+    "text": "The release check of `def459c` is `verified` and acknowledged (execution 1539), and plugin 0.31.4 is installed. The read-only proof run from the installed path is running now; a check while it ran found no window process. Waiting for it to finish."
+  }
+}
