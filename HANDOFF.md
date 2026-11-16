@@ -1,6 +1,6 @@
 # Handoff
 
-## 16 November 2026 (night): the setup page says both rates; the record of #82 (0.38.2)
+## 16 November 2026 (night): the setup page says both rates; the record of #82 (0.38.3)
 
 **Why.** `sa-review`'s one low finding on #82 was left for a follow-up:
 `model-budget-setup.md` said T3 Code's file is "rewritten every minute". That is the file;
@@ -19,10 +19,19 @@ hook, so the advice is as in 0.38.0.
   that entry's finding: one read fills both files.
 - The 0.38.1 entry's outstanding line for the low finding is marked cleared.
 
-**Verification.** `npm test`: 564 passed, 0 failed, 1 skipped (`npm-test-0.38.2.log`). The log
-facts above were read from `sample-sources.log` itself, and #82's from GitHub and
-`merge-by-hand-cookbook-82.log`. `sa-review` runs on the pushed head (run
-`cookbook-0.38.2-review`); its result is a comment on the pull request.
+**Verification.** `npm test` on the head merged with `main`: 583 passed, 0 failed, 2 skipped,
+in 416 seconds (`npm-test-85.log`). The log facts above were read from `sample-sources.log` itself, and
+#82's from GitHub and `merge-by-hand-cookbook-82.log`. `sa-review`'s result on that head
+is a comment on the pull request (#85). The version is 0.38.3 because `main` took 0.38.2
+(#78) while this was in review.
+
+**Failure, kept on record.** The first `sa-review` (run `cookbook-0.38.2-review`, on
+`9682934`) ended `unknown`: its own `npm test` did not finish.
+`scripts/vetting.test.mjs` stopped at 596 seconds on a loaded PC (36 `node` processes).
+The same file alone passed, 23 of 23, in 500 seconds (`vetting-test-85.log`), and the full
+suite had passed before the push: 564 passed, 0 failed, 1 skipped, in 557 seconds against
+the usual 150 (`npm-test-85-first.log`). Its one low finding was that difference, not a
+fault in the change. Owner: Claude. A second run on the merged head follows the push.
 
 **Outstanding.**
 - The AI review job has no API credit (unchanged): `sa-review` is the fallback and the
@@ -31,7 +40,7 @@ facts above were read from `sample-sources.log` itself, and #82's from GitHub an
   by up to 50 minutes).
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-claude-usage-reading/`
-(the 0.38.1 folder; this job's files have `0.38.2` in their names).
+(the 0.38.1 folder; this job's files have `85` or `0.38.2-review` in their names).
 
 **Recorded here, from the job before (#82).** All on 16 November 2026, times UTC; each fact
 checked against that evidence folder and against GitHub.
@@ -55,6 +64,86 @@ checked against that evidence folder and against GitHub.
 - Not on GitHub until this job: #82 had one comment, the `review unavailable` one. The
   fallback review's result and the owner's answer were added there as a comment after the
   merge, with these facts.
+## 16 November 2026 (night): the key read no longer waits on a script scan (0.38.2)
+
+**Why.** While #75 was verified, `boat limits --json` through `~/.local/bin/with-key.mjs`
+took 32 seconds once and over 90 once, and `boat-run` refused three of six runs at its
+60-second limit. The 37-second refusal in #70's entry was the same fault.
+
+**The cause, found before anything was changed.** The PC's security software scans every
+PowerShell script block (AMSI; it is the only scanner registered), and while many processes
+start, each scan can wait about 30 seconds. `with-key.mjs` read a key by starting
+`agent-key.ps1`, which crosses several scans: the script itself and each module import.
+- Windows' PowerShell event log: in every slow read PowerShell was ready in under 2 seconds
+  and then waited before compiling the script. 33 of the day's 313 reads took over 3
+  seconds; 14 waits sit at 30.2 to 30.4 seconds, a time limit inside the scanner.
+- A traced read of 32.7 seconds: 9.7 before the script's first line, 18.0 in
+  `Import-Module`, 0.07 decrypting. A one-line block made in memory waited 12.7 seconds; a
+  plain file read in the same run took 5 ms. So: the scan, not file access and not DPAPI.
+- Made to happen on demand: 16 workers starting `git --version` for 45 seconds gave one
+  read of 47 seconds; with no burst, 27 runs took 0.7 to 2.5 seconds.
+- Ruled out: two and four key reads at the same moment (0.9 to 2.0 seconds), and
+  PowerShell's own start.
+
+**What changed.**
+- The helpers were in no repository. On the owner's word (16 November 2026) they live here:
+  `skills/cookbook/scripts/with-key.mjs` and `agent-key.ps1` (the latter byte for byte as it
+  was on the PC). Callers keep using the copies in `~/.local/bin`.
+- `with-key.mjs` reads the key in its own process: Node calls `CryptUnprotectData` through
+  `node:ffi` (Node 26.13.1, no flag; experimental). No PowerShell starts. The store and its
+  files are unchanged. Same checks as `agent-key.ps1`: the name pattern, no link.
+- The PowerShell route stays as the fallback where `node:ffi` is missing. It is ended after
+  15 seconds and the launcher says why. A failure message holds only the launcher's own
+  words or an error code, never what PowerShell printed.
+- `recipes/keys.md` (new; the map row links it); `catalog.json` notes for the two copies.
+- From the reviews: a program that cannot start ends the launcher with code 127 and one
+  line, not a stack trace (Graphify); a failed read removes a value the caller already had
+  under the variable's name; loading `node:ffi` leaves the process's warning handling as it
+  was; a missing `agent-key.ps1` is named (`sa-review`, three low findings).
+- GitHub's security review wrote two threads. "Prints a key" was the `--headers` mode:
+  taken out. "Starts any program it is given" is the launcher's purpose: the owner's yes
+  (16 November 2026) is in the thread.
+
+**Verification.**
+- 20 tests in `scripts/with-key.test.mjs` (19 pass, the link test skips on this PC: no right
+  to make a link). On Windows they read a synthetic DPAPI key by the direct route with
+  PowerShell forbidden, start the launcher as a process by five spellings of its path, and
+  save a key with `agent-key.ps1` and read it by both routes. CI runs on Linux with Node 24:
+  the Windows tests skip there, the rest run.
+- The real `boat` key, both routes side by side during a 60-second burst of process starts:
+  PowerShell 1 read in 86.8 seconds; the new launcher 38 reads, 0.6 to 1.4 seconds, none
+  failed. The key from both routes has the same SHA-256.
+- `npm test` passed on this PC.
+
+**Outstanding.**
+- The merge, the release check, the copy to `~/.local/bin` and the proof from there are
+  reported in the chat of this pull request and in the next entry.
+- Other PowerShell key reads still stall the same way: an MCP `headersHelper` that calls
+  `agent-key.ps1 -Mode headers`, and the launchers `firecrawl-secure.mjs`,
+  `parallel-secure.mjs` and `browserbase-key.ps1` in `~/.local/bin`, which are in no
+  repository either. Owner: Claude. Cleared by a read without PowerShell for each. A
+  `--headers` mode in `with-key.mjs` was written and taken out again: GitHub's security
+  review flags a mode that prints a key, so that design goes to the owner first.
+- The first commit of this pull request carried a stray file,
+  `Microsoft/Windows/PowerShell/ModuleAnalysisCache` (the AI review caught it). A test ran
+  PowerShell with a temporary home folder, and PowerShell then writes its module cache into
+  the working directory. It held no path under the user's profile. Removed; the test's
+  temporary home now has `AppData\Local`, which keeps the cache there. The squash merge
+  leaves it out of `main`; it stays readable in the pull request's first commit.
+- `with-key.mjs` still starts the program without its variable when the key cannot be read
+  (the owner-questions broker relies on it) and still ends with code 1 when a signal kills
+  its child. Unchanged here. Owner: Claude.
+- The `ai-review` job answered `review unavailable` from the second push on: the review
+  key's credit balance is too low. `sa-review` reviewed instead. Until the credits are
+  back, every pull request needs that fallback. Owner: the owner (it is spending).
+- `node:ffi` is experimental. If a Node update changes it, reads fall back to PowerShell and
+  can stall again, for at most 15 seconds, with the reason on stderr.
+- A recommendation for whoever manages the security software, not acted on: its script scan
+  holds PowerShell up to 30 seconds per block under load. Its settings were not touched.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-with-key-stall/`:
+`FINDINGS.md`, the probes (`stall-probe.mjs`, `sampler.mjs`, `phase-split.ps1`,
+`storm.mjs`, `storm-compare.mjs`, `eventlog-gaps.mjs`, `dpapi-ffi.mjs`) and their logs.
 
 ## 16 November 2026 (night): Claude Code's saved usage reading weighed; the record of #80 (0.38.1)
 
@@ -82,7 +171,7 @@ T3 Code's newer reading said 97%, so the hook said "use Fable" where the newer f
   every three to six minutes (19:05:24, 19:10:28, 19:13:42, 19:19:39, 19:24:47), and Claude
   Code's copy stayed at 19:00:20 until 19:24 (24 minutes old), then was rewritten at
   19:24:48, one second after T3 Code's probe of 19:24:47: a second matching pair, one read
-  filling both files again. (Corrected in 0.38.2 from the finished log; this said "stayed
+  filling both files again. (Corrected in 0.38.3 from the finished log; this said "stayed
   at 19:00:20 throughout, over 23 minutes old at the end".)
 - So Claude Code's copy is there whenever a Claude Code thread has asked in the last hour
   (T3 Code's probe is what fills it), and is never newer than T3 Code's figures.
@@ -121,7 +210,7 @@ weekly reset banked, and the hook said "use Fable 5.2 high".
 - `sa-review`'s low finding: `model-budget-setup.md` says T3 Code's file is "rewritten every
   minute"; that is the file, while the limits in it are asked for every three to six
   minutes. Owner: Claude. Clears with a follow-up that says both (not pushed into a
-  reviewed head). **Cleared in 0.38.2:** the page says both.
+  reviewed head). **Cleared in 0.38.3:** the page says both.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-16-claude-usage-reading/`.
 
