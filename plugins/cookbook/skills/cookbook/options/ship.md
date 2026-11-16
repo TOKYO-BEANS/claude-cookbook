@@ -17,7 +17,7 @@ Chosen by fit for the job on 15 November 2026.
   GPT Sol and forbids another model, and the ChatGPT sign-in refuses `gpt-6.1-sol`; running it
   would take an API key or another plan, which is spending. `council` needs three providers
   and two are on. Neither checks the merge condition in code, and the review of a pull
-  request has its owner. What is used from them is the consult: one read-only question to
+  request has its owner. What is used from them is the consult: one question to
   the other provider, as advice ([consult](../recipes/consult.md)). What the comparison showed
   is kept as practice in `recipes/ci-releases.md`: the reviews inside the `sa-*` route found
   almost nothing, the AI review in CI and one reviewer that had not built the change found the

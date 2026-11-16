@@ -15,7 +15,7 @@ fair trial; they never pick an owner.
 - **One side piece: the Cookbook dispatch profiles.** A fixed model, effort and tool list per
   kind of piece. Weighed: an untyped subagent (inherits every tool and the session's model); a
   T3 delegate (a whole thread for a small piece).
-- **A second opinion: a consult.** One read-only question to the other provider through T3
+- **A second opinion: a consult.** One question to the other provider through T3
   `delegate_task`; advice, never a check. Weighed: tstack's `sol-loop` and `council` (see
   "ship"); a `cookbook:review` subagent (the same provider: no second opinion).
 - **Code structure: Graphify.** Callers, impact and linked tests from an index, and the `sa-*`

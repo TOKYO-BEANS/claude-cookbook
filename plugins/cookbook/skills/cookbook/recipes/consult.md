@@ -1,6 +1,6 @@
 # Consult: a second provider's opinion
 
-A consult is one read-only question to a model from another provider. Since 16 November 2026
+A consult is one question to a model from another provider, read-only by its brief. Since 16 November 2026
 Codex is on in T3 Code as the second provider, signed in with the owner's ChatGPT account. A
 Claude session asks Codex; a Codex session asks Claude. The answer is advice: the session that
 asked checks each point against the code and decides.
@@ -9,7 +9,7 @@ asked checks each point against the code and decides.
   a security-sensitive design, two real options); when a diagnosis has failed twice; before a
   reply to a review finding you dispute; when the owner says "consult" or "ask Codex".
 - **Not for.** What a test or a check can decide; a public fact (research); routine edits; a
-  second look by the same provider (that is `cookbook:review`). Never one on every pull request.
+  second look by the same provider (`cookbook:review`). Never one on every pull request.
 - **How.** Call `orchestrator_capabilities` once per thread: Codex must show
   `canRunChildTask: true`. Then one `delegate_task` with
   `target: { providerInstanceId: "codex", model: "gpt-6-astra" }` and `role: "review"`; add
@@ -20,11 +20,14 @@ asked checks each point against the code and decides.
   commit, push, comment on a pull request or start subagents." Ask for a verdict, findings with
   file, line and evidence, and what it could not check. No secrets and no customer data in a
   brief.
+- **Read-only is asked for, not enforced.** `role` and the target set no sandbox: nothing in
+  the call stops the child from writing or pushing. Note `git status --short` and
+  `git rev-parse HEAD` before; afterwards compare both, and the branch on the remote. Report a
+  change the child made; never keep one unseen. For committed work, `isolation: "worktree"`
+  gives the child its own checkout.
 - **While it runs.** Do not edit the files it reads. A timeout, an error or no reply is not
-  agreement. One model, one consult per question; a re-check after changes is a new
-  `delegate_task`, three rounds at most.
-- **Afterwards.** Check each point yourself. Report what the consult said, what was taken and
-  what was declined, with the reason.
+  agreement. One consult per question; a re-check is a new `delegate_task`, three rounds at most.
+- **Afterwards.** Report what was said, taken and declined, and why.
 
 ## What a consult does not replace
 
@@ -44,5 +47,4 @@ asked checks each point against the code and decides.
 - **Cost.** A consult draws on the allowance of the owner's ChatGPT plan. An API key, bought
   credits, a faster tier or another plan is spending: ask the owner.
 - **No second provider.** Off, refusing or at its usage limit: say that no second opinion was
-  had and carry on. There is no fallback: a `cookbook:review` subagent is the same provider,
-  and T3's rule is never to fall back to another route unasked.
+  had and carry on. No fallback: T3's rule is never to fall back unasked.

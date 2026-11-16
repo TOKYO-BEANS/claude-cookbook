@@ -50,8 +50,18 @@ checks the merge condition in code, and the review of a pull request keeps its o
   and it sent every consult to Codex, also from a session that runs on Codex (now: the other
   provider). Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-16-codex-consult/`.
 - `npm test` passed.
+- AI review of the first commit (comment 6914545236 on #63): one medium and one low finding,
+  both fixed in the second commit. Medium: "read-only" was a sentence in the brief and
+  nothing in the call enforces it. The page now says so: read-only is asked for, not
+  enforced; the checkout and the branch are compared before and after; committed work can go
+  to the child in its own checkout (`isolation: "worktree"`). The map, the catalog and the
+  options pages no longer call the route read-only as if it were a property. Low: the
+  `ignored` note on `codex-chat-import` contradicted the new Codex tool. After the first
+  consult the commit that followed held only this change's ten files.
 
 **Outstanding.**
+- `recipes/consult.md` is at its size limit (3,974 of 4,000 bytes as a Read result): a further
+  rule goes on a `consult-<part>.md` page.
 - A consult from a Codex session to Claude has not been run. Owner: Claude. Clears with the
   first real call from a Codex session; until then the page marks it as not proven.
 - Stack-Atlas's `HANDOFF.md` (15 November 2026) still lists `sol-loop` as open until "the
