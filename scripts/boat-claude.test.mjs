@@ -2,11 +2,12 @@
 // (skills/cookbook/scripts). The caps are numbers in the script; the environment must pass
 // nothing of the account but the proxied sign-in; the sandbox is always deleted.
 import { test } from "node:test";
+import { EventEmitter } from "node:events";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CLAUDE, ENVIRONMENT, TASK_BYTES, checkBudget, pickEnvironment, failure, main, newArgv, newId, parseArgs, promptArgv, promptText, requestsOf, sandboxRun } from "../plugins/cookbook/skills/cookbook/scripts/boat-claude.mjs";
+import { CLAUDE, ENVIRONMENT, MISSED_READINGS, runPrompt, TASK_BYTES, checkBudget, pickEnvironment, failure, main, newArgv, newId, parseArgs, promptArgv, promptText, requestsOf, sandboxRun } from "../plugins/cookbook/skills/cookbook/scripts/boat-claude.mjs";
 import { NOT_STARTED } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
 const base = ["--model", "claude-sonnet-5-5", "--timeout", "1800", "--task", "t.md"];
@@ -58,6 +59,8 @@ test("the wallet and the day: a run's cap must fit both", () => {
   assert.equal(checkBudget(run, usage(0), 29, "2026-11-17"), null);
   assert.equal(checkBudget(run, usage(0), CLAUDE.walletFloor + 0.2, "2026-11-17"), null);
   assert.match(checkBudget(run, usage(0), CLAUDE.walletFloor + 0.19, "2026-11-17"), /wallet/);
+  // A day's figure that cannot be read is no result, never zero.
+  for (const bad of [undefined, "12", NaN, -1]) assert.match(checkBudget(run, { usage: [{ day: "2026-11-17", requests: bad }] }, 29, "2026-11-17"), /no result/, String(bad));
   for (const [u, w] of [[null, 29], [{}, 29], [usage(0), undefined], [usage(0), NaN]]) assert.match(checkBudget(run, u, w, "2026-11-17"), /no result/);
 });
 
@@ -122,6 +125,10 @@ function fakes(over = {}) {
       calls.push(`delete ${id}`);
       return true;
     },
+    onStop: () => {
+      calls.push("onStop on");
+      return () => calls.push("onStop off");
+    },
     outDir: () => join(dir, "out"),
     today: () => "2026-11-17",
     say: (l) => said.push(l),
@@ -141,6 +148,8 @@ test("a finished run: report and patch come back, the sandbox is deleted, both p
     assert.ok(f.calls.includes("push bx_abcd1234") && f.calls.includes("delete bx_abcd1234") && f.calls.includes("staged removed"));
     assert.deepEqual(f.released.sort(), ["claude", "slot"]);
     assert.ok(f.said.some((l) => /42 proxied requests/.test(l)));
+    // A stopped script cleans up too: the handler is on while the sandbox exists, off after.
+    assert.ok(f.calls.indexOf("onStop on") < f.calls.indexOf("onStop off"));
   } finally {
     f.cleanup();
   }
@@ -155,6 +164,8 @@ test("nothing starts without the narrow environment, room in the budget, or a re
     [{ permit: () => ({ ok: false, key: "github.com/o/r" }) }, /upload list/],
     [{ scan: () => ({ ok: false, reason: "1 finding" }) }, /secret scan of the upload: 1 finding/],
     [{ dataFiles: () => ["dump.sql"] }, /data-shaped/],
+    // The task file is scanned before it goes in.
+    [{ scan: (d) => (d.endsWith("task") ? { ok: false, reason: "1 finding" } : { ok: true }) }, /secret scan of the task file: 1 finding/],
   ];
   for (const [over, why] of cases) {
     const f = fakes(over);
@@ -197,6 +208,14 @@ test("a run stopped at a cap, a failed agent or a missing report exits 1, and th
       f.cleanup();
     }
   }
+  // boat new that fails before naming a sandbox: one may exist, so not "not started".
+  const g = fakes({ boat: (argv) => (argv[0] === "new" ? { status: null, error: { code: "ETIMEDOUT" }, stdout: "" } : { status: 0, stdout: "" }) });
+  try {
+    assert.equal(await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", g.task], g.deps), 1);
+    assert.match(g.said.join(" | "), /may still exist: run 'boat list'/);
+  } finally {
+    g.cleanup();
+  }
   const f = fakes({ remove: () => false });
   try {
     await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task], f.deps);
@@ -204,5 +223,97 @@ test("a run stopped at a cap, a failed agent or a missing report exits 1, and th
     assert.ok(!existsSync(join(f.dir, "out", "changes.patch")), "no patch without an upload");
   } finally {
     f.cleanup();
+  }
+});
+
+// A fake `boat prompt` process: it runs until killed.
+function child() {
+  const c = new EventEmitter();
+  c.stdout = new EventEmitter();
+  c.stderr = new EventEmitter();
+  c.kill = () => setImmediate(() => c.emit("close", null));
+  return c;
+}
+
+function prompted(run, readings) {
+  const dir = mkdtempSync(join(tmpdir(), "boat-claude-prompt-"));
+  const asked = [];
+  let i = 0;
+  const io = {
+    start: () => child(),
+    ask: (argv) => asked.push(argv.join(" ")),
+    usageOf: () => {
+      const r = readings[Math.min(i, readings.length - 1)];
+      i += 1;
+      if (r instanceof Error) throw r;
+      return r;
+    },
+    pollMs: 5,
+    killMs: 1,
+  };
+  return { io, asked, events: join(dir, "events.jsonl"), cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+}
+
+test("the spend guard: the request cap stops the run, refusing the placeholders and interrupting the agent", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 5, timeout: 600 };
+  const t = prompted(run, [{ totals: { requests: 2 } }, { totals: { requests: 7 } }]);
+  try {
+    const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
+    assert.match(r.stopped, /request cap \(7 of 5\)/);
+    assert.deepEqual(t.asked, ["ai block bx_abcd", "interrupt bx_abcd"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("the spend guard fails closed: readings that fail in a row stop the run; one miss does not", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 500, timeout: 600 };
+  const t = prompted(run, [new Error("boat ai usage failed"), {}, new Error("x"), new Error("y")]);
+  try {
+    const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
+    assert.match(r.stopped, new RegExp(`${MISSED_READINGS} readings of the request count in a row failed`));
+    assert.ok(t.asked.includes("ai block bx_abcd"));
+  } finally {
+    t.cleanup();
+  }
+  const u = prompted(run, [new Error("one miss"), { totals: { requests: 1 } }, new Error("a"), { totals: { requests: 2 } }, { totals: { requests: 600 } }]);
+  try {
+    assert.match((await runPrompt(run, "bx_abcd", null, u.events, u.io)).stopped, /request cap \(600 of 500\)/);
+  } finally {
+    u.cleanup();
+  }
+});
+
+test("the spend guard: the timeout stops a run whose count stays low", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 500, timeout: 0.05 };
+  const t = prompted(run, [{ totals: { requests: 1 } }]);
+  try {
+    const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
+    assert.match(r.stopped, /the timeout/);
+    assert.deepEqual(t.asked, ["ai block bx_abcd", "interrupt bx_abcd"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a failure line from boat prompt is reported, and every line is kept", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 500, timeout: 600 };
+  const t = prompted(run, [{ totals: { requests: 1 } }]);
+  t.io.start = () => {
+    const c = child();
+    setImmediate(() => {
+      const lines = ['{"data":{"data":{"status":"running"}}}', '{"data":{"data":{"limitType":"auth_expiry","summary":"Claude login required"}}}', ""];
+      c.stdout.emit("data", Buffer.from(lines.join(String.fromCharCode(10))));
+      c.emit("close", 0);
+    });
+    return c;
+  };
+  try {
+    const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
+    assert.equal(r.stopped, null);
+    assert.match(r.failed, /Claude login required/);
+    assert.equal(readFileSync(t.events, "utf8").trim().split(/\r?\n/).length, 2);
+  } finally {
+    t.cleanup();
   }
 });

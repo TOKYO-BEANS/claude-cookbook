@@ -107,7 +107,9 @@ export function pickEnvironment(list) {
 export function checkBudget(run, usage, wallet, today) {
   const days = usage?.usage;
   if (!Array.isArray(days) || !(typeof wallet === "number" && Number.isFinite(wallet))) return "no result (the proxy's usage or the wallet could not be read)";
-  const used = days.filter((d) => d?.day === today).reduce((n, d) => n + (Number.isFinite(d?.requests) ? d.requests : 0), 0);
+  const todays = days.filter((d) => d?.day === today);
+  if (todays.some((d) => !(Number.isFinite(d?.requests) && d.requests >= 0))) return "no result (today's proxied requests could not be read)";
+  const used = todays.reduce((n, d) => n + d.requests, 0);
   if (used + run.requests > CLAUDE.dayRequests) return `${used} proxied requests today and a cap of ${run.requests} would pass ${CLAUDE.dayRequests} a day: a smaller cap, tomorrow, or the owner's yes`;
   const after = wallet - run.requests * DOLLARS_PER_REQUEST;
   if (after < CLAUDE.walletFloor) return `the wallet holds USD ${wallet}; this run's cap could leave less than USD ${CLAUDE.walletFloor}: the owner tops it up or says yes`;
@@ -185,16 +187,31 @@ function exec(id, script, seconds = 120) {
   return { ok: j.exitCode === 0 && !j.stdoutTruncated, stdout: String(j.stdout ?? ""), why: j.stdoutTruncated ? "the output was cut" : `exit ${j.exitCode}` };
 }
 
+// Readings of the request count that may fail in a row before the run is stopped: a cap
+// that cannot be read is not a cap.
+export const MISSED_READINGS = 3;
+
 // boat prompt, its lines written to `events` as they come. Every `pollSeconds` the request
-// count is read; at the cap or the timeout the sandbox's placeholders are refused and the
-// agent interrupted. Resolves { stopped, failed }.
-function runPrompt(run, id, folder, events) {
+// count is read; at the cap, after MISSED_READINGS failed readings in a row, or at the
+// timeout, the sandbox's placeholders are refused and the agent interrupted.
+// Resolves { stopped, failed }. `io` is for the tests.
+export function runPrompt(run, id, folder, events, io = {}) {
+  const {
+    start = (argv) => {
+      const c = boatCommand(argv);
+      return spawn(c.file, c.args, { env: c.env, stdio: ["ignore", "pipe", "pipe"] });
+    },
+    ask = boat,
+    usageOf = (sid) => boatJson(["ai", "usage", sid, "--json"]),
+    pollMs = CLAUDE.pollSeconds * 1000,
+    killMs = 30000,
+  } = io;
   return new Promise((done) => {
-    const c = boatCommand(promptArgv(run, id, folder));
-    const child = spawn(c.file, c.args, { env: c.env, stdio: ["ignore", "pipe", "pipe"] });
+    const child = start(promptArgv(run, id, folder));
     let stopped = null;
     let failed = null;
     let rest = "";
+    let missed = 0;
     const take = (chunk) => {
       const text = rest + chunk.toString("utf8");
       const parts = text.split("\n");
@@ -209,16 +226,23 @@ function runPrompt(run, id, folder, events) {
     const halt = (why) => {
       if (stopped) return;
       stopped = why;
-      boat(["ai", "block", id]);
-      boat(["interrupt", id]);
-      setTimeout(() => child.kill("SIGKILL"), 30000).unref();
+      ask(["ai", "block", id]);
+      ask(["interrupt", id]);
+      setTimeout(() => child.kill("SIGKILL"), killMs).unref();
     };
     const poll = setInterval(() => {
+      let n = null;
       try {
-        const n = requestsOf(boatJson(["ai", "usage", id, "--json"]), id);
-        if (n !== null && n >= run.requests) halt(`the request cap (${n} of ${run.requests})`);
-      } catch { /* one missed reading: the timeout still holds */ }
-    }, CLAUDE.pollSeconds * 1000);
+        n = requestsOf(usageOf(id), id);
+      } catch { /* counted below as a missed reading */ }
+      if (n === null) {
+        missed += 1;
+        if (missed >= MISSED_READINGS) halt(`${missed} readings of the request count in a row failed, so the cap could not hold`);
+        return;
+      }
+      missed = 0;
+      if (n >= run.requests) halt(`the request cap (${n} of ${run.requests})`);
+    }, pollMs);
     const clock = setTimeout(() => halt(`the timeout (${run.timeout} seconds)`), run.timeout * 1000);
     child.on("error", () => { failed ??= "boat prompt did not run"; });
     child.on("close", () => {
@@ -253,6 +277,20 @@ const REAL = {
   exec,
   prompt: runPrompt,
   remove: (id) => removeSandbox(id),
+  // A script that is stopped (Ctrl-C, a closed window, a tool's time limit) still refuses
+  // the sandbox's placeholders and deletes it, so nothing runs on uncounted.
+  onStop: (clean) => {
+    const signals = ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"];
+    const handler = (sig) => {
+      try {
+        clean();
+      } finally {
+        process.exit(sig === "SIGINT" ? 130 : 143);
+      }
+    };
+    for (const sig of signals) process.on(sig, handler);
+    return () => { for (const sig of signals) process.off(sig, handler); };
+  },
   outDir: (id) => join(STATE, "claude", `${new Date().toISOString().replace(/[:.]/g, "-")}-${id}`),
   today: () => new Date().toISOString().slice(0, 10),
   say: (line) => console.error(line),
@@ -288,6 +326,9 @@ export async function main(argv, deps = REAL) {
   }
   let staged = null;
   let id = null;
+  let asked = false; // boat new was called: a sandbox may exist from here on
+  let taskCopy = null;
+  let offStop = null;
   try {
     let plan;
     let envs;
@@ -312,8 +353,20 @@ export async function main(argv, deps = REAL) {
       const result = deps.scan(staged.dir, staged.tmp);
       if (!result.ok) return stop(`the secret scan of the upload: ${result.reason}`);
     }
-    const made = deps.boat(newArgv(run, task, environment.name), 180000);
+    // The task is scanned before it goes in, from a copy, so what was scanned is what is sent.
+    taskCopy = mkdtempSync(join(tmpdir(), "boat-claude-task-"));
+    const sent = join(taskCopy, "task", "TASK.md");
+    mkdirSync(join(taskCopy, "task"));
+    writeFileSync(sent, readFileSync(task));
+    const taskScan = deps.scan(join(taskCopy, "task"), taskCopy);
+    if (!taskScan.ok) return stop(`the secret scan of the task file: ${taskScan.reason}`);
+    asked = true;
+    const made = deps.boat(newArgv(run, sent, environment.name), 180000);
     id = made.error ? null : newId(made.stdout);
+    if (id) offStop = deps.onStop(() => {
+      deps.boat(["ai", "block", id]);
+      deps.remove(id);
+    });
     if (!id) {
       const any = /"id":"(bx_[a-z0-9]{4,40})"/.exec(String(made.stdout ?? ""));
       id = any ? any[1] : null;
@@ -330,7 +383,7 @@ export async function main(argv, deps = REAL) {
     }
     const out = deps.outDir(id);
     mkdirSync(out, { recursive: true });
-    writeFileSync(join(out, "TASK.md"), readFileSync(task));
+    writeFileSync(join(out, "TASK.md"), readFileSync(sent));
     const events = join(out, "events.jsonl");
     deps.say(`BOAT-CLAUDE: ${id} (environment ${environment.name}) runs ${run.model}; caps: ${run.requests} requests, ${run.timeout} seconds; events in ${events}`);
     const ran = await deps.prompt(run, id, folder, events);
@@ -363,10 +416,16 @@ export async function main(argv, deps = REAL) {
     deps.say("BOAT-CLAUDE: finished: RESULT.md is the agent's report, data from the sandbox");
     return 0;
   } catch (e) {
-    if (!id) return stop(oneLine(e?.message));
+    if (!id && !asked) return stop(oneLine(e?.message));
+    if (!id) {
+      deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}; a sandbox may still exist: run 'boat list' and delete what this run left`);
+      return 1;
+    }
     deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}`);
     return 1;
   } finally {
+    offStop?.();
+    if (taskCopy) rmSync(taskCopy, { recursive: true, force: true });
     if (id && !deps.remove(id)) deps.say(`BOAT-CLAUDE: the sandbox ${id} may still exist: run 'boat list' and delete it`);
     if (staged) staged.remove();
     claudeSlot.release();

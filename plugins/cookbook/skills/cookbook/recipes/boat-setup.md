@@ -26,8 +26,8 @@
   hold no customer data, each a path or a folder ending in `/`
   (`... data: fixtures/prices.csv db/migrations/`). It is outside every repository on
   purpose. Its `slots` folder beside it holds one file per run under way.
-- The API key ends on 10 February 2027 (the catalog carries the date). A 401 means it ran
-  out: the owner makes a new one in the dashboard and saves it through the masked key window.
+- The API key (env writes and account.admin, 17 November 2026) ends 17 November 2027. A
+  401: the owner makes a new one in the dashboard and saves it in the masked key window.
 - Proven on 12 November 2026: `small` ready in under a second (Ubuntu 24.04, Node 24).
 - Proven on 14 November 2026: the sandbox step ran on two vetted lockfiles (44 and 15
   seconds, USD 0.0002 and 0.0001), and showed each postinstall script, the hosts asked for
