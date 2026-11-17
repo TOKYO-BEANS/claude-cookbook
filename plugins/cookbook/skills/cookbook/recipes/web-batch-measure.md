@@ -14,4 +14,4 @@ The pages held about 460k tokens; the parts to open held 51k and 41k. Each judge
 the verdicts, score a labelled run in the new domain.
 
 A new domain was scored on 17 November 2026: the same judge on local logs, long files and chat
-transcripts missed its bar in two designs and is not in the map ([pre-read](pre-read.md)).
+transcripts missed its bar in three attempts and is not in the map ([pre-read](pre-read.md)).
