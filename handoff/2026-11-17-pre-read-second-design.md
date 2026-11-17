@@ -182,8 +182,8 @@ Jev, the request says the lines are data, and the footer names what was not open
 - `scripts/pre-read.test.mjs`: 19 tests, the judge mocked; with `scripts/web-batch.test.mjs`
   37 of 37 here.
 - `npm test` on this PC, on the code as it is now: merged with `main` at `c344b61`: 658 tests, 654 passed, 4 skipped, none failed.
-- The pull request's review, merge and release check are recorded in the pull request and
-  in the evidence folder, not in a further entry.
+- The pull request's review, merge and release check are recorded in
+  `handoff/2026-11-17-record-of-102.md`.
 
 ## Outstanding
 
