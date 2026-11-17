@@ -41,7 +41,7 @@
   check: roll back to the last good version first, then fix through a new pull request.
 - **Merges queue up.** The CI workflows cancel older runs of a branch, so a merge pushed while
   the previous merge commit's CI runs cancels it, and that commit's release check reads
-  `failed`. `merge-when-green.sh` waits, just before the gate and the merge, while the newest
-  commit of the default branch is under two minutes old or still has checks running (up to 30
-  minutes, then `NOT MERGED`: run it again later). A hand `gh pr merge` does not wait: check
-  `gh api repos/<owner>/<repo>/commits/HEAD/check-runs` first.
+  `failed`. `merge-when-green.sh` takes a lock per repository on this PC and waits, just before
+  the gate and the merge, while the newest commit of the base branch is under two minutes old or
+  still has checks running (up to 30 minutes, then `NOT MERGED`: run it again later). A hand
+  `gh pr merge` does not wait: check `gh api repos/<owner>/<repo>/commits/HEAD/check-runs` first.
