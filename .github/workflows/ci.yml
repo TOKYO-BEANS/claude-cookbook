@@ -1,0 +1,47 @@
+# The Windows exception to Depot-only CI (owner's yes, 17 November 2026): Depot
+# CI has no Windows sandboxes, and the hooks and helper scripts here run on
+# Windows (PowerShell, .cmd shims, Node on win32). This workflow holds only the
+# Windows job; the Linux checks stay in .depot/workflows. Retire it when Depot
+# CI runs Windows.
+#
+# The runner is GitHub's own, not Depot's: this repository is public, where
+# GitHub's runner is free, and a Depot Windows runner takes a public
+# repository's jobs only once the organisation's runner group allows public
+# repositories. If the repository turns private, use depot-windows-2025.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+      - name: Install Aikido Safe Chain (malware check on npm and pip installs)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $installer = Join-Path $env:RUNNER_TEMP "install-safe-chain.ps1"
+          Invoke-WebRequest "https://github.com/AikidoSec/safe-chain/releases/download/1.5.27/install-safe-chain.ps1" -OutFile $installer -UseBasicParsing -MaximumRetryCount 5 -RetryIntervalSec 5
+          if ((Get-FileHash $installer -Algorithm SHA256).Hash -ne "9B9F329CB3E6EFC3B1BFB8B0B791F546FA52AC6CA791C8E9961C5830936D64F3") { throw "Checksum verification failed for install-safe-chain.ps1" }
+          # Outside the checkout, as the Depot step runs it.
+          Set-Location $env:RUNNER_TEMP
+          & $installer -ci
+      - run: npm ci
+      - run: npm test
