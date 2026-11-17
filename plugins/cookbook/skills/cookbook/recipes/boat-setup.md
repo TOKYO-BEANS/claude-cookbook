@@ -8,10 +8,10 @@
 - **Nothing bills past the plan** by boat's own terms while the wallet is empty and extra
   starts are off, as both were that day: the wallet pays for use above the plan, and a start
   past a limit is billed only with extra starts on. Not tested by running out. Claude never
-  changes the plan, tops up the wallet, turns extra starts on or creates API keys. Without a plan, or with the month's
-  time used up, the sandbox step answers "no result" and every pinned npm update waits for
-  the owner: if boat is ever cancelled, take the step out of the vetting scripts and these
-  recipes in the same change.
+  changes the plan, tops up the wallet, turns extra starts on or creates API keys. With no
+  plan or no time left, the sandbox step answers "no result" and every pinned npm update
+  waits for the owner: if boat is cancelled, take the step out of the vetting scripts and
+  these recipes in one change.
 - **On this PC:** the `boat` command is a shim that decrypts the DPAPI key `boat` into that one
   process and turns the CLI's self-update off (`BOAT_NO_UPDATE=1`). The binary is a pinned copy
   in `~/.local/share/boat`, checked against the checksum list boat publishes; it is not
@@ -27,8 +27,8 @@
   purpose. Its `slots` folder beside it holds one file per run under way.
 - The API key ends on 10 February 2027 (the catalog carries the date). A 401 means it ran
   out: the owner makes a new one in the dashboard and saves it through the masked key window.
-- Proven on 12 November 2026: `boat run --type small` had a sandbox ready in under a second
-  (Ubuntu 24.04, Node 24, Python 3.12), ran a command and deleted it.
+- Proven on 12 November 2026: a `small` sandbox ready in under a second (Ubuntu 24.04,
+  Node 24, Python 3.12, uv).
 - Proven on 14 November 2026: the sandbox step ran on two vetted lockfiles (44 and 15
   seconds, USD 0.0002 and 0.0001), and showed each postinstall script, the hosts asked for
   and what was left running. With the outside code running as `vet`, an install made of
@@ -36,6 +36,9 @@
 - Proven on 16 November 2026, on the paid plan: this repository's `npm test` ran in a
   `small` sandbox in 13 seconds with the upload (about 150 seconds on this PC) and found a
   test that depended on the machine's sort order; five sandboxes ran at once; a `large` one
-  reported 8 CPUs; `boat list --all` was empty afterwards. The lot cost under USD 0.01.
+  reported 8 CPUs; `boat list --all` was empty afterwards. Under USD 0.01 in all.
   `boat-run.mjs` refused its first upload on three Gitleaks findings (made-up test values,
   since rewritten), then sent 176 tracked files and passed the tests in 22 seconds.
+- **The hook** `hooks/boat-route.mjs` denies local tests and `semgrep` in a listed repository,
+  naming the boat-run command (`semgrep ci`: the CI job); give sa-review that command.
+  Windows-only: end `# local-run: <why, 10+ chars>`.

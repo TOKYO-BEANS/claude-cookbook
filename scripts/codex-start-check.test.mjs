@@ -812,13 +812,18 @@ test("the hook as a program: a Claude start prints nothing, an unchecked Codex s
 
 test("hooks.json runs the gate before the three T3 tools that start an agent, and a failed hook blocks", () => {
   const groups = JSON.parse(readFileSync(HOOKS_JSON, "utf8")).hooks.PreToolUse;
-  // Two groups, both pinned whole: the gate first, then the owner-answers hook
-  // (recipes/parallel-chats.md), which can only deny or stay silent and never blocks on failure.
-  assert.equal(groups.length, 2);
+  // Three groups, all pinned whole: the gate first, then the owner-answers hook
+  // (recipes/parallel-chats.md) and the boat route (recipes/boat.md), which can only deny or
+  // stay silent and never block on failure.
+  assert.equal(groups.length, 3);
   assert.equal(groups.filter((g) => JSON.stringify(g).includes("codex-start-gate")).length, 1);
   assert.deepEqual(groups[1], {
     matcher: "AskUserQuestion|mcp__.+__(create_threads|t3_thread_launch)",
     hooks: [{ type: "command", command: '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/owner-answers.mjs"', timeout: 10 }],
+  });
+  assert.deepEqual(groups[2], {
+    matcher: "Bash|PowerShell",
+    hooks: [{ type: "command", command: '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/boat-route.mjs"', timeout: 15 }],
   });
   const [group] = groups;
   const matcher = new RegExp(group.matcher);

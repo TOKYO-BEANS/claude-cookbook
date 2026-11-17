@@ -1,9 +1,9 @@
 # Cloud sandboxes (boat)
 
-boat (boat.dev): Ubuntu virtual machines from the `boat` CLI, on the owner's paid plan since
+boat (boat.dev): Ubuntu VMs from the `boat` CLI, on the owner's paid plan since
 16 November 2026. No plugin, MCP server or skill pack: the CLI is enough.
 
-- **Use it by default** for whatever should not, or need not, run on this PC:
+- **Use it by default** ([a hook](boat-setup.md)) for what does not need this PC:
   - outside code before an install: a fixed step of every vetting, with its own fixed
     command ([vetting-sandbox.md](vetting-sandbox.md));
   - a repository's tests before a push, on Linux, where CI runs them, in seconds;
