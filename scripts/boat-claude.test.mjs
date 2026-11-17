@@ -235,7 +235,7 @@ test("a run stopped at a cap, a failed agent or a missing report exits 1, and th
     }
   }
   // boat new that fails before naming a sandbox: one may exist, so not "not started".
-  const g = fakes({ boat: (argv) => (argv[0] === "new" ? { status: null, error: { code: "ETIMEDOUT" }, stdout: "" } : { status: 0, stdout: "" }) });
+  const g = fakes({ findByName: () => null, boat: (argv) => (argv[0] === "new" ? { status: null, error: { code: "ETIMEDOUT" }, stdout: "" } : { status: 0, stdout: "" }) });
   try {
     assert.equal(await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", g.task], g.deps), 1);
     assert.match(g.said.join(" | "), /may still exist: run 'boat list'/);
@@ -404,24 +404,45 @@ test("a halt that boat confirms neither way: the sandbox is deleted before anyth
   }
 });
 
-test("a Ctrl-C while the sandbox starts: the handler is already on and finds it by the run's name", async () => {
+test("a start that names no sandbox: the run's own name finds it, and it is blocked and deleted", async () => {
   let f;
   f = fakes({
     boat: (argv) => {
       f.calls.push(argv.slice(0, 2).join(" "));
       if (argv[0] === "new") {
         assert.deepEqual(argv.slice(argv.indexOf("--name"), argv.indexOf("--name") + 2), ["--name", "boat-claude-test"]);
-        f.stopHandlers[0](); // the signal arrives during boat new
-        return { status: 0, stdout: '{"event":"created","id":"bx_abcd1234"}\n{"event":"ready","id":"bx_abcd1234"}\n' };
+        return { status: null, error: { code: "ETIMEDOUT" }, stdout: "" };
       }
       return { status: 0, stdout: "{}" };
     },
   });
   try {
-    await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task], f.deps);
+    assert.equal(await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task], f.deps), 1);
     const at = f.calls.indexOf("find boat-claude-test");
     assert.ok(at > 0, f.calls.join(", "));
-    assert.deepEqual(f.calls.slice(at, at + 3), ["find boat-claude-test", "ai block", "delete bx_found1"]);
+    assert.deepEqual(f.calls.slice(at), ["find boat-claude-test", "ai block", "delete bx_found1", "onStop off"]);
+    assert.match(f.said.join(" | "), /its sandbox bx_found1, found by the run's name, is deleted/);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("a delete that fails after an unconfirmed halt is said as it is, and tried once more", async () => {
+  let removes = 0;
+  const f = fakes({
+    prompt: async () => ({ stopped: "the request cap (9 of 5); boat did not confirm the block", failed: null, unconfirmed: true }),
+    remove: () => {
+      removes += 1;
+      return false;
+    },
+  });
+  try {
+    assert.equal(await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task], f.deps), 1);
+    const said = f.said.join(" | ");
+    assert.match(said, /nothing was fetched and the delete is tried once more/);
+    assert.doesNotMatch(said, /was deleted before/);
+    assert.match(said, /may still exist/);
+    assert.equal(removes, 2);
   } finally {
     f.cleanup();
   }

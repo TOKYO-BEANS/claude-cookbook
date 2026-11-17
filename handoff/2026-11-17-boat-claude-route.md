@@ -16,8 +16,9 @@ Gitleaks-scanned, to `~/.local/share/boat-run/claude/`. `recipes/boat-claude.md`
 `boat-run.mjs`'s gate refused every run once the wallet held the proxy's money; it now checks
 boat's own figures instead (next start priced at nothing, starts left, the plan's time). The
 follow-up pull request fixes the four lows of the third fallback review (per-stream line
-buffers, the stop handler on before `boat new`, a delete before any fetch when neither block
-nor interrupt is confirmed, a `main` test for the other runs' reserve).
+buffers; a start that names no sandbox finds it by the run's own name and deletes it; a
+delete before any fetch when neither block nor interrupt is confirmed; a `main` test for
+the other runs' reserve). A signal is handled only after the synchronous `boat new` returns.
 
 **Owner steps, 17 November.** Set safe-for-third-parties and proxy AI credentials on `base`
 by hand (the key had 403 on `environment.write`). Then "Yes, plus account.admin": the DPAPI

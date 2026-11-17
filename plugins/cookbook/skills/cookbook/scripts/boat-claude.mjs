@@ -381,6 +381,7 @@ export async function main(argv, deps = REAL) {
   let taskCopy = null;
   let offStop = null;
   let gone = false; // the sandbox was deleted before the end
+  let name = null; // this run's sandbox name, unique, set before boat new
   try {
     let plan;
     let envs;
@@ -412,14 +413,14 @@ export async function main(argv, deps = REAL) {
     writeFileSync(sent, readFileSync(task));
     const taskScan = deps.scan(join(taskCopy, "task"), taskCopy);
     if (!taskScan.ok) return stop(`the secret scan of the task file: ${taskScan.reason}`);
-    // The stop handler is on before boat new, so a Ctrl-C while the sandbox starts still finds
-    // it, by the run's own name until boat has said its id.
-    const name = deps.runName();
+    // Each run has a name of its own: a start that ends without boat saying the sandbox's id
+    // (a time-out, a cut answer) is found by it and deleted below. A signal is handled only
+    // after boat new returns (it is a synchronous call), so the handler always has the id.
+    name = deps.runName();
     offStop = deps.onStop(() => {
-      const sid = id ?? deps.findByName(name);
-      if (sid) {
-        deps.boat(["ai", "block", sid]);
-        deps.remove(sid);
+      if (id) {
+        deps.boat(["ai", "block", id]);
+        deps.remove(id);
       }
       if (staged) staged.remove();
       if (taskCopy) rmSync(taskCopy, { recursive: true, force: true });
@@ -450,7 +451,7 @@ export async function main(argv, deps = REAL) {
     if (ran.unconfirmed) {
       // Neither the block nor the interrupt was confirmed: nothing is fetched first.
       gone = deps.remove(id);
-      deps.say(`BOAT-CLAUDE: not finished: stopped at ${ran.stopped}; boat confirmed neither the block nor the interrupt, so the sandbox was deleted before anything was fetched`);
+      deps.say(`BOAT-CLAUDE: not finished: stopped at ${ran.stopped}; boat confirmed neither the block nor the interrupt, so ${gone ? "the sandbox was deleted before anything was fetched" : "nothing was fetched and the delete is tried once more"}`);
       return 1;
     }
     const report = deps.exec(id, "cat /home/user/RESULT.md");
@@ -484,7 +485,13 @@ export async function main(argv, deps = REAL) {
   } catch (e) {
     if (!id && !asked) return stop(oneLine(e?.message));
     if (!id) {
-      deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}; a sandbox may still exist: run 'boat list' and delete what this run left`);
+      // boat new was asked and named no sandbox: look for this run's own name.
+      const found = name ? deps.findByName(name) : null;
+      if (found) {
+        deps.boat(["ai", "block", found]);
+        gone = deps.remove(found);
+      }
+      deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}; ${gone ? `its sandbox ${found}, found by the run's name, is deleted` : "a sandbox may still exist: run 'boat list' and delete what this run left"}`);
       return 1;
     }
     deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}`);
