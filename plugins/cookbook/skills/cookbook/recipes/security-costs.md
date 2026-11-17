@@ -5,8 +5,9 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
 - **CodeQL runs on Depot runners in the private repositories** (owner, 17 November 2026):
   `gh api -X PATCH repos/<owner>/<repo>/code-scanning/default-setup -f runner_type=labeled -f runner_label=depot-ubuntu-24.04`.
   The public repository stays on GitHub's runners: its minutes are free, and the Depot runner
-  group does not serve a public repository. Until the standard writes the setting, a new
-  private repository needs the call by hand. Measured on one repository first: 46 seconds
+  group does not serve a public repository. The Stack Atlas standard writes and checks it
+  (Stack-Atlas #217): the onboarding sets it for the repository it brings on, `org --apply`
+  for every repository, and `org --check` and the daily audit read it. Measured on one repository first: 46 seconds
   against 86, and the code-scanning rule was satisfied.
 - **Why.** GitHub Team includes 3,000 Actions minutes a month for private repositories. CodeQL
   (69%) and AI Scan (24%) had used 2,672 by 17 November, and the Actions budget is USD 0 with a
@@ -16,8 +17,8 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   `gh api "organizations/<org>/settings/billing/usage?year=<y>&month=<m>"` (per day,
   repository and SKU) and `.../settings/billing/budgets`. Depot's: `node ~/.local/bin/with-key.mjs
   depot-org DEPOT_TOKEN depot org invoices list` (then `line-items <id>`), finalized months only.
-- **GitHub's AI scanning was turned off** (owner, 17 November 2026): pushes since start no
-  session; the next day's usage read is the last proof. Three switches, each billed as
+- **GitHub's AI scanning was turned off** (owner, 17 November 2026): pushes since then have
+  started no AI scanning session; the next day's usage read is the last proof. Three switches, each billed as
   "Code Security AI Credits" (USD 0.01): `pr_scan` and `repository_scan` through `gh api -X
   PATCH orgs/<org>/code-scanning/ai-scan`, and "Scan for AI applications", which wrote the
   review threads, only on the organisation's Settings, Advanced Security, Global settings.
