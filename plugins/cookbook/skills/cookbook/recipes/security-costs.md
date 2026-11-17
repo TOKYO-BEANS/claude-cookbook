@@ -16,14 +16,13 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   `gh api "organizations/<org>/settings/billing/usage?year=<y>&month=<m>"` (per day,
   repository and SKU) and `.../settings/billing/budgets`. Depot's use needs an organisation
   token, which the key store does not hold: the Depot share is unread, never zero.
-- **GitHub's AI Scan is off** (owner, 17 November 2026):
+- **GitHub's AI Scan: the owner decided to turn it off (17 November 2026); not proven off.**
   `gh api -X PATCH orgs/<org>/code-scanning/ai-scan -f pr_scan=disabled -f repository_scan=disabled`.
   It reviewed every push and wrote the security review threads. It is billed by use as
   "Code Security AI Credits" (USD 0.01 each): USD 136 in 17 days, about USD 0.53 a pull
-  request, plus a quarter of the minutes. A scan still ran 15 minutes after the switch read
-  `disabled`, so the lock is a budget for the SKU `code_security_ai_unit`: USD 0 with a hard
-  stop. Its risk types (agent permissions, prompt injection, data disclosure) go into our
-  own review's rubric.
+  request, plus a quarter of the minutes. Scans still ran after the switch read `disabled`
+  and after a budget for the SKU `code_security_ai_unit` (USD 0, hard stop) was added. Count
+  it as on until a push starts no "Code scanning AI findings" session and the bill stops.
 - **The `ai-review` job is paid in cash once the plan's monthly API credit is used.** It was
   used up on 16 November. From the token counts in the review comments: USD 11 to 27 a day at
   38 to 40 pull requests a day. The owner chose one review, run on the Claude plan by a

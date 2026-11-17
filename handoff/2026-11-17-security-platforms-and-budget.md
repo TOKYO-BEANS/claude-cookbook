@@ -36,17 +36,23 @@ minutes of the private repositories were about to run out.
   second repository's CodeQL run on a normal push used Depot runners. The public repository
   is unchanged.
 - AI Scan: `pr_scan` and `repository_scan` read `disabled` on the organisation and on all
-  eight repositories. That alone did not hold: 15 minutes later a "Code scanning AI
-  findings" run started on this pull request's first push and ran a whole session. So a
-  budget was added for the SKU `code_security_ai_unit`: USD 0, hard stop (`POST
-  organizations/<org>/settings/billing/budgets`, `budget_type: SkuPricing`). What the next
-  push showed is in the pull request.
+  eight repositories. That did not hold: 15 minutes later a "Code scanning AI
+  findings" run started on this pull request's first push and ran a whole session. A budget
+  was then added for the SKU `code_security_ai_unit`: USD 0, hard stop (`POST
+  organizations/<org>/settings/billing/budgets`, `budget_type: SkuPricing`). The next two
+  pushes each ran a whole session again, minutes after the budget. Disabling the workflow
+  (`PUT .../actions/workflows/<id>/disable`) is refused with 422. **AI Scan is not proven
+  off.**
 - The Cookbook: `recipes/security-costs.md` and `options/security-platforms.md` are new;
   `recipes/security.md`, `recipes/ai-review.md`, `recipes/review-threads.md`,
   `options/check.md` and the catalog's GitHub entry say the same. No tool was added or
   retired.
 
 **Outstanding.**
+- AI Scan still runs. Either the budget stops it once the bill catches up (the usage read
+  lags by hours) or the real switch is in the organisation's settings page. Check on a push
+  and in the next day's usage read. Owner: Claude, in the Stack Atlas chat on these
+  settings; if only the settings page can do it, that step is the owner's.
 - Stack Atlas does not write the runner setting or the AI Scan setting yet, and its
   `docs/depot-ci.md` still calls CodeQL on GitHub-hosted runners a permanent exception. Until
   it does, a new private repository gets GitHub's runners, and a re-applied configuration
