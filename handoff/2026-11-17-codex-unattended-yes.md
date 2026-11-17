@@ -20,7 +20,8 @@ today's date in recipes/codex.md through a pull request.").
   either mode.
 - `recipes/codex-limits.md`: "Nothing fences reading" covers both modes. Its section "The
   owner's decisions" moved to the new page `recipes/codex-decisions.md` (the limits page was
-  over the 4000-byte limit), which records the two answers of 17 November word for word
+  over the 4000-byte limit; "Never pointed at" and "Ask first" stay on the limits page,
+  as Graphify asked on 19ec197), which records the two answers of 17 November word for word
   (only the second names full access). The 16 November standing yes keeps its meaning; its
   sentence "a consult still starts supervised" is gone, since the 17 November yes replaces
   it. "Models" and "Cost and no Codex" are unchanged (the first fix head, e5491af, lost them

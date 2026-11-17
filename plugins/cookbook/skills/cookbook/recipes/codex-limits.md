@@ -28,6 +28,12 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 
 What the owner allowed, with dates and words: [codex-decisions](codex-decisions.md).
 
+- **Never pointed at.** Secrets, keys and tokens; customer data; personal data; files outside
+  the repository, beyond Codex's own start-up reading.
+- **Ask first.** Anything else: a repository that is not the owner's, a client's private
+  material, data exports, logs with real users in them. The question names the provider, the
+  model and what would be sent, by path, and why. No yes, no consult.
+
 ## Models
 
 - The Codex page names the models that answered. Refused on the ChatGPT sign-in

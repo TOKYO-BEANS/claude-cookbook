@@ -16,11 +16,6 @@ consult, with dates and words. The checks before the call are on the limits page
   sandbox and `approval_policy = "untrusted"`; only its first command was seen to wait for
   the owner's click (16 November). No mode is both read-only and unattended, so the first
   answer above could not be met as asked; the second is the one in force.
-- **Never pointed at.** Secrets, keys and tokens; customer data; personal data; files outside
-  the repository, beyond Codex's own start-up reading.
-- **Ask first.** Anything else: a repository that is not the owner's, a client's private
-  material, data exports, logs with real users in them. The question names the provider, the
-  model and what would be sent, by path, and why. No yes, no consult.
 - The standing yes answers findings of GitHub's security review: the owner chose it twice on
   16 November over a confirmation before every consult, the second time knowing that the
   sandbox does not fence reading and that the session decides alone.
