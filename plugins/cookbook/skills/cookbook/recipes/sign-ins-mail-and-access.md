@@ -18,9 +18,9 @@
   cloudflare-wrangler CLOUDFLARE_API_TOKEN node ~/.local/share/site-login/inbox/deploy.mjs address
   <name>` (`addresses` lists them, `remove <name>` deletes one); use one address per site. The
   mail gets there either because the account's own address is that inbox address, or through a
-  forwarding rule in the owner's mailbox limited to that site's sender. For any account but
-  Claude's own, either is the owner's decision: whoever receives a site's mail can reset its
-  password.
+  forwarding rule in the owner's mailbox limited to that site's sender. Either is the
+  owner's decision, but for the inbox address of Claude's own accounts above: whoever receives
+  a site's mail can reset its password.
 - **A site behind Cloudflare Access:** `agent-browser access <site>` signs in with an Access
   service token instead of a one-time mail code. A short child process reads the token's client ID
   and secret from the key store and sends them in one request to the site's exact login address;

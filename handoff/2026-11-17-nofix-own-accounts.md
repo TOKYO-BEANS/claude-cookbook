@@ -10,7 +10,7 @@ behind Cloudflare Access only if they truly help; other ideas go to the owner.
   address per service, the login in the vault "Claude", mail kept 15 minutes, so links and
   codes only. No forward for important mail: a service whose mail must be kept is not one only
   Claude uses, and it goes to the owner. The owner's-decision sentence for mail routes now
-  reads "for any account but Claude's own".
+  exempts only the inbox address of Claude's own accounts; a forward stays the owner's decision.
 - `recipes/sign-ins.md`: the `pass-cli item create` example uses `--email
   <service>@in.nofix.dev`. The rule that each new login needs the owner's yes in the current
   chat is unchanged: the owner's decision sets the address, not that stop.
