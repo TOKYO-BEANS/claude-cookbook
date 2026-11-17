@@ -1,11 +1,13 @@
 // The owner-answers hooks (recipes/parallel-chats.md). Several chats work at once and none
-// sees the others, so the owner got the same question in two of them. Three things here:
+// sees the others, so the owner got the same question in two of them. Four things here:
 //  - when a question dialog is shown and when it is answered, a note goes into one local list:
 //    which chat, which repository, when. No question, no option and no answer is ever kept,
 //    not even as a hash on its own;
 //  - before a question dialog, a chat is told once which other chats of its repository put
 //    questions to the owner, so it can read the owner's answer there, in the chat itself;
-//  - before a chat starts a new chat, it is told once to look at the chats that exist.
+//  - before a chat starts a new chat, it is told once to look at the chats that exist;
+//  - before a chat's first change to a file of a repository, it is told once to look at the
+//    chats that exist and at the files the open pull requests change.
 // The list is a pointer, never a source: any chat on this PC could write the file, so what
 // the owner answered is read only from the host's own record of the chat that asked. Every
 // value this module puts in front of a model is a number, a date, or a chat id in one of
@@ -16,9 +18,11 @@ import { createHash } from "node:crypto";
 export const WINDOW_MS = 72 * 3_600_000; // a note points other chats at a chat for three days
 export const OPEN_MS = 12 * 3_600_000; // a dialog with no answer counts as open this long
 export const LAUNCH_PASS_MS = 10 * 60_000;
+export const EDIT_PASS_MS = 4 * 3_600_000; // a chat that runs longer looks again
 export const MAX_SHOWN = 15; // chats named in one denial
 const ASK = "AskUserQuestion";
 const LAUNCH = /^mcp__.+__(create_threads|t3_thread_launch)$/;
+const EDIT = /^(Edit|Write|NotebookEdit)$/;
 
 const str = (v) => (typeof v === "string" ? v : "");
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -178,9 +182,32 @@ const LAUNCH_REASON = [
   "Then call this tool again: it passes for ten minutes.",
 ].join("\n");
 
+// A delegate child works for the chat that started it, which took the look.
+const isDelegate = (env) => str(env.T3CODE_THREAD_ID).startsWith("thread:delegated-task:");
+
+// Two fixed texts: nothing of the call, the file or the branch's name is in either.
+const editReason = (onDefault) => [
+  "Parallel-chats check (the Cookbook, recipes/parallel-chats.md): before this chat's first change in this repository, see whether a chat or a pull request already has the job or the files.",
+  "1. `t3_thread_list` with `allProjects: true`, `settled: false` and `includeSubagents: false`: read the titles and the linked pull requests.",
+  "2. `gh pr list --json number,title,headRefName,files` in this repository: the files each open pull request changes.",
+  "One has the job: change nothing here. Send that chat what you know with `t3_thread_send`, and say in your message which chat has it. One only changes the same files: build on its branch, wait for its merge or keep to other files, and say which.",
+  onDefault ? "This checkout is on the default branch, which every chat without a worktree shares: move to a worktree or a branch of your own before the change." : null,
+  "Then repeat the call: it passes for four hours in this repository.",
+].filter(Boolean).join("\n");
+
+// Before a chat changes a file of a repository: { output, state }. One look per repository,
+// taken again after EDIT_PASS_MS. A subagent and a delegate child are left alone.
+export function decideEdit({ input, env = {}, now, state = {}, repo = "", onDefault = false }) {
+  if (input?.agent_id || isDelegate(env) || !REPO.test(repo)) return { output: null, state };
+  const looks = isObject(state.editLooks) ? state.editLooks : {};
+  const last = Object.hasOwn(looks, repo) && typeof looks[repo] === "number" ? looks[repo] : null;
+  if (last !== null && now - last >= 0 && now - last < EDIT_PASS_MS) return { output: null, state };
+  return { output: deny(editReason(onDefault === true)), state: { ...state, editLooks: { ...looks, [repo]: now } } };
+}
+
 // Before a chat starts a new chat: { output, state }.
 export function decideLaunch({ env = {}, now, state = {} }) {
-  if (str(env.T3CODE_THREAD_ID).startsWith("thread:delegated-task:")) return { output: null, state };
+  if (isDelegate(env)) return { output: null, state };
   const last = typeof state.launchCheckedAt === "number" ? state.launchCheckedAt : null;
   if (last !== null && now - last >= 0 && now - last < LAUNCH_PASS_MS) return { output: null, state };
   return { output: deny(LAUNCH_REASON), state: { ...state, launchCheckedAt: now } };
@@ -211,6 +238,15 @@ export function run({ input, env = {}, now = Date.now(), io }) {
     }
     if (LAUNCH.test(tool) && event === "PreToolUse") {
       const r = decideLaunch({ env, now, state: io.readState(session) });
+      if (r.output) io.writeState(session, r.state);
+      return r.output;
+    }
+    if (EDIT.test(tool) && event === "PreToolUse") {
+      const file = str(input.tool_input?.file_path) || str(input.tool_input?.notebook_path);
+      if (!file || input.agent_id || isDelegate(env)) return null;
+      // The repository is the edited file's own, wherever the chat's folder is.
+      const where = io.checkout(str(input.cwd), file);
+      const r = decideEdit({ input, env, now, state: io.readState(session), repo: str(where?.repo), onDefault: where?.onDefault === true });
       if (r.output) io.writeState(session, r.state);
       return r.output;
     }
