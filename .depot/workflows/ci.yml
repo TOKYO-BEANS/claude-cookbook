@@ -23,6 +23,22 @@ jobs:
           # read-only token (permissions: contents: read).
           persist-credentials: true
           fetch-depth: 0
+      # The standard's Safe Chain step (safe-chain-step.yml in Stack Atlas's
+      # templates/depot-security), unchanged: one release and one checksum in
+      # every job of the workflow.
+      - name: Install Aikido Safe Chain (malware check on npm and pip installs)
+        retry:
+          retries: 3
+          backoff: exponential
+          delay-seconds: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://github.com/AikidoSec/safe-chain/releases/download/1.5.27/install-safe-chain.sh -o "$RUNNER_TEMP/install-safe-chain.sh"
+          echo "600ebddcb3aaf1fd53653a8d7985df44528722c0f5ee7eb9fff86f26a1a4e5a8  $RUNNER_TEMP/install-safe-chain.sh" | sha256sum -c -
+          # Outside the checkout: the installer sources nvm, and nvm stops it (exit 3)
+          # on a .nvmrc naming a Node version that nvm does not hold.
+          cd "$RUNNER_TEMP"
+          sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
       # Version and wheel hashes live in .depot/semgrep-requirements.txt; pip installs
       # only those wheels and refuses any file whose hash does not match.
       - name: Install Semgrep
@@ -33,7 +49,11 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m venv "$RUNNER_TEMP/semgrep"
-          "$RUNNER_TEMP/semgrep/bin/python" -m pip install --require-hashes --no-deps --only-binary :all: -r .depot/semgrep-requirements.txt
+          # Through Safe Chain. A venv's own python, called by path, goes around
+          # Safe Chain's wrappers: so the venv comes first on PATH and safe-chain
+          # starts its python by name. Without Safe Chain this line fails; it
+          # never installs unchecked. Do not change it back to a path.
+          PATH="$RUNNER_TEMP/semgrep/bin:$PATH" env -u PKG_EXECPATH safe-chain python -m pip install --require-hashes --no-deps --only-binary :all: -r .depot/semgrep-requirements.txt
           # The lock overrides Semgrep's mcp and OpenTelemetry pins (GHSA-84m7-p3x7-pcfv,
           # GHSA-xcq7-p3pf-p88h; see the lock's header): pip check may report exactly these
           # four conflicts, in any order, and nothing else.
