@@ -45,8 +45,10 @@ export const LIMITS = { maxParts: 2000 };
 export const MIN_TEXT_CHARS = 200; // a shorter file is read directly, without a Jev call
 export const COMPACTION_PLUGIN = "fast-jev-compaction-atlas@";
 
-// The bar a labelled run is scored against (recipes/pre-read-measure.md). Written before
-// the first call; change it only with a new measurement.
+// The bar a labelled run is scored against (recipes/pre-read.md). Written before the first
+// call; change it only with a new measurement. Two more points have no number: a question
+// must not lose every relevant part, and recall must be above the keyword rule's
+// (`someFound_met` and `aboveFixedRule_met` in scoreRun).
 export const BAR = { recall: 0.9, falseAnswers: 0.1, openShare: 0.35 };
 
 // ---------- the question wording, in one place ----------
@@ -169,42 +171,109 @@ export function privateMatcher(roots) {
   return new RegExp(parts.join("|"));
 }
 
-// In a root, or above one (a chat that ran in Desktop saw every project under it).
+// In a root, or above one (a chat that ran in Desktop saw every project under it). Stricter
+// than the plugin's function in one place: a folder that cannot be compared counts as private
+// here, where the plugin leaves that doubt to its caller.
 export function touchesPrivateRoot(dir, roots) {
   const d = normalizeDir(dir);
-  if (d === null) return true; // doubt is private
+  if (d === null) return true;
   return roots.some((root) => {
     const r = normalizeDir(root);
     return r === null || d === r || d.startsWith(r + "\\") || r.startsWith(d + "\\");
   });
 }
 
-// Why a source is not sent, or null when it may be. `markerNames` is the listing of the
-// plugin's private-session folder; `cwds` are the folders a chat ran in.
-export function privateReason({ path, text, roots = [], markerNames = [], cwds = [] }) {
-  const session = lastName(path).replace(/\.jsonl$/i, "").toLowerCase();
-  if (markerNames.some((n) => String(n).toLowerCase() === `${session}.json`)) return "the chat is marked private";
-  if (roots.length === 0) return null;
-  const d = normalizeDir(path);
-  if (d === null) return "its path cannot be compared with the private folders";
-  for (const root of roots) {
-    const r = normalizeDir(root);
-    if (r === null || d === r || d.startsWith(r + "\\")) return "it is in a private folder";
+// The lines of a text that are JSON objects (a chat transcript is one per line).
+function jsonObjects(text) {
+  const out = [];
+  for (const raw of String(text).replace(/^﻿/, "").split("\n")) {
+    const line = raw.trim();
+    if (!line.startsWith("{")) continue;
+    try {
+      const j = JSON.parse(line);
+      if (j && typeof j === "object") out.push(j);
+    } catch {
+      /* not JSON: the raw text is checked as it is */
+    }
   }
-  if (cwds.some((c) => touchesPrivateRoot(c, roots))) return "the chat ran in or above a private folder";
+  return out;
+}
+
+const MAX_SCAN_NODES = 5_000_000;
+// Whether any string in `value` (keys included, any depth) names a root; null when the
+// structure is too large to say. The plugin's mentionsPrivateRoot: a path inside a JSON
+// string is matched as the string reads, not as its escaped form in the file.
+function stringsName(value, matcher) {
+  const stack = [value];
+  let nodes = 0;
+  while (stack.length > 0) {
+    if (++nodes > MAX_SCAN_NODES) return null;
+    const item = stack.pop();
+    if (typeof item === "string") {
+      if (matcher.test(normalizeText(item))) return true;
+    } else if (Array.isArray(item)) {
+      for (const child of item) stack.push(child);
+    } else if (item && typeof item === "object") {
+      for (const [key, child] of Object.entries(item)) stack.push(key, child);
+    }
+  }
+  return false;
+}
+
+// Why a source is not sent, or null when it may be. `path` is the real path and `typedPath`
+// the one given; `text` is the file as read and `partTexts` the parts as they would be sent
+// (a chat rendered, a log without colour codes): a folder is looked for in both forms.
+// `markerNames` is the listing of the plugin's private-session folder.
+export function privateReason({ path, typedPath, text = "", partTexts = [], roots = [], markerNames = [] }) {
+  const paths = [...new Set([path, typedPath].filter((p) => typeof p === "string"))];
+  const objects = jsonObjects(text);
+  // A chat is known by its file name, by a folder above it (a subagent's chat lies in a
+  // folder named after its session) and by the session ids its lines carry.
+  const ids = new Set();
+  for (const p of paths) for (const segment of p.split(/[\\/]/)) ids.add(segment.replace(/\.jsonl$/i, "").toLowerCase());
+  for (const o of objects) if (typeof o.sessionId === "string") ids.add(o.sessionId.toLowerCase());
+  if (markerNames.some((n) => /\.json$/i.test(String(n)) && ids.has(String(n).slice(0, -5).toLowerCase()))) return "the chat is marked private";
+  if (roots.length === 0) return null;
+  for (const p of paths) {
+    const d = normalizeDir(p);
+    if (d === null) return "its path cannot be compared with the private folders";
+    for (const root of roots) {
+      const r = normalizeDir(root);
+      if (r === null || d === r || d.startsWith(r + "\\")) return "it is in a private folder";
+    }
+  }
+  // Whatever kind the file was read as: a line that carries a working folder is a chat's.
+  if (objects.some((o) => typeof o.cwd === "string" && touchesPrivateRoot(o.cwd, roots))) return "the chat ran in or above a private folder";
   const matcher = privateMatcher(roots);
-  if (matcher && matcher.test(normalizeText(path))) return "its path names a private folder";
-  if (matcher && matcher.test(normalizeText(text))) return "its text names a private folder";
+  if (!matcher) return null;
+  if (paths.some((p) => matcher.test(normalizeText(p)))) return "its path names a private folder";
+  if (matcher.test(normalizeText(text)) || partTexts.some((t) => matcher.test(normalizeText(t)))) return "its text names a private folder";
+  const inJson = stringsName(objects, matcher);
+  if (inJson === null) return "its text is too large to check for private folders";
+  if (inJson) return "its text names a private folder";
   return null;
 }
 
 // The list for this run: the plugin's option in the user settings, `--private-roots`, and
 // the plugin's markers. `error` is set when any of it cannot be read: nothing is sent then.
+// The messages are fixed words: a parser's own message can quote the settings file.
+// Not read: a list in managed settings or in a file given to Claude Code with `--settings`.
 export function loadPrivacy({ settingsFile = DEFAULTS.settingsFile, markerDir = DEFAULTS.markerDir, extra } = {}) {
   try {
     const options = [];
     if (existsSync(settingsFile)) {
-      const configs = readJson(settingsFile)?.pluginConfigs ?? {};
+      let raw, settings;
+      try {
+        raw = readFileSync(settingsFile, "utf8");
+      } catch (e) {
+        throw new Error(`the settings file was not read (${e.code ?? "error"})`);
+      }
+      try {
+        settings = JSON.parse(raw);
+      } catch {
+        throw new Error("the settings file is not valid JSON");
+      }
+      const configs = settings?.pluginConfigs ?? {};
       if (typeof configs !== "object") throw new Error("pluginConfigs is not an object");
       for (const [id, config] of Object.entries(configs)) {
         if (!id.startsWith(COMPACTION_PLUGIN)) continue;
@@ -215,11 +284,25 @@ export function loadPrivacy({ settingsFile = DEFAULTS.settingsFile, markerDir = 
     }
     if (extra) options.push(extra);
     const { roots, ignored } = resolvePrivateRoots(options);
-    const markerNames = existsSync(markerDir) ? readdirSync(markerDir) : [];
+    let markerNames = [];
+    if (existsSync(markerDir)) {
+      try {
+        markerNames = readdirSync(markerDir);
+      } catch (e) {
+        throw new Error(`the private-session markers were not read (${e.code ?? "error"})`);
+      }
+    }
     return { roots, ignored, markerNames, error: null };
   } catch (e) {
-    return { roots: [], ignored: 0, markerNames: [], error: short(e.message, 120) };
+    return { roots: [], ignored: 0, markerNames: [], error: e.message };
   }
+}
+
+// Why a loaded source may not be sent, with the list as it is now. The plan asks, and the
+// judge asks again with a list read again: a folder or a marker added in between counts.
+function notSent(privacy, source, loaded) {
+  if (!privacy || privacy.error) return `the private-folder list could not be read (${privacy?.error ?? "not loaded"})`;
+  return privateReason({ path: source.path, typedPath: source.typed, text: loaded.text, partTexts: loaded.parts.map((p) => p.text), roots: privacy.roots, markerNames: privacy.markerNames });
 }
 
 // ---------- parts ----------
@@ -309,16 +392,20 @@ export function partsOf(text, kind) {
   }
   // Colour codes in a log are noise; taking them out moves no line.
   const clean = kind === "log" ? text.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, "") : text;
-  return { parts: chunkText(clean, Infinity).chunks, cwds: [] };
+  // A blank part (a line end after a full part) holds nothing to judge.
+  return { parts: chunkText(clean, Infinity).chunks.filter((p) => p.text.trim() !== ""), cwds: [] };
 }
 
 // Reads a source and splits it. Text stays in memory: callers write none of it.
 export function loadSource(path, kindOption) {
   const buf = readFileSync(path);
-  if (buf.subarray(0, 8000).includes(0)) throw new Error("not a text file");
-  const text = buf.toString("utf8");
+  // Windows PowerShell writes a redirected log as UTF-16 with a byte order mark.
+  const utf16 = buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe;
+  if (!utf16 && buf.subarray(0, 8000).includes(0)) throw new Error("not a text file");
+  const text = (utf16 ? buf.subarray(2).toString("utf16le") : buf.toString("utf8")).replace(/^﻿/, "");
   const kind = kindOption ?? detectKind(path, text);
   const { parts, cwds } = partsOf(text, kind);
+  if (kind === "transcript" && parts.length === 0 && text.trim()) throw new Error("no chat messages in it: not a chat transcript");
   return { kind, text, parts, cwds };
 }
 
@@ -360,18 +447,19 @@ export function planStage({ question, files, kind, maxParts, privacy }) {
   if (!files?.length) throw new Error("name at least one file");
   let budget = maxParts;
   const sources = files.map((file, n) => {
-    const s = { i: n + 1, path: resolve(file), name: lastName(file), kind: kind ?? null, status: "ok", error: null, chars: 0, parts: [] };
+    // `typed` is the path as given and `path` the real one: both are checked, and the name
+    // that goes to Jev is the real file's.
+    const s = { i: n + 1, path: resolve(file), typed: resolve(file), name: lastName(file), kind: kind ?? null, status: "ok", error: null, chars: 0, parts: [] };
     let loaded;
     try {
       s.path = realpathSync(s.path);
+      s.name = lastName(s.path);
       loaded = loadSource(s.path, kind);
     } catch (e) {
-      return Object.assign(s, { status: "error", error: `not read: ${short(e.code === "ENOENT" ? "no such file" : e.message, 100)}` });
+      return Object.assign(s, { status: "error", error: `not read: ${short(e.code === "ENOENT" ? "no such file" : (e.code ?? e.message), 100)}` });
     }
     s.kind = loaded.kind;
-    const why = privacy.error
-      ? `the private-folder list could not be read (${privacy.error})`
-      : privateReason({ path: s.path, text: loaded.text, roots: privacy.roots, markerNames: privacy.markerNames, cwds: loaded.cwds });
+    const why = notSent(privacy, s, loaded);
     if (why) return Object.assign(s, { status: "private", error: `not sent: ${why}` });
     s.chars = loaded.parts.reduce((sum, p) => sum + p.text.length, 0);
     const tiny = s.chars < MIN_TEXT_CHARS ? (loaded.text.trim() ? "short" : "empty") : null;
@@ -400,7 +488,13 @@ export async function judgeStage(manifest, providers, opts) {
     try {
       loaded = loadSource(s.path, s.kind);
     } catch (e) {
-      for (const p of pending) p.jevError = `the file could not be read again: ${short(e.message, 80)}`;
+      for (const p of pending) p.jevError = `the file could not be read again: ${short(e.code ?? e.message, 80)}`;
+      continue;
+    }
+    // Asked again on the text just read, with the list as `opts.privacy` holds it now.
+    const why = notSent(opts.privacy, s, loaded);
+    if (why) {
+      Object.assign(s, { status: "private", error: `not sent: ${why}`, parts: [] });
       continue;
     }
     for (const p of pending) {
@@ -532,12 +626,12 @@ const STOP = new Set("the and for was were what which where when why how did doe
 export const contentWords = (question) => [...new Set((String(question).toLowerCase().match(/[a-z0-9][a-z0-9_.-]{2,}/g) ?? []).filter((w) => !STOP.has(w)))];
 
 // The fixed rule Jev has to beat: parts ranked by how many of the question's content
-// words they hold, and as many opened as Jev opened. `texts` maps a part id to its text.
+// words they hold, and as many opened as Jev opened (parts with no word fill the rest, in
+// file order). `texts` maps a part id to its text.
 export function keywordRule(question, rows, texts, opens, labels) {
   const words = contentWords(question);
   const ranked = rows
     .map((p, n) => ({ p, n, hits: words.filter((w) => (texts.get(p.id) ?? "").toLowerCase().includes(w)).length }))
-    .filter((r) => r.hits > 0)
     .sort((a, b) => b.hits - a.hits || a.n - b.n)
     .slice(0, opens);
   const relevant = rows.filter((p) => labels[p.id] === true).length;
@@ -548,24 +642,35 @@ export function keywordRule(question, rows, texts, opens, labels) {
 // labels: { "<part id>": true | false } (true = the part holds what the question asks for).
 // Read only here, after judging; the labels never reach Jev.
 export function scoreRun(manifest, labels, { texts } = {}) {
-  const rows = manifest.sources.flatMap((s) => s.parts).filter((p) => Object.hasOwn(labels, p.id));
-  const total = manifest.sources.reduce((n, s) => n + s.parts.length, 0);
+  const parts = manifest.sources.flatMap((s) => s.parts);
+  const rows = parts.filter((p) => Object.hasOwn(labels, p.id));
+  const total = parts.length;
+  // A label for a part the run does not hold (its file was not read or not sent): when it
+  // says "relevant", that part was not found, and it counts as a miss.
+  const known = new Set(parts.map((p) => p.id));
+  const lost = Object.keys(labels).filter((id) => !known.has(id));
+  const lostRelevant = lost.filter((id) => labels[id] === true);
   const relevant = rows.filter((p) => labels[p.id] === true);
   const opened = rows.filter((p) => OPEN.has(p.verdict));
   const caught = relevant.filter((p) => OPEN.has(p.verdict));
   const answers = rows.filter((p) => p.verdict === "answers");
   const falseAnswers = answers.filter((p) => labels[p.id] === false);
   const chars = (list) => list.reduce((sum, p) => sum + p.chars, 0);
-  const recall = relevant.length ? caught.length / relevant.length : null;
+  const relevantCount = relevant.length + lostRelevant.length;
+  const recall = relevantCount ? caught.length / relevantCount : null;
   const fixedRule = texts ? keywordRule(manifest.question, rows, texts, opened.length, labels) : null;
   const score = {
     labelled: rows.length,
     unlabelled: total - rows.length,
-    relevant: relevant.length,
+    labelsWithoutPart: lost.length,
+    relevant: relevantCount,
     caught: caught.length,
     recall,
     caughtWithRelated: relevant.filter((p) => OPEN.has(p.verdict) || p.verdict === "related").length,
-    missed: relevant.filter((p) => !OPEN.has(p.verdict)).map((p) => ({ id: p.id, verdict: p.verdict, reason: p.reason })),
+    missed: [
+      ...relevant.filter((p) => !OPEN.has(p.verdict)).map((p) => ({ id: p.id, verdict: p.verdict, reason: p.reason })),
+      ...lostRelevant.map((id) => ({ id, verdict: "error", reason: "not in the run" })),
+    ],
     answers: answers.length,
     falseAnswers: falseAnswers.map((p) => ({ id: p.id, reason: p.reason })),
     opened: opened.length,
@@ -579,6 +684,8 @@ export function scoreRun(manifest, labels, { texts } = {}) {
   score.bar = {
     ...BAR,
     recall_met: recall === null ? null : recall >= BAR.recall,
+    // A run has one question: it must not lose every relevant part of it.
+    someFound_met: relevantCount ? caught.length > 0 : null,
     falseAnswers_met: answers.length ? falseAnswers.length / answers.length <= BAR.falseAnswers : true,
     openShare_met: score.openShare === null ? null : score.openShare <= BAR.openShare,
     aboveFixedRule_met: fixedRule?.recall == null || recall === null ? null : recall > fixedRule.recall,
@@ -604,7 +711,10 @@ export async function jevWorker(jobsFile, resultsFile, { env = process.env, fetc
         if (!loaded.has(id)) loaded.set(id, loadSource(job.path, job.kind));
         const text = loaded.get(id).parts[job.k - 1]?.text;
         if (text === undefined || sha256(text) !== job.hash) throw new Error("the file changed after the plan: run again");
-        results[n] = await callJev(jevBody({ ...job, text }), { key, fetchImpl, sleep });
+        const r = await callJev(jevBody({ ...job, text }), { key, fetchImpl, sleep });
+        // The API's own error text could quote the request: only the status is kept.
+        if (!r.ok && /^HTTP \d+/.test(r.error)) r.error = r.error.match(/^HTTP \d+/)[0];
+        results[n] = r;
       } catch (e) {
         results[n] = { ok: false, error: short(e.message, 160) };
       }
@@ -724,7 +834,9 @@ export async function main(argv, { providers, log = console.log } = {}) {
     if (!m) throw new Error(`no manifest.json in ${outDir}; run the plan stage first`);
     if (stage === "judge") {
       if (o.question && o.question !== m.question) throw new Error("--question differs from the run's question");
-      m = await judgeStage(m, p, opts);
+      // Read again, not taken from the plan: the list may have changed since.
+      const privacy = loadPrivacy({ settingsFile: o.settingsFile, markerDir: o.markerDir, extra: o.privateRoots });
+      m = await judgeStage(m, p, { ...opts, privacy });
       writeJson(manifestFile, m);
     } else if (stage === "report") {
       const { text, summary } = renderReport(m, outDir);

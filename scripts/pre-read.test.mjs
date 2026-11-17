@@ -44,7 +44,7 @@ const byWord = (table) => (text) => {
 };
 async function runAll(dir, files, m, extra = {}) {
   const manifest = planStage({ question: QUESTION, files, kind: extra.kind, maxParts: extra.maxParts ?? 400, privacy: extra.privacy ?? NO_PRIVACY });
-  await judgeStage(manifest, m.providers, { model: "jev-1.14.0", cacheDir: join(dir, "cache") });
+  await judgeStage(manifest, m.providers, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), privacy: extra.judgePrivacy ?? extra.privacy ?? NO_PRIVACY });
   return manifest;
 }
 const part = (m, id) => m.sources.flatMap((s) => s.parts).find((p) => p.id === id);
@@ -162,13 +162,31 @@ test("private folders: the plugin's rules decide, before anything is read by the
   assert.equal(ask({ path: "C:\\Users\\u\\.claude\\projects\\C--Work-Secret\\0a1b.jsonl" }), "its path names a private folder");
   assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: 'cd "C:\\\\Work\\\\Secret" && npm test' }), "its text names a private folder");
   assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: "see /c/work/secret/readme" }), "its text names a private folder");
-  assert.equal(ask({ path: "C:\\Work\\Open\\0a1b.jsonl", cwds: ["C:\\Work"] }), "the chat ran in or above a private folder");
+  const ranIn = (cwd) => JSON.stringify({ type: "user", cwd, message: { role: "user", content: "hello" } });
+  // A chat that ran above a root, whatever kind the file is read as (a copy named .txt, a byte order mark).
+  assert.equal(ask({ path: "C:\\Work\\Open\\0a1b.jsonl", text: ranIn("C:\\Work") }), "the chat ran in or above a private folder");
+  assert.equal(ask({ path: "C:\\Work\\Open\\copy.txt", text: "\uFEFF" + ranIn("C:\\Work") }), "the chat ran in or above a private folder");
   assert.equal(ask({ path: "/home/u/run.log" }), "its path cannot be compared with the private folders");
-  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: "nothing private", cwds: ["C:\\Work\\Open"] }), null);
+  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: "nothing private\n" + ranIn("C:\\Work\\Open") }), null);
+  // The path as typed counts beside the real one (a link into a private folder, or out of one).
+  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", typedPath: "C:\\Work\\Secret\\link.log" }), "it is in a private folder");
+  // A folder named inside a JSON string: in the file the line end before it is written \\n, so only the string as it reads names it.
+  const inJson = JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", content: "grep hits:\nWork/Secret/notes.md" }] } });
+  assert.equal(/(^|[^a-z0-9])work\/secret/.test(inJson.toLowerCase().replace(/[\\/]+/g, "/")), false, "the raw line does not show it");
+  assert.equal(ask({ path: "C:\\Work\\Open\\0a1b.jsonl", text: inJson }), "its text names a private folder");
+  // A folder split by colour codes in a log: the part as it would be sent names it.
+  const coloured = "\x1b[2mC:\\Work\\\x1b[22m\x1b[1mSecret\x1b[22m\\src\\a.ts";
+  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: coloured }), null);
+  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: coloured, partTexts: [partsOf(coloured, "log").parts[0].text] }), "its text names a private folder");
   assert.equal(touchesPrivateRoot("C:\\Work\\Open", roots), false);
   // With no folder marked private everything may go, except a chat the plugin marked.
   assert.equal(privateReason({ path: "/home/u/run.log", text: "x", roots: [] }), null);
-  assert.equal(privateReason({ path: "C:\\p\\0A1B-cd.jsonl", text: "x", roots: [], markerNames: ["README.txt", "0a1b-cd.json"] }), "the chat is marked private");
+  const markerNames = ["README.txt", "0a1b-cd.json"];
+  assert.equal(privateReason({ path: "C:\\p\\0A1B-cd.jsonl", text: "x", roots: [], markerNames }), "the chat is marked private");
+  // A subagent's chat lies in a folder named after the marked session, and its lines carry that id.
+  assert.equal(privateReason({ path: "C:\\p\\0a1b-cd\\subagents\\agent-a1.jsonl", text: "x", roots: [], markerNames }), "the chat is marked private");
+  assert.equal(privateReason({ path: "C:\\p\\copy.jsonl", text: JSON.stringify({ type: "user", sessionId: "0A1B-CD" }), roots: [], markerNames }), "the chat is marked private");
+  assert.equal(privateReason({ path: "C:\\p\\other.jsonl", text: JSON.stringify({ type: "user", sessionId: "ffff" }), roots: [], markerNames }), null);
 });
 
 test("a private source is an error row and never reaches the judge; an unreadable list sends nothing", async () => {
@@ -192,9 +210,9 @@ test("a private source is an error row and never reaches the judge; an unreadabl
     assert.equal(m.calls.judge, 0);
     assert.match(renderReport(manifest, dir).text, /\| 1 \| error \| - \| - \| not sent: /);
     // A broken settings file is doubt: nothing is sent, not even the open file.
-    writeFileSync(settings, "{ not json");
+    writeFileSync(settings, '{ "v": {"X": SETTINGSTEXT');
     const broken = loadPrivacy({ settingsFile: settings, markerDir: join(dir, "none") });
-    assert.ok(broken.error);
+    assert.equal(broken.error, "the settings file is not valid JSON", "fixed words: the parser's message quotes the file");
     const m2 = mocks();
     const closed = await runAll(dir, [outside], m2, { privacy: broken });
     assert.match(closed.sources[0].error, /^not sent: the private-folder list could not be read/);
@@ -202,6 +220,17 @@ test("a private source is an error row and never reaches the judge; an unreadabl
     writeFileSync(settings, JSON.stringify({ pluginConfigs: { "fast-jev-compaction-atlas@claude-local": { options: { privateRoots: 7 } } } }));
     assert.ok(loadPrivacy({ settingsFile: settings, markerDir: join(dir, "none") }).error);
     assert.equal(loadPrivacy({ settingsFile: join(dir, "absent.json"), markerDir: join(dir, "none") }).error, null);
+    // The judge asks again: a folder marked private after the plan stops the send, and so does a missing list.
+    const m3 = mocks({ jev: () => ({ answers: 0.9, about: 0.9 }) });
+    const later = await runAll(dir, [outside], m3, { judgePrivacy: { ...NO_PRIVACY, roots: [dir] } });
+    assert.equal(m3.calls.judge, 0);
+    assert.deepEqual([later.sources[0].status, later.sources[0].parts.length], ["private", 0]);
+    assert.match(renderReport(later, dir).text, /\| 1 \| error \| - \| - \| not sent: /);
+    const m4 = mocks();
+    const planned = planStage({ question: QUESTION, files: [outside], maxParts: 400, privacy: NO_PRIVACY });
+    await judgeStage(planned, m4.providers, { model: "jev-1.14.0", cacheDir: join(dir, "cache") });
+    assert.equal(m4.calls.judge, 0, "no list given to the judge: nothing is sent");
+    assert.match(planned.sources[0].error, /could not be read \(not loaded\)/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -242,6 +271,26 @@ test("missing, binary, empty and short files get a row without a call", async ()
     assert.equal(part(manifest, "3.1").verdict, "doesn't");
     assert.equal(part(manifest, "4.1").verdict, "uncertain");
     assert.match(renderReport(manifest, dir).text, /Errors: 2\./);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a line end after a full part makes no blank part; a UTF-16 log is read; a forced kind that does not fit is an error", async () => {
+  const dir = tmp();
+  try {
+    const full = bulk(["only"]) + "\n";
+    assert.equal(full.length, CHUNK_CHARS);
+    assert.deepEqual(partsOf(full, "file").parts.map((p) => [p.startLine, p.endLine]), [[1, CHUNK_CHARS / 100]]);
+    const wide = join(dir, "wide.log");
+    writeFileSync(wide, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from("FAIL wide line\nsecond", "utf16le")]));
+    assert.equal(loadSource(wide).parts[0].text, "FAIL wide line\nsecond");
+    const log = join(dir, "run.log");
+    writeFileSync(log, bulk(["plain"]));
+    const m = mocks();
+    const manifest = await runAll(dir, [log], m, { kind: "transcript" });
+    assert.equal(m.calls.judge, 0);
+    assert.match(manifest.sources[0].error, /^not read: no chat messages in it/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -293,7 +342,7 @@ test("the worker reads the part from the file, checks its hash and holds the key
     writeFileSync(file, bulk(["WORKERTEXT", "other"]));
     const manifest = planStage({ question: QUESTION, files: [file], maxParts: 400, privacy: NO_PRIVACY });
     let jobs;
-    await judgeStage(manifest, { judge: async (j) => ((jobs = j), j.map(() => ({ ok: false, error: "stop" }))) }, { model: "jev-1.14.0", cacheDir: join(dir, "cache") });
+    await judgeStage(manifest, { judge: async (j) => ((jobs = j), j.map(() => ({ ok: false, error: "stop" }))) }, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), privacy: NO_PRIVACY });
     const jobsFile = join(dir, "jobs.json"), resultsFile = join(dir, "results.json");
     writeFileSync(jobsFile, JSON.stringify(jobs));
     assert.equal(readFileSync(jobsFile, "utf8").includes("WORKERTEXT"), false);
@@ -318,6 +367,9 @@ test("the worker reads the part from the file, checks its hash and holds the key
     // A malformed answer and a missing key are errors too.
     const bad = await jevWorker(jobsFile, resultsFile, { env: { TYPESAFE_API_KEY: "k" }, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ answers: { answers: { type: "noul", noul: 0.8 } } }) }) });
     assert.match(bad[1].error, /malformed Jev answer for "about"/);
+    // The API's error text could quote the request: only the status reaches the results.
+    const refused = await jevWorker(jobsFile, resultsFile, { env: { TYPESAFE_API_KEY: "k" }, fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "bad state: rewritten line 3" } }) }) });
+    assert.equal(refused[1].error, "HTTP 400");
     const noKey = await jevWorker(jobsFile, resultsFile, { env: {}, fetchImpl: async () => assert.fail("no call without a key") });
     assert.ok(noKey.every((r) => !r.ok && /TYPESAFE_API_KEY missing/.test(r.error)));
   } finally {
@@ -341,14 +393,19 @@ test("score: recall, false answers, the share to open and the keyword rule; labe
     assert.deepEqual(s.falseAnswers.map((f) => f.id), ["1.3"]);
     assert.deepEqual([s.answers, s.opened, s.openedNotRelevant], [3, 3, 1]);
     assert.equal(s.openShare, 0.75);
-    // The keyword rule opens the three parts that hold the question's words: 1 and 4, and misses part 2.
+    // The keyword rule opens as many parts as Jev did: 4 and 1 hold the question's words, and the next in file order (2) fills the third place.
     assert.deepEqual(contentWords(QUESTION), ["unit", "test", "job", "fail"]);
-    assert.deepEqual([s.fixedRule.opened, s.fixedRule.caught, s.fixedRule.recall], [2, 1, 0.5]);
-    assert.deepEqual([s.bar.recall_met, s.bar.falseAnswers_met, s.bar.openShare_met, s.bar.aboveFixedRule_met], [true, false, false, true]);
+    assert.deepEqual([s.fixedRule.opened, s.fixedRule.caught, s.fixedRule.recall], [3, 2, 1]);
+    assert.equal(keywordRule(QUESTION, manifest.sources[0].parts.slice(0, 4), texts, 2, labels).recall, 0.5, "two places: parts 4 and 1, and part 2 is missed");
+    assert.deepEqual([s.bar.recall_met, s.bar.someFound_met, s.bar.falseAnswers_met, s.bar.openShare_met, s.bar.aboveFixedRule_met], [true, true, false, false, false]);
     assert.deepEqual([BAR.recall, BAR.falseAnswers, BAR.openShare], [0.9, 0.1, 0.35]);
     // A missed relevant part is listed with its verdict; an error is a miss, not a pass.
     const miss = scoreRun(manifest, { "1.5": true });
-    assert.deepEqual([miss.recall, miss.missed[0].id, miss.missed[0].verdict, miss.bar.recall_met], [0, "1.5", "doesn't", false]);
+    assert.deepEqual([miss.recall, miss.missed[0].id, miss.missed[0].verdict, miss.bar.recall_met, miss.bar.someFound_met], [0, "1.5", "doesn't", false, false]);
+    // A label for a part the run does not hold (its file was not read) is a miss, not a dropped row.
+    const lost = scoreRun(manifest, { "1.2": true, "2.1": true, "2.2": false });
+    assert.deepEqual([lost.labelled, lost.labelsWithoutPart, lost.relevant, lost.caught, lost.recall], [1, 2, 2, 1, 0.5]);
+    assert.deepEqual(lost.missed, [{ id: "2.1", verdict: "error", reason: "not in the run" }]);
     assert.equal(keywordRule("why?", [], new Map(), 3, {}).recall, null);
   } finally {
     rmSync(dir, { recursive: true, force: true });

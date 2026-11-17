@@ -30,7 +30,8 @@ question, and a table names the line ranges to open.
    product's live records are another question). Never sent, and shown as an `error` row: a
    file in a folder of the compaction plugin's `privateRoots` ([compaction](compaction.md)), a
    file whose text or path names one, a chat that ran in or above one or that the plugin marked
-   private, and every file when that list cannot be read. `--private-roots` adds folders.
+   private, and every file when that list cannot be read. The judge reads the list again.
+   `--private-roots` adds folders; a list in managed settings is not read.
 5. What is written, in `~/.local/share/pre-read`: line ranges, sizes, hashes and
    probabilities. No text of a file or a chat goes into the run folder, the cache or the
    worker's job file: the worker reads each part from the file again and checks its hash. The
