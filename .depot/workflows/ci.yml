@@ -55,8 +55,8 @@ jobs:
           # never installs unchecked. Do not change it back to a path.
           PATH="$RUNNER_TEMP/semgrep/bin:$PATH" env -u PKG_EXECPATH safe-chain python -m pip install --require-hashes --no-deps --only-binary :all: -r .depot/semgrep-requirements.txt
           # The lock overrides Semgrep's mcp and OpenTelemetry pins (GHSA-84m7-p3x7-pcfv,
-          # GHSA-xcq7-p3pf-p88h; see the lock's header): pip check may report exactly these
-          # four conflicts, in any order, and nothing else.
+          # GHSA-xcq7-p3pf-p88h and GHSA-mf5v-w3w3-f6cg; see the lock's header): pip check
+          # may report exactly these four conflicts, in any order, and nothing else.
           accepted=(
             "semgrep 1.182.0 has requirement mcp==1.29.0, but you have mcp 1.30.0."
             "semgrep 1.182.0 has requirement opentelemetry-api~=1.37.0, but you have opentelemetry-api 1.45.2."
@@ -75,10 +75,18 @@ jobs:
             exit 1
           fi
           semgrep ci --supply-chain --no-suppress-errors --json-output="$RUNNER_TEMP/semgrep.json"
-      # Our own gate, versioned here instead of in the Semgrep account policy: fail only
-      # on a reachable vulnerable dependency of high or critical severity. A code
-      # finding is CodeQL's to gate, and an unreachable one never fails the job.
-      # Prints rule and location only, never code.
+      # Our own gate, versioned here instead of in the Semgrep account policy: fail on
+      # a vulnerable dependency of high or critical severity unless Semgrep classes
+      # it unreachable, and on any dependency it classes malicious. The classes are
+      # Semgrep's own (exposure_type in its cli/src/semgrep/rule_match.py): an
+      # "upgrade-only" or "malicious" rule is reachable whatever sca_info.reachable
+      # says ("vulnerable even without usage"); a "legacy" rule does not look for
+      # reachability, so it is undetermined and blocks like a reachable one; any
+      # other rule is what that field says, and a field that is neither true nor
+      # false is undetermined. A result it cannot read (sca_info or metadata of
+      # another shape) fails it at any severity. Until 17 November 2026 the gate
+      # read only the field. A code finding is CodeQL's to gate. Prints rule and
+      # location only, never code.
       - name: Gate on reachable vulnerable dependencies
         run: |
           python3 - "$RUNNER_TEMP/semgrep.json" <<'PY'
@@ -88,17 +96,39 @@ jobs:
               sys.exit(1)
           data = json.load(open(sys.argv[1]))
           high = {"ERROR", "HIGH", "CRITICAL"}
-          blocking = []
+          def exposure(extra, sca):
+              meta = extra.get("metadata")
+              if not isinstance(sca, dict) or not isinstance(meta, (dict, type(None))):
+                  return "unreadable"
+              kind = (meta or {}).get("sca-kind")
+              if kind in ("upgrade-only", "malicious"):
+                  return kind
+              if kind == "legacy":
+                  return "undetermined"
+              reachable = sca.get("reachable")
+              return "reachable" if reachable is True else "unreachable" if reachable is False else "undetermined"
+          blocking, passed = [], []
           for r in data.get("results", []):
+              if not isinstance(r, dict) or not isinstance(r.get("extra") or {}, dict):
+                  blocking.append(f"a result the gate cannot read [{type(r).__name__}/unreadable]")
+                  continue
               extra = r.get("extra") or {}
               severity = str(extra.get("severity", "")).upper()
               sca = extra.get("sca_info")
-              if sca is not None and bool(sca.get("reachable")) and severity in high:
-                  blocking.append(f"{r.get('check_id')} {r.get('path')}:{(r.get('start') or {}).get('line')} [{severity}/reachable]")
+              if sca is None:
+                  continue
+              kind = exposure(extra, sca)
+              where = f"{r.get('check_id')} {r.get('path')}:{(r.get('start') or {}).get('line')} [{severity}/{kind}]"
+              if kind in ("malicious", "unreadable") or (severity in high and kind != "unreachable"):
+                  blocking.append(where)
+              elif severity in high:
+                  passed.append(where)
           total = len(data.get("results", []))
-          print(f"Semgrep gate: {total} findings, {len(blocking)} blocking (reachable high/critical dependency)")
+          print(f"Semgrep gate: {total} findings, {len(blocking)} blocking (a high or critical dependency unless Semgrep classes it unreachable; any malicious one)")
           for b in blocking:
               print("  BLOCKING " + b)
+          for p in passed:
+              print("  not blocking " + p)
           sys.exit(1 if blocking else 0)
           PY
 
