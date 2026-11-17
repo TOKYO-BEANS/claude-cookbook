@@ -17,8 +17,8 @@ table names, per part, the few lines to open.
 2. Measured on 17 November 2026 (jev-1.14.0): two CI logs, a 160 kB handoff file and two chat
    transcripts; 167 parts, 14 questions, the relevant lines marked by reader agents that saw
    only the text and the questions. The rows held 278 of 779 relevant lines (36 %; the
-   keyword rule 18 %) and 4 of 32 `answers` rows held none (12.5 %): two points missed. The
-   lines to open were 12.4 % of the text. 42 of the 48 parts with a relevant line were
+   keyword rule 18 %) and 6 of 34 `answers` rows held none (17.6 %): two points missed. The
+   lines to open were 12.4 % of the text. 43 of the 48 parts with a relevant line were
    opened; the lost lines lie in those parts, outside the row, because a part holds several
    relevant places and a Choice names one. About 5.5k Jev input tokens a part.
 3. The first design (three Nouls per part, the whole part opened) found 21 of 21 relevant

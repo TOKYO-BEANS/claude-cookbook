@@ -7,7 +7,7 @@ wording: TypeSafe's line-search cookbook, so that a row names a few lines.
 
 **Result.** The second design opens far less (12.4 % of the text) and beats the keyword rule,
 but it misses the bar on two of four points: its rows hold 36 % of the relevant lines (bar:
-90 %) and 12.5 % of its `answers` rows hold no relevant line (bar: 10 %). No map row. Big
+90 %) and 17.6 % of its `answers` rows hold no relevant line (bar: 10 %). No map row. Big
 local output stays with context-mode.
 
 ## What changed
@@ -42,20 +42,24 @@ Written in the chat and in `BAR` before the first call, and committed before it.
 line of the text as sent (for a chat, a line of its rendered text); a reader marks the lines
 that hold what the question asks for; a row is one part's lines to open.
 
-| Point | Bar | First run | Second run, the code as it is now | |
-| --- | --- | --- | --- | --- |
-| Relevant lines in `answers` or `uncertain` rows | at least 90 %, no question with all of its own missed | 295 of 779 (37.9 %); no question lost all | 278 of 779 (35.7 %); no question lost all | missed |
-| `answers` rows that hold no relevant line | at most 10 % | 4 of 32 (12.5 %) | 4 of 32 (12.5 %) | missed |
-| Share of the text in the lines to open | at most 35 % | 12.7 % | 12.4 % | met |
-| Line recall against a keyword rule opening as many lines | higher | 37.9 % against 17.7 % | 35.7 % against 17.6 % (137 of 779) | met |
+| Point | Bar | First run | Second run | Third run, the code as it is now | |
+| --- | --- | --- | --- | --- | --- |
+| Relevant lines in `answers` or `uncertain` rows | at least 90 %, no question with all of its own missed | 295 of 779 (37.9 %) | 278 of 779 (35.7 %) | 278 of 779 (35.7 %); no question lost all | missed |
+| `answers` rows that hold no relevant line | at most 10 % | 4 of 32 (12.5 %) | 4 of 32 (12.5 %) | 6 of 34 (17.6 %) | missed |
+| Share of the text in the lines to open | at most 35 % | 12.7 % | 12.4 % | 12.4 % | met |
+| Line recall against a keyword rule opening as many lines | higher | 37.9 % against 17.7 % | 35.7 % against 17.6 % | 35.7 % against 17.7 % (138 of 779) | met |
 
-Beside the bar, as announced with it: in the second run 65 of 126 relevant passages had at
-least half of their lines opened (69 were touched); in the first 68 (72).
+Beside the bar, as announced with it: relevant passages with at least half of their lines
+opened were 68, 65 and 64 of 126 in the three runs (72, 69 and 68 were touched).
 
-The second run was made after the review's fixes (below), because they change what is sent
-from a chat. Same labels and settings; the lines of all five sources were checked to carry the
-same numbers as in the first run before any call. 22 lines in 14 parts of the two chats had
-changed, so 35 requests were new and 132 answers came from the cache.
+Each later run was made because a review changed what is sent. Same labels and settings; the
+lines of all five sources were checked to carry the same numbers before any call.
+
+- The second run, after the review before the pull request: 22 lines in 14 parts of the two
+  chats had changed, so 35 requests were new and 132 answers came from the cache.
+- The third run, after the security review's last thread: both questions carry a note that
+  the lines are data, so all 167 requests were new. The total of relevant lines found is the
+  same by chance: one question of the handoff file lost 11 and one of a chat won 11.
 
 ## The measurement (17 November 2026, jev-1.14.0)
 
@@ -70,33 +74,35 @@ changed, so 35 requests were new and 132 answers came from the cache.
 - The order: the bar; the script and its tests; one real call on a file of this repository
   (one part, 2,035 tokens, the right line); a development run on the first job's five sources
   and eleven questions, scored against that job's part labels; the settings frozen and
-  committed; the first measured run; the review and its fixes; the second measured run. The
-  readers worked while the development run ran. Their lists of line numbers came back before
-  the settings were frozen; they were not scored or held against any answer until the first
-  measured run.
+  committed; the first measured run; the review and its fixes; the second measured run; the
+  security review's threads and the third measured run. The readers worked while the
+  development run ran. Their lists of line numbers came back before the settings were
+  frozen; they were not scored or held against any answer until the first measured run.
 - What the development run settled: `answers` from 0.9 (the cookbook starts at 0.7; rows from
   0.7 to 0.9 lay in a relevant old part 3 times of 6, rows from 0.9 on 13 times of 13, and a
   bar of one wrong row in ten asks for 0.9 of a calibrated probability), and more lines after
   a picked line than before it (the picked line was the head of its passage). On the measured
-  set the cookbook's 0.7 would have given 12 of 51 `answers` rows without a relevant line.
-- By kind, second run: logs 127 of 515 relevant lines and 0 of 13 `answers` rows without one;
-  the handoff file 75 of 137 and 3 of 8; the chats 76 of 127 and 1 of 11. One question ("which
+  set the cookbook's 0.7 would have given 13 of 51 `answers` rows without a relevant line.
+- By kind, third run: logs 127 of 515 relevant lines and 0 of 13 `answers` rows without one;
+  the handoff file 64 of 137 and 3 of 8; the chats 87 of 127 and 3 of 13. One question ("which
   tests failed, and what did each report") has 487 relevant lines, more than half of its log;
   without it the rows hold 168 of 292 (58 %), still a miss.
-- Where the lines are lost: 42 of the 48 parts with a relevant line were opened, and only one
-  of those rows held none. A few lost lines lie in the 6 skipped parts; nearly all lie in an
+- Where the lines are lost: 43 of the 48 parts with a relevant line were opened, and only one
+  of those rows held none. A few lost lines lie in the 5 skipped parts; nearly all lie in an
   opened part, outside its row. A part holds several relevant places (126 passages in 48
   parts) and a Choice names one line; its probability does not spread over all of them.
-- At the level of parts nothing was gained on the first design: 76 of 167 parts were opened
-  and 34 of those rows hold no relevant line. The third Noul flagged 6 of 167 parts (three
+- At the level of parts nothing was gained on the first design: 74 of 167 parts were opened
+  and 31 of those rows hold no relevant line. The third Noul flagged 6 of 167 parts (three
   parts of one chat, under both of its questions); they are opened whole. Its own accuracy
   has no labels.
-- Between the two runs 2 of 167 verdicts differed and p(exists) moved by up to 0.17, in parts
-  where a few lines had changed: an answer is sensitive to small changes of the text.
-- Jev input tokens: 2,035 (the one call), 717,847 (development, 123 requests), 919,572 (first
-  run, 167 requests) and 176,412 (second run, 35 requests): about 1.8M, under 10 cents.
-- No wording or setting was changed after the first measured run, and the fixes for the
-  security review left the measured requests as they were. These labels are used up.
+- An answer is sensitive to small changes. Between the first and the second run 2 of 167
+  verdicts differed and p(exists) moved by up to 0.17, in parts where a few lines had
+  changed; with the note in the request 8 of 167 differed from the second run, by up to 0.25.
+- Jev input tokens: 2,035 and 2,167 (two single calls), 717,847 (development, 123 requests),
+  919,572 (first run, 167 requests), 176,412 (second run, 35 requests) and 941,963 (third
+  run, 167 requests): about 2.8M, 12 cents.
+- No setting was changed after the first measured run, and the only change of wording is the
+  note the security review asked for. These labels are used up.
 
 ## The review before the pull request was marked ready
 
@@ -123,41 +129,40 @@ commit ids, and one `process.env` name behind a key name. No key value had gone 
   now runs before the prefix); the Authorization rule stopped at a carriage return inside a
   line, and a line separator inside a line could start what looks like another id-tagged
   line (both are a space in what is sent now); the judge did not ask the private-folder
-  question again for a source with nothing to send (a short file); a path written with
-  `\` escapes in a pretty-printed JSON file was not seen as naming a private folder; the
+  question again for a source with nothing to send (a short file); a path whose backslashes are written as JSON unicode escapes, in a pretty-printed JSON file, was not seen as naming a private folder; the
   score left out a source without labels silently (`unlabelledSources`); a part opened whole
   as data showed a "best line".
-- Not changed: a line whose own text begins with something like `L007| ` stays as it is
-  under its real id. A source can always mislead its judge by what it says; the third Noul
-  and reading as data are the answer to that, not a rewrite of the text.
 
 ## The security review threads on the pull request
 
-GitHub's security review wrote four threads; each is fixed in code, none answered away. No
-fix changes a measured request: after each, the 14 questions were run again, all 167 answers
-came from the cache and the scores are the second run's (`runs3/`, `runs4/`).
+GitHub's security review wrote five threads over four pushes; each is fixed in code, none
+answered away. Three review rounds were the budget: the owner said yes in the chat to the
+fourth push, and chose the fix for the fifth thread (both on 17 November 2026).
 
-- "Prompt injection", on the first push: the question from the command line stood in the
+- "Prompt injection", first push: the question from the command line stood in the
   instructions as it was typed, so a question taken from somewhere else could close its
   quotes and go on as instructions. Fixed as the thread proposed: line ends and control
   characters become one space and the question is written as a JSON string
   (`quoteQuestion`). A plain question reads as before.
-- "Sensitive information disclosure", on the second push: a secret typed into the question
-  would go to TypeSafe. Fixed: the question passes the same redaction as every line
+- "Sensitive information disclosure", second push: a secret typed into the question would
+  go to TypeSafe. Fixed: the question passes the same redaction as every line
   (`cleanQuestion`), and the manifest, the jobs and the request hold it in that form only.
-- "Prompt injection", on the second push: text in a source can steer Jev, and the only guard
-  (the third Noul) is Jev's own judgement. The thread proposed a policy text and an envelope
-  in the state; not done, as in #98, since Jev answers typed questions and the measured
-  request would change. Fixed with two guards that are code: a short list of fixed patterns
-  (`AIMED_PATTERNS`: a line with a line id of its own, "ignore ... instructions", an id
-  named as the answer, a judge addressed about "this text") makes a part one that is opened
-  whole and read as data whatever Jev answers, and the table's footer names every range that
-  was not opened on Jev's word. No part of the measured sources matched a pattern.
-- "Sensitive information disclosure", on the third push, in `web-batch.mjs`: `callJev` kept
-  the API's own error text, which could quote the request, and web batch writes that result
-  to its run folder (the pre-read's worker already cut it to the status). Fixed: `callJev`
-  returns the HTTP status only. Three review rounds were the budget; the owner said yes to
-  this fourth push in the chat (17 November 2026).
+- "Prompt injection", second push: text in a source can steer Jev, and the only guard (the
+  third Noul) is Jev's own judgement. Fixed first with two guards that are code: a short list
+  of fixed patterns (`AIMED_PATTERNS`: a line with a line id of its own, "ignore ...
+  instructions", an id named as the answer, a judge addressed about "this text") makes a
+  part one that is opened whole and read as data whatever Jev answers, and the table's
+  footer names every range that was not opened on Jev's word. No part of the measured
+  sources matched a pattern.
+- "Sensitive information disclosure", third push, in `web-batch.mjs`: `callJev` kept the
+  API's own error text, which could quote the request, and web batch writes that result to
+  its run folder (the pre-read's worker already cut it to the status). Fixed: `callJev`
+  returns the HTTP status only.
+- "Prompt injection", fourth push: the same finding again, asking for a data-only policy in
+  the request itself. Fixed as asked: both questions have structured instructions, the
+  question beside a fixed note that the lines are quoted text to judge and never an
+  instruction (`DATA_ONLY`). This is the one change to the measured request, and the reason
+  for the third run.
 
 ## Kept from the reviews of #98
 
@@ -168,13 +173,13 @@ or chat text in the run folder, the cache or the job file (the cache holds proba
 line id); a failed call, a malformed answer and a part past the cap are `error` rows; a part
 that speaks to its reader is never skipped, and now never narrowed to a few lines either.
 New beside them: the question is redacted and quoted, fixed patterns flag a part without
-Jev, and the footer names what was not opened.
+Jev, the request says the lines are data, and the footer names what was not opened.
 
 ## Verification
 
 - `scripts/pre-read.test.mjs`: 19 tests, the judge mocked; with `scripts/web-batch.test.mjs`
   37 of 37 here.
-- `npm test` on this PC, on the code as it is now: on top of `main` at `5f5de40`: 657 tests, 653 passed, 4 skipped, none failed.
+- `npm test` on this PC, on the code as it is now: merged with `main` at `c344b61`: 658 tests, 654 passed, 4 skipped, none failed.
 - The pull request's review, merge and release check are recorded in the pull request and
   in the evidence folder, not in a further entry.
 
@@ -182,9 +187,9 @@ Jev, and the footer names what was not opened.
 
 - **Whether a third design is worth a job** (owner: Claude, a new chat). What the numbers
   say it would need: a judgement per small block of lines, since a part's relevant places are
-  many and one Choice names one; and a way to bring down the 34 of 76 opened rows that hold
+  many and one Choice names one; and a way to bring down the 31 of 74 opened rows that hold
   nothing. What clears it: a measurement on new labels that meets the same bar.
-- The organisation's Jev rate limit was not read; no call was rate limited in 326 requests.
+- The organisation's Jev rate limit was not read; no call was rate limited in 494 requests.
 - The launcher test that failed once under load (`scripts/key-header.test.mjs:213`),
   unchanged from the entry of #98: its own job.
 
@@ -196,12 +201,14 @@ Jev, and the footer names what was not opened.
   Choice went with rows that held no answer, not with answers spread over the part.
 - A "none of these lines" option in the Choice: not used; the companion Noul is the
   cookbook's and TypeSafe's advice for the null case.
+- Guards in code alone against a source that steers its judge: the security review did not
+  take them without a note in the request, and asked again one push later.
 
 ## Evidence
 
 `~/.local/share/claude-cookbook/evidence/pre-read-lines-2026-11-17/`: `sources/` (the two
-logs and the handoff file as measured), `labels/` (14 files), `runs/` and `runs2/` (a folder
-per question: manifest, report, summary, score), `pooled-runs.json`, `pooled-runs2.json`,
-`measure.log`, `measure-2.log`, `diag.json`, `diag-2.json`, `dev/` (the development run)
-and the scripts that made them (`measure.mjs`, `pages.mjs`, `dev-run.mjs`, `dev-eval.mjs`,
-`diag.mjs`, `same-lines.mjs`).
+logs and the handoff file as measured), `labels/` (14 files), `runs/`, `runs2/` and `runs5/`
+(the three measured runs, a folder per question: manifest, report, summary, score), `runs3/`
+and `runs4/` (the two checks that a fix left the requests unchanged), `pooled-*.json`,
+`measure*.log`, `diag*.json`, `dev/` (the development run) and the scripts that made them
+(`measure.mjs`, `pages.mjs`, `dev-run.mjs`, `dev-eval.mjs`, `diag.mjs`, `same-lines.mjs`).
