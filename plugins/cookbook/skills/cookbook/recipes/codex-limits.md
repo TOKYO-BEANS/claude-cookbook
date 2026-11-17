@@ -24,20 +24,22 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 - **A narrow brief.** It names the paths the question is about and carries this line: "Read
   only what this question needs, and nothing outside the repository."
 
-## The owner's decisions, 16 and 17 November 2026
+## The owner's decisions
 
-- **The standing yes**, 16 November. With the checks above passed, a session may start a
-  consult on its own judgement, for code in the owner's own repositories, without a question
-  in chat; the report names the model and the repository. The owner chose it twice that day
-  over a confirmation before every consult (asked for by three threads on #63), the second
-  time knowing that the sandbox does not fence reading and that the session decides alone.
-- **Unattended**, 17 November, two yeses in the question dialog: first to Codex started
-  without the owner watching, for second opinions on our own work; then to these words:
-  "without your clicks, with full access, on your own repositories only, after the scan,
-  ignored-files and start checks". It allows the mode; a finding about it is handled as any.
-- **Never pointed at.** Secrets, keys and tokens; customer data; personal data; files outside
-  the repository, beyond Codex's own start-up reading.
-- **Ask first.** Anything else: a repository that is not the owner's, a client's private
-  material, data exports, logs with real users in them. The question names the provider, the
-  model and what would be sent, by path, and why. No yes, no consult.
-- Loosening either is the owner's decision.
+What the owner allowed, with dates and words: [codex-decisions](codex-decisions.md).
+
+## Models
+
+- The Codex page names the models that answered. Refused on the ChatGPT sign-in
+  (16 November 2026): `gpt-6-luna` and `gpt-6.1-sol` ("model is not supported when using
+  Codex with a ChatGPT account"), although the capabilities list shows them.
+- On a refusal, stop that consult and report two things only: the model that was tried and
+  the exact text of the refusal. Never paste the contents of a configuration file into chat,
+  a report or evidence, and never switch model unasked.
+
+## Cost and no Codex
+
+- A consult draws on the allowance of the owner's ChatGPT plan. An API key, bought credits, a
+  faster tier or another plan is spending: ask the owner.
+- Codex off or refusing: say that no second opinion was had. The row's fallback, a
+  `cookbook:review` subagent, is a second look by Claude: name it as that, never as a consult.
