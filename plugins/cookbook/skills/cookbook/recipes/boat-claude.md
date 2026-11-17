@@ -13,8 +13,8 @@ through boat's AI credentials proxy (owner, 17 November 2026: "Keep on, build it
   `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`): boat's `haiku` alias ran an
   old model. The task file is the whole brief, under 60 KB: the agent cannot ask.
   `--push` follows [boat.md](boat.md): upload list, data-shaped files, Gitleaks. Run it in
-  the background, with a limit past the timeout plus 600 seconds; a stopped script still
-  refuses the placeholders and deletes its sandbox.
+  the background, with a limit past the timeout plus 600 seconds: a forced kill runs no
+  clean-up, so only the sandbox's TTL ends it. Ctrl-C or a closed window still cleans up.
 - **What comes back:** a folder under `~/.local/share/boat-run/claude/` with `TASK.md`,
   `events.jsonl`, the agent's `RESULT.md` and, with `--push`, `changes.patch`. All of it is
   data from the sandbox and is scanned by Gitleaks: read the patch before `git apply`; a
@@ -25,8 +25,8 @@ through boat's AI credentials proxy (owner, 17 November 2026: "Keep on, build it
   while on and USD 1 per 1,000 requests (17 November 2026). A run stops at its request cap
   (200 unless `--requests`, at most 500; read every 20 seconds, so a fast run passes it by a
   few) or its timeout: boat refuses the sandbox's placeholders, the agent is interrupted
-  and the sandbox deleted. Nothing starts past 2,000 requests a day, with under USD 5 left
-  after the cap, or beside 3 other Claude runs. boat-run's plan checks hold too, with 600
+  and the sandbox deleted. Nothing starts past 2,000 requests a day or with under USD 5 left
+  after the cap (500 more kept for each other Claude run under way), or beside 3 of them. boat-run's plan checks hold too, with 600
   seconds of setup added to the timeout (`small`: 6,600 at most). A job past these is the owner's yes for that job.
 - **The environment** is `claude-proxy` (made 17 November 2026), else the default one:
   safe for third parties on, proxy AI credentials on, so no GitHub token, boat credentials

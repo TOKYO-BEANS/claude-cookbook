@@ -248,7 +248,7 @@ export function takeSlot(dir, { pid = process.pid, alive = isAlive, max = LIMITS
       renameSync(file, file + UP);
     } catch { /* not renamed: the run stays counted as waiting, the safe side */ }
   };
-  return { file, waiting, up, release };
+  return { file, waiting, others, up, release };
 }
 
 // How a repository is named on the upload list: its origin without the scheme, the user

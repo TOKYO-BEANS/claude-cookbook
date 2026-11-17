@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CLAUDE, ENVIRONMENT, MISSED_READINGS, runPrompt, TASK_BYTES, checkBudget, pickEnvironment, failure, main, newArgv, newId, parseArgs, promptArgv, promptText, requestsOf, sandboxRun } from "../plugins/cookbook/skills/cookbook/scripts/boat-claude.mjs";
+import { CLAUDE, ENVIRONMENT, MISSED_READINGS, longest, runPrompt, TASK_BYTES, checkBudget, pickEnvironment, failure, main, newArgv, newId, parseArgs, promptArgv, promptText, requestsOf, sandboxRun } from "../plugins/cookbook/skills/cookbook/scripts/boat-claude.mjs";
 import { NOT_STARTED } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
 const base = ["--model", "claude-sonnet-5-5", "--timeout", "1800", "--task", "t.md"];
@@ -30,6 +30,10 @@ test("arguments: a full model id, a timeout and a task; caps inside the script's
 
 test("the plan's time counts the setup beside the agent's timeout", () => {
   assert.deepEqual(sandboxRun(args(...base)), { type: "small", timeout: 1800 + CLAUDE.setupSeconds });
+  // The refusal names the most --timeout this script takes, not the sandbox's own limit.
+  assert.equal(longest(args("--model", "claude-haiku-5-5", "--timeout", "6600", "--task", "t")), null);
+  assert.match(longest(args("--model", "claude-haiku-5-5", "--timeout", "6601", "--task", "t")), /small: a --timeout of 6600 at most/);
+  assert.match(longest(args("--model", "claude-haiku-5-5", "--type", "large", "--timeout", "1201", "--task", "t")), /large: a --timeout of 1200 at most/);
 });
 
 const env = (over = {}, base = {}) => ({ environments: [{ name: "base", isDefault: true, safeForThirdParties: false, proxyAiCredentials: false, ...base }, { name: ENVIRONMENT, safeForThirdParties: true, proxyAiCredentials: true, ...over }] });
@@ -53,15 +57,20 @@ const usage = (requests, day = "2026-11-17") => ({ usage: [{ day, requests }, { 
 
 test("the wallet and the day: a run's cap must fit both", () => {
   const run = args(...base, "--requests", "200");
-  assert.equal(checkBudget(run, usage(1800), 29, "2026-11-17"), null);
-  assert.match(checkBudget(run, usage(1801), 29, "2026-11-17"), /a day/);
+  assert.equal(checkBudget(run, usage(1800), 29, "2026-11-17", 0), null);
+  assert.match(checkBudget(run, usage(1801), 29, "2026-11-17", 0), /a day/);
+  // Other Claude runs under way may each still use up to maxRequests: that much is kept.
+  assert.equal(checkBudget(run, usage(1800 - CLAUDE.maxRequests), 29, "2026-11-17", 1), null);
+  assert.match(checkBudget(run, usage(1801 - CLAUDE.maxRequests), 29, "2026-11-17", 1), /kept for 1 other run under way/);
+  assert.match(checkBudget(run, usage(0), CLAUDE.walletFloor + 0.2 + 2 * CLAUDE.maxRequests * 0.001 - 0.01, "2026-11-17", 2), /wallet/);
+  for (const bad of [undefined, -1, 1.5, "1"]) assert.match(checkBudget(run, usage(0), 29, "2026-11-17", bad), /no result/, String(bad));
   // Yesterday's requests do not count against today.
-  assert.equal(checkBudget(run, usage(0), 29, "2026-11-17"), null);
-  assert.equal(checkBudget(run, usage(0), CLAUDE.walletFloor + 0.2, "2026-11-17"), null);
-  assert.match(checkBudget(run, usage(0), CLAUDE.walletFloor + 0.19, "2026-11-17"), /wallet/);
+  assert.equal(checkBudget(run, usage(0), 29, "2026-11-17", 0), null);
+  assert.equal(checkBudget(run, usage(0), CLAUDE.walletFloor + 0.2, "2026-11-17", 0), null);
+  assert.match(checkBudget(run, usage(0), CLAUDE.walletFloor + 0.19, "2026-11-17", 0), /wallet/);
   // A day's figure that cannot be read is no result, never zero.
-  for (const bad of [undefined, "12", NaN, -1]) assert.match(checkBudget(run, { usage: [{ day: "2026-11-17", requests: bad }] }, 29, "2026-11-17"), /no result/, String(bad));
-  for (const [u, w] of [[null, 29], [{}, 29], [usage(0), undefined], [usage(0), NaN]]) assert.match(checkBudget(run, u, w, "2026-11-17"), /no result/);
+  for (const bad of [undefined, "12", NaN, -1]) assert.match(checkBudget(run, { usage: [{ day: "2026-11-17", requests: bad }] }, 29, "2026-11-17", 0), /no result/, String(bad));
+  for (const [u, w] of [[null, 29], [{}, 29], [usage(0), undefined], [usage(0), NaN]]) assert.match(checkBudget(run, u, w, "2026-11-17", 0), /no result/);
 });
 
 test("the boat commands: the narrow environment, a TTL, the task as a file, a full model id", () => {
@@ -97,7 +106,8 @@ function fakes(over = {}) {
   const calls = [];
   const said = [];
   const released = [];
-  const slot = (name) => ({ waiting: 0, up: () => calls.push(`${name} up`), release: () => released.push(name) });
+  const stopHandlers = [];
+  const slot = (name) => ({ waiting: 0, others: 0, up: () => calls.push(`${name} up`), release: () => released.push(name) });
   const deps = {
     limits: () => ({ activeSandboxes: 0, canStart: true, keepGoing: { enabled: false }, subscriptionQuotaSeconds: 2000000, subscriptionRemainingSeconds: 1999000, wallet: { balanceDollars: 29 }, nextStartDollars: 0, starts: { day: { remaining: 147 }, hour: { remaining: 58 }, minute: { remaining: 12 } } }),
     slot: () => slot("slot"),
@@ -125,8 +135,9 @@ function fakes(over = {}) {
       calls.push(`delete ${id}`);
       return true;
     },
-    onStop: () => {
+    onStop: (clean) => {
       calls.push("onStop on");
+      stopHandlers.push(clean);
       return () => calls.push("onStop off");
     },
     outDir: () => join(dir, "out"),
@@ -134,7 +145,7 @@ function fakes(over = {}) {
     say: (l) => said.push(l),
     ...over,
   };
-  return { deps, dir, task, calls, said, released, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  return { deps, dir, task, calls, said, released, stopHandlers, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 test("a finished run: report and patch come back, the sandbox is deleted, both places released", async () => {
@@ -148,8 +159,13 @@ test("a finished run: report and patch come back, the sandbox is deleted, both p
     assert.ok(f.calls.includes("push bx_abcd1234") && f.calls.includes("delete bx_abcd1234") && f.calls.includes("staged removed"));
     assert.deepEqual(f.released.sort(), ["claude", "slot"]);
     assert.ok(f.said.some((l) => /42 proxied requests/.test(l)));
-    // A stopped script cleans up too: the handler is on while the sandbox exists, off after.
+    // The stop handler is on while the sandbox exists, off after; called, it refuses the
+    // placeholders, deletes the sandbox and removes the copies.
     assert.ok(f.calls.indexOf("onStop on") < f.calls.indexOf("onStop off"));
+    assert.equal(f.stopHandlers.length, 1);
+    f.calls.length = 0;
+    f.stopHandlers[0]();
+    assert.deepEqual(f.calls, ["ai block", "delete bx_abcd1234", "staged removed"]);
   } finally {
     f.cleanup();
   }
@@ -241,7 +257,10 @@ function prompted(run, readings) {
   let i = 0;
   const io = {
     start: () => child(),
-    ask: (argv) => asked.push(argv.join(" ")),
+    ask: (argv) => {
+      asked.push(argv.join(" "));
+      return { status: 0 };
+    },
     usageOf: () => {
       const r = readings[Math.min(i, readings.length - 1)];
       i += 1;
@@ -313,6 +332,38 @@ test("a failure line from boat prompt is reported, and every line is kept", asyn
     assert.equal(r.stopped, null);
     assert.match(r.failed, /Claude login required/);
     assert.equal(readFileSync(t.events, "utf8").trim().split(/\r?\n/).length, 2);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("the spend guard: a block boat does not confirm is asked twice and reported", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 5, timeout: 600 };
+  const t = prompted(run, [{ totals: { requests: 9 } }]);
+  t.io.ask = (argv) => {
+    t.asked.push(argv.join(" "));
+    return { status: argv[1] === "block" ? 1 : 0 };
+  };
+  try {
+    const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
+    assert.match(r.stopped, /request cap \(9 of 5\); boat did not confirm the block/);
+    assert.deepEqual(t.asked, ["ai block bx_abcd", "ai block bx_abcd", "interrupt bx_abcd"]);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a halted run ends even when the killed process never closes, so the sandbox is deleted", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 5, timeout: 600 };
+  const t = prompted(run, [{ totals: { requests: 9 } }]);
+  t.io.start = () => {
+    const c = child();
+    c.kill = () => {}; // boat.exe under the launcher keeps the pipes: no "close"
+    return c;
+  };
+  try {
+    const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
+    assert.match(r.stopped, /request cap/);
   } finally {
     t.cleanup();
   }

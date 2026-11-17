@@ -89,6 +89,14 @@ export function parseArgs(argv) {
 // The plan's time this run may take: the agent's timeout and the sandbox's own setup.
 export const sandboxRun = (run) => ({ type: run.type, timeout: run.timeout + CLAUDE.setupSeconds });
 
+// null when the agent's timeout fits one run's share of the plan with the setup beside it;
+// else why not, naming the most --timeout this size takes here (boat-run's own message
+// would name the sandbox's limit, which counts the setup too).
+export function longest(run) {
+  const most = Math.floor(LIMITS.runSeconds / RATE[run.type]) - CLAUDE.setupSeconds;
+  return run.timeout > most ? `one run takes at most ${LIMITS.runSeconds} seconds of the plan's time with ${CLAUDE.setupSeconds} of setup (${run.type}: a --timeout of ${most} at most); more needs the owner's yes` : null;
+}
+
 // The environment a run starts in, { name } or { error }: "claude-proxy" when it exists,
 // else the default one, and only when it passes nothing of the account but the proxied
 // sign-in. `list` is `boat env list --json`.
@@ -104,15 +112,20 @@ export function pickEnvironment(list) {
 
 // null when the wallet and the day's requests leave room for this run's cap, else why not.
 // `usage` is `boat ai usage --json` (the account view); `today` is "YYYY-MM-DD" in UTC.
-export function checkBudget(run, usage, wallet, today) {
+// `others` is how many other Claude runs from this PC hold a place: each may still use up to
+// CLAUDE.maxRequests that boat's figure does not show yet, so that much is kept for each.
+export function checkBudget(run, usage, wallet, today, others) {
   const days = usage?.usage;
   if (!Array.isArray(days) || !(typeof wallet === "number" && Number.isFinite(wallet))) return "no result (the proxy's usage or the wallet could not be read)";
+  if (!(Number.isInteger(others) && others >= 0)) return "no result (the count of Claude runs under way could not be read)";
   const todays = days.filter((d) => d?.day === today);
   if (todays.some((d) => !(Number.isFinite(d?.requests) && d.requests >= 0))) return "no result (today's proxied requests could not be read)";
   const used = todays.reduce((n, d) => n + d.requests, 0);
-  if (used + run.requests > CLAUDE.dayRequests) return `${used} proxied requests today and a cap of ${run.requests} would pass ${CLAUDE.dayRequests} a day: a smaller cap, tomorrow, or the owner's yes`;
-  const after = wallet - run.requests * DOLLARS_PER_REQUEST;
-  if (after < CLAUDE.walletFloor) return `the wallet holds USD ${wallet}; this run's cap could leave less than USD ${CLAUDE.walletFloor}: the owner tops it up or says yes`;
+  const held = others * CLAUDE.maxRequests;
+  const beside = held ? ` and ${held} kept for ${others} other run${others === 1 ? "" : "s"} under way` : "";
+  if (used + held + run.requests > CLAUDE.dayRequests) return `${used} proxied requests today${beside}, and a cap of ${run.requests} would pass ${CLAUDE.dayRequests} a day: a smaller cap, later, or the owner's yes`;
+  const after = wallet - (held + run.requests) * DOLLARS_PER_REQUEST;
+  if (after < CLAUDE.walletFloor) return `the wallet holds USD ${wallet}; this run's cap${beside} could leave less than USD ${CLAUDE.walletFloor}: the owner tops it up or says yes`;
   return null;
 }
 
@@ -223,12 +236,27 @@ export function runPrompt(run, id, folder, events, io = {}) {
     };
     child.stdout.on("data", take);
     child.stderr.on("data", take);
+    let ended = false;
+    const finish = () => {
+      if (ended) return;
+      ended = true;
+      clearInterval(poll);
+      clearTimeout(clock);
+      if (rest) take("\n");
+      done({ stopped, failed });
+    };
     const halt = (why) => {
       if (stopped) return;
-      stopped = why;
-      ask(["ai", "block", id]);
+      // The block is what stops the spending: asked twice before it counts as failed.
+      const blocked = [0, 1].some(() => ask(["ai", "block", id])?.status === 0);
+      stopped = blocked ? why : `${why}; boat did not confirm the block`;
       ask(["interrupt", id]);
-      setTimeout(() => child.kill("SIGKILL"), killMs).unref();
+      // On this PC boat runs under a launcher: killing it may leave boat.exe holding the
+      // pipes, so "close" may never come. The run ends anyway, and main deletes the sandbox.
+      setTimeout(() => {
+        child.kill("SIGKILL");
+        setTimeout(finish, killMs).unref();
+      }, killMs).unref();
     };
     const poll = setInterval(() => {
       let n = null;
@@ -245,12 +273,7 @@ export function runPrompt(run, id, folder, events, io = {}) {
     }, pollMs);
     const clock = setTimeout(() => halt(`the timeout (${run.timeout} seconds)`), run.timeout * 1000);
     child.on("error", () => { failed ??= "boat prompt did not run"; });
-    child.on("close", () => {
-      clearInterval(poll);
-      clearTimeout(clock);
-      if (rest) take("\n");
-      done({ stopped, failed });
-    });
+    child.on("close", finish);
   });
 }
 
@@ -277,8 +300,10 @@ const REAL = {
   exec,
   prompt: runPrompt,
   remove: (id) => removeSandbox(id),
-  // A script that is stopped (Ctrl-C, a closed window, a tool's time limit) still refuses
-  // the sandbox's placeholders and deletes it, so nothing runs on uncounted.
+  // A script stopped by Ctrl-C, Ctrl-Break or a closed window still refuses the sandbox's
+  // placeholders, deletes it and removes its copies. A forced kill (a tool's time limit; on
+  // Windows SIGTERM is never delivered) runs no handler: then only the sandbox's TTL ends it,
+  // and nothing holds the request cap until then.
   onStop: (clean) => {
     const signals = ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"];
     const handler = (sig) => {
@@ -341,7 +366,7 @@ export async function main(argv, deps = REAL) {
       return stop(`no result (${oneLine(e?.message)})`);
     }
     const environment = pickEnvironment(envs);
-    const refusal = gate(sandboxRun(run), plan, slot.waiting) ?? environment.error ?? checkBudget(run, usage, plan?.wallet?.balanceDollars, deps.today());
+    const refusal = longest(run) ?? gate(sandboxRun(run), plan, slot.waiting) ?? environment.error ?? checkBudget(run, usage, plan?.wallet?.balanceDollars, deps.today(), claudeSlot.others);
     if (refusal) return stop(refusal);
     if (run.push !== null) {
       const permit = deps.permit(run.push);
@@ -366,6 +391,8 @@ export async function main(argv, deps = REAL) {
     if (id) offStop = deps.onStop(() => {
       deps.boat(["ai", "block", id]);
       deps.remove(id);
+      if (staged) staged.remove();
+      if (taskCopy) rmSync(taskCopy, { recursive: true, force: true });
     });
     if (!id) {
       const any = /"id":"(bx_[a-z0-9]{4,40})"/.exec(String(made.stdout ?? ""));
