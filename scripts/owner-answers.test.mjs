@@ -261,6 +261,8 @@ test("a new chat is stopped once, then passes for ten minutes", () => {
   // Another chat has its own turn, and a delegate child is left alone.
   assert.equal(run({ input: launch("you"), env: {}, now: NOW + 1000, io: s.io }).hookSpecificOutput.permissionDecision, "deny");
   assert.equal(decideLaunch({ input: launch("kid"), env: { T3CODE_THREAD_ID: "thread:delegated-task:1" }, now: NOW, state: {} }).output, null);
+  // A subagent that starts a chat is stopped like any chat: only its edits are left alone.
+  assert.equal(run({ input: { ...launch("sub"), agent_id: "a1" }, env: {}, now: NOW, io: s.io }).hookSpecificOutput.permissionDecision, "deny");
   assert.equal(s.lines.length, 0, "a launch writes nothing to the list");
 });
 
