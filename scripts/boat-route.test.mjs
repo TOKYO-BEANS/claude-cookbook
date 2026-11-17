@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { decide, find, instead, kind, marked, place, read } from "../plugins/cookbook/hooks/boat-route-lib.mjs";
+import { decide, find, instead, kind, marked, place, read, sh } from "../plugins/cookbook/hooks/boat-route-lib.mjs";
 
 const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/boat-route.mjs", import.meta.url));
 const kinds = (text, opts = {}) => find(text, { cwd: "/w", windows: false, ...opts }).runs.map((r) => r.kind);
@@ -68,7 +68,7 @@ test("the folder: cd before it, npm --prefix, Git Bash drive paths and ~", () =>
 
 test("kind reads only the command word", () => {
   assert.equal(kind(["echo", "npm", "test"]), null);
-  assert.deepEqual(kind(["npm", "test"]), { kind: "npm", dir: null });
+  assert.deepEqual(kind(["CI=1", "timeout", "60", "npm", "--prefix", "sub", "test"]), { kind: "npm", dir: "sub", env: ["CI=1"], words: ["npm", "test"] });
 });
 
 test("the marker keeps a run local only with a reason", () => {
@@ -82,18 +82,36 @@ const REPO = { listed: true, key: "github.com/o/r", top: "C:/w/r", prefix: "", d
 const deps = (repo = REPO) => ({ cwd: (i) => i.cwd, home: "C:/Users/me", windows: true, script: "C:/p/boat-run.mjs", repo: () => repo });
 const ask = (command, tool = "Bash") => ({ tool_name: tool, cwd: "C:/w/r", tool_input: { command } });
 
-test("the command it names instead", () => {
-  const run = (raw, k) => ({ kind: k, raw });
-  assert.equal(instead(run("npm test", "npm"), REPO, { script: "C:/p/boat-run.mjs" }),
-    `node "C:/p/boat-run.mjs" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
-  assert.equal(instead(run("npm test", "npm"), { ...REPO, deps: true, prefix: "sub/" }, { script: "s" }),
+test("the command it names instead, rebuilt from the parsed words", () => {
+  const as = (text, repo = REPO, shell = "bash") => {
+    const [run] = find(text, { shell: shell === "powershell" ? "powershell" : "bash", cwd: "C:/w/r", windows: true }).runs;
+    return instead(run, repo, { script: "s", shell });
+  };
+  assert.equal(as("npm test"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
+  assert.equal(as("npm test", { ...REPO, deps: true, prefix: "sub/" }),
     `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'cd sub && npm ci --ignore-scripts && npm test'`);
-  assert.equal(instead(run("pytest -q", "pytest"), { ...REPO, requirements: true }, { script: "s" }),
+  // The folder option is not passed on: the folder is the run's own (review of #108).
+  assert.equal(as("npm --prefix sub test", { ...REPO, prefix: "sub/" }), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'cd sub && npm test'`);
+  assert.equal(as("pytest -q", { ...REPO, requirements: true }),
     `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest --with-requirements requirements.txt pytest -q'`);
-  assert.equal(instead(run("semgrep scan --config 'p/default'", "semgrep"), { ...REPO, semgrep: "1.140.0" }, { script: "s" }),
-    `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'uvx semgrep@1.140.0 scan --config '\\''p/default'\\'''`);
-  assert.equal(instead(run("npm test -- 'a b'", "npm"), REPO, { script: "s", shell: "powershell" }),
-    `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- ''a b'''`);
+  // Variables stay in front; a timeout wrapper is dropped (boat-run has its own).
+  assert.equal(as("PYTHONPATH=. pytest -q"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'PYTHONPATH=. uv run --with pytest pytest -q'`);
+  assert.equal(as("SEMGREP_SEND_METRICS=off semgrep scan --config p/default", { ...REPO, semgrep: "1.140.0" }),
+    `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'SEMGREP_SEND_METRICS=off uvx semgrep@1.140.0 scan --config p/default'`);
+  assert.equal(as("timeout 600 semgrep scan ."), `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'uvx semgrep scan .'`);
+  assert.equal(as("python -m pytest"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest python3 -m pytest'`);
+  // Quoted words keep their quotes; PowerShell gets its own outer quoting.
+  assert.equal(as(`semgrep scan --config "p/a b"`), `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'uvx semgrep scan --config "p/a b"'`);
+  assert.equal(as("npm test -- 'it''s'", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- "it''s"'`);
+  assert.equal(sh("$x"), "'$x'");
+});
+
+test("review of #108: an odd quote in a commit message's here-document, and a quoted Windows folder", () => {
+  const msg = "git commit -m \"$(cat <<'EOF'\nHook: a 6\" timeout\nnpm test now runs on boat\nEOF\n)\"";
+  assert.deepEqual(kinds(msg), []);
+  assert.equal(decide({ input: ask(msg), deps: deps() }), null);
+  const r = find(String.raw`cd "C:\r\sub" && npm test`, { cwd: "C:/", windows: true }).runs;
+  assert.deepEqual(r.map((x) => x.dir), ["C:/r/sub"]);
 });
 
 test("decide: a listed repository is denied with the route; others run", () => {

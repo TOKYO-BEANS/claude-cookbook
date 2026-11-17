@@ -13,8 +13,27 @@ const MARKER = /^#\s*local-run:\s*(\S.{8,}\S)/i;
 // A small shell reader: enough of bash and PowerShell to tell a command word from a quoted
 // argument (`grep "npm test"` runs grep). Returns the simple commands in order, each with its
 // words and raw text, and the comments.
-export function read(text, shell = "bash") {
+// A here-document's lines are data, not commands: dropped before the read, also inside a
+// quoted `$(cat <<'EOF' ... EOF)`, where an odd quote in the text would otherwise end the
+// string early.
+export function dropHeredocs(text) {
+  const lines = text.split("\n");
+  const out = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    out.push(lines[i]);
+    const ends = [...lines[i].matchAll(/(?<!<)<<(?!<)-?[ \t]*(['"]?)([A-Za-z0-9_.-]+)\1/g)].map((m) => m[2]);
+    for (const d of ends) {
+      while (i + 1 < lines.length && lines[i + 1].trim() !== d) i += 1;
+      i += 1; // the closing line
+      if (i < lines.length) out.push(lines[i].trim() === d ? "" : lines[i]);
+    }
+  }
+  return out.join("\n");
+}
+
+export function read(source, shell = "bash") {
   const ps = shell === "powershell";
+  const text = ps ? source : dropHeredocs(source);
   const esc = ps ? "`" : "\\";
   const seps = ps ? ";&|\n(){}" : ";&|\n(){}`";
   const list = [];
@@ -32,33 +51,9 @@ export function read(text, shell = "bash") {
     words = [];
     start = -1;
   };
-  const heredocs = [];
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i];
     if (start < 0 && !/\s/.test(c) && !seps.includes(c)) start = i;
-    // A here-document's lines are data, not commands: skipped to the line that ends it.
-    if (c === "\n" && heredocs.length) {
-      endCommand(i);
-      let at = i + 1;
-      for (const d of heredocs.splice(0)) {
-        for (;;) {
-          const end = text.indexOf("\n", at);
-          const line = text.slice(at, end < 0 ? text.length : end);
-          at = end < 0 ? text.length : end + 1;
-          if (line.trim() === d || end < 0) break;
-        }
-      }
-      i = at - 1;
-      continue;
-    }
-    if (!ps && c === "<" && text[i + 1] === "<" && text[i + 2] !== "<") {
-      const m = /^-?[ \t]*(['"]?)([A-Za-z0-9_.-]+)\1/.exec(text.slice(i + 2));
-      if (m) {
-        heredocs.push(m[2]);
-        i += 1 + m[0].length;
-        continue;
-      }
-    }
     // A PowerShell here-string, @' ... '@ or @" ... "@: one word.
     if (ps && c === "@" && (text[i + 1] === "'" || text[i + 1] === '"') && /^[ \t]*\r?\n/.test(text.slice(i + 2))) {
       const q = text[i + 1];
@@ -89,7 +84,8 @@ export function read(text, shell = "bash") {
       let j = i + 1;
       let s = "";
       while (j < text.length && text[j] !== '"') {
-        if (text[j] === esc && j + 1 < text.length) j += 1;
+        // bash keeps a backslash in double quotes unless it comes before $ ` " \ or a newline.
+        if (text[j] === esc && j + 1 < text.length && (ps || '$`"\\\n'.includes(text[j + 1]))) j += 1;
         s += text[j];
         j += 1;
       }
@@ -121,11 +117,12 @@ const PS_SHELLS = new Set(["powershell", "pwsh"]);
 const SCRIPT = /\.(m|c)?(j|t)s$/i;
 
 // The words of one command after the wrappers that only start another: `VAR=1`,
-// `timeout 600`, `env`, `time`.
+// `timeout 600`, `env`, `time`. The variables are kept on `env` (boat-run has its own timeout).
 function unwrap(words) {
   let i = 0;
+  const env = [];
   for (;;) {
-    if (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1;
+    if (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) env.push(words[i++]);
     else if (i < words.length && WRAPPERS.has(program(words[i]))) i += 1;
     else if (i < words.length && program(words[i]) === "timeout") {
       i += 1;
@@ -133,49 +130,58 @@ function unwrap(words) {
       i += 1; // the duration
     } else break;
   }
-  return words.slice(i);
+  const out = words.slice(i);
+  out.env = env;
+  return out;
 }
 
 // What kind of heavy run one command is, or null. `dir` is set when the command names its
-// own folder (`npm --prefix x test`).
+// own folder (`npm --prefix x test`); `words` is the command without it and without the
+// wrappers, and `env` its leading variables: what runs on boat.
 export function kind(words) {
   const w = unwrap(words);
   if (!w.length) return null;
+  const found = (k, dir = null, own = w) => ({ kind: k, dir, env: w.env, words: [...own] });
   const p = program(w[0]);
   const rest = w.slice(1);
   if (p === "npm" || p === "pnpm" || p === "yarn") {
     let dir = null;
+    const own = [w[0]];
     for (let i = 0; i < rest.length; i += 1) {
       const a = rest[i];
       if (["--prefix", "-C", "--dir", "--cwd"].includes(a)) {
         dir = rest[i + 1] ?? null;
         i += 1;
-      } else if (a.startsWith("-")) continue;
-      else if (/^(test|t|tst)(:.*)?$/.test(a)) return { kind: "npm", dir };
-      else if ((a === "run" || a === "run-script") && /^test(:.*)?$/.test(rest[i + 1] ?? "")) return { kind: "npm", dir };
-      else return null;
+        continue;
+      }
+      own.push(a);
+      if (a.startsWith("-")) continue;
+      if (/^(test|t|tst)(:.*)?$/.test(a) || ((a === "run" || a === "run-script") && /^test(:.*)?$/.test(rest[i + 1] ?? ""))) {
+        return found("npm", dir, own.concat(rest.slice(i + 1)));
+      }
+      return null;
     }
     return null;
   }
   if (p === "node") {
     for (const a of rest) {
-      if (a === "--test") return { kind: "node", dir: null };
+      if (a === "--test") return found("node");
       if (!a.startsWith("-") && SCRIPT.test(a)) return null;
     }
     return null;
   }
-  if (p === "pytest" || p === "py.test") return { kind: "pytest", dir: null };
+  if (p === "pytest" || p === "py.test") return found("pytest");
   if (["python", "python3", "py"].includes(p)) {
     const m = rest.indexOf("-m");
-    return m >= 0 && program(rest[m + 1] ?? "") === "pytest" ? { kind: "pytest", dir: null } : null;
+    return m >= 0 && program(rest[m + 1] ?? "") === "pytest" ? found("pytest") : null;
   }
   if (["uv", "uvx", "poetry", "pipenv", "pdm", "hatch"].includes(p)) {
-    return rest.some((a) => program(a) === "pytest") ? { kind: "pytest", dir: null } : null;
+    return rest.some((a) => program(a) === "pytest") ? found("pytest") : null;
   }
   if (p === "semgrep") {
     const sub = rest.find((a) => !a.startsWith("-"));
-    if (sub === "ci") return { kind: "semgrep-ci", dir: null };
-    if (sub === "scan" || rest.some((a) => a === "--config" || a === "-c" || a.startsWith("--config="))) return { kind: "semgrep", dir: null };
+    if (sub === "ci") return found("semgrep-ci");
+    if (sub === "scan" || rest.some((a) => a === "--config" || a === "-c" || a.startsWith("--config="))) return found("semgrep");
     return null;
   }
   return null;
@@ -242,19 +248,27 @@ export const marked = (comments) => comments.some((c) => MARKER.test(c));
 
 // The command to run instead, for one run in a listed repository.
 // repo: { top, prefix, deps (package.json lists any), lock, requirements, semgrep (pinned version) }
+// The command is rebuilt from its parsed words with POSIX quoting, so PowerShell text, a
+// wrapper or a folder option of this PC never reaches the sandbox as it was typed.
+export const sh = (w) => (/^[A-Za-z0-9_\/.:=@%+,-]+$/.test(w) ? w : /^[^$`"\\!]*$/.test(w) ? `"${w}"` : `'${w.replace(/'/g, "'\\''")}'`);
+
 export function instead(run, repo, { script, shell = "bash" }) {
-  const cd = repo.prefix ? `cd ${repo.prefix.replace(/\/$/, "")} && ` : "";
-  let inner = run.raw;
+  const cd = repo.prefix ? `cd ${sh(repo.prefix.replace(/\/$/, ""))} && ` : "";
+  const env = (run.env ?? []).map((e) => { const at = e.indexOf("="); return `${e.slice(0, at + 1)}${sh(e.slice(at + 1))}`; });
+  const words = [...run.words];
+  const p = program(words[0]);
+  words[0] = ["python", "py"].includes(p) ? "python3" : p;
   let size = "--timeout 1200";
+  let install = "";
   if (run.kind === "npm" || run.kind === "node") {
-    if (repo.deps) inner = `${repo.lock ? "npm ci" : "npm install"} --ignore-scripts && ${inner}`;
+    if (repo.deps) install = `${repo.lock ? "npm ci" : "npm install"} --ignore-scripts && `;
   } else if (run.kind === "pytest") {
-    if (!/^uvx?\s/.test(inner)) inner = `uv run --with pytest${repo.requirements ? " --with-requirements requirements.txt" : ""} ${inner}`;
+    if (!["uv", "uvx"].includes(p)) words.unshift("uv", "run", "--with", "pytest", ...(repo.requirements ? ["--with-requirements", "requirements.txt"] : []));
   } else {
     size = "--type default --timeout 1800";
-    inner = inner.replace(/^\S*semgrep(\.exe)?/i, `uvx semgrep${repo.semgrep ? `@${repo.semgrep}` : ""}`);
+    words.splice(0, 1, "uvx", `semgrep${repo.semgrep ? `@${repo.semgrep}` : ""}`);
   }
-  const body = `${cd}${inner}`;
+  const body = `${cd}${install}${[...env, ...words.map(sh)].join(" ")}`;
   const quoted = shell === "powershell" ? `'${body.replace(/'/g, "''")}'` : `'${body.replace(/'/g, "'\\''")}'`;
   return `node "${script}" ${size} --push "${repo.top}" -- bash -c ${quoted}`;
 }
