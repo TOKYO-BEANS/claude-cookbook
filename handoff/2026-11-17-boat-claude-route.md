@@ -26,14 +26,17 @@ key `boat` is a new key with environment writes and account.admin (ends 17 Novem
 it made `claude-proxy`. "Revoke both": the old keys "Production" and "claude-proxy" are
 revoked. Turning the proxy on or off still asks the owner (USD 1 a day while on).
 
-**Verification.** Suite on boat at each head (660 tests at `d7f63be`, 0 fail); CI green;
+**Verification.** Suite on boat at each head (660 tests at `d7f63be`, 0 fail; the
+follow-up's 665 or more, 0 fail, at each of its heads); CI green;
 `merge-when-green` merged and the release check passed (`merge verified`). Live: Haiku 5.5
 counted the recipe pages (66) and sent a one-file patch, 6 requests, USD 0.006; caps of 5 and
 3 stopped runs at 9 and 8 requests with the block confirmed; every sandbox deleted.
 
 **Reviews.** The AI review was unavailable on all three heads (credit balance); three
 fallback reviews by `cookbook:review` (6, 6 and 4 findings, the last all low), records on
-#121. Graphify's one P2 was the same as a medium of round two, fixed.
+#121. Graphify's one P2 was the same as a medium of round two, fixed. The follow-up: the
+AI review unavailable as well; fallback reviews of `7768d4a` and `d9a44ed` found two lows
+each, all fixed, records on #123; Graphify reported no issues.
 
 **Dead ends.** `--no-env` carries no sign-in ("Claude login required", while `boat prompt`
 exits 0). `boat scp` fails from this PC; files come back through `boat exec --json`. boat refused

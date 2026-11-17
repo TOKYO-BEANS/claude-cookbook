@@ -488,10 +488,11 @@ export async function main(argv, deps = REAL) {
       // boat new was asked and named no sandbox: look for this run's own name.
       const found = name ? deps.findByName(name) : null;
       if (found) {
+        id = found; // from here on it is this run's sandbox: finally retries a failed delete
         deps.boat(["ai", "block", found]);
         gone = deps.remove(found);
       }
-      deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}; ${gone ? `its sandbox ${found}, found by the run's name, is deleted` : "a sandbox may still exist: run 'boat list' and delete what this run left"}`);
+      deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}; ${gone ? `its sandbox ${found}, found by the run's name, is deleted` : found ? `its sandbox ${found}, found by the run's name, could not be deleted yet; the delete is tried once more` : "a sandbox may still exist: run 'boat list' and delete what this run left"}`);
       return 1;
     }
     deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}`);

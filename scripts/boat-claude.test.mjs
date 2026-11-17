@@ -480,3 +480,23 @@ test("stdout and stderr keep their own partial lines", async () => {
     t.cleanup();
   }
 });
+
+test("a sandbox found by name whose delete fails is named and tried once more", async () => {
+  const deletes = [];
+  const f = fakes({
+    boat: (argv) => (argv[0] === "new" ? { status: null, error: { code: "ETIMEDOUT" }, stdout: "" } : { status: 0, stdout: "{}" }),
+    remove: (id) => {
+      deletes.push(id);
+      return false;
+    },
+  });
+  try {
+    assert.equal(await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task], f.deps), 1);
+    assert.deepEqual(deletes, ["bx_found1", "bx_found1"]);
+    const said = f.said.join(" | ");
+    assert.match(said, /its sandbox bx_found1, found by the run's name, could not be deleted yet/);
+    assert.match(said, /the sandbox bx_found1 may still exist/);
+  } finally {
+    f.cleanup();
+  }
+});
