@@ -75,11 +75,16 @@ test("the wallet and the day: a run's cap must fit both", () => {
 
 test("the boat commands: the narrow environment, a TTL, the task as a file, a full model id", () => {
   const run = args(...base, "--effort", "high");
-  assert.deepEqual(newArgv(run, "C:/t/task.md", ENVIRONMENT), ["new", "--type", "small", "--environment", ENVIRONMENT, "--ttl", String(1800 + CLAUDE.setupSeconds), "--name", "boat-claude", "--file", "TASK.md=C:/t/task.md", "--json"]);
+  assert.deepEqual(newArgv(run, "C:/t/task.md", ENVIRONMENT, "boat-claude-1a2b3c4d"), ["new", "--type", "small", "--environment", ENVIRONMENT, "--ttl", String(1800 + CLAUDE.setupSeconds), "--name", "boat-claude-1a2b3c4d", "--file", "TASK.md=C:/t/task.md", "--json"]);
   const p = promptArgv(run, "bx_abcd", "repo");
   assert.deepEqual(p.slice(0, 9), ["prompt", "bx_abcd", "--provider", "claude", "--model", "claude-sonnet-5-5", "--reasoning-effort", "high", "--json"]);
   assert.match(p[9], /TASK\.md.*\/home\/user\/repo.*RESULT\.md/);
   assert.doesNotMatch(promptText(null), /patch/);
+  // boat names Opus by its own id; the others go as they are.
+  const opus = promptArgv(args("--model", "claude-opus-5-5", "--timeout", "60", "--task", "t"), "bx_abcd", null);
+  assert.equal(opus[opus.indexOf("--model") + 1], "opus-5-5");
+  const haiku = promptArgv(args("--model", "claude-haiku-5-5", "--timeout", "60", "--task", "t"), "bx_abcd", null);
+  assert.equal(haiku[haiku.indexOf("--model") + 1], "claude-haiku-5-5");
 });
 
 test("reading boat's answers", () => {
@@ -131,6 +136,11 @@ function fakes(over = {}) {
       return { ok: true, stdout: "" };
     },
     prompt: async () => ({ stopped: null, failed: null }),
+    runName: () => "boat-claude-test",
+    findByName: (n) => {
+      calls.push(`find ${n}`);
+      return "bx_found1";
+    },
     remove: (id) => {
       calls.push(`delete ${id}`);
       return true;
@@ -348,6 +358,8 @@ test("the spend guard: a block boat does not confirm is asked twice and reported
     const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
     assert.match(r.stopped, /request cap \(9 of 5\); boat did not confirm the block/);
     assert.deepEqual(t.asked, ["ai block bx_abcd", "ai block bx_abcd", "interrupt bx_abcd"]);
+    // The interrupt was confirmed, so main may still fetch before it deletes.
+    assert.equal(r.unconfirmed, false);
   } finally {
     t.cleanup();
   }
@@ -364,6 +376,85 @@ test("a halted run ends even when the killed process never closes, so the sandbo
   try {
     const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
     assert.match(r.stopped, /request cap/);
+  } finally {
+    t.cleanup();
+  }
+});
+
+test("a halt that boat confirms neither way: the sandbox is deleted before anything is fetched", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 5, timeout: 600 };
+  const t = prompted(run, [{ totals: { requests: 9 } }]);
+  t.io.ask = (argv) => {
+    t.asked.push(argv.join(" "));
+    return { status: 1 };
+  };
+  try {
+    assert.equal((await runPrompt(run, "bx_abcd", null, t.events, t.io)).unconfirmed, true);
+  } finally {
+    t.cleanup();
+  }
+  const f = fakes({ prompt: async () => ({ stopped: "the request cap (9 of 5); boat did not confirm the block", failed: null, unconfirmed: true }) });
+  try {
+    assert.equal(await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task, "--push", "."], f.deps), 1);
+    assert.match(f.said.join(" | "), /deleted before anything was fetched/);
+    assert.ok(!f.calls.includes("exec cat"), "nothing fetched");
+    assert.equal(f.calls.filter((c) => c === "delete bx_abcd1234").length, 1, "deleted once, not again at the end");
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("a Ctrl-C while the sandbox starts: the handler is already on and finds it by the run's name", async () => {
+  let f;
+  f = fakes({
+    boat: (argv) => {
+      f.calls.push(argv.slice(0, 2).join(" "));
+      if (argv[0] === "new") {
+        assert.deepEqual(argv.slice(argv.indexOf("--name"), argv.indexOf("--name") + 2), ["--name", "boat-claude-test"]);
+        f.stopHandlers[0](); // the signal arrives during boat new
+        return { status: 0, stdout: '{"event":"created","id":"bx_abcd1234"}\n{"event":"ready","id":"bx_abcd1234"}\n' };
+      }
+      return { status: 0, stdout: "{}" };
+    },
+  });
+  try {
+    await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task], f.deps);
+    const at = f.calls.indexOf("find boat-claude-test");
+    assert.ok(at > 0, f.calls.join(", "));
+    assert.deepEqual(f.calls.slice(at, at + 3), ["find boat-claude-test", "ai block", "delete bx_found1"]);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("main keeps requests for the other Claude runs under way", async () => {
+  const f = fakes({ claudeSlot: () => ({ waiting: 0, others: 2, up: () => {}, release: () => {} }), usage: () => usage(2000 - CLAUDE.requests - 2 * CLAUDE.maxRequests + 1) });
+  try {
+    assert.equal(await main(["--model", "claude-haiku-5-5", "--timeout", "600", "--task", f.task], f.deps), NOT_STARTED);
+    assert.match(f.said.join(" | "), /kept for 2 other runs under way/);
+  } finally {
+    f.cleanup();
+  }
+});
+
+test("stdout and stderr keep their own partial lines", async () => {
+  const run = { model: "claude-haiku-5-5", requests: 500, timeout: 600 };
+  const t = prompted(run, [{ totals: { requests: 1 } }]);
+  t.io.start = () => {
+    const c = child();
+    setImmediate(() => {
+      c.stdout.emit("data", Buffer.from('{"data":{"data":{"limitType":"auth_'));
+      c.stderr.emit("data", Buffer.from("a warning on stderr" + String.fromCharCode(10)));
+      c.stdout.emit("data", Buffer.from('expiry","summary":"Claude login required"}}}' + String.fromCharCode(10)));
+      c.emit("close", 0);
+    });
+    return c;
+  };
+  try {
+    const r = await runPrompt(run, "bx_abcd", null, t.events, t.io);
+    assert.match(r.failed, /Claude login required/);
+    const lines = readFileSync(t.events, "utf8").trim().split(/\r?\n/);
+    assert.deepEqual(lines.sort(), ["a warning on stderr", '{"data":{"data":{"limitType":"auth_expiry","summary":"Claude login required"}}}'].sort());
   } finally {
     t.cleanup();
   }
