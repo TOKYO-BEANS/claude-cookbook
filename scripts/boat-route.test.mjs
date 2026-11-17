@@ -1,14 +1,15 @@
 // The boat route hook (plugins/cookbook/hooks/boat-route*.mjs, recipes/boat.md).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { decide, find, instead, kind, marked, place, read, sh } from "../plugins/cookbook/hooks/boat-route-lib.mjs";
+import { decide, find, instead, kind, marked, place, read, semgrepPin, sh } from "../plugins/cookbook/hooks/boat-route-lib.mjs";
 
 const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/boat-route.mjs", import.meta.url));
+const read_ = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const kinds = (text, opts = {}) => find(text, { cwd: "/w", windows: false, ...opts }).runs.map((r) => r.kind);
 
 test("the test runners and scans it stops, in command position", () => {
@@ -115,6 +116,14 @@ test("the command it names instead, rebuilt from the parsed words", () => {
   // Third review: a quoted argument that looks like a redirection stays; PowerShell's *> goes.
   assert.equal(as(`npm test -- --grep "<x>" 2>&1`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- --grep "<x>"'`);
   assert.equal(as("npm test *> out.txt", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
+});
+
+test("fourth review of #108: the Semgrep pin is read from the hash-locked requirements file", () => {
+  assert.equal(semgrepPin(read_("../.depot/semgrep-requirements.txt")), /^semgrep==([0-9.]+)/m.exec(read_("../.depot/semgrep-requirements.txt"))[1]);
+  assert.equal(semgrepPin("semgrep==1.182.0 \\\n    --hash=sha256:abc"), "1.182.0");
+  assert.equal(semgrepPin("semgrep==1.90.0\n"), "1.90.0");
+  assert.equal(semgrepPin("semgrep-extra==1.0\n"), null);
+  assert.equal(semgrepPin(null), null);
 });
 
 test("third review of #108: what the reader does not model is let through; pytest only as the program", () => {

@@ -39,6 +39,6 @@
   reported 8 CPUs; `boat list --all` was empty afterwards. Under USD 0.01 in all.
   `boat-run.mjs` refused its first upload on three Gitleaks findings (made-up test values,
   since rewritten), then sent 176 tracked files and passed the tests in 22 seconds.
-- **The hook** `hooks/boat-route.mjs` denies a local `npm test`, `node --test`, `pytest` or
-  `semgrep` in a listed repository, naming the boat-run command (sa-review: its test command).
-  One that needs Windows ends `# local-run: <why>`.
+- **The hook** `hooks/boat-route.mjs` denies local tests and `semgrep` in a listed repository,
+  naming the boat-run command (`semgrep ci`: the CI job); give sa-review that command.
+  Windows-only: end `# local-run: <why, 10+ chars>`.

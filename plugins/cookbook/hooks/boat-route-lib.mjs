@@ -262,6 +262,10 @@ export function find(text, { shell = "bash", cwd = ".", home = "", windows = pro
 
 export const marked = (comments) => comments.some((c) => MARKER.test(c));
 
+// The Semgrep version CI pins, from the standard's hash-locked requirements file, whose line
+// is `semgrep==1.182.0 \` with the hashes on the lines after it.
+export const semgrepPin = (text) => /^semgrep==([0-9][0-9A-Za-z.]*)(?=[\s\\;]|$)/m.exec(String(text ?? ""))?.[1] ?? null;
+
 // The command to run instead, for one run in a listed repository.
 // repo: { top, prefix, deps (package.json lists any), lock, requirements, semgrep (pinned version) }
 // The command is rebuilt from its parsed words: a wrapper, a folder option and a redirection
@@ -330,7 +334,7 @@ export function decide({ input, deps }) {
   const reason = [
     `Not run on this PC: ${[...repos].join(", ")} ${repos.size === 1 ? "is" : "are"} on boat-run's upload list, so tests and scans run on boat (recipes/boat.md).`,
     ...lines,
-    "A run that truly needs Windows or this PC (DPAPI, PowerShell, a local app) stays here: end the command with `# local-run: <why>`. The repository's Windows CI job runs its suite on Windows on every push.",
+    "A run that truly needs Windows or this PC (DPAPI, PowerShell, a local app) stays here: end the command with `# local-run: <why>`, a reason of at least ten characters. The repository's Windows CI job runs its suite on Windows on every push.",
   ].join("\n");
   return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } };
 }

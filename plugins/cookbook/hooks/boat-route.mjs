@@ -46,6 +46,7 @@ process.exitCode = 0;
 
 async function repoReader() {
   const { listEntry, normalKey, UPLOAD_LIST } = await import("../skills/cookbook/scripts/boat-run.mjs");
+  const { semgrepPin } = await import("./boat-route-lib.mjs");
   const list = text(UPLOAD_LIST) ?? "";
   const seen = new Map();
   return (dir) => {
@@ -59,7 +60,7 @@ async function repoReader() {
         const origin = git("config", "--get", "remote.origin.url");
         const key = normalKey(origin.status === 0 && origin.stdout.trim() ? origin.stdout.trim() : top);
         const pkg = JSON.parse(text(join(top, prefix, "package.json")) ?? "{}");
-        const pin = /^semgrep==([0-9][0-9A-Za-z.]*)\s*$/m.exec(text(join(top, ".depot", "semgrep-requirements.txt")) ?? "");
+        const pin = semgrepPin(text(join(top, ".depot", "semgrep-requirements.txt")));
         repo = {
           listed: listEntry(key, list) !== null,
           key,
@@ -68,7 +69,7 @@ async function repoReader() {
           deps: Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).length > 0,
           lock: existsSync(join(top, prefix, "package-lock.json")),
           requirements: existsSync(join(top, prefix, "requirements.txt")),
-          semgrep: pin ? pin[1] : null,
+          semgrep: pin,
         };
       }
     }
