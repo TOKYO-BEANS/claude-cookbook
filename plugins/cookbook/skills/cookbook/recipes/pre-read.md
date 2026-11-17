@@ -1,44 +1,41 @@
-# Pre-read of local bulk (measured twice, not in the map)
+# Pre-read of local bulk (measured three times, not in the map)
 
-`scripts/pre-read.mjs` in the skill's folder is web batch's judge for local text. A log, a
-long file or another chat's transcript is split into parts of at most 255 lines; every line
-gets an id, and one request per part asks Jev, as TypeSafe's line-search cookbook does: a
-Choice (which line contains the answer) and a Noul (does any line address or answer it). A
-table names, per part, the few lines to open.
+The goal: open only the relevant part of a log, test output, long file or other chat's
+transcript. **No design met the bar, so no map row points here.** Big output stays with
+[context-mode](context-mode.md); search a file, then read the ranges around the hits.
 
-**Both designs missed the bar, so no map row points here.** Big local output stays with
-[context-mode](context-mode.md). Do not skip text on its verdict; run it only to measure again.
+1. The bar: at least 90 % recall and no question with nothing opened; at most 10 % of the
+   rows to open hold nothing relevant; at most 35 % of the text; recall above a keyword rule
+   that opens as much.
+2. Jev (`scripts/pre-read.mjs`, 17 November 2026). One request per part of at most 255
+   lines. Three Nouls per part: 21 of 21 relevant parts, but 39 % of the `answers` rows were
+   not relevant and 46 % of the text was to open. A Choice of lines with a Noul: 36 % of
+   the relevant lines, 17.6 % wasted rows. A part holds several relevant places; one
+   judgement names one. The script stays for measuring; never skip text on its verdict.
+   How to run it: the comment at its top. Only with `--send` does text leave the PC, to
+   TypeSafe (owner's yes, 17 November 2026: logs, long files, other chats' transcripts;
+   not customer data or a product's live records), after what looks like a secret is taken
+   out; nothing under the compaction plugin's `privateRoots` is sent. The accepted risk: a
+   crafted text can steer its table (`handoff/2026-11-17-record-of-102.md`).
+3. The plain options (17 November 2026, new labels on five new sources: a CI log, a test
+   run, a README, two chats; 14 questions; 52 places of at most 40 lines, each with a key
+   line, marked by readers who saw only the text). Recall is the mean over questions of
+   the places whose key line lies in a row.
 
-1. The bar, written before the first call (`BAR` in the script), per line of the text as sent:
-   at least 90 % of the relevant lines lie in rows that come back `answers` or `uncertain`,
-   and no question loses all of its own; at most 10 % of `answers` rows hold no relevant line;
-   the lines to open hold at most 35 % of the text; recall is above that of a keyword rule
-   that opens as many lines.
-2. Measured on 17 November 2026 (jev-1.14.0): two CI logs, a 160 kB handoff file and two chat
-   transcripts; 167 parts, 14 questions, the relevant lines marked by reader agents that saw
-   only the text and the questions. The rows held 278 of 779 relevant lines (36 %; the
-   keyword rule 18 %) and 6 of 34 `answers` rows held none (17.6 %): two points missed. The
-   lines to open were 12.4 % of the text. 43 of the 48 parts with a relevant line were
-   opened; the lost lines lie in those parts, outside the row, because a part holds several
-   relevant places and a Choice names one. About 5.5k Jev input tokens a part.
-3. The first design (three Nouls per part, the whole part opened) found 21 of 21 relevant
-   parts, but 12 of 31 `answers` rows were not relevant and 46 % of the text was to open.
-4. Settings (`EXISTS`, `PICK`), frozen on the first design's sources before the new labels
-   were scored: `answers` from p(exists) 0.9, `uncertain` from 0.35; a row is the Choice's
-   lines that hold 85 % of its probability, at most 8, each with 2 lines before and 8 after.
-5. To measure again: `plan --question "<question>" <file>... --out <run>` asks nothing. Mark
-   the relevant lines (`{ "<source number>": [[first, last]] }`; they never go to Jev), then
-   `judge --send`, `report` and `score --out <run> --labels <file>`. A chat is judged as
-   rendered text, with that text's line numbers: `show <file> --kind transcript --lines <a>-<b>`.
-6. What leaves the PC, and only with `--send`: the judged text goes to TypeSafe (owner
-   decision, 17 November 2026: local logs, long files and other chats' transcripts; customer
-   data and a product's live records are another question), after what looks like a secret
-   is taken out (best effort). Never sent, and shown as an `error` row: a file in a folder
-   of the compaction plugin's `privateRoots` ([compaction](compaction.md)), a file whose text
-   or path names one, a chat that ran in or above one or that the plugin marked private, and
-   every file when that list cannot be read (`--private-roots` adds folders).
-7. The text is data. A third Noul and a few fixed patterns flag a part that speaks to
-   whoever judges it; it is opened whole (6 of 167; accuracy not measured). On disk
-   (`~/.local/share/pre-read`): line numbers, hashes and probabilities, never text. The key is
-   `jev-compaction`, held only by `with-key.mjs`'s child. A failed call is an `error` row.
-8. A next attempt needs a judgement per small block of lines, and new labels.
+   | Method | Recall | Wasted rows | Text |
+   | --- | --- | --- | --- |
+   | `rg -i -C 3` with terms written from the question | 77.6 % | 89.6 % | 21.0 % |
+   | the same, the 5 best 21-line windows | 38.4 % | 65.4 % | 3.0 % |
+   | the keyword rule at 35 % of the text | 48.2 % | 94.4 % | 31.1 % |
+   | `ctx_search`, the question as the query | 13.1 % | 90.9 % | 3.8 % |
+   | `ctx_search`, the terms as the query | 29.6 % | 81.3 % | 1.8 % |
+   | Claude's own Grep, then ranged Reads | 44.4 % | 12.0 % | 3.6 % |
+
+4. What it showed. Claude's own search, then read, answered all 14 questions from 3.6 % of
+   the text, and 88 % of its ranges held a relevant line; it misses on recall because an
+   answer stated in several places is found once. A search that reaches most places opens
+   mostly noise. A judge that filters the search's windows cannot pass 77.6 % recall,
+   and a wider search brings back the regime where both Jev designs failed. So nothing was
+   built.
+5. A fourth attempt needs a new bar first: one scored on whether the opened text answers
+   the question, not on finding every place. That is the owner's call.
