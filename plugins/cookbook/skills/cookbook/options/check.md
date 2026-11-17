@@ -7,8 +7,8 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   container builds. Weighed: GitHub Actions (kept only for two documented exceptions: the
   Windows checks and CodeQL default setup); CircleCI and Buildkite (a second vendor for the
   same job).
-- **Review of every pull request: the `ai-review` job.** It runs on every same-repository pull
-  request with a fixed rubric and no tools, and its comment on the head commit is part of the
+- **Review of every pull request: the `ai-review` job.** It runs once on a same-repository pull
+  request, when marked ready for review, with a fixed rubric and no tools, and its comment on the head commit is part of the
   merge condition. Weighed: CodeRabbit (ruled out by the owner: do not use it); Greptile and
   similar hosted reviewers (one more service reading every private diff); Macroscope (the same,
   paid per review, and its GitHub app asks for write access to code and workflows; installed
