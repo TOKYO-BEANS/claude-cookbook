@@ -24,8 +24,9 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   and after a budget for the SKU `code_security_ai_unit` (USD 0, hard stop) was added. Count
   it as on until a push starts no "Code scanning AI findings" session and the bill stops.
 - **The `ai-review` job is paid in cash once the plan's monthly API credit is used.** It was
-  used up on 16 November. From the token counts in the review comments: USD 11 to 27 a day at
-  38 to 40 pull requests a day. The owner chose one review, run on the Claude plan by a
+  used up on 16 November. From the token counts in the review comments, a floor: USD 17 to 27 for the
+  40 reviews of 16 November. With no balance the job answers "credit balance too low" and
+  the [fallback review](ai-review-fallback.md) applies. The owner chose one review, run on the Claude plan by a
   reviewer in the session; the API job stays until that is built and measured
   ([ai-review](ai-review.md)).
 - **The purchase when the trial ends, about 28 November 2026.** Secret Protection is USD 19

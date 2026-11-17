@@ -29,7 +29,7 @@ vendors' pricing pages) for one committer and eight repositories. Result: none.
   plan; Semgrep, Snyk and Sonar review security or quality rules only. Macroscope: about five
   times our own review for each pull request, measured on 17 November 2026. None is cheaper
   than one review on the Claude plan.
-- **Depot's larger plan** (USD 200 a month, 20,000 runner minutes): CodeQL needs about 1,500.
+- **Depot's larger plan** (USD 200 a month, 20,000 runner minutes): CodeQL needs under 2,000.
 - **Not found**: an independent 2025 or 2026 comparison of finding quality between CodeQL,
   Semgrep, Snyk Code and Aikido. Hence the measurement on our own code.
 - Prices are list prices read on 17 November 2026; a claim without a link here was in a

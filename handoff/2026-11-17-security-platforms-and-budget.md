@@ -65,8 +65,8 @@ minutes of the private repositories were about to run out.
   key store (17 November 2026, on a question-dialog yes). October 2026: USD 52.69 before VAT
   (the USD 20 plan, 5,265 runner minutes at USD 0.004 = USD 21.06, sandbox compute USD
   11.63). CodeQL's share shows on the November invoice, finalized on 1 December: check it.
-- The Actions budget is unchanged at USD 0 with the hard stop. With CodeQL and AI Scan gone
-  from GitHub's runners, the private repositories use about 10 minutes a day there.
+- The Actions budget is unchanged at USD 0 with the hard stop. With CodeQL moved, and once
+  AI Scan is proven off, the private repositories use about 10 minutes a day there.
 
 **Failures and dead ends.**
 - The `ai-scan` endpoints are not in GitHub's REST docs that were found; the switch was
