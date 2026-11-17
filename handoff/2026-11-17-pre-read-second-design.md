@@ -129,6 +129,16 @@ commit ids, and one `process.env` name behind a key name. No key value had gone 
   under its real id. A source can always mislead its judge by what it says; the third Noul
   and reading as data are the answer to that, not a rewrite of the text.
 
+## The security review thread on the pull request
+
+GitHub's security review wrote one thread on the first push ("prompt injection": the
+question from the command line stood in the instructions as it was typed, so a question
+taken from somewhere else could close its quotes and go on as instructions). Fixed in code,
+as the thread proposed: line ends and control characters in the question become one space
+and the question is written as a JSON string (`quoteQuestion`), with a test. A plain question
+reads as before, so the 14 measured requests are unchanged: run again, all 167 answers came
+from the cache and the scores are the second run's (`runs3/`, `measure-3.log`).
+
 ## Kept from the reviews of #98
 
 `--send` per run and `PRE_READ_SEND` for the worker; every line redacted before anything is

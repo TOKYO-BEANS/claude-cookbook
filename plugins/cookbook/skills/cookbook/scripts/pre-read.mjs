@@ -94,17 +94,22 @@ export const KINDS = {
   transcript: "chat between a user and an AI coding assistant, with the assistant's tool calls and their output",
 };
 export const lineId = (n) => `L${String(n).padStart(3, "0")}`;
+// The question is the caller's text, and it stands in the instructions as a quoted value:
+// line ends and control characters become one space, and JSON quoting escapes a quote or a
+// backslash, so the text cannot close its quotes and go on as instructions. A plain
+// question reads as before: "<question>".
+export const quoteQuestion = (question) => JSON.stringify(String(question).replace(/[\s\p{Cc}]+/gu, " ").trim());
 export const questionsFor = (question, count) => ({
   where: {
     type: "choice",
-    instructions: `Which line of \`lines\` contains the answer to: "${question}"?`,
+    instructions: `Which line of \`lines\` contains the answer to: ${quoteQuestion(question)}?`,
     // The ids carry no description: the state holds the text of each.
     criteria: Object.fromEntries(Array.from({ length: count }, (_, n) => [lineId(n), null])),
   },
   // A Choice always has a top line; this says whether the part holds an answer at all.
   exists: {
     type: "noul",
-    instructions: `Does any line of \`lines\` address or answer: "${question}"?`,
+    instructions: `Does any line of \`lines\` address or answer: ${quoteQuestion(question)}?`,
     criteria: {
       true: "At least one line of `lines` states or directly implies the answer",
       false: "No line of `lines` addresses this",
