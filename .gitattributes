@@ -1,0 +1,4 @@
+# Every text file is checked out with LF, on Windows too. Git for Windows ships
+# core.autocrlf=true, which gives CRLF: pages then no longer fit their byte limits, the shell
+# scripts stop running, and the tests read lines that end in "\r" (the first Windows CI run).
+* text=auto eol=lf
