@@ -25,14 +25,16 @@ jobs:
       matrix:
         os: [windows-2025]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      # Node 26, not the Depot job's 24: the key helpers read the DPAPI store through
+      # node:ffi, which Node 24 lacks, and on 24 the tests of that route skip.
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: "24"
+          node-version: "26"
       - name: Install Aikido Safe Chain (malware check on npm and pip installs)
         shell: pwsh
         run: |
