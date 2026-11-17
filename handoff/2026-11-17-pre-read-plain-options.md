@@ -20,9 +20,9 @@ why.
 ## The measurement (all local; nothing was sent to an outside service)
 
 - **Order.** The bar, the questions and each question's search terms were written to
-  `bar.md` before any source was read. Then the sources, the readers' labels, the rows of
-  B, C and K, their scores; then an addendum for method S, written before S or the
-  context-mode runs were scored.
+  `bar.md` before any source was read. Then the sources, the rows of B, C and K (their
+  script reads no labels), the readers' labels, the scores of B, C and K; then an addendum
+  for method S, written before S or the context-mode runs were scored.
 - **The unit: a place.** At most 40 consecutive lines that hold an answer or a needed piece
   of it, with one key line. Opened: the key line lies in a row. Recall is the mean over
   questions, so a question whose answer is half of its source counts once.
@@ -35,9 +35,9 @@ why.
   pages of about 3,300 bytes and that source's questions, told to read every page and not
   to search. Each reported reading every page (217 in all). 52 places. The page copies and
   the agents' saved search results left the scratchpad: with the two chats' renderings they
-  are in `~/.local/share/backups/pre-read-plain-scratch-2026-11-17/`, since a recursive
-  delete is blocked on this PC. With the owner's yes in the chat (17 November 2026) they
-  were then deleted file by file.
+  were moved to `~/.local/share/backups/pre-read-plain-scratch-2026-11-17/`, since a
+  recursive delete is blocked on this PC, and then, with the owner's yes in the chat
+  (17 November 2026), deleted file by file (247 files).
 - **Methods and scores:**
 
   | Method | Recall | Wasted rows | Text | Above the keyword rule |
@@ -79,6 +79,20 @@ of a twice-failed approach.
 - The scores: `score-*.json` in the evidence folder, recomputed by `score.mjs` from the
   rows and the labels.
 
+## The record of #109 (17 November 2026)
+
+- The one `ai-review` run, on the head `9b42a63` when it was marked ready, posted "review
+  unavailable" (the review key's credit balance is too low). A fallback review by a
+  `cookbook:review` subagent read the whole diff with the base branch's rubric: two low
+  findings, both about this entry's wording, fixed here. Every number in the change matched
+  the evidence's score files.
+- Checks on the head passed (`Depot CI / test`, `Depot CI / semgrep`, `Analyze (actions)`,
+  `Analyze (javascript-typescript)`, `CodeQL`, `test (windows-2025)`, `Graphify`); `Graphify
+  Formal Verification` did not run (Markdown only).
+- Merged by `sa-release` as `1f79f02` ("review gate: allowed (fallback review)"). The
+  release check of `1f79f02`: `verified`, acknowledged, execution 1692, five checks on the
+  merge commit. The installed plugin was updated from `8ee6081` to `1f79f02`.
+
 ## Outstanding
 
 - **A fourth attempt, with an answer-based bar** (owner: Claude, a new chat). The bar
@@ -93,7 +107,7 @@ of a twice-failed approach.
 ## Evidence
 
 `~/.local/share/claude-cookbook/evidence/pre-read-plain-2026-11-17/`: `bar.md` (with its
-addendum), `questions.json`, `labels/labels.json`, `rows/*.json`, `score-*.json` and the
+addendum), `release-cookbook-109-merge.log`, `result-cookbook-109-merge.json`, `questions.json`, `labels/labels.json`, `rows/*.json`, `score-*.json` and the
 scripts (`pages.mjs`, `methods.mjs`, `ctxrows.mjs`, `replay.mjs`, `score.mjs`). The CI log,
 the test output and the README are kept in `sources/`; the two chats' renderings are not
 (make them again with `pre-read.mjs show <file> --kind transcript --lines 1-999999`).
