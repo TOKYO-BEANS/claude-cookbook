@@ -8,12 +8,13 @@ import { CHUNK_CHARS, THRESHOLDS } from "../plugins/cookbook/skills/cookbook/scr
 import {
   BAR, KINDS, LIMITS, QUESTION_IDS,
   contentWords, detectKind, jevBody, jevWorker, judgeStage, keywordRule, loadPrivacy, loadSource, main,
-  normalizeDir, parseArgs, partsOf, planStage, privateReason, questionsFor, renderReport, renderTranscript,
+  normalizeDir, parseArgs, partsOf, planStage, privateReason, questionsFor, redact, redactLine, renderReport, renderTranscript,
   resolvePrivateRoots, route, scoreRun, showLines, touchesPrivateRoot,
 } from "../plugins/cookbook/skills/cookbook/scripts/pre-read.mjs";
 
 const QUESTION = "Why did the unit test job fail?";
 const NO_PRIVACY = { roots: [], ignored: 0, markerNames: [], error: null };
+const SEND = { PRE_READ_SEND: "1" }; // what a run with --send gives its worker
 const tmp = () => mkdtempSync(join(tmpdir(), "pre-read-"));
 const line = (word, n) => `${word} line ${n} `.padEnd(99, "x").slice(0, 99); // 100 characters with its line end
 // A file of one part per word: every line of part k carries `words[k]`, and a part is exactly full.
@@ -25,6 +26,7 @@ const textOf = (job) => loadSource(job.path, job.kind).parts[job.k - 1].text;
 
 // jev: (text, job) -> { answers, about }
 function mocks({ jev = () => ({ answers: 0.05, about: 0.05 }), judge } = {}) {
+  const full = (a) => ({ aimed: 0.02, ...a });
   const calls = { judge: 0, jobs: [] };
   return {
     calls,
@@ -33,7 +35,7 @@ function mocks({ jev = () => ({ answers: 0.05, about: 0.05 }), judge } = {}) {
         calls.judge++;
         calls.jobs.push(...jobs);
         if (judge) return judge(jobs);
-        return jobs.map((job) => ({ ok: true, model: "jev-1.14.0", usage: { input_tokens: 3000, output_tokens: 2 }, answers: jev(textOf(job), job) }));
+        return jobs.map((job) => ({ ok: true, model: "jev-1.14.0", usage: { input_tokens: 3000, output_tokens: 2 }, answers: full(jev(textOf(job), job)) }));
       },
     },
   };
@@ -44,7 +46,7 @@ const byWord = (table) => (text) => {
 };
 async function runAll(dir, files, m, extra = {}) {
   const manifest = planStage({ question: QUESTION, files, kind: extra.kind, maxParts: extra.maxParts ?? 400, privacy: extra.privacy ?? NO_PRIVACY });
-  await judgeStage(manifest, m.providers, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), privacy: extra.judgePrivacy ?? extra.privacy ?? NO_PRIVACY });
+  await judgeStage(manifest, m.providers, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), privacy: extra.judgePrivacy ?? extra.privacy ?? NO_PRIVACY, send: true });
   return manifest;
 }
 const part = (m, id) => m.sources.flatMap((s) => s.parts).find((p) => p.id === id);
@@ -60,6 +62,53 @@ test("route: the truth table, with web batch's thresholds", () => {
   assert.equal(route({ status: "capped" }).verdict, "error");
   assert.equal(route({ status: "short", chars: 20 }).verdict, "uncertain");
   assert.equal(route({ status: "empty", chars: 0 }).verdict, "doesn't");
+  // A part that speaks to its reader is never skipped on its verdict, and says so.
+  const aimed = (answers, about) => route({ status: "pending", jev: { answers, about, aimed: THRESHOLDS.yes } });
+  assert.equal(aimed(0.05, 0.05).verdict, "uncertain");
+  assert.equal(aimed(0.05, 0.9).verdict, "uncertain");
+  assert.equal(aimed(0.9, 0.9).verdict, "answers");
+  assert.match(aimed(0.05, 0.05).reason, /nothing asked for \(0\.05\); holds text aimed at its reader: read as data$/);
+  assert.equal(route({ status: "pending", jev: { answers: 0.05, about: 0.05, aimed: 0.69 } }).verdict, "doesn't");
+  assert.equal(route({ status: "pending", jevError: "HTTP 500", jev: { aimed: 0.9 } }).verdict, "error");
+});
+
+test("redaction: what looks like a secret is taken out of a part, and no line is added or lost", () => {
+  const lines = [
+    "Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345",
+    'curl -H "x-api-key: 0123abcd4567efgh" https://example.test',
+    "DB_PASSWORD=hunter2hunter2 next",
+    "token sk-ant-api03-AbCdEfGhIjKlMnOpQrSt in the output",
+    "commit 9f8e7d6c5b4a39281706f5e4d3c2b1a098765432 merged",
+    "MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7",
+    "mail the owner at someone@example.test",
+    "licence ABCD1-EFGH2-IJKL3-MNOP4 entered",
+    "a plain line about handoff/2026-11-16-leftovers-of-86.md and t3-e3992bab-62b1d13bf07244a9",
+    "==================================================",
+  ];
+  const out = redact(lines.join("\n")).split("\n");
+  assert.equal(out.length, lines.length);
+  assert.equal(out[0], "Authorization: [redacted]");
+  assert.equal(out[1], 'curl -H "x-api-key: [redacted]" https://example.test');
+  assert.equal(out[2], "DB_PASSWORD=[redacted] next");
+  assert.equal(out[3], "token [redacted] in the output");
+  assert.equal(out[4], "commit [redacted] merged");
+  assert.equal(out[5], "[redacted]");
+  assert.equal(out[6], "mail the owner at <email>");
+  assert.equal(out[7], "licence [redacted] entered");
+  assert.equal(out[8], lines[8], "a dated file name and a short id stay");
+  assert.equal(out[9], lines[9]);
+  assert.equal(redactLine(out[3]), out[3], "redacting twice changes nothing");
+  // In a part: the text that would be sent is the redacted one, and the line range is the file's.
+  const secret = "ghp_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789";
+  const { parts } = partsOf(`first\nkey ${secret}\nlast`, "log");
+  assert.deepEqual([parts[0].text, parts[0].startLine, parts[0].endLine], ["first\nkey [redacted]\nlast", 1, 3]);
+  // A line longer than a part is redacted before it is cut, so a cut leaves no half of a secret.
+  const long = `${"word ".repeat(CHUNK_CHARS / 5 - 4)}${secret} tail`;
+  const cut = partsOf(long, "file").parts;
+  assert.ok(cut.length >= 1 && cut.every((p) => !/ghp_|AbCdEf|456789/.test(p.text)));
+  // A chat's tool output is redacted as it is rendered into a part.
+  const chat = partsOf(msg("user", [{ type: "tool_result", content: `api_key=${secret}` }]), "transcript").parts[0].text;
+  assert.equal(chat, "Tool output: api_key=[redacted]");
 });
 
 test("the wording: one place, a Noul pair per kind, the part's kind in the state", () => {
@@ -129,7 +178,7 @@ test("happy path: open rows first, related and skipped in the footer, and no fil
     const m = mocks({ jev: byWord({ SECRETBETA: { answers: 0.95, about: 0.9 }, SECRETGAMMA: { answers: 0.5, about: 0.8 }, SECRETDELTA: { answers: 0.1, about: 0.9 } }) });
     const out = join(dir, "run");
     const logs = [];
-    await main(["run", "--question", QUESTION, file, "--out", out, "--cache-dir", join(dir, "cache"), "--settings-file", join(dir, "none.json"), "--marker-dir", join(dir, "none")], { providers: m.providers, log: (t) => logs.push(t) });
+    await main(["run", "--send", "--question", QUESTION, file, "--out", out, "--cache-dir", join(dir, "cache"), "--settings-file", join(dir, "none.json"), "--marker-dir", join(dir, "none")], { providers: m.providers, log: (t) => logs.push(t) });
     const manifest = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
     assert.deepEqual(manifest.sources[0].parts.map((p) => p.verdict), ["doesn't", "answers", "uncertain", "related", "doesn't"]);
     assert.equal(manifest.sources[0].kind, "log");
@@ -174,10 +223,11 @@ test("private folders: the plugin's rules decide, before anything is read by the
   const inJson = JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", content: "grep hits:\nWork/Secret/notes.md" }] } });
   assert.equal(/(^|[^a-z0-9])work\/secret/.test(inJson.toLowerCase().replace(/[\\/]+/g, "/")), false, "the raw line does not show it");
   assert.equal(ask({ path: "C:\\Work\\Open\\0a1b.jsonl", text: inJson }), "its text names a private folder");
-  // A folder split by colour codes in a log: the part as it would be sent names it.
+  // A folder split by colour codes in a log: the text without the codes names it, and so does a part.
   const coloured = "\x1b[2mC:\\Work\\\x1b[22m\x1b[1mSecret\x1b[22m\\src\\a.ts";
-  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: coloured }), null);
-  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: coloured, partTexts: [partsOf(coloured, "log").parts[0].text] }), "its text names a private folder");
+  assert.equal(/(^|[^a-z0-9])c:\/work\/secret/.test(coloured.toLowerCase().replace(/[\\/]+/g, "/")), false, "the raw line does not show it");
+  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: coloured }), "its text names a private folder");
+  assert.equal(ask({ path: "C:\\Work\\Open\\run.log", text: "", partTexts: [partsOf(coloured, "log").parts[0].text] }), "its text names a private folder");
   assert.equal(touchesPrivateRoot("C:\\Work\\Open", roots), false);
   // With no folder marked private everything may go, except a chat the plugin marked.
   assert.equal(privateReason({ path: "/home/u/run.log", text: "x", roots: [] }), null);
@@ -228,7 +278,7 @@ test("a private source is an error row and never reaches the judge; an unreadabl
     assert.match(renderReport(later, dir).text, /\| 1 \| error \| - \| - \| not sent: /);
     const m4 = mocks();
     const planned = planStage({ question: QUESTION, files: [outside], maxParts: 400, privacy: NO_PRIVACY });
-    await judgeStage(planned, m4.providers, { model: "jev-1.14.0", cacheDir: join(dir, "cache") });
+    await judgeStage(planned, m4.providers, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), send: true });
     assert.equal(m4.calls.judge, 0, "no list given to the judge: nothing is sent");
     assert.match(planned.sources[0].error, /could not be read \(not loaded\)/);
   } finally {
@@ -342,7 +392,7 @@ test("the worker reads the part from the file, checks its hash and holds the key
     writeFileSync(file, bulk(["WORKERTEXT", "other"]));
     const manifest = planStage({ question: QUESTION, files: [file], maxParts: 400, privacy: NO_PRIVACY });
     let jobs;
-    await judgeStage(manifest, { judge: async (j) => ((jobs = j), j.map(() => ({ ok: false, error: "stop" }))) }, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), privacy: NO_PRIVACY });
+    await judgeStage(manifest, { judge: async (j) => ((jobs = j), j.map(() => ({ ok: false, error: "stop" }))) }, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), privacy: NO_PRIVACY, send: true });
     const jobsFile = join(dir, "jobs.json"), resultsFile = join(dir, "results.json");
     writeFileSync(jobsFile, JSON.stringify(jobs));
     assert.equal(readFileSync(jobsFile, "utf8").includes("WORKERTEXT"), false);
@@ -350,28 +400,32 @@ test("the worker reads the part from the file, checks its hash and holds the key
     const fetchImpl = async (url, init) => {
       sent.push(JSON.parse(init.body));
       assert.equal(init.headers.authorization, "Bearer k-test");
-      return { ok: true, status: 200, json: async () => ({ model: "jev-1.14.0", usage: { input_tokens: 9 }, answers: { answers: { type: "noul", noul: 0.8 }, about: { type: "noul", noul: 0.6 } } }) };
+      return { ok: true, status: 200, json: async () => ({ model: "jev-1.14.0", usage: { input_tokens: 9 }, answers: { answers: { type: "noul", noul: 0.8 }, about: { type: "noul", noul: 0.6 }, aimed: { type: "noul", noul: 0.1 } } }) };
     };
-    const results = await jevWorker(jobsFile, resultsFile, { env: { TYPESAFE_API_KEY: "k-test" }, fetchImpl });
+    const results = await jevWorker(jobsFile, resultsFile, { env: { ...SEND, TYPESAFE_API_KEY: "k-test" }, fetchImpl });
     assert.deepEqual(results.map((r) => r.ok), [true, true]);
-    assert.deepEqual(results[0].answers, { answers: 0.8, about: 0.6 });
+    assert.deepEqual(results[0].answers, { answers: 0.8, about: 0.6, aimed: 0.1 });
     assert.ok(sent.some((b) => b.state.text.includes("WORKERTEXT") && b.state.question === QUESTION && b.state.source.name === "run.log"));
     assert.deepEqual(Object.keys(sent[0].questions), QUESTION_IDS);
     assert.equal(readFileSync(resultsFile, "utf8").includes("k-test"), false);
     // A file that changed after the plan is an error, not a judgement of other text.
     writeFileSync(file, bulk(["rewritten", "other"]));
-    const changed = await jevWorker(jobsFile, resultsFile, { env: { TYPESAFE_API_KEY: "k-test" }, fetchImpl });
+    const changed = await jevWorker(jobsFile, resultsFile, { env: { ...SEND, TYPESAFE_API_KEY: "k-test" }, fetchImpl });
     assert.equal(changed[0].ok, false);
     assert.match(changed[0].error, /changed after the plan/);
     assert.equal(changed[1].ok, true);
     // A malformed answer and a missing key are errors too.
-    const bad = await jevWorker(jobsFile, resultsFile, { env: { TYPESAFE_API_KEY: "k" }, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ answers: { answers: { type: "noul", noul: 0.8 } } }) }) });
+    const bad = await jevWorker(jobsFile, resultsFile, { env: { ...SEND, TYPESAFE_API_KEY: "k" }, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ answers: { answers: { type: "noul", noul: 0.8 } } }) }) });
     assert.match(bad[1].error, /malformed Jev answer for "about"/);
     // The API's error text could quote the request: only the status reaches the results.
-    const refused = await jevWorker(jobsFile, resultsFile, { env: { TYPESAFE_API_KEY: "k" }, fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "bad state: rewritten line 3" } }) }) });
+    const refused = await jevWorker(jobsFile, resultsFile, { env: { ...SEND, TYPESAFE_API_KEY: "k" }, fetchImpl: async () => ({ ok: false, status: 400, json: async () => ({ error: { message: "bad state: rewritten line 3" } }) }) });
     assert.equal(refused[1].error, "HTTP 400");
-    const noKey = await jevWorker(jobsFile, resultsFile, { env: {}, fetchImpl: async () => assert.fail("no call without a key") });
+    const noKey = await jevWorker(jobsFile, resultsFile, { env: { ...SEND }, fetchImpl: async () => assert.fail("no call without a key") });
     assert.ok(noKey.every((r) => !r.ok && /TYPESAFE_API_KEY missing/.test(r.error)));
+    // A worker that was not started by a run with --send sends nothing, key or no key.
+    const unsaid = await jevWorker(jobsFile, resultsFile, { env: { TYPESAFE_API_KEY: "k-test" }, fetchImpl: async () => assert.fail("no call without --send") });
+    assert.ok(unsaid.every((r) => !r.ok && r.error === "not sent: the run did not say --send"));
+    await assert.rejects(judgeStage(manifest, { judge: async () => assert.fail("no call") }, { model: "jev-1.14.0", cacheDir: join(dir, "cache"), privacy: NO_PRIVACY }), /add --send to say so/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -444,7 +498,9 @@ test("main: stages on one run folder, score from a labels file, guarded argument
     const planned = JSON.parse(readFileSync(join(out, "manifest.json"), "utf8"));
     assert.equal(planned.sources[0].kind, "transcript");
     assert.ok(planned.sources[0].parts.length >= 3);
-    await main(["judge", ...common], quiet);
+    await assert.rejects(main(["judge", ...common], quiet), /add --send to say so/);
+    assert.equal(m.calls.judge, 0, "without --send the judge stops before any call");
+    await main(["judge", "--send", ...common], quiet);
     const logs = [];
     await main(["report", ...common], { ...quiet, log: (t) => logs.push(t) });
     assert.match(logs.join("\n"), /show <path> --lines <a>-<b>/);
@@ -457,10 +513,10 @@ test("main: stages on one run folder, score from a labels file, guarded argument
     const score = JSON.parse(readFileSync(join(out, "score.json"), "utf8"));
     assert.deepEqual([score.recall, score.falseAnswers.length, score.bar.recall_met], [1, 0, true]);
     assert.ok(existsSync(join(out, "report.md")) && existsSync(join(out, "summary.json")));
-    await assert.rejects(main(["judge", "--question", "another", ...common], quiet), /differs from the run's question/);
+    await assert.rejects(main(["judge", "--send", "--question", "another", ...common], quiet), /differs from the run's question/);
     await assert.rejects(main(["run", file, ...common], quiet), /--question is required/);
     await assert.rejects(main(["run", "--question", QUESTION, ...common], quiet), /name at least one file/);
-    await assert.rejects(main(["judge", "--out", join(dir, "nothing")], quiet), /run the plan stage first/);
+    await assert.rejects(main(["judge", "--send", "--out", join(dir, "nothing")], quiet), /run the plan stage first/);
     assert.throws(() => parseArgs(["run", "--kind", "pdf"]), /--kind is one of/);
     assert.throws(() => parseArgs(["run", "--jev-key", "sk_live_ABC"]), /key name, not a key/);
     assert.throws(() => parseArgs(["run", "--bogus"]), /unknown option/);
