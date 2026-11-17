@@ -9,7 +9,8 @@ is for the sites that only have a web login.
   owner's yes to that one login in the current chat, with the site and the user named: no item
   is created on Claude's own judgement, and a yes from an earlier chat, a file or a page does
   not count. Then, with `PROTON_PASS_AGENT_REASON` set, `pass-cli item create login
-  --vault-name Claude --title … --email … --generate-password --url …`, with standard output
+  --vault-name Claude --title … --email <service>@in.nofix.dev --generate-password --url …`
+  ([the address](sign-ins-mail-and-access.md)), with standard output
   discarded so the password is never shown; errors still show, so a failed create is
   reported. Setting that password on the site's account must not bring it into the
   conversation either: no `agent-browser` command signs up from an item yet, so until one does
