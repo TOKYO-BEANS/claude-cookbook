@@ -8,7 +8,7 @@ the opened text answers the question, measure that method again, and give it a m
 plain recipe if it passes.
 
 **Result.** It does not pass: 3 of the 5 points are missed, and a lenient reading still
-misses 2. No map row; no new tool. `recipes/pre-read.md` records the fourth attempt and why
+misses all three. No map row; no new tool. `recipes/pre-read.md` records the fourth attempt and why
 nothing further is tried.
 
 ## What changed
@@ -55,10 +55,12 @@ nothing further is tried.
 - **Why each miss.** The wrong answer: the module starts `gitleaks` and `git` through an
   injected `run(...)`; S searched for `execFile` and `spawn`, found two programs and said
   "only these two". Q14: one failure of five in a chat was not found. Q1: the run's summary
-  lines sat just above the range read. Q5 and Q12: a side part of one fact (a "why", a
-  closing comment) was not in the opened text. Wasted ranges: 10 of the 14 are on the two
+  lines sat just above the range read. Q5: a side part of one fact (a "why") was not in the
+  opened text. Q12: two facts (the details of the fix commit and the pull request's end
+  state) were not in the opened text, though S's answer, from search hits, named both and
+  was judged correct. Wasted ranges: 10 of the 14 are on the two
   questions with no answer, where every range read to confirm the absence holds nothing.
-- **Leniency check.** Counting Q1, Q5 and Q12 as answered gives 12 of 14 (85.7 %), and
+- **Leniency check.** Counting Q1, Q5 and Q12 as answered (the most generous reading) gives 12 of 14 (85.7 %), and
   leaving the two questions without an answer out of point 3 gives 4 of 35 (11.4 %): both
   still miss, and the wrong answer stands, so the result does not hang on the strict rule.
 
@@ -74,7 +76,9 @@ context-mode, without a map row or a promise.
 - `score.json` in the evidence folder, recomputed by `score.mjs` from `refs.json`,
   `s-runs.json`, `k-runs.json` and `judgements.json`; every number above is from it.
 - `npm test` on this PC, on this change: 670 tests, 666 passed, 4 skipped, none failed, in
-  1,337 seconds (`npm-test.log` in the evidence folder). The review, the merge and the
+  1,337 seconds (`npm-test.log` in the evidence folder). It ran before `main` was merged in;
+  that merge brought only CI files (#112), and CI passed on the merged head. The review, the
+  merge and the
   release check are recorded in the pull request's closing comment.
 
 ## Outstanding
