@@ -137,6 +137,46 @@ test("an upload holds the tracked files with their uncommitted edits, never an u
   }
 });
 
+// Git's settings for one call, as a machine's own configuration would give them: the
+// environment form, which every git that `stage` starts reads.
+function withGitConfig(pairs, run) {
+  const names = ["GIT_CONFIG_COUNT", ...pairs.flatMap((_, i) => [`GIT_CONFIG_KEY_${i}`, `GIT_CONFIG_VALUE_${i}`])];
+  const before = names.map((n) => process.env[n]);
+  process.env.GIT_CONFIG_COUNT = String(pairs.length);
+  pairs.forEach(([key, value], i) => Object.assign(process.env, { [`GIT_CONFIG_KEY_${i}`]: key, [`GIT_CONFIG_VALUE_${i}`]: value }));
+  try {
+    return run();
+  } finally {
+    names.forEach((n, i) => (before[i] === undefined ? delete process.env[n] : (process.env[n] = before[i])));
+  }
+}
+
+// Git for Windows ships core.autocrlf=true, and `git archive` then writes CRLF (seen on the
+// first Windows CI run). The copy goes to a Linux sandbox: it holds the repository's bytes.
+test("the copy holds the repository's line endings, whatever this machine's Git converts on checkout", async () => {
+  for (const [pairs, attributes] of [
+    [[["core.autocrlf", "true"]], null],
+    [[["core.autocrlf", "false"], ["core.eol", "crlf"]], "* text=auto\n"],
+  ]) {
+    const { root, dir, git } = repo();
+    try {
+      if (attributes) {
+        writeFileSync(join(dir, ".gitattributes"), attributes);
+        git("add", "-A");
+        git("commit", "-q", "-m", "attributes");
+      }
+      const staged = withGitConfig(pairs, () => stage(dir));
+      try {
+        assert.equal(readFileSync(join(staged.dir, "app.js"), "utf8"), "one\n", JSON.stringify(pairs));
+      } finally {
+        staged.remove();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 test("an upload of a clean repository is its last commit; a subfolder sends only itself", async () => {
   const { root, dir, git } = repo();
   try {
