@@ -36,7 +36,8 @@ why.
   to search. Each reported reading every page (217 in all). 52 places. The page copies and
   the agents' saved search results left the scratchpad: with the two chats' renderings they
   are in `~/.local/share/backups/pre-read-plain-scratch-2026-11-17/`, since a recursive
-  delete is blocked on this PC.
+  delete is blocked on this PC. With the owner's yes in the chat (17 November 2026) they
+  were then deleted file by file.
 - **Methods and scores:**
 
   | Method | Recall | Wasted rows | Text | Above the keyword rule |
@@ -80,11 +81,12 @@ of a twice-failed approach.
 
 ## Outstanding
 
-- **Whether to try a fourth time, with a new bar** (owner: the owner). The bar counts every
-  place an answer is stated; the outcome is that Claude reads little and answers right. A
-  bar scored on answers (does the opened text answer the question) would likely be met by
-  Claude's own Grep, then ranged Reads, which needs no tool. Changing the bar is the
-  owner's call; asked in the chat on 17 November 2026.
+- **A fourth attempt, with an answer-based bar** (owner: Claude, a new chat). The bar
+  counts every place an answer is stated; the outcome is that Claude reads little and
+  answers right. Asked in the chat on 17 November 2026, the owner chose "Yes,
+  answer-based bar": write a bar scored on whether the opened text answers the question,
+  before any run; new labels; measure Claude's own Grep, then ranged Reads, against it. If
+  it passes, a map row as a plain recipe, no new tool.
 - The launcher test that failed once under load (`scripts/key-header.test.mjs:213`):
   unchanged, its own job.
 
