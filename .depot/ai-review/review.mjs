@@ -3,6 +3,9 @@
 // copy from $RUNNER_TEMP/ai-review, never the pull request's. Change it in
 // Stack Atlas (templates/ai-review/), never by hand in a repository.
 //
+// - It runs once for the commit that is about to merge, when the pull request
+//   is marked ready for review, not on every push (.depot/workflows/ai-review.yml).
+//   The comment names the commit it is about, and the merge gate compares it.
 // - A pull request from a fork reads no secret and posts nothing.
 // - The pull request's text, diff and files reach the model only as delimited,
 //   untrusted data. The request carries no tools; the script only posts text.
@@ -16,7 +19,12 @@ import { appendFileSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
+// Owner, 16 November 2026: "Opus 5.5, once per PR". The trial of Claude Fable 5.2
+// (standard v17, 14 November) ended: it cost twice Claude Opus 5.5 per token, and
+// a review of every push used the plan's monthly API credits in 12 days. The
+// effort is set in the request (EFFORT): Opus 5.5's own default is "medium".
 export const MODEL = "claude-opus-5-5";
+export const EFFORT = "high";
 export const INPUT_BUDGET_TOKENS = 120_000;
 export const MARKER = "<!-- stack-atlas-ai-review -->";
 // Thinking counts toward max_tokens, so at effort "high" the answer needs room:
@@ -229,7 +237,7 @@ function requestFromPlan(plan) {
     fallbacks: "default",
     thinking: { type: "adaptive" },
     output_config: {
-      effort: "high",
+      effort: EFFORT,
       format: { type: "json_schema", schema: FINDINGS_SCHEMA },
     },
     system: plan.system,
@@ -424,8 +432,15 @@ function cleanCode(text) {
     .trim();
 }
 
+const HEAD_COMMIT = /^[0-9a-f]{40}$/;
 export function renderComment(result) {
   const lines = [MARKER, "### AI review (advisory)", ""];
+  // The commit this comment is about (a review of it, or a review of it that
+  // could not run), right under the title so that a comment cut at its size
+  // limit still names it. The merge gate reads this line against the head it
+  // merges.
+  if (HEAD_COMMIT.test(result?.head ?? ""))
+    lines.push(`<sub>Head commit ${result.head}.</sub>`, "");
   if (result?.unavailable !== undefined || !Array.isArray(result?.findings)) {
     lines.push(
       `**review unavailable: ${clean(result?.unavailable ?? "no result")}**`,
@@ -526,6 +541,7 @@ export async function review({
     ...result,
     notIncluded: plan?.dropped ?? [],
     diffCut: Boolean(plan?.diffNote),
+    head: env.HEAD_SHA,
   };
   if (result.findings) log(findingsLogLine(result.findings));
   else log(`ai-review: review unavailable: ${result.unavailable}`);
