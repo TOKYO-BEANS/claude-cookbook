@@ -624,6 +624,20 @@ test("the call the Codex page writes down passes the hook and is checked", () =>
   }
 });
 
+test("an unattended (full-access) Codex start gets no way around the gate", () => {
+  const full = { target: codex, runtimeMode: "full-access", role: "review", mode: "wait" };
+  for (const reason of Object.keys(REASONS)) {
+    const { out } = gate(hookInput("delegate_task", { task: BRIEF, ...full }), spy(() => ({ start: false, reason })));
+    assert.equal(out.hookSpecificOutput.permissionDecision, "deny", reason);
+  }
+  const noRepo = gate(hookInput("delegate_task", { task: "Read the plan.", ...full }));
+  assert.equal(noRepo.out.hookSpecificOutput.permissionDecision, "deny");
+  assert.deepEqual(noRepo.check.calls, []);
+  const worktree = gate(hookInput("delegate_task", { task: BRIEF, ...full, isolation: "worktree" }));
+  assert.equal(worktree.out.hookSpecificOutput.permissionDecision, "deny");
+  assert.deepEqual(worktree.check.calls, []);
+});
+
 test("the hook denies a Codex start the check refuses, with the check's fixed reason", () => {
   for (const reason of Object.keys(REASONS)) {
     const { out } = gate(hookInput("delegate_task", { task: BRIEF, target: codex }), spy(() => ({ start: false, reason })));
