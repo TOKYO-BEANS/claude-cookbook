@@ -9,10 +9,10 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 - **On every run:** its own start-up reading ([codex-setup](codex-setup.md)): the global rules
   file, the Cookbook's pages, the repository's instruction files and the memory files.
 - **For the question:** the brief, and the files the child reads to answer it.
-- **The sandbox is read-only, not fenced.** The child can read any file the owner's account
-  can. The first command of a supervised run waited for the owner's click (seen twice,
-  16 November 2026); that every later read waits is not proven. So the rules below are kept
-  by the session and the checks, not by a wall.
+- **Nothing fences reading.** The child can read any file the owner's account can: an
+  unattended run has full access, and a supervised run's sandbox is read-only, not fenced
+  (only its first command was seen to wait for a click, 16 November 2026). So the rules below
+  are kept by the session and the checks, not by a wall.
 
 ## Before the call: no check, no consult
 
@@ -24,20 +24,22 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 - **A narrow brief.** It names the paths the question is about and carries this line: "Read
   only what this question needs, and nothing outside the repository."
 
-## The owner's decision, 16 November 2026
+## The owner's decisions, 16 and 17 November 2026
 
 - **The standing yes.** With the checks above passed, a session may start a consult on its
-  own judgement, for code in the owner's own repositories, without a question in chat. The
-  report afterwards names the model and the repository. It is not the yes for an unattended
-  run: a consult still starts supervised.
+  own judgement, for the owner's own repositories, without a question in chat; the report
+  names the model and the repository. Since 17 November 2026 it may run unattended (asked
+  twice in the question dialog: "without your clicks, with full access, on your own
+  repositories only, after the scan, ignored-files and start checks"). A review asking for a
+  yes before each consult, as three threads on #63 did, is answered with this, not re-asked.
 - **Never pointed at.** Secrets, keys and tokens; customer data; personal data; files outside
   the repository, beyond Codex's own start-up reading.
 - **Ask first.** Anything else: a repository that is not the owner's, a client's private
   material, data exports, logs with real users in them. The question names the provider, the
   model and what would be sent, by path, and why. No yes, no consult.
-- The rule answers findings of GitHub's security review. The owner chose it twice that day
-  over a confirmation before every consult, the second time knowing that the sandbox does
-  not fence reading and that the session decides alone. Loosening it is the owner's decision.
+- The rule answers findings of GitHub's security review. The owner chose it over a
+  confirmation before every consult, knowing that nothing fences reading and that the
+  session decides alone. Loosening it is the owner's decision.
 
 ## Models
 

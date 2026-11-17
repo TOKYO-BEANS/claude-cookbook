@@ -609,16 +609,18 @@ test("the hook runs the check on this thread's checkout, with the name from the 
 });
 
 test("the call the Codex page writes down passes the hook and is checked", () => {
-  // recipes/codex.md, "Start it supervised", with codex-consult.md's role and the brief's line.
+  // recipes/codex.md, "Start it", both modes, with codex-consult.md's role and the brief's line.
   const page = readFileSync(new URL("../plugins/cookbook/skills/cookbook/recipes/codex.md", import.meta.url), "utf8").replace(/\s+/g, " ");
   assert.ok(page.includes('`delegate_task` with `target: { providerInstanceId: "codex", model }`'));
-  assert.ok(page.includes('`runtimeMode: "approval-required"`'));
   assert.ok(page.includes("`Repository: TOKYO-BEANS/<repo>`"));
-  for (const model of ["gpt-5.6-sol", "gpt-6-astra"]) {
-    assert.ok(page.includes(`\`${model}\``), model);
-    const { out, check } = gate(hookInput("delegate_task", { task: BRIEF, target: { providerInstanceId: "codex", model }, runtimeMode: "approval-required", role: "review", mode: "wait" }));
-    assert.equal(out, null);
-    assert.deepEqual(check.calls, [{ repo: "claude-cookbook", checkout: "C:/work/checkout" }]);
+  for (const runtimeMode of ["full-access", "approval-required"]) {
+    assert.ok(page.includes(`\`runtimeMode: "${runtimeMode}"\``), runtimeMode);
+    for (const model of ["gpt-5.6-sol", "gpt-6-astra"]) {
+      assert.ok(page.includes(`\`${model}\``), model);
+      const { out, check } = gate(hookInput("delegate_task", { task: BRIEF, target: { providerInstanceId: "codex", model }, runtimeMode, role: "review", mode: "wait" }));
+      assert.equal(out, null);
+      assert.deepEqual(check.calls, [{ repo: "claude-cookbook", checkout: "C:/work/checkout" }]);
+    }
   }
 });
 

@@ -1,8 +1,8 @@
 # Codex: a consult
 
 Part of [codex](codex.md). Everything on that page holds for a consult: the check of where
-Codex may start, the supervised start (`runtimeMode: "approval-required"`), never on text
-from outside, and no unattended run without the owner's recorded yes, which does not exist.
+Codex may start, the two ways to start it (unattended under the owner's yes of 17 November
+2026, or supervised), and never on text from outside.
 
 A consult is the name for the second opinion in the map's row: one question about our own work
 to Codex, a model that is not Claude. The answer is advice: the session that asked checks each
@@ -26,10 +26,10 @@ point against the code and decides. What may be sent, the refused models and the
   question, and give file and line for each point or mark it unverified." Ask for a verdict,
   findings with file, line and evidence, and what it could not check. No secrets and no
   customer data in a brief. Advice without evidence you can check is not taken.
-- **What keeps it from writing** is the supervised mode's read-only sandbox, not the brief. It
-  does not fence reading: see the limits page. Note `git status --short` and
-  `git rev-parse HEAD` before all the same; afterwards compare both, and the branch on the
-  remote. Report a change the child made; never keep one unseen.
+- **Nothing keeps an unattended run from writing** but the brief: it has full access. A
+  supervised run's read-only sandbox stops writes, not reads (see the limits page). So, in
+  either mode, note `git status --short` and `git rev-parse HEAD` before; afterwards compare
+  both, and the branch on the remote. Report a change the child made; never keep one unseen.
 - **While it runs.** Do not edit the files it reads. A timeout, an error or no reply is not
   agreement. One consult per question; a re-check is a new `delegate_task`, three rounds at most.
 - **Afterwards.** Report what was said, taken and declined, and why.

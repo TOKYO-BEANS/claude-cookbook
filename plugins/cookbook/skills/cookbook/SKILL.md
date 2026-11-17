@@ -27,7 +27,7 @@ fallback and say that you did.
 | Plan, build or debug a change | **Superpowers** skills | the same steps inline | [building](recipes/building.md), [debugging](recipes/debugging.md) |
 | Several agents on one job | the named **`sa-*`** workflows, within their budgets | plain parallel subagents | [workflows](recipes/workflows.md) |
 | One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (`cookbook:mechanical`, `cookbook:research`, `cookbook:review`, `cookbook:reader`, `cookbook:reader-graph`) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
-| A second opinion (a consult) on our own work from a model that is not Claude: a design, a risky change, a cross-check | **Codex**, as a supervised T3 `delegate_task` run; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
+| A second opinion (a consult) on our own work from a model that is not Claude: a design, a risky change, a cross-check | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a Claude API call with a typed answer | [judgement](recipes/judgement.md) |
