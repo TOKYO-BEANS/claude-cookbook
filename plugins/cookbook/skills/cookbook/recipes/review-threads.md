@@ -3,6 +3,10 @@
 The rule is in [ci-releases](ci-releases.md): no merge while a thread of GitHub's security
 review is open. This page is how to read the threads and what the merge commands do.
 
+That review (AI Scan) is off since 17 November 2026, by the owner, for its cost
+([security-costs](security-costs.md)): no new thread comes. The rule holds for every thread
+still open.
+
 - **What they are.** `github-advanced-security` reviews each push and writes each finding as a
   review thread on a line of the diff ("Prompt injection risk", "Excessive agency risk"),
   about one round per push, a minute or two after it. It never closes a thread and gives no
