@@ -17,9 +17,11 @@ nothing was built. A `--no-env` start from the snapshot held no stored secret. `
 snapshots --json` showed 0 of 10 used and `boat list --all` was empty afterwards.
 
 **A failure of mine.** The by-hand part went around `boat-run.mjs` and kept a sandbox
-between commands for about a minute, which `recipes/boat.md` asks the owner's yes for; it was
-not asked. Cost USD 0.0000; everything deleted. The page now says so and that it is no
-precedent. Found by the fallback review of `05fea2d` (two mediums and two lows, all fixed).
+between commands for about a minute (`--no-env`, 900 s TTL), which `recipes/boat.md` asks the
+owner's yes for; it was not asked. Its copy of a listed repository went in by `boat push`,
+so without the Gitleaks scan or the data-file check. Cost USD 0.0000; everything deleted.
+The page says so and that it is no precedent. Found by the fallback reviews of `05fea2d`
+(two mediums, two lows) and `bc0be6d` (three lows), all fixed.
 
 **Dead ends.** `boat snapshot` with no arguments does not list saved snapshots; `boat
 snapshots --json` does (`named`, `savedAllowance`). `boat delete --json` needs `--yes`.
