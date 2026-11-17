@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   CLOCK_SLACK_MS,
+  EDIT_PASS_MS,
   LAUNCH_PASS_MS,
   MAX_SHOWN,
   OPEN_MS,
@@ -19,6 +20,7 @@ import {
   chatId,
   chatLines,
   decideAsk,
+  decideEdit,
   decideLaunch,
   entryId,
   parseLedger,
@@ -27,7 +29,7 @@ import {
   run,
   sessionKey,
 } from "../plugins/cookbook/hooks/owner-answers-lib.mjs";
-import { openStore, originUrl } from "../plugins/cookbook/hooks/owner-answers-store.mjs";
+import { onDefaultBranch, openStore, originUrl } from "../plugins/cookbook/hooks/owner-answers-store.mjs";
 
 const NOW = Date.parse("2026-11-16T19:30:00Z");
 const HOUR = 3_600_000;
@@ -48,7 +50,7 @@ const ROW = /^- (chat (?:(?:mcp|launch|thread):){0,2}[0-9a-f-]{8,64}|a chat outs
 
 // A list and a state store in memory, shaped like the real ones.
 function store(lines = []) {
-  const s = { lines: [...lines], states: new Map(), logs: [], turns: 0 };
+  const s = { lines: [...lines], states: new Map(), logs: [], turns: 0, where: { repo: REPO, onDefault: false } };
   s.io = {
     locked: (fn) => {
       s.turns += 1;
@@ -59,6 +61,7 @@ function store(lines = []) {
     readState: (key) => s.states.get(key) ?? {},
     writeState: (key, state) => s.states.set(key, state),
     repo: () => REPO,
+    checkout: () => s.where,
     log: (l) => s.logs.push(l),
   };
   return s;
@@ -428,4 +431,164 @@ test("the hook file, end to end on a folder of its own", () => {
   assert.ok(notes.length >= 4);
   assert.ok(notes.every((n) => n.repo === "owner/one" || n.repo === "owner/two"), "nothing is written without a repository");
   for (const said of ["credit", "Merge", SECRET_WORDS, "hand review"]) assert.ok(!text.includes(said), said);
+});
+
+// The look before a chat's first change in a repository (Edit, Write, NotebookEdit).
+const edit = (session, over = {}) => ({ hook_event_name: "PreToolUse", tool_name: "Edit", session_id: session, cwd: "C:/work/repo", tool_input: { file_path: "C:/work/repo/src/a.mjs", old_string: SECRET_WORDS, new_string: "x" }, ...over });
+const denied = (out) => out?.hookSpecificOutput?.permissionDecision === "deny";
+
+test("a chat's first change in a repository is stopped once, then passes for four hours", () => {
+  const s = store();
+  const out = run({ input: edit("me"), env: {}, now: NOW, io: s.io });
+  assert.ok(denied(out));
+  assert.match(reason(out), /t3_thread_list/);
+  assert.match(reason(out), /includeSubagents/);
+  assert.match(reason(out), /gh pr list --json number,title,headRefName,files/);
+  assert.doesNotMatch(reason(out), /default branch/);
+  assert.equal(run({ input: edit("me"), env: {}, now: NOW + 1000, io: s.io }), null);
+  for (const tool of ["Write", "NotebookEdit"]) assert.equal(run({ input: { ...edit("me"), tool_name: tool }, env: {}, now: NOW + EDIT_PASS_MS - 1, io: s.io }), null, tool);
+  assert.ok(denied(run({ input: edit("me"), env: {}, now: NOW + EDIT_PASS_MS + 1, io: s.io })), "the look is taken again after four hours");
+  assert.ok(denied(run({ input: edit("you"), env: {}, now: NOW + 1000, io: s.io })), "another chat has its own look");
+  assert.ok(denied(run({ input: { ...edit("w"), tool_name: "Write", tool_input: { file_path: "C:/work/repo/new.md", content: "x" } }, env: {}, now: NOW, io: s.io })));
+  assert.ok(denied(run({ input: { ...edit("nb"), tool_name: "NotebookEdit", tool_input: { notebook_path: "C:/work/repo/n.ipynb" } }, env: {}, now: NOW, io: s.io })));
+  assert.equal(run({ input: { ...edit("me"), hook_event_name: "PostToolUse" }, env: {}, now: NOW + 2 * EDIT_PASS_MS, io: s.io }), null);
+  assert.equal(s.lines.length, 0, "a change writes nothing to the list");
+});
+
+test("each repository has its own look, and a file outside a repository is left alone", () => {
+  const s = store();
+  assert.ok(denied(run({ input: edit("me"), env: {}, now: NOW, io: s.io })));
+  s.where = { repo: "owner/other", onDefault: false };
+  assert.ok(denied(run({ input: edit("me"), env: {}, now: NOW + 1000, io: s.io })));
+  assert.equal(run({ input: edit("me"), env: {}, now: NOW + 2000, io: s.io }), null);
+  s.where = { repo: REPO, onDefault: false };
+  assert.equal(run({ input: edit("me"), env: {}, now: NOW + 3000, io: s.io }), null, "the first repository's look still holds");
+  s.where = { repo: "", onDefault: true };
+  assert.equal(run({ input: edit("new"), env: {}, now: NOW, io: s.io }), null);
+  assert.equal(run({ input: { ...edit("blank"), tool_input: {} }, env: {}, now: NOW, io: s.io }), null, "no file named");
+  assert.deepEqual([...s.states.keys()], ["me"]);
+  // A state of another shape, or a look dated in the future, is no look.
+  for (const editLooks of ["x", [NOW], { [REPO]: "now" }, { [REPO]: NOW + HOUR }]) {
+    assert.ok(denied(decideEdit({ input: edit("me"), env: {}, now: NOW, state: { editLooks }, repo: REPO, onDefault: false }).output), JSON.stringify(editLooks));
+  }
+  const kept = decideEdit({ input: edit("me"), env: {}, now: NOW, state: { shown: ["a"], launchCheckedAt: 5, editLooks: { "owner/other": NOW - 1 } }, repo: REPO, onDefault: false }).state;
+  assert.deepEqual(kept, { shown: ["a"], launchCheckedAt: 5, editLooks: { "owner/other": NOW - 1, [REPO]: NOW } });
+});
+
+test("a subagent and a delegate child are left alone: their chat took the look", () => {
+  const s = store();
+  assert.equal(run({ input: edit("me", { agent_id: "a1" }), env: {}, now: NOW, io: s.io }), null);
+  assert.equal(run({ input: edit("kid"), env: { T3CODE_THREAD_ID: "thread:delegated-task:1" }, now: NOW, io: s.io }), null);
+  assert.equal(s.states.size, 0);
+  assert.ok(denied(run({ input: edit("me"), env: {}, now: NOW + 1000, io: s.io })), "the chat itself is still stopped");
+});
+
+test("a look that cannot be noted, or a call with no session, never stops a change", () => {
+  const s = store();
+  s.io.writeState = () => { throw Object.assign(new Error(`full ${SECRET_WORDS}`), { code: "ENOSPC" }); };
+  assert.equal(run({ input: edit("me"), env: {}, now: NOW, io: s.io }), null, "a denial that could not be noted would come back on every call");
+  assert.deepEqual(s.logs.map((l) => l.error), ["ENOSPC"]);
+  s.io.checkout = () => { throw new Error("unreadable"); };
+  assert.equal(run({ input: edit("me"), env: {}, now: NOW, io: s.io }), null);
+  const fresh = store();
+  assert.equal(run({ input: { ...edit("me"), session_id: undefined }, env: {}, now: NOW, io: fresh.io }), null);
+  assert.equal(fresh.states.size, 0);
+});
+
+test("on the default branch the chat is told to move; the denial is one of two fixed texts", () => {
+  const at = (onDefault, input = edit("me"), env = {}) => reason(decideEdit({ input, env, now: NOW, state: {}, repo: REPO, onDefault }).output);
+  const plain = at(false), onMain = at(true);
+  assert.match(onMain, /default branch/);
+  assert.match(onMain, /worktree/);
+  assert.equal(onMain.split("\n").length, plain.split("\n").length + 1);
+  // Nothing of the call reaches the text: not the folder, the file, the words or the chat.
+  const loud = edit(SECRET_WORDS, { cwd: `C:/${SECRET_WORDS}`, tool_input: { file_path: `C:/work/${SECRET_WORDS}.md`, content: SECRET_WORDS } });
+  assert.equal(at(false, loud, { T3CODE_THREAD_ID: SECRET_WORDS }), plain);
+  assert.equal(at(true, loud, { T3CODE_THREAD_ID: SECRET_WORDS }), onMain);
+});
+
+test("the default branch is read from git's own files: HEAD against origin's, or main and master", () => {
+  const root = mkdtempSync(join(tmpdir(), "owner-answers-branch-"));
+  const repo = (name, head, originHead) => {
+    const dir = join(root, name);
+    mkdirSync(join(dir, ".git", "refs", "remotes", "origin"), { recursive: true });
+    mkdirSync(join(dir, "src"));
+    writeFileSync(join(dir, ".git", "config"), '[remote "origin"]\n\turl = https://github.com/Owner/Repo.git\n');
+    writeFileSync(join(dir, ".git", "HEAD"), head);
+    if (originHead) writeFileSync(join(dir, ".git", "refs", "remotes", "origin", "HEAD"), originHead);
+    return dir;
+  };
+  const main = repo("a", "ref: refs/heads/main\n", "ref: refs/remotes/origin/main\n");
+  assert.equal(onDefaultBranch(join(main, "src")), true);
+  assert.equal(onDefaultBranch(repo("b", "ref: refs/heads/fix/thing\n", "ref: refs/remotes/origin/main\n")), false);
+  assert.equal(onDefaultBranch(repo("c", "ref: refs/heads/trunk\r\n", "ref: refs/remotes/origin/trunk\r\n")), true);
+  assert.equal(onDefaultBranch(repo("d", "ref: refs/heads/main\n", "ref: refs/remotes/origin/trunk\n")), false, "origin's default is another branch");
+  assert.equal(onDefaultBranch(repo("e", "ref: refs/heads/master\n")), true, "no record of origin's default: main and master count");
+  assert.equal(onDefaultBranch(repo("f", "ref: refs/heads/work\n")), false);
+  assert.equal(onDefaultBranch(repo("g", "0123456789abcdef0123456789abcdef01234567\n", "ref: refs/remotes/origin/main\n")), false, "a detached HEAD is no branch");
+  // A worktree has a HEAD of its own and shares origin's record.
+  mkdirSync(join(main, ".git", "worktrees", "side"), { recursive: true });
+  writeFileSync(join(main, ".git", "worktrees", "side", "commondir"), "../..\n");
+  writeFileSync(join(main, ".git", "worktrees", "side", "HEAD"), "ref: refs/heads/side\n");
+  const side = join(root, "side");
+  mkdirSync(side);
+  writeFileSync(join(side, ".git"), `gitdir: ${join(main, ".git", "worktrees", "side")}\n`);
+  assert.equal(onDefaultBranch(side), false);
+  assert.equal(onDefaultBranch(main), true);
+  assert.equal(onDefaultBranch(join(root, "not-there")), false);
+  // A ".git" file that names no folder is no repository; one that names a folder with no
+  // shared one (a submodule) has its config and its HEAD there; a missing HEAD is no branch.
+  const odd = join(root, "odd");
+  mkdirSync(odd);
+  writeFileSync(join(odd, ".git"), "nothing here\n");
+  assert.equal(originUrl(odd), "");
+  assert.equal(onDefaultBranch(odd), false);
+  const sub = join(root, "sub"), subGit = join(root, "modules", "sub");
+  mkdirSync(sub);
+  mkdirSync(subGit, { recursive: true });
+  writeFileSync(join(sub, ".git"), `gitdir: ${subGit}\n`);
+  writeFileSync(join(subGit, "config"), '[remote "origin"]\n\turl = https://github.com/Owner/Repo.git\n');
+  assert.equal(originUrl(sub), "https://github.com/Owner/Repo.git");
+  assert.equal(onDefaultBranch(sub), false, "no HEAD to read");
+  writeFileSync(join(subGit, "HEAD"), "ref: refs/heads/main\n");
+  assert.equal(onDefaultBranch(sub), true);
+  // The checkout is the edited file's, not the chat's folder; a new folder counts as its parent's.
+  const io = openStore({ OWNER_ANSWERS_DIR: join(root, "store") });
+  assert.deepEqual(io.checkout(side, join(main, "new-folder", "file.md")), { repo: REPO, onDefault: true });
+  assert.deepEqual(io.checkout(side, join("docs", "file.md")), { repo: REPO, onDefault: false });
+  assert.deepEqual(io.checkout(main, join(root, "plain.txt")), { repo: "", onDefault: false });
+  assert.deepEqual(io.checkout("", ""), { repo: "", onDefault: false });
+});
+
+test("the hook file stops a chat's first change in a checkout, end to end", () => {
+  const home = mkdtempSync(join(tmpdir(), "owner-answers-edit-"));
+  const env = { ...process.env, OWNER_ANSWERS_DIR: join(home, "store") };
+  const hook = fileURLToPath(new URL("../plugins/cookbook/hooks/owner-answers.mjs", import.meta.url));
+  const dir = join(home, "one");
+  mkdirSync(join(dir, ".git"), { recursive: true });
+  writeFileSync(join(dir, ".git", "config"), '[remote "origin"]\n\turl = https://github.com/owner/one.git\n');
+  writeFileSync(join(dir, ".git", "HEAD"), "ref: refs/heads/main\n");
+  const fire = (input) => spawnSync(process.execPath, [hook], { input: JSON.stringify(input), env: { ...env, T3CODE_THREAD_ID: CHAT.a }, encoding: "utf8" });
+  const inRepo = (session, over = {}) => edit(session, { cwd: home, tool_input: { file_path: join(dir, "a.md"), old_string: "a", new_string: "b" }, ...over });
+  const first = JSON.parse(fire(inRepo("a")).stdout);
+  assert.ok(denied(first));
+  assert.match(reason(first), /default branch/);
+  assert.equal(fire(inRepo("a")).stdout, "");
+  assert.equal(fire(inRepo("sub", { agent_id: "a1" })).stdout, "");
+  assert.equal(fire(edit("out", { cwd: dir, tool_input: { file_path: join(home, "plain", "a.md") } })).stdout, "", "a file outside a repository");
+  // A branch's name is text anyone can choose: it never reaches the denial, on the default
+  // branch or off it.
+  const named = join(home, "two");
+  mkdirSync(join(named, ".git", "refs", "remotes", "origin"), { recursive: true });
+  writeFileSync(join(named, ".git", "config"), '[remote "origin"]\n\turl = https://github.com/owner/two.git\n');
+  writeFileSync(join(named, ".git", "HEAD"), `ref: refs/heads/${SECRET_WORDS}\n`);
+  const inNamed = (session) => edit(session, { cwd: named, tool_input: { file_path: join(named, "a.md"), old_string: "a", new_string: "b" } });
+  const off = reason(JSON.parse(fire(inNamed("b")).stdout));
+  writeFileSync(join(named, ".git", "refs", "remotes", "origin", "HEAD"), `ref: refs/remotes/origin/${SECRET_WORDS}\n`);
+  const on = reason(JSON.parse(fire(inNamed("c")).stdout));
+  assert.doesNotMatch(off, /default branch/);
+  assert.equal(on, reason(first));
+  for (const text of [off, on]) assert.ok(!text.includes(SECRET_WORDS));
+  assert.deepEqual(readdirSync(join(home, "store")), ["sessions"]);
+  assert.equal(readdirSync(join(home, "store", "sessions")).length, 3);
 });

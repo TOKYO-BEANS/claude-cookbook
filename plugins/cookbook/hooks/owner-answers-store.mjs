@@ -13,53 +13,86 @@ const LOCK_WAIT_MS = 1500; // how long a chat waits for another chat's turn at t
 const LOCK_STALE_MS = 10_000; // a lock this old was left by a hook that died
 const STATE_KEEP_MS = 7 * 24 * 3_600_000;
 
-// The URL of `origin` for the checkout a folder is in, read from the files git keeps: no
-// program is started, so it works with the short PATH a hook gets. "" when there is none.
+// The two folders git keeps for the checkout a folder is in: `own` (this checkout's HEAD)
+// and `shared` (the config and origin's refs; the same folder outside a worktree). They are
+// found by reading files: no program is started, so it works with the short PATH a hook
+// gets. A folder that does not exist yet counts as its parent's. null when there is none.
+function gitFolders(cwd) {
+  let dir = resolve(cwd);
+  for (let i = 0; i < 64; i += 1) {
+    const dot = join(dir, ".git");
+    let kind = null;
+    try {
+      kind = statSync(dot);
+    } catch {
+      kind = null;
+    }
+    if (kind) {
+      if (!kind.isFile()) return { own: dot, shared: dot };
+      // A worktree: ".git" is a file that names its folder, which names the shared one.
+      const named = /^gitdir:\s*(.+)$/m.exec(readFileSync(dot, "utf8").slice(0, 4000));
+      if (!named) return null;
+      const own = resolve(dir, named[1].trim());
+      try {
+        const common = readFileSync(join(own, "commondir"), "utf8").trim();
+        if (common) return { own, shared: resolve(own, common) };
+      } catch {
+        // not a worktree folder: the named folder holds the config itself
+      }
+      return { own, shared: own };
+    }
+    const up = dirname(dir);
+    if (up === dir) return null;
+    dir = up;
+  }
+  return null;
+}
+
+// The URL of `origin` for the checkout a folder is in; "" when there is none.
 export function originUrl(cwd) {
   try {
-    let dir = resolve(cwd);
-    for (let i = 0; i < 64; i += 1) {
-      const dot = join(dir, ".git");
-      let kind = null;
-      try {
-        kind = statSync(dot);
-      } catch {
-        kind = null;
+    const git = gitFolders(cwd);
+    if (!git) return "";
+    const lines = readFileSync(join(git.shared, "config"), "utf8").slice(0, 200_000).split(/\r?\n/);
+    let inOrigin = false;
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (line.startsWith("[")) inOrigin = line === '[remote "origin"]';
+      else if (inOrigin && line.startsWith("url")) {
+        const at = line.indexOf("=");
+        if (at > 0 && line.slice(0, at).trim() === "url") return line.slice(at + 1).trim();
       }
-      if (kind) {
-        let gitDir = dot;
-        if (kind.isFile()) {
-          // A worktree: ".git" is a file that names its folder, which names the shared one.
-          const named = /^gitdir:\s*(.+)$/m.exec(readFileSync(dot, "utf8").slice(0, 4000));
-          if (!named) return "";
-          gitDir = resolve(dir, named[1].trim());
-          try {
-            const common = readFileSync(join(gitDir, "commondir"), "utf8").trim();
-            if (common) gitDir = resolve(gitDir, common);
-          } catch {
-            // not a worktree folder: the named folder holds the config itself
-          }
-        }
-        const lines = readFileSync(join(gitDir, "config"), "utf8").slice(0, 200_000).split(/\r?\n/);
-        let inOrigin = false;
-        for (const raw of lines) {
-          const line = raw.trim();
-          if (line.startsWith("[")) inOrigin = line === '[remote "origin"]';
-          else if (inOrigin && line.startsWith("url")) {
-            const at = line.indexOf("=");
-            if (at > 0 && line.slice(0, at).trim() === "url") return line.slice(at + 1).trim();
-          }
-        }
-        return "";
-      }
-      const up = dirname(dir);
-      if (up === dir) return "";
-      dir = up;
     }
   } catch {
     // unreadable: no repository
   }
   return "";
+}
+
+// Whether the checkout a folder is in has the default branch checked out: its HEAD against
+// the branch origin's HEAD names, or against "main" and "master" where the clone holds no
+// record of origin's. A detached HEAD is no branch. The answer is yes or no: a branch's
+// name is text anyone can choose, and it goes no further than this function.
+export function onDefaultBranch(cwd) {
+  try {
+    const git = gitFolders(cwd);
+    if (!git) return false;
+    const ref = (path, prefix) => {
+      const line = readFileSync(path, "utf8").slice(0, 1000).split(/\r?\n/)[0];
+      return line.startsWith(`ref: ${prefix}`) ? line.slice(`ref: ${prefix}`.length).trim() : "";
+    };
+    const branch = ref(join(git.own, "HEAD"), "refs/heads/");
+    if (!branch) return false;
+    let origin = "";
+    try {
+      origin = ref(join(git.shared, "refs", "remotes", "origin", "HEAD"), "refs/remotes/origin/");
+    } catch {
+      origin = "";
+    }
+    return origin ? branch === origin : branch === "main" || branch === "master";
+  } catch {
+    return false;
+  }
 }
 
 // The folder and every file in it are the owner's alone, whatever the system's default is:
@@ -211,6 +244,14 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
     },
     // The repository a chat works in, from its checkout's remote; "" when there is none.
     repo: (cwd) => (cwd ? repoLabel(originUrl(cwd)) : ""),
+    // The checkout a file is in (a path from `cwd` when it is not a whole one): its
+    // repository, and whether the default branch is checked out there.
+    checkout(cwd, file) {
+      if (!file) return { repo: "", onDefault: false };
+      const folder = dirname(resolve(cwd || ".", file));
+      const repo = repoLabel(originUrl(folder));
+      return { repo, onDefault: repo ? onDefaultBranch(folder) : false };
+    },
     log(line) {
       ownFolder(dir);
       appendFileSync(join(dir, "log.jsonl"), `${JSON.stringify(line)}\n`, { mode: OWNER_FILE });
