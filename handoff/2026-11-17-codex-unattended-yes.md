@@ -27,7 +27,7 @@ today's date in recipes/codex.md through a pull request.").
   it. "Models" and "Cost and no Codex" are unchanged (the first fix head, e5491af, lost them
   by mistake; restored). The three checks before the call and what may be sent are
   unchanged.
-- The map row (`SKILL.md`) and `options/ship.md` follow. The yes covers one consult, not
+- The map row (`SKILL.md`) and `options/ship.md` follow. The yes covers a consult, not
   tstack's `sol-loop`.
 - `scripts/codex-start-check.test.mjs`: the page test checks both modes on the page and that
   the hook passes and checks a start in each; a new test denies a full-access start that the
@@ -72,3 +72,7 @@ does run for a full-access start (the hook covers every Codex start, and a test 
 The fourth was new: the before-and-after audit can be fooled by another writer in the
 checkout. `recipes/codex-consult.md` now says nothing else writes in that checkout while the
 child runs (it was "do not edit the files it reads").
+
+**Fourth fallback review**, of 3eb0a5a: one medium (`recipes/codex.md` had lost the date of
+the owner's yes, which the owner's answer asked for) and two low (`options/ship.md` line width
+and "one consult"); all fixed on the next head.

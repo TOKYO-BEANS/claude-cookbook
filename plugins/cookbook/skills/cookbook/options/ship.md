@@ -16,9 +16,10 @@ Chosen by fit for the job on 15 November 2026.
   since 16 November 2026, and `sol-loop` and `council` are still not in use: tstack is not
   installed. `sol-loop` picks the latest GPT Sol, and the ChatGPT sign-in refuses
   `gpt-6.1-sol` (an older one, `gpt-5.6-sol`, answers); it starts its reviewer in the session's
-  own mode, round after round, and the owner's yes to an unattended Codex run covers one
-  consult, not a loop ([codex](../recipes/codex.md)). `council` needs three providers and two are on. Neither
-  checks the merge condition in code, and the review of a pull request has its owner. Their
+  own mode, round after round, and the owner's yes to an unattended Codex run covers a
+  consult, not a loop ([codex](../recipes/codex.md)). `council` needs three providers and two
+  are on. Neither checks the merge condition in code, and the review of a pull request has
+  its owner. Their
   job, a review by another provider's model, is done by a consult, as advice
   ([codex-consult](../recipes/codex-consult.md)). What the comparison showed
   is kept as practice in `recipes/ci-releases.md`: the reviews inside the `sa-*` route found
