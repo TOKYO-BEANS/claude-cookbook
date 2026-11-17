@@ -69,7 +69,7 @@ fallback and say that you did.
 | Typed records: companies, people, jobs, filings, places | **Firecrawl** Alexandria | Parallel FindAll | [firecrawl](recipes/firecrawl.md) |
 | One question across 10 to 50 pages | the web batch script (**Parallel**, **Firecrawl**, **TypeSafe / Jev**) | Parallel Search excerpts | [web-batch](recipes/web-batch.md) |
 | A cited answer that needs several sources | **sa-research** | Parallel `web_research` | [workflows](recipes/workflows.md) |
-| Several steps on a public page inside a session: click, fill, screenshot | **Stagehand** | the `browse` CLI, a command per step | [stagehand](recipes/stagehand.md) |
+| Several steps on a public page: click, fill, screenshot | **Stagehand**, in a child session | the `browse` CLI, a command per step | [stagehand](recipes/stagehand.md) |
 | A public page from a script, or one step | **Browserbase**, the `browse` CLI | Firecrawl, when reading is enough | [cloud-browser](recipes/cloud-browser.md) |
 | A site that needs a sign-in | **agent-browser**, with a login from the vault | the built-in browser, where the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Web logins | the **Proton Pass CLI**, vault "Claude" | the owner signs in | [sign-ins](recipes/sign-ins.md) |

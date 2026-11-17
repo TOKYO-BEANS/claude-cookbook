@@ -16,8 +16,13 @@ of a live site does not use it: it cannot reach a local build and has no phone e
   rest of the session, so the page state survives between calls. It ends when the Claude session
   ends, and at the latest after 20 minutes (`STAGEHAND_BROWSERBASE_SESSION_TIMEOUT_SECONDS=1200`).
   That time counts against the Browserbase plan's browser hours. Mounting the server opens no
-  browser and uses no browser time until a tool is called. It does add three tool names and two
-  Node processes to every session.
+  browser and uses no browser time until a tool is called.
+- **Loaded on demand (since 17 November 2026):** not in every session, because its two Node
+  processes cost about 32 MB each session, about 450 MB across 14 sessions at once. A step that
+  needs it runs in a child session that loads only this server:
+  `claude -p --mcp-config ~/.local/share/stagehand-mcp.json --strict-mcp-config --allowedTools
+  "mcp__stagehand__run mcp__stagehand__snapshot mcp__stagehand__screenshot" "<the steps>"`.
+  The child sees only the prompt it is given, so put the page and the steps in it.
 - **Acting on a page:** opening, reading, scrolling and filling a field are free. Anything that
   changes something for someone else or cannot be undone (submitting a form, sending, posting,
   buying, deleting, accepting terms) needs the owner's yes for that action first, as everywhere.
