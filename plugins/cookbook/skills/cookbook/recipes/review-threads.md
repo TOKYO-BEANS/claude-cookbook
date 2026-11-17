@@ -3,8 +3,8 @@
 The rule is in [ci-releases](ci-releases.md): no merge while a thread of GitHub's security
 review is open. This page is how to read the threads and what the merge commands do.
 
-That review (GitHub's AI scanning) is off since 17 November 2026, by the owner, for its cost
-([security-costs](security-costs.md)). The rule holds for every open thread, and a new
+That review (GitHub's AI scanning) was turned off on 17 November 2026, by the owner, for its
+cost; its proof: [security-costs](security-costs.md). The rule holds for every open thread, and a new
 thread means it is back on: say so.
 
 - **What they are.** `github-advanced-security` reviews each push and writes each finding as a

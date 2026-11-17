@@ -42,10 +42,11 @@ minutes of the private repositories were about to run out.
   organizations/<org>/settings/billing/budgets`, `budget_type: SkuPricing`). The next two
   pushes each ran a whole session again, minutes after the budget. Disabling the workflow
   (`PUT .../actions/workflows/<id>/disable`) is refused with 422. The Stack Atlas chat on
-  these settings found the third switch (12:36 UTC): "Scan for AI applications", the
+  these settings found the third switch (its report reached this chat at 12:36 UTC): "Scan for AI applications", the
   `xpia-reviewer` agent that wrote the prompt-injection threads, has no API and lives only
   on the organisation's Settings, Advanced Security, Global settings, "Code scanning". The
-  owner unticked it there. The last session started at 12:05:45 UTC; pushes at 12:17 and
+  owner unticked it there, after 12:06 and before 12:17 UTC. The last session started at
+  12:05:45 UTC; pushes at 12:17 and
   12:24 UTC started CodeQL and no session. The click detached `TOKYO-BEANS standard` from
   all eight repositories; the standard's `org --apply` attached it again at 12:20 UTC, all
   eight `enforced`, runners unchanged. Evidence:
