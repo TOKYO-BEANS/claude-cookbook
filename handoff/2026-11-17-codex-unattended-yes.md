@@ -65,3 +65,10 @@ the repository goes unseen; repository text could steer a full-access run; the h
 was asked in the question dialog (this chat, 17 November 2026) and answered "Accept as known
 limits": the four are known limits of the unattended mode, answered with that yes. A new
 finding that is not one of these four is handled as any other.
+
+**Graphify on 24c9eed.** Four medium findings: three are the limits the owner accepted (only
+prose controls, no gate of its own for the mode, steering by repository text); the start check
+does run for a full-access start (the hook covers every Codex start, and a test denies one).
+The fourth was new: the before-and-after audit can be fooled by another writer in the
+checkout. `recipes/codex-consult.md` now says nothing else writes in that checkout while the
+child runs (it was "do not edit the files it reads").
