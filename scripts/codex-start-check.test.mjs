@@ -818,7 +818,7 @@ test("hooks.json runs the gate before the three T3 tools that start an agent, an
   assert.equal(groups.length, 3);
   assert.equal(groups.filter((g) => JSON.stringify(g).includes("codex-start-gate")).length, 1);
   assert.deepEqual(groups[1], {
-    matcher: "AskUserQuestion|mcp__.+__(create_threads|t3_thread_launch)",
+    matcher: "AskUserQuestion|Edit|Write|NotebookEdit|mcp__.+__(create_threads|t3_thread_launch)",
     hooks: [{ type: "command", command: '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/owner-answers.mjs"', timeout: 10 }],
   });
   assert.deepEqual(groups[2], {

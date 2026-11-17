@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening (Adobe Firefly), photo masks and cut-outs (Adobe for creativity), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening, masks and cut-outs (no tool yet: say so), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -32,8 +32,8 @@ fallback and say that you did.
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a Claude API call with a typed answer | [judgement](recipes/judgement.md) |
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
-| Sharpen a soft real photo | **Adobe Firefly** | none: say so | [photos](recipes/photos.md) |
-| Edit a real photo: masks, cut-out, straighten, colour by region | **Adobe for creativity**, in its own child session | the same connector in a Claude Desktop chat | [photos-adobe-connector](recipes/photos-adobe-connector.md) |
+| Sharpen a soft real photo | none: say so | — | [photos](recipes/photos.md) |
+| Edit a real photo: masks, cut-out, straighten, colour by region | none: say so | — | [photos](recipes/photos.md) |
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
@@ -83,7 +83,7 @@ fallback and say that you did.
 | Big output kept out of the conversation | **context-mode** | ranged `Read` and `rg` | [context-mode](recipes/context-mode.md) |
 | Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor, by itself | [compaction](recipes/compaction.md) |
 | Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev**; the display is T3 Code's sidebar (`❓ ` marker, pins) | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
-| Several chats at once: a question another chat already put to the owner, a job another chat has | the **Cookbook**'s `owner-answers` hooks, which point at the chat that asked; **T3 Code**'s thread list and thread read | the same two looks by hand, before asking | [parallel-chats](recipes/parallel-chats.md) |
+| Several chats at once: a question another chat already put to the owner, a job or a file another chat has | the **Cookbook**'s `owner-answers` hooks, which point at the chat that asked and stop a chat's first change until it has looked; **T3 Code**'s thread list and thread read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
 | Memory across sessions | the project's handoff for its state (`HANDOFF.md`, or a file per entry in `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md) |
 | A plain script on a schedule | Windows Task Scheduler | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | An agent run on a schedule | a **T3 Code** scheduled task | a Claude Desktop scheduled task | [scheduled-runs](recipes/scheduled-runs.md) |

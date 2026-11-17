@@ -17,8 +17,8 @@
   logged out again.
 - **The code** is `~/.local/share/site-login` (`login.mjs`, `inbox.mjs`, `daemon.mjs`, `cli.mjs`
   and the Worker in `inbox/`, with `playwright-core` 1.65.0 and `postal-mime` 4.2.0 from a
-  lockfile); `npm test` there runs 20 tests against a local form and made-up mails. It is not in a
-  repository yet.
+  lockfile); `npm test` there runs 20 tests against a local form and made-up mails. Its source is
+  the repository `TOKYO-BEANS/sign-in-tools`, whose `install.mjs` copies it here.
 - Vetted on 12 and 13 November 2026: the `pass-cli` download matched the checksum in Proton's own
   version list and carries a valid Proton AG signature; Trivy 0.76.2 and OSV-Scanner 2.7.0 could
   not parse the closed binary, which is no result, not a clean one. OSV-Scanner found no issue in
