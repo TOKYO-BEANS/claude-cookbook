@@ -17,7 +17,7 @@ the end state.
 | Fixing findings, failed CI, conflicts, review comments | Claude (Auto-fix, `sa-*` workflows) |
 | Vetting outside code before install | local Gitleaks, OSV-Scanner and Trivy, then one run in a boat sandbox ([connecting.md](connecting.md) and [boat.md](boat.md)); never part of CI |
 
-- CodeQL runs on Depot runners in the private repositories and on GitHub's in the public one;
+- CodeQL runs on Depot runners in the private repositories and on GitHub's in the public one.
   Runners, AI Scan, costs and the purchase when the trial ends (about
   28 November 2026): [security-costs.md](security-costs.md).
 - Renaming or retiring a required check means updating the `Stack Atlas checks` ruleset in the same
