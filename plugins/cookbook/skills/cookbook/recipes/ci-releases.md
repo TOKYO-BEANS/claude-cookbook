@@ -39,5 +39,9 @@
 - **After a merge or deploy**, in the same task: Release Maintenance (commit, checks, deployed
   version, health), recorded with the release verifier, before calling it done. A failed release
   check: roll back to the last good version first, then fix through a new pull request.
-- Do not merge two PRs into the same `main` back to back: a new push can cancel the earlier
-  merge's CI.
+- **Merges queue up.** The CI workflows cancel older runs of a branch, so a merge pushed while
+  the previous merge commit's CI runs cancels it, and that commit's release check reads
+  `failed`. `merge-when-green.sh` waits, just before the gate and the merge, while the newest
+  commit of the default branch is under two minutes old or still has checks running (up to 30
+  minutes, then `NOT MERGED`: run it again later). A hand `gh pr merge` does not wait: check
+  `gh api repos/<owner>/<repo>/commits/HEAD/check-runs` first.
