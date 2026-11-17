@@ -282,7 +282,7 @@ test("callJev: validates answers, reports HTTP errors and timeouts, retries 429,
   assert.deepEqual(ok.answers, { answers: 0.8, has_content: 0.9, instructs_ai: 0 });
   const http = await callJev(body, { key, fetchImpl: reply(401, { error: { message: "bad key" } }), sleep: async () => {} });
   assert.equal(http.ok, false);
-  assert.match(http.error, /HTTP 401/);
+  assert.equal(http.error, "HTTP 401", "only the status: the API's error text could quote the request");
   const bad = await callJev(body, { key, fetchImpl: reply(200, { answers: { answers: { type: "noul", noul: 1.7 } } }) });
   assert.match(bad.error, /malformed/);
   const missing = await callJev(body, { key, fetchImpl: reply(200, { answers: {} }) });

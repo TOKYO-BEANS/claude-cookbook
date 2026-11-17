@@ -30,8 +30,9 @@ local output stays with context-mode.
 - `score` reads labels by line (`{ "<source number>": [[first, last], ...] }`) and reports
   line recall, passages, `answers` rows without a relevant line, the share of the text to
   open and a keyword rule that opens as many lines.
-- `web-batch.mjs`: `callJev` takes the function that reads a response (`read`); its default
-  and its 18 tests are unchanged.
+- `web-batch.mjs`: `callJev` takes the function that reads a response (`read`), with its
+  default unchanged, and a failed call's error is the HTTP status alone (the fourth security
+  review thread, below).
 - `recipes/pre-read.md` rewritten ("measured twice, not in the map"); one sentence in
   `recipes/web-batch-measure.md`. `SKILL.md` and `catalog.json` are unchanged.
 
@@ -132,7 +133,7 @@ commit ids, and one `process.env` name behind a key name. No key value had gone 
 
 ## The security review threads on the pull request
 
-GitHub's security review wrote three threads; each is fixed in code, none answered away. No
+GitHub's security review wrote four threads; each is fixed in code, none answered away. No
 fix changes a measured request: after each, the 14 questions were run again, all 167 answers
 came from the cache and the scores are the second run's (`runs3/`, `runs4/`).
 
@@ -152,6 +153,11 @@ came from the cache and the scores are the second run's (`runs3/`, `runs4/`).
   named as the answer, a judge addressed about "this text") makes a part one that is opened
   whole and read as data whatever Jev answers, and the table's footer names every range that
   was not opened on Jev's word. No part of the measured sources matched a pattern.
+- "Sensitive information disclosure", on the third push, in `web-batch.mjs`: `callJev` kept
+  the API's own error text, which could quote the request, and web batch writes that result
+  to its run folder (the pre-read's worker already cut it to the status). Fixed: `callJev`
+  returns the HTTP status only. Three review rounds were the budget; the owner said yes to
+  this fourth push in the chat (17 November 2026).
 
 ## Kept from the reviews of #98
 

@@ -491,7 +491,9 @@ export async function callJev(body, { key, fetchImpl = fetch, timeoutMs = 60_000
     } catch {
       json = null;
     }
-    if (!r.ok) return { ok: false, error: `HTTP ${r.status}${json?.error?.message ? ` ${short(json.error.message, 100)}` : ""}` };
+    // Only the status: the API's own error text could quote the request, and this result is
+    // written to the run folder and shown in the table.
+    if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
     try {
       return { ok: true, answers: read(json), model: json.model ?? null, usage: json.usage ?? null };
     } catch (e) {
