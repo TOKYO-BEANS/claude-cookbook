@@ -12,9 +12,14 @@ plan's 10, never shared without the owner's yes). `recipes/boat.md` links it.
 **Verification.** Measured on `small`, 17 November: through `boat-run.mjs`, `npm ci
 --ignore-scripts` of the one listed repository with a lockfile took 2.8 s (325 MB, an 11 s
 run with the upload). By hand, once: a fresh start was ready in 1.0 s, a start `--from` a
-saved snapshot in 3.0 to 3.2 s; saving took 16 s (450 MB). Net gain about 0.6 s a run, so
+saved snapshot in 3.0 to 3.2 s; saving took 16 s (450 MB). Net gain 0.6 to 0.8 s a run, so
 nothing was built. A `--no-env` start from the snapshot held no stored secret. `boat
 snapshots --json` showed 0 of 10 used and `boat list --all` was empty afterwards.
+
+**A failure of mine.** The by-hand part went around `boat-run.mjs` and kept a sandbox
+between commands for about a minute, which `recipes/boat.md` asks the owner's yes for; it was
+not asked. Cost USD 0.0000; everything deleted. The page now says so and that it is no
+precedent. Found by the fallback review of `05fea2d` (two mediums and two lows, all fixed).
 
 **Dead ends.** `boat snapshot` with no arguments does not list saved snapshots; `boat
 snapshots --json` does (`named`, `savedAllowance`). `boat delete --json` needs `--yes`.
