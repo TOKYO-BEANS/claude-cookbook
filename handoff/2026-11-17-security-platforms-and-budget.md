@@ -36,7 +36,11 @@ minutes of the private repositories were about to run out.
   second repository's CodeQL run on a normal push used Depot runners. The public repository
   is unchanged.
 - AI Scan: `pr_scan` and `repository_scan` read `disabled` on the organisation and on all
-  eight repositories.
+  eight repositories. That alone did not hold: 15 minutes later a "Code scanning AI
+  findings" run started on this pull request's first push and ran a whole session. So a
+  budget was added for the SKU `code_security_ai_unit`: USD 0, hard stop (`POST
+  organizations/<org>/settings/billing/budgets`, `budget_type: SkuPricing`). What the next
+  push showed is in the pull request.
 - The Cookbook: `recipes/security-costs.md` and `options/security-platforms.md` are new;
   `recipes/security.md`, `recipes/ai-review.md`, `recipes/review-threads.md`,
   `options/check.md` and the catalog's GitHub entry say the same. No tool was added or
@@ -58,6 +62,9 @@ minutes of the private repositories were about to run out.
   from GitHub's runners, the private repositories use about 10 minutes a day there.
 
 **Failures and dead ends.**
+- The `ai-scan` endpoints are not in GitHub's REST docs that were found; the switch was
+  accepted and read back, and a scan ran all the same. Whether it takes effect later, or is
+  not the control, is not known. What clears it: the Stack Atlas chat on these settings.
 - Parallel's connector answered "free-tier rate limit" after two calls in the main session;
   the research runs had finished, and the vendor pages were read with Firecrawl.
 - Firecrawl timed out twice on Semgrep's pricing page: its free tier is from a research

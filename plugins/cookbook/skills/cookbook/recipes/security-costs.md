@@ -19,9 +19,11 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
 - **GitHub's AI Scan is off** (owner, 17 November 2026):
   `gh api -X PATCH orgs/<org>/code-scanning/ai-scan -f pr_scan=disabled -f repository_scan=disabled`.
   It reviewed every push and wrote the security review threads. It is billed by use as
-  "Code Security AI Credits" (USD 0.01 each) with no cap unless a budget is set: USD 136 in
-  17 days, about USD 0.53 a pull request, plus a quarter of the minutes. Its risk types
-  (agent permissions, prompt injection, data disclosure) go into our own review's rubric.
+  "Code Security AI Credits" (USD 0.01 each): USD 136 in 17 days, about USD 0.53 a pull
+  request, plus a quarter of the minutes. A scan still ran 15 minutes after the switch read
+  `disabled`, so the lock is a budget for the SKU `code_security_ai_unit`: USD 0 with a hard
+  stop. Its risk types (agent permissions, prompt injection, data disclosure) go into our
+  own review's rubric.
 - **The `ai-review` job is paid in cash once the plan's monthly API credit is used.** It was
   used up on 16 November. From the token counts in the review comments: USD 11 to 27 a day at
   38 to 40 pull requests a day. The owner chose one review, run on the Claude plan by a
