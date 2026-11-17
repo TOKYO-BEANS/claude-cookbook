@@ -35,8 +35,8 @@ repository.
 ## Before a chat changes a file or starts a new chat
 
 The same hook stops a chat once before its first `Edit`, `Write` or `NotebookEdit` in a
-repository (again after four hours), and before `t3_thread_launch` and `create_threads`
-(then passing ten minutes); never a subagent or a delegate. The look:
+GitHub repository (again after four hours), and before `t3_thread_launch` and
+`create_threads` (then passing ten minutes); never a subagent or a delegate. The look:
 
 1. `t3_thread_list` with `allProjects: true`, `settled: false`, `includeSubagents: false`:
    the titles and the linked pull requests.

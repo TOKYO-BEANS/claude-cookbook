@@ -176,8 +176,8 @@ export function recordAnswers({ input, env = {}, now, repo = "" }) {
 
 const LAUNCH_REASON = [
   "Parallel-chats check (the Cookbook, recipes/parallel-chats.md): before a new chat starts, see whether a chat or a pull request already has this job.",
-  "1. `t3_thread_list` with `allProjects: true` and `settled: false`: read the titles and the linked pull requests (`titleContains` narrows it).",
-  "2. `gh pr list` in the job's repository.",
+  "1. `t3_thread_list` with `allProjects: true`, `settled: false` and `includeSubagents: false`: read the titles and the linked pull requests (`titleContains` narrows it).",
+  "2. `gh pr list --json number,title,headRefName,files` in the job's repository: the files each open pull request changes.",
   "If one has the job, start no second chat: send that chat what you know with `t3_thread_send`. If one only edits the same files, name it in the new chat's brief and say which files stay out.",
   "Then call this tool again: it passes for ten minutes.",
 ].join("\n");

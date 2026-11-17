@@ -483,6 +483,18 @@ test("a subagent and a delegate child are left alone: their chat took the look",
   assert.ok(denied(run({ input: edit("me"), env: {}, now: NOW + 1000, io: s.io })), "the chat itself is still stopped");
 });
 
+test("a look that cannot be noted, or a call with no session, never stops a change", () => {
+  const s = store();
+  s.io.writeState = () => { throw Object.assign(new Error(`full ${SECRET_WORDS}`), { code: "ENOSPC" }); };
+  assert.equal(run({ input: edit("me"), env: {}, now: NOW, io: s.io }), null, "a denial that could not be noted would come back on every call");
+  assert.deepEqual(s.logs.map((l) => l.error), ["ENOSPC"]);
+  s.io.checkout = () => { throw new Error("unreadable"); };
+  assert.equal(run({ input: edit("me"), env: {}, now: NOW, io: s.io }), null);
+  const fresh = store();
+  assert.equal(run({ input: { ...edit("me"), session_id: undefined }, env: {}, now: NOW, io: fresh.io }), null);
+  assert.equal(fresh.states.size, 0);
+});
+
 test("on the default branch the chat is told to move; the denial is one of two fixed texts", () => {
   const at = (onDefault, input = edit("me"), env = {}) => reason(decideEdit({ input, env, now: NOW, state: {}, repo: REPO, onDefault }).output);
   const plain = at(false), onMain = at(true);
@@ -524,6 +536,22 @@ test("the default branch is read from git's own files: HEAD against origin's, or
   assert.equal(onDefaultBranch(side), false);
   assert.equal(onDefaultBranch(main), true);
   assert.equal(onDefaultBranch(join(root, "not-there")), false);
+  // A ".git" file that names no folder is no repository; one that names a folder with no
+  // shared one (a submodule) has its config and its HEAD there; a missing HEAD is no branch.
+  const odd = join(root, "odd");
+  mkdirSync(odd);
+  writeFileSync(join(odd, ".git"), "nothing here\n");
+  assert.equal(originUrl(odd), "");
+  assert.equal(onDefaultBranch(odd), false);
+  const sub = join(root, "sub"), subGit = join(root, "modules", "sub");
+  mkdirSync(sub);
+  mkdirSync(subGit, { recursive: true });
+  writeFileSync(join(sub, ".git"), `gitdir: ${subGit}\n`);
+  writeFileSync(join(subGit, "config"), '[remote "origin"]\n\turl = https://github.com/Owner/Repo.git\n');
+  assert.equal(originUrl(sub), "https://github.com/Owner/Repo.git");
+  assert.equal(onDefaultBranch(sub), false, "no HEAD to read");
+  writeFileSync(join(subGit, "HEAD"), "ref: refs/heads/main\n");
+  assert.equal(onDefaultBranch(sub), true);
   // The checkout is the edited file's, not the chat's folder; a new folder counts as its parent's.
   const io = openStore({ OWNER_ANSWERS_DIR: join(root, "store") });
   assert.deepEqual(io.checkout(side, join(main, "new-folder", "file.md")), { repo: REPO, onDefault: true });
@@ -548,6 +576,19 @@ test("the hook file stops a chat's first change in a checkout, end to end", () =
   assert.equal(fire(inRepo("a")).stdout, "");
   assert.equal(fire(inRepo("sub", { agent_id: "a1" })).stdout, "");
   assert.equal(fire(edit("out", { cwd: dir, tool_input: { file_path: join(home, "plain", "a.md") } })).stdout, "", "a file outside a repository");
+  // A branch's name is text anyone can choose: it never reaches the denial, on the default
+  // branch or off it.
+  const named = join(home, "two");
+  mkdirSync(join(named, ".git", "refs", "remotes", "origin"), { recursive: true });
+  writeFileSync(join(named, ".git", "config"), '[remote "origin"]\n\turl = https://github.com/owner/two.git\n');
+  writeFileSync(join(named, ".git", "HEAD"), `ref: refs/heads/${SECRET_WORDS}\n`);
+  const inNamed = (session) => edit(session, { cwd: named, tool_input: { file_path: join(named, "a.md"), old_string: "a", new_string: "b" } });
+  const off = reason(JSON.parse(fire(inNamed("b")).stdout));
+  writeFileSync(join(named, ".git", "refs", "remotes", "origin", "HEAD"), `ref: refs/remotes/origin/${SECRET_WORDS}\n`);
+  const on = reason(JSON.parse(fire(inNamed("c")).stdout));
+  assert.doesNotMatch(off, /default branch/);
+  assert.equal(on, reason(first));
+  for (const text of [off, on]) assert.ok(!text.includes(SECRET_WORDS));
   assert.deepEqual(readdirSync(join(home, "store")), ["sessions"]);
-  assert.equal(readdirSync(join(home, "store", "sessions")).length, 1);
+  assert.equal(readdirSync(join(home, "store", "sessions")).length, 3);
 });
