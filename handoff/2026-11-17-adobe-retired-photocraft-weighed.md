@@ -23,7 +23,10 @@ masks, cut-out and colour job after vetting and a side-by-side test.
   RUSTSEC-2026-0187 and GHSA-6fj4-rcr3-r7rr, a
   stack overflow on a crafted nested PDF. It is in the binary and still on upstream `main`.
   The owner accepted it on 17 November 2026 (question dialog, this chat) on the condition
-  that PhotoCraft never opens a PDF or a file from outside; `photos.md` says so.
+  that PhotoCraft never opens a PDF or a file from outside, only our own JPEG, PNG or TIFF;
+  `photos.md` says so in the same words. The test photos below came from Wikimedia Commons,
+  so opening them stretched that condition; the advisory is in the PDF reader, which a JPEG
+  never reaches. The owner was told.
 - boat sandbox run of the Linux build under the probe: quiet (no DNS name, no connection, no
   file outside the folder, no process left).
 - Installed as the portable build in `~/.local/share/photocraft-0.23.1` (no admin). It stays

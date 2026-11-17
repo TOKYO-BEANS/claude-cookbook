@@ -18,8 +18,8 @@
   and location removed (check the copy, not the original). Without all of this, prepare the
   copies and stop.
 - A local tool reads files from outside the PC only as data. PhotoCraft never opens a PDF or
-  a file someone else sent: its PDF reader has an open high advisory the owner accepted on
-  that condition (17 November 2026).
+  a file from outside, only our own JPEG, PNG or TIFF: its PDF reader has an open high
+  advisory the owner accepted on that condition (17 November 2026).
 - What the 10 November job taught, for any tool:
   - Use masks and do the colour work locally. A cast correction needs a guard: never push a
     pixel past neutral, and keep skin from turning grey-green. A cream shirt or blonde hair is
