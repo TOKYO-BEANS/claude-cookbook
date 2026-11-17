@@ -15,7 +15,7 @@
   request; one Claude would dispute, dismiss or accept goes to the owner before any merge. A
   model's judgement never clears one.
 - **A security review thread stops the merge.** GitHub's security review
-  (`github-advanced-security`) writes each finding as a review thread on the pull request. No
+  (`github-advanced-security`; turned off on 17 November 2026, [review-threads](review-threads.md)) writes each finding as a review thread on the pull request. No
   merge while one is open, on the head or on an older commit. Only a reply in that thread
   closes it: `Fixed in <commit>`, a later commit of the pull request that fixes the finding,
   or `Owner's yes (<date>): <the owner's words>`, written only after the owner has said yes to

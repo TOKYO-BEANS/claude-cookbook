@@ -27,6 +27,10 @@
   review of every push took 2.9 calls a pull request and used a month's credit in 12 days; one
   review of the commit about to merge is about USD 0.40 to 0.60 a pull request. A smaller input
   budget, another model or no review for some pull requests is the owner's decision.
+- The month's credit was used up on 16 November 2026; after that each review is cash: USD 17
+  to 27 for the 40 reviews of 16 November, a floor. The owner chose (17 November 2026) one review
+  on the Claude plan, by a reviewer in the session, in the fallback review's form. Not built
+  yet: this job stays the review until it is, measured ([security-costs](security-costs.md)).
 - Review every change to `.depot/**`: a branch can edit the job and read the secret.
 - Claude fixes its findings together with failed checks and CodeQL alerts; a finding blocks only with
   evidence (a failing test, a CI run, a code-scanning alert, a line of code).

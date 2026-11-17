@@ -17,9 +17,9 @@ the end state.
 | Fixing findings, failed CI, conflicts, review comments | Claude (Auto-fix, `sa-*` workflows) |
 | Vetting outside code before install | local Gitleaks, OSV-Scanner and Trivy, then one run in a boat sandbox ([connecting.md](connecting.md) and [boat.md](boat.md)); never part of CI |
 
-- CodeQL default setup runs on GitHub-hosted runners: a permanent, documented exception to Depot-only
-  CI. Secret Protection and Code Security run on GitHub's Advanced Security trial until about
-  28 November 2026, when the owner buys both.
+- CodeQL runs on Depot runners in the private repositories and on GitHub's in the public one.
+  Runners, AI Scan, costs and the purchase when the trial ends (about
+  28 November 2026): [security-costs.md](security-costs.md).
 - Renaming or retiring a required check means updating the `Stack Atlas checks` ruleset in the same
   change, or every pull request waits for a check that never reports. The standard writes the
   ruleset once the repository's CI has run on its default branch, with the CodeQL rule in place
