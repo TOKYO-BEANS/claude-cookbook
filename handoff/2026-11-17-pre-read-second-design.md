@@ -135,9 +135,11 @@ commit ids, and one `process.env` name behind a key name. No key value had gone 
 
 ## The security review threads on the pull request
 
-GitHub's security review wrote five threads over four pushes; each is fixed in code, none
-answered away. Three review rounds were the budget: the owner said yes in the chat to the
-fourth push, and chose the fix for the fifth thread (both on 17 November 2026).
+GitHub's security review wrote five threads over the first four pushes; each is fixed in
+code. A sixth came on the fifth push and was closed with the owner's yes
+(`handoff/2026-11-17-record-of-102.md`). Three review rounds were the budget: the owner said
+yes in the chat to the fourth push, and chose the fix for the fifth thread (both on
+17 November 2026).
 
 - "Prompt injection", first push: the question from the command line stood in the
   instructions as it was typed, so a question taken from somewhere else could close its
