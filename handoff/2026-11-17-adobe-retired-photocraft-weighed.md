@@ -25,8 +25,9 @@ masks, cut-out and colour job after vetting and a side-by-side test.
   The owner accepted it on 17 November 2026 (question dialog, this chat) on the condition
   that PhotoCraft never opens a PDF or a file from outside, only our own JPEG, PNG or TIFF;
   `photos.md` says so. The test photos below came from Wikimedia Commons and were opened after
-  that answer, so the test stretched the condition; the advisory is in the PDF reader, which
-  a JPEG never reaches. The owner was told.
+  that answer, so the test stretched the condition. Asked in a question dialog (this chat, 17
+  November 2026), the owner chose "Accept the test as done": the ten test photos are
+  accepted, and the condition stays as it was for everything after.
 - boat sandbox run of the Linux build under the probe: quiet (no DNS name, no connection, no
   file outside the folder, no process left).
 - Installed as the portable build in `~/.local/share/photocraft-0.23.1` (no admin). It stays
