@@ -61,9 +61,10 @@ minutes of the private repositories were about to run out.
   types into the rubric; the thread rule stays for threads still open.
 - The measurement of Semgrep's code rules, due 24 November 2026, before the trial ends.
   Owner: Claude, its own chat. The purchase itself is the owner's.
-- Depot's use is unread: `depot org credits` needs an organisation token, which the key
-  store does not hold. A Depot minute past the plan's 2,000 costs USD 0.006. What clears it:
-  the owner saves a Depot organisation token in the key store (one masked window).
+- Depot's bill now reads: the owner saved a Depot organisation token as `depot-org` in the
+  key store (17 November 2026, on a question-dialog yes). October 2026: USD 52.69 before VAT
+  (the USD 20 plan, 5,265 runner minutes at USD 0.004 = USD 21.06, sandbox compute USD
+  11.63). CodeQL's share shows on the November invoice, finalized on 1 December: check it.
 - The Actions budget is unchanged at USD 0 with the hard stop. With CodeQL and AI Scan gone
   from GitHub's runners, the private repositories use about 10 minutes a day there.
 

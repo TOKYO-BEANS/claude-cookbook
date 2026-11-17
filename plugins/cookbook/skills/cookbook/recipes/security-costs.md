@@ -10,12 +10,12 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   against 86, and the code-scanning rule was satisfied.
 - **Why.** GitHub Team includes 3,000 Actions minutes a month for private repositories. CodeQL
   (69%) and AI Scan (24%) had used 2,672 by 17 November, and the Actions budget is USD 0 with a
-  hard stop: CodeQL would have stopped and the ruleset blocked every merge. A Depot minute
-  past its plan's 2,000 costs the same USD 0.006 as GitHub's.
+  hard stop: CodeQL would have stopped and the ruleset blocked every merge. Depot bills its
+  runner minutes at USD 0.004 (October 2026: 5,265 minutes, USD 21.06), before 25% VAT.
 - **Read the use** with
   `gh api "organizations/<org>/settings/billing/usage?year=<y>&month=<m>"` (per day,
-  repository and SKU) and `.../settings/billing/budgets`. Depot's use needs an organisation
-  token, which the key store does not hold: the Depot share is unread, never zero.
+  repository and SKU) and `.../settings/billing/budgets`. Depot's: `node ~/.local/bin/with-key.mjs
+  depot-org DEPOT_TOKEN depot org invoices list` (then `line-items <id>`), finalized months only.
 - **GitHub's AI Scan: the owner decided to turn it off (17 November 2026); not proven off.**
   `gh api -X PATCH orgs/<org>/code-scanning/ai-scan -f pr_scan=disabled -f repository_scan=disabled`.
   It reviewed every push and wrote the security review threads. It is billed by use as
