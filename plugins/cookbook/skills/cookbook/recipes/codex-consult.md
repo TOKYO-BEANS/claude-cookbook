@@ -30,8 +30,7 @@ point against the code and decides. What may be sent, the refused models and the
   supervised run's read-only sandbox stops writes, not reads (see the limits page). So, in
   either mode, note `git status --short` and `git rev-parse HEAD` before; afterwards compare
   both, and the branch on the remote. Report a change the child made; never keep one unseen.
-  The audit sees the repository only: an unattended run's write elsewhere would go unseen, a
-  known limit of the mode ([codex-decisions](codex-decisions.md)).
+  The audit sees the repository only: an unattended run's write elsewhere would go unseen.
 - **While it runs.** Nothing else writes in that checkout, so the audit sees only the child.
   A timeout, an error or no reply is not agreement. One consult per question; a re-check is a
   new `delegate_task`, three rounds at most.
