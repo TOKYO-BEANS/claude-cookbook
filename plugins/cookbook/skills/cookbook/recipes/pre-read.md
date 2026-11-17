@@ -37,5 +37,5 @@ transcript. **No design met the bar, so no map row points here.** Big output sta
    mostly noise. A judge that filters the search's windows cannot pass 77.6 % recall,
    and a wider search brings back the regime where both Jev designs failed. So nothing was
    built.
-5. A fourth attempt needs a new bar first: one scored on whether the opened text answers
-   the question, not on finding every place. That is the owner's call.
+5. A fourth attempt (owner's yes, 17 November 2026) writes a new bar first: one scored on
+   whether the opened text answers the question, not on finding every place.
