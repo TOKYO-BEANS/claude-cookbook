@@ -128,7 +128,7 @@ export const planCost = (url, pdfPages) => (isPdfUrl(url) ? pdfPages : 1);
 
 // Splits on line ends into parts of at most CHUNK_CHARS (a longer line is cut), so each
 // part maps to a line range Claude can open with a ranged Read. Lines are 1-based.
-// `maxChunks` is the page cap; pre-read.mjs passes its own.
+// `maxChunks` is the page cap.
 export function chunkText(text, maxChunks = MAX_CHUNKS) {
   const lines = text.split("\n");
   const chunks = [];
@@ -461,7 +461,8 @@ export function scoreRun(manifest, labels) {
 
 // ---------- Jev worker (runs in the child that holds the key) ----------
 
-export async function callJev(body, { key, fetchImpl = fetch, timeoutMs = 60_000, retries = 3, sleep = sleepReal }) {
+// `read` turns a response into the answers kept; pre-read.mjs passes its own, for a Choice.
+export async function callJev(body, { key, fetchImpl = fetch, timeoutMs = 60_000, retries = 3, sleep = sleepReal, read = (json) => readJevAnswers(json, Object.keys(body.questions ?? QUESTIONS)) }) {
   for (let attempt = 0; ; attempt++) {
     let r;
     try {
@@ -490,9 +491,11 @@ export async function callJev(body, { key, fetchImpl = fetch, timeoutMs = 60_000
     } catch {
       json = null;
     }
-    if (!r.ok) return { ok: false, error: `HTTP ${r.status}${json?.error?.message ? ` ${short(json.error.message, 100)}` : ""}` };
+    // Only the status: the API's own error text could quote the request, and this result is
+    // written to the run folder and shown in the table.
+    if (!r.ok) return { ok: false, error: `HTTP ${r.status}` };
     try {
-      return { ok: true, answers: readJevAnswers(json, Object.keys(body.questions ?? QUESTIONS)), model: json.model ?? null, usage: json.usage ?? null };
+      return { ok: true, answers: read(json), model: json.model ?? null, usage: json.usage ?? null };
     } catch (e) {
       return { ok: false, error: e.message };
     }
