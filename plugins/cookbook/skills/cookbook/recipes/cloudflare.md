@@ -21,3 +21,10 @@
 - An endpoint that starts paid work, or relies on a protecting setting, fails closed: it answers 503
   while that setting is unset, and a test covers the unset case. Template: release-verifier
   `src/auth.mjs`.
+- The owner's domain `nofix.dev`: the apex and `/privacy` (Worker `nofix-site`) keep Google's
+  sign-in screen in production, so nothing else goes there; `in.nofix.dev` is the mail inbox
+  ([sign-ins](sign-ins-mail-and-access.md)). Private pages on its subdomains behind Access were
+  weighed on 17 November 2026 and not built: an Artifact is already private, opens wherever the
+  owner uses claude.ai and can keep state, and T3's `html_render` shows a page in the chat. Each
+  Access page adds a Worker, an Access policy (an access change) and a sign-in for nothing more.
+  Built only for a page that must serve live data from this PC.
