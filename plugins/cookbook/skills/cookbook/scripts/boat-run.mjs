@@ -16,8 +16,8 @@
 //   an archive): one that the list does not name for that repository stops the run.
 // - The sandbox is always deleted when the command ends: a kept one would run on outside
 //   these limits.
-// - Nothing starts while the plan cannot be read, while something could bill past it, or
-//   past the limits. "BOAT-RUN: not started: <why>" and exit 75, a code commands rarely
+// - Nothing starts while the plan cannot be read, while something could bill past it (a
+//   priced start, starts nearly used, the plan's time), or past the limits. "BOAT-RUN: not started: <why>" and exit 75, a code commands rarely
 //   use; otherwise the exit code is the command's own.
 // - A run takes its place among this PC's runs first and asks boat after. boat's count of
 //   sandboxes and the runs here that have none yet are counted together, so runs that
@@ -81,12 +81,21 @@ export function gate(run, plan, waiting = 0) {
   const p = plan;
   if (!count(waiting)) return "no result (the count of runs under way could not be read)";
   if (!p || typeof p !== "object" || !count(p.activeSandboxes) || !count(p.subscriptionQuotaSeconds) || !count(p.subscriptionRemainingSeconds)
-    || typeof p.keepGoing?.enabled !== "boolean" || !count(p.wallet?.balanceDollars) || typeof p.canStart !== "boolean") {
+    || typeof p.keepGoing?.enabled !== "boolean" || !count(p.wallet?.balanceDollars) || typeof p.canStart !== "boolean"
+    || !count(p.nextStartDollars) || !["day", "hour", "minute"].every((w) => count(p.starts?.[w]?.remaining))) {
     return "no result (the plan could not be read from boat limits)";
   }
   if (!p.canStart) return "boat says this account cannot start a sandbox now";
   if (p.keepGoing.enabled) return "extra starts are on, so a start could bill past the plan: the owner turns them off or says yes";
-  if (p.wallet.balanceDollars > 0) return "the wallet holds money, so use past the plan would spend it: the owner's yes first";
+  // The wallet may hold money (since 17 November 2026 it pays for the AI credentials proxy).
+  // Use past the plan would draw on it, so the run must fit inside the plan on its own
+  // figures: a start boat prices at nothing, starts left with room for the runs under way,
+  // and the plan's time checked below.
+  if (p.nextStartDollars > 0) return `boat would bill the next start (USD ${p.nextStartDollars}): starts past the plan need the owner's yes`;
+  const { day, hour, minute } = p.starts;
+  if (day.remaining <= LIMITS.active || hour.remaining <= LIMITS.active || minute.remaining <= waiting) {
+    return `the plan's starts are nearly used (left: ${day.remaining} today, ${hour.remaining} this hour, ${minute.remaining} this minute), and a start past them would be billed: wait, or the owner's yes`;
+  }
   const cost = run.timeout * RATE[run.type];
   if (cost > LIMITS.runSeconds) {
     return `one run takes at most ${LIMITS.runSeconds} seconds of the plan's time (${run.type}: a timeout of ${Math.floor(LIMITS.runSeconds / RATE[run.type])}); more needs the owner's yes`;
@@ -307,7 +316,7 @@ function isAlive(pid) {
 
 // On the owner's PC the key comes from the encrypted store for this one process; elsewhere
 // `boat` is on the path.
-function boatCommand(argv) {
+export function boatCommand(argv) {
   const key = join(homedir(), ".local", "bin", "with-key.mjs");
   const exe = join(homedir(), ".local", "share", "boat", "boat.exe");
   const local = process.platform === "win32" && existsSync(key) && existsSync(exe);
