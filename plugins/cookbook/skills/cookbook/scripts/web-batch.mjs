@@ -82,16 +82,16 @@ const OPEN = new Set(["answers", "uncertain"]);
 
 // ---------- small helpers ----------
 
-function sha256(s) {
+export function sha256(s) {
   return createHash("sha256").update(s).digest("hex");
 }
 const sleepReal = (ms) => new Promise((r) => setTimeout(r, ms));
-const short = (s, n = 200) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
-const readJson = (f) => JSON.parse(readFileSync(f, "utf8"));
-const writeJson = (f, v) => writeFileSync(f, JSON.stringify(v, null, 2));
+export const short = (s, n = 200) => String(s ?? "").replace(/\s+/g, " ").trim().slice(0, n);
+export const readJson = (f) => JSON.parse(readFileSync(f, "utf8"));
+export const writeJson = (f, v) => writeFileSync(f, JSON.stringify(v, null, 2));
 const estTokens = (chars) => Math.round(chars / 4);
 
-async function pool(items, size, fn) {
+export async function pool(items, size, fn) {
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(size, items.length) }, async () => {
@@ -128,7 +128,8 @@ export const planCost = (url, pdfPages) => (isPdfUrl(url) ? pdfPages : 1);
 
 // Splits on line ends into parts of at most CHUNK_CHARS (a longer line is cut), so each
 // part maps to a line range Claude can open with a ranged Read. Lines are 1-based.
-export function chunkText(text) {
+// `maxChunks` is the page cap; pre-read.mjs passes its own.
+export function chunkText(text, maxChunks = MAX_CHUNKS) {
   const lines = text.split("\n");
   const chunks = [];
   let cur = [], size = 0, start = 1;
@@ -152,7 +153,7 @@ export function chunkText(text) {
     size += line.length + 1;
   }
   flush(lines.length);
-  return { chunks: chunks.slice(0, MAX_CHUNKS), truncated: chunks.length > MAX_CHUNKS, total: chunks.length };
+  return { chunks: chunks.slice(0, maxChunks), truncated: chunks.length > maxChunks, total: chunks.length };
 }
 
 export function jevBody({ question, page, chunk, part, parts, model }) {
@@ -170,10 +171,10 @@ export function cacheKey(body) {
   return sha256(JSON.stringify({ v: QUESTION_VERSION, model: body.model, state: body.state }));
 }
 
-// Validates one Jev response: every question answered with a Noul in [0, 1].
-export function readJevAnswers(json) {
+// Validates one Jev response: every question (`ids`) answered with a Noul in [0, 1].
+export function readJevAnswers(json, ids = Object.keys(QUESTIONS)) {
   const out = {};
-  for (const id of Object.keys(QUESTIONS)) {
+  for (const id of ids) {
     const a = json?.answers?.[id];
     if (!a || a.type !== "noul" || typeof a.noul !== "number" || !(a.noul >= 0 && a.noul <= 1)) {
       throw new Error(`malformed Jev answer for "${id}"`);
@@ -491,7 +492,7 @@ export async function callJev(body, { key, fetchImpl = fetch, timeoutMs = 60_000
     }
     if (!r.ok) return { ok: false, error: `HTTP ${r.status}${json?.error?.message ? ` ${short(json.error.message, 100)}` : ""}` };
     try {
-      return { ok: true, answers: readJevAnswers(json), model: json.model ?? null, usage: json.usage ?? null };
+      return { ok: true, answers: readJevAnswers(json, Object.keys(body.questions ?? QUESTIONS)), model: json.model ?? null, usage: json.usage ?? null };
     } catch (e) {
       return { ok: false, error: e.message };
     }
@@ -517,7 +518,7 @@ export async function jevWorker(jobsFile, resultsFile, { env = process.env, fetc
 // ---------- real providers (CLI shims) ----------
 
 // Runs a Node script (a ~/.local/bin shim or this file) with an argument list; never a shell.
-function runNode(args, { timeoutMs = 120_000, env } = {}) {
+export function runNode(args, { timeoutMs = 120_000, env } = {}) {
   return new Promise((done) => {
     const child = spawn(process.execPath, args, { stdio: ["ignore", "pipe", "pipe"], windowsHide: true, env: env ?? process.env });
     let stdout = "", stderr = "";

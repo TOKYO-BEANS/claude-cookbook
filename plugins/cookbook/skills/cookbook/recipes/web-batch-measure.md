@@ -12,3 +12,6 @@ separate agent before judging. Recall was 18 of 18 and 12 of 12 relevant pages, 
 The pages held about 460k tokens; the parts to open held 51k and 41k. Each judge pass used about
 630k Jev input tokens (about 160 requests). Two questions are a small test: before automating on
 the verdicts, score a labelled run in the new domain.
+
+A new domain was scored on 17 November 2026: the same judge on local logs, long files and chat
+transcripts missed its bar and is not in the map ([pre-read](pre-read.md)).
