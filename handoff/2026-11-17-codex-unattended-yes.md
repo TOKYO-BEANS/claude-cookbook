@@ -32,6 +32,10 @@ today's date in recipes/codex.md through a pull request.").
   the hook passes and checks a start in each; a new test denies a full-access start that the
   check refuses, that has no `Repository:` line, or that asks for a worktree.
 
+**Clears** the open item in `HANDOFF.md` (16 November, "Unattended Codex runs for the map
+row ... Until then the row means a supervised run"): the owner's yes is recorded, and the row
+now means either mode within it. `HANDOFF.md` is closed, so the item is cleared here.
+
 **Not changed.** The start check, its hook, the Gitleaks scan, the ignored-files check, the
 narrow brief, "never on text from outside", and what may never be sent.
 
@@ -49,7 +53,9 @@ from the 16 November yes, its record shortened, this handoff's wording, no test 
 full-access start). All six were fixed on e5491af. A second fallback review of e5491af found
 one high (that head had lost the limits page's "Models" and "Cost and no Codex" sections),
 one medium (the first answer was not quoted word for word) and three low; all fixed on the
-next head, where the owner's decisions moved to `recipes/codex-decisions.md`.
+next head, where the owner's decisions moved to `recipes/codex-decisions.md`. A third
+fallback review, of 19ec197, found one medium (the decisions page let the unattended yes read
+as an answer to security findings) and four low; all fixed on the next head.
 
 **Graphify's four findings (medium, advisory).** On e0a4f70 Graphify raised four: only the
 brief keeps an unattended run from writing; the audit is repository-scoped, so a write outside

@@ -15,8 +15,8 @@ point against the code and decides. What may be sent, the refused models and the
 - **Not for.** What a test or a check can decide; a public fact (research); routine edits; a
   second look by Claude (`cookbook:review`). Never one on every pull request.
 - **The call.** As on the Codex page, with `role: "review"`. First check what would be sent
-  against the limits page and run its checks: no check, no consult; outside its standing yes,
-  ask the owner before the call. Add
+  against the limits page and run its checks: no check, no consult; outside the standing yes
+  ([codex-decisions](codex-decisions.md)), ask the owner first. Add
   `mode: "wait"` only when this turn needs the answer. Leave `serviceTier` alone.
 - **The brief.** The child gets no history. Give it the line `Repository: TOKYO-BEANS/<repo>`
   (the start check's hook reads it), the repository path, the base commit or the files, the
