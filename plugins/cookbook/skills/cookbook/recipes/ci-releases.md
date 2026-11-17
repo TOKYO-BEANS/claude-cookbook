@@ -39,5 +39,5 @@
 - **After a merge or deploy**, in the same task: Release Maintenance (commit, checks, deployed
   version, health), recorded with the release verifier, before calling it done. A failed release
   check: roll back to the last good version first, then fix through a new pull request.
-- **Merges queue up:** a push cancels `main`'s running CI, so `merge-when-green.sh` waits for
-  it. So does a hand merge.
+- **Merges queue up:** a push cancels `main`'s running CI; `merge-when-green.sh` waits for it,
+  a hand merge must check first.
