@@ -33,4 +33,4 @@ record (Stack-Atlas #200, `AGENTS.md` "Fallback review").
 - **After it.** Critical, high and medium findings are fixed or answered as before. Any later
   comment by a person of the repository counts as the answer to them, so every note goes inside
   the record and nothing is posted after it until they are really answered. A push is a new head:
-  a new `ai-review` run and, if that is unavailable too, a new record.
+  a new `ai-review` run (asked for again) and, if that is unavailable too, a new record.
