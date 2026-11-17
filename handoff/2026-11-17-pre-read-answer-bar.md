@@ -77,8 +77,9 @@ context-mode, without a map row or a promise.
   `s-runs.json`, `k-runs.json` and `judgements.json`; every number above is from it.
 - `npm test` on this PC, on this change: 670 tests, 666 passed, 4 skipped, none failed, in
   1,337 seconds (`npm-test.log` in the evidence folder). It ran before `main` was merged in;
-  that merge brought only CI files (#112), and CI passed on the merged head. The review, the
-  merge and the
+  those merges bring other pull requests' changes (none to this change's files), so the
+  suite on the merged head is CI's (`Depot CI / test`, `test (windows-2025)`). The review,
+  the merge and the
   release check are recorded in the pull request's closing comment.
 
 ## Outstanding
