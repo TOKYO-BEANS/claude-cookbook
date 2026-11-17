@@ -112,6 +112,28 @@ test("the command it names instead, rebuilt from the parsed words", () => {
   assert.equal(as(`FOO="a b" npm test`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'FOO="a b" npm test'`);
   assert.equal(as("npm test -- $env:FOO", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- ''$env:FOO'''`);
   assert.deepEqual(kinds("cat <<\\EOF\nnpm test\nEOF"), []);
+  // Third review: a quoted argument that looks like a redirection stays; PowerShell's *> goes.
+  assert.equal(as(`npm test -- --grep "<x>" 2>&1`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- --grep "<x>"'`);
+  assert.equal(as("npm test *> out.txt", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
+});
+
+test("third review of #108: what the reader does not model is let through; pytest only as the program", () => {
+  // Command substitutions, here-documents, block comments and here-strings: unread, allowed.
+  assert.deepEqual(kinds(`git commit -m "$(echo "Fix flake; pytest now green")"`), []);
+  assert.deepEqual(kinds(`gh pr comment 108 --body "$(printf '%s\\n' "Ran it; npm test passed")"`), []);
+  assert.deepEqual(kinds("x=`npm test`"), []);
+  assert.deepEqual(kinds("<#\nnpm test\n#>\nGet-Date", { shell: "powershell" }), []);
+  assert.deepEqual(kinds("Write-Output $(npm test)", { shell: "powershell" }), []);
+  // Installs that name pytest are not test runs.
+  for (const text of ["uv pip install pytest", "uv add --dev pytest", "poetry add --group dev pytest", "pipenv install pytest", "uv run --with pytest python script.py", "uvx --from pytest ruff"]) {
+    assert.deepEqual(kinds(text), [], text);
+  }
+  assert.deepEqual(kinds("uv run --with pytest pytest -q"), ["pytest"]);
+  assert.deepEqual(kinds("uvx pytest"), ["pytest"]);
+  assert.deepEqual(kinds("poetry run pytest"), ["pytest"]);
+  // bash keywords before a runner.
+  assert.deepEqual(kinds("for f in a b; do npm test; done"), ["npm"]);
+  assert.deepEqual(kinds("if true; then npm test; fi"), ["npm"]);
 });
 
 test("review of #108: an odd quote in a commit message's here-document, and a quoted Windows folder", () => {

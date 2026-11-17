@@ -10,30 +10,18 @@ export const HINT = /npm|pnpm|yarn|--test|pytest|py\.test|semgrep/i;
 // The marker: a reason of at least ten characters, in a comment of the command.
 const MARKER = /^#\s*local-run:\s*(\S.{8,}\S)/i;
 
+// What this reader does not model, so a command that holds it is let through unread: a
+// command substitution or a here-document (bash), a subexpression, a block comment or a
+// here-string (PowerShell). Text inside them (a commit message, a pull request body) could
+// otherwise be read as commands. A run missed this way is the safe side: the hook is a route.
+const UNREAD = { bash: /\$\(|`|<</, powershell: /\$\(|<#|@['"]/ };
+
 // A small shell reader: enough of bash and PowerShell to tell a command word from a quoted
 // argument (`grep "npm test"` runs grep). Returns the simple commands in order, each with its
-// words and raw text, and the comments.
-// A here-document's lines are data, not commands: dropped before the read, also inside a
-// quoted `$(cat <<'EOF' ... EOF)`, where an odd quote in the text would otherwise end the
-// string early.
-export function dropHeredocs(text) {
-  const lines = text.split("\n");
-  const out = [];
-  for (let i = 0; i < lines.length; i += 1) {
-    out.push(lines[i]);
-    const ends = [...lines[i].matchAll(/(?<!<)<<(?!<)-?[ \t]*\\?(['"]?)([A-Za-z0-9_.-]+)\1/g)].map((m) => m[2]);
-    for (const d of ends) {
-      while (i + 1 < lines.length && lines[i + 1].trim() !== d) i += 1;
-      i += 1; // the closing line
-      if (i < lines.length) out.push(lines[i].trim() === d ? "" : lines[i]);
-    }
-  }
-  return out.join("\n");
-}
-
-export function read(source, shell = "bash") {
+// words (and each word as typed) and raw text, and the comments.
+export function read(text, shell = "bash") {
   const ps = shell === "powershell";
-  const text = ps ? source : dropHeredocs(source);
+  if (UNREAD[ps ? "powershell" : "bash"].test(text)) return { commands: [], comments: [], unread: true };
   const esc = ps ? "`" : "\\";
   const seps = ps ? ";&|\n(){}" : ";&|\n(){}`";
   const list = [];
@@ -64,14 +52,6 @@ export function read(source, shell = "bash") {
   for (let i = 0; i < text.length; i += 1) {
     const c = text[i];
     if (start < 0 && !/\s/.test(c) && !seps.includes(c)) start = i;
-    // A PowerShell here-string, @' ... '@ or @" ... "@: one word.
-    if (ps && c === "@" && (text[i + 1] === "'" || text[i + 1] === '"') && /^[ \t]*\r?\n/.test(text.slice(i + 2))) {
-      const q = text[i + 1];
-      const end = text.indexOf(`\n${q}@`, i + 2);
-      add(text.slice(i + 2, end < 0 ? text.length : end), i);
-      i = end < 0 ? text.length : end + 2;
-      continue;
-    }
     // `2>&1` and `&>`: a redirection, not a separator.
     if (c === "&" && (text[i - 1] === ">" || text[i + 1] === ">")) {
       add(c, i);
@@ -120,7 +100,19 @@ export function read(source, shell = "bash") {
 
 export const program = (w) => String(w).replace(/\\/g, "/").split("/").pop().toLowerCase().replace(/\.(exe|cmd|bat|ps1)$/, "");
 
-const WRAPPERS = new Set(["time", "env", "nice", "nohup", "exec", "command", "builtin", "xargs"]);
+// Words before a command that start it, bash's keywords included (`for ...; do npm test`).
+const WRAPPERS = new Set(["time", "env", "nice", "nohup", "exec", "command", "builtin", "xargs", "do", "then", "else", "elif", "if", "while", "until", "!"]);
+// The runners that start a program: `uv run [options] pytest`, `uvx [options] pytest`. The
+// options that take a value, so the value is not read as the program.
+const RUN_VIA = new Set(["uv", "poetry", "pipenv", "pdm", "hatch"]);
+const VALUE_OPTIONS = new Set(["--with", "--with-requirements", "--with-editable", "--python", "-p", "--project", "--directory", "--extra", "--group", "--env-file", "--from", "--package", "-e", "--env"]);
+function programAfter(words) {
+  for (let i = 0; i < words.length; i += 1) {
+    if (VALUE_OPTIONS.has(words[i])) i += 1;
+    else if (!words[i].startsWith("-")) return words[i];
+  }
+  return null;
+}
 const CD = new Set(["cd", "chdir", "pushd", "set-location", "sl", "push-location"]);
 const SHELLS = new Set(["bash", "sh", "zsh", "dash"]);
 const PS_SHELLS = new Set(["powershell", "pwsh"]);
@@ -195,8 +187,10 @@ export function kind(words, typed = words) {
     const m = rest.indexOf("-m");
     return m >= 0 && program(rest[m + 1] ?? "") === "pytest" ? found("pytest") : null;
   }
-  if (["uv", "uvx", "poetry", "pipenv", "pdm", "hatch"].includes(p)) {
-    return rest.some((a) => program(a) === "pytest") ? found("pytest") : null;
+  if (p === "uvx") return program(programAfter(rest) ?? "") === "pytest" ? found("pytest") : null;
+  if (RUN_VIA.has(p)) {
+    const run = rest.indexOf("run");
+    return run >= 0 && program(programAfter(rest.slice(run + 1)) ?? "") === "pytest" ? found("pytest") : null;
   }
   if (p === "semgrep") {
     const sub = rest.find((a) => !a.startsWith("-"));
@@ -255,13 +249,13 @@ export function find(text, { shell = "bash", cwd = ".", home = "", windows = pro
     // The key launcher: `node with-key.mjs <name> <VAR> <program> ...` starts the program.
     if (p === "node" && program(w[1] ?? "") === "with-key.mjs" && w.length > 4) {
       const k = kind(w.slice(4));
-      if (k) out.runs.push({ ...k, typed: null, dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: w.slice(4).join(" ") });
+      if (k) out.runs.push({ ...k, asTyped: false, dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: w.slice(4).join(" ") });
       continue;
     }
     // Words typed for bash go on as typed (globs, $VAR, ~ and quotes keep their meaning);
     // PowerShell's are rebuilt with POSIX quoting.
     const k = kind(c.words, c.typed);
-    if (k) out.runs.push({ ...k, typed: shell === "powershell" ? null : k.typed, dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: c.raw });
+    if (k) out.runs.push({ ...k, asTyped: shell !== "powershell", dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: c.raw });
   }
   return out;
 }
@@ -273,20 +267,22 @@ export const marked = (comments) => comments.some((c) => MARKER.test(c));
 // The command is rebuilt from its parsed words: a wrapper, a folder option and a redirection
 // of this PC never reach the sandbox; bash words go as typed, PowerShell's with POSIX quoting.
 export const sh = (w) => (/^[A-Za-z0-9_\/.:=@%+,-]+$/.test(w) ? w : /^[^$`"\\!]*$/.test(w) ? `"${w}"` : `'${w.replace(/'/g, "'\\''")}'`);
-const REDIRECT = /^\d*(>>?|<|&>|>&)/;
-const BARE_REDIRECT = /^\d*(>>?|<|&>)$/;
+// Redirections, as typed (a quoted "<x>" is an argument): bash's and PowerShell's `*>`.
+const REDIRECT = /^[\d*]?(>>?|<|&>|>&)/;
+const BARE_REDIRECT = /^[\d*]?(>>?|<|&>)$/;
 
 export function instead(run, repo, { script, shell = "bash" }) {
   const cd = repo.prefix ? `cd ${sh(repo.prefix.replace(/\/$/, ""))} && ` : "";
-  const asTyped = Array.isArray(run.typed) && run.typed.length === run.words.length;
+  const asTyped = run.asTyped !== false && Array.isArray(run.typed) && run.typed.length === run.words.length;
+  const seen = Array.isArray(run.typed) && run.typed.length === run.words.length ? run.typed : run.words;
   const env = asTyped && run.envTyped
     ? run.envTyped
     : (run.env ?? []).map((e) => { const at = e.indexOf("="); return `${e.slice(0, at + 1)}${sh(e.slice(at + 1))}`; });
   const parts = asTyped ? [...run.typed] : run.words.map(sh);
   const words = [];
   for (let i = 0; i < parts.length; i += 1) {
-    if (i > 0 && REDIRECT.test(run.words[i])) {
-      if (BARE_REDIRECT.test(run.words[i])) i += 1; // and its target
+    if (i > 0 && REDIRECT.test(seen[i])) {
+      if (BARE_REDIRECT.test(seen[i])) i += 1; // and its target
       continue;
     }
     words.push(parts[i]);
