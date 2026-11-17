@@ -68,7 +68,7 @@ test("the folder: cd before it, npm --prefix, Git Bash drive paths and ~", () =>
 
 test("kind reads only the command word", () => {
   assert.equal(kind(["echo", "npm", "test"]), null);
-  assert.deepEqual(kind(["CI=1", "timeout", "60", "npm", "--prefix", "sub", "test"]), { kind: "npm", dir: "sub", env: ["CI=1"], words: ["npm", "test"] });
+  assert.deepEqual(kind(["CI=1", "timeout", "60", "npm", "--prefix", "sub", "test"]), { kind: "npm", dir: "sub", env: ["CI=1"], envTyped: ["CI=1"], words: ["npm", "test"], typed: ["npm", "test"] });
 });
 
 test("the marker keeps a run local only with a reason", () => {
@@ -104,6 +104,14 @@ test("the command it names instead, rebuilt from the parsed words", () => {
   assert.equal(as(`semgrep scan --config "p/a b"`), `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'uvx semgrep scan --config "p/a b"'`);
   assert.equal(as("npm test -- 'it''s'", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- "it''s"'`);
   assert.equal(sh("$x"), "'$x'");
+  // Second review of #108: redirections are dropped; globs, $VAR and ~ keep their meaning.
+  assert.equal(as("npm test 2>&1 | tail -20"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
+  assert.equal(as("pytest tests/ > out.txt"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest pytest tests/'`);
+  assert.equal(as("pytest tests/test_*.py ~/x"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest pytest tests/test_*.py ~/x'`);
+  assert.equal(as(`npm test -- --grep "$PAT"`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- --grep "$PAT"'`);
+  assert.equal(as(`FOO="a b" npm test`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'FOO="a b" npm test'`);
+  assert.equal(as("npm test -- $env:FOO", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- ''$env:FOO'''`);
+  assert.deepEqual(kinds("cat <<\\EOF\nnpm test\nEOF"), []);
 });
 
 test("review of #108: an odd quote in a commit message's here-document, and a quoted Windows folder", () => {

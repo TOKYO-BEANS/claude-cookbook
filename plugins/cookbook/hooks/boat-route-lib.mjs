@@ -21,7 +21,7 @@ export function dropHeredocs(text) {
   const out = [];
   for (let i = 0; i < lines.length; i += 1) {
     out.push(lines[i]);
-    const ends = [...lines[i].matchAll(/(?<!<)<<(?!<)-?[ \t]*(['"]?)([A-Za-z0-9_.-]+)\1/g)].map((m) => m[2]);
+    const ends = [...lines[i].matchAll(/(?<!<)<<(?!<)-?[ \t]*\\?(['"]?)([A-Za-z0-9_.-]+)\1/g)].map((m) => m[2]);
     for (const d of ends) {
       while (i + 1 < lines.length && lines[i + 1].trim() !== d) i += 1;
       i += 1; // the closing line
@@ -39,16 +39,26 @@ export function read(source, shell = "bash") {
   const list = [];
   const comments = [];
   let words = [];
+  let typed = []; // each word as it was typed, quotes included
   let word = null;
+  let wstart = -1;
   let start = -1;
-  const endWord = () => {
-    if (word !== null) words.push(word);
+  const add = (part, at) => {
+    if (word === null) wstart = at;
+    word = (word ?? "") + part;
+  };
+  const endWord = (at) => {
+    if (word !== null) {
+      words.push(word);
+      typed.push(text.slice(wstart, at));
+    }
     word = null;
   };
   const endCommand = (at) => {
-    endWord();
-    if (words.length) list.push({ words, raw: text.slice(start, at).trim() });
+    endWord(at);
+    if (words.length) list.push({ words, typed, raw: text.slice(start, at).trim() });
     words = [];
+    typed = [];
     start = -1;
   };
   for (let i = 0; i < text.length; i += 1) {
@@ -58,18 +68,18 @@ export function read(source, shell = "bash") {
     if (ps && c === "@" && (text[i + 1] === "'" || text[i + 1] === '"') && /^[ \t]*\r?\n/.test(text.slice(i + 2))) {
       const q = text[i + 1];
       const end = text.indexOf(`\n${q}@`, i + 2);
-      word = (word ?? "") + text.slice(i + 2, end < 0 ? text.length : end);
+      add(text.slice(i + 2, end < 0 ? text.length : end), i);
       i = end < 0 ? text.length : end + 2;
       continue;
     }
     // `2>&1` and `&>`: a redirection, not a separator.
     if (c === "&" && (text[i - 1] === ">" || text[i + 1] === ">")) {
-      word = (word ?? "") + c;
+      add(c, i);
       continue;
     }
     if (c === esc && i + 1 < text.length) {
       i += 1;
-      if (text[i] !== "\n") word = (word ?? "") + text[i];
+      if (text[i] !== "\n") add(text[i], i - 1);
     } else if (c === "'") {
       let j = i + 1;
       let s = "";
@@ -78,7 +88,7 @@ export function read(source, shell = "bash") {
         s += text[j];
         j += 1;
       }
-      word = (word ?? "") + s;
+      add(s, i);
       i = j;
     } else if (c === '"') {
       let j = i + 1;
@@ -89,7 +99,7 @@ export function read(source, shell = "bash") {
         s += text[j];
         j += 1;
       }
-      word = (word ?? "") + s;
+      add(s, i);
       i = j;
     } else if (c === "#" && word === null) {
       const end = text.indexOf("\n", i);
@@ -99,9 +109,9 @@ export function read(source, shell = "bash") {
     } else if (seps.includes(c)) {
       endCommand(i);
     } else if (/\s/.test(c)) {
-      endWord();
+      endWord(i);
     } else {
-      word = (word ?? "") + c;
+      add(c, i);
     }
   }
   endCommand(text.length);
@@ -122,7 +132,7 @@ function unwrap(words) {
   let i = 0;
   const env = [];
   for (;;) {
-    if (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) env.push(words[i++]);
+    if (i < words.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) env.push(i++);
     else if (i < words.length && WRAPPERS.has(program(words[i]))) i += 1;
     else if (i < words.length && program(words[i]) === "timeout") {
       i += 1;
@@ -132,21 +142,30 @@ function unwrap(words) {
   }
   const out = words.slice(i);
   out.env = env;
+  out.start = i;
   return out;
 }
 
 // What kind of heavy run one command is, or null. `dir` is set when the command names its
 // own folder (`npm --prefix x test`); `words` is the command without it and without the
-// wrappers, and `env` its leading variables: what runs on boat.
-export function kind(words) {
+// wrappers, `env` its leading variables, and `typed`/`envTyped` the same words as they were
+// typed (`typed` defaults to `words`): what runs on boat.
+export function kind(words, typed = words) {
   const w = unwrap(words);
   if (!w.length) return null;
-  const found = (k, dir = null, own = w) => ({ kind: k, dir, env: w.env, words: [...own] });
+  const found = (k, dir = null, at = w.map((_, j) => j)) => ({
+    kind: k,
+    dir,
+    env: w.env.map((j) => words[j]),
+    envTyped: w.env.map((j) => typed[j]),
+    words: at.map((j) => w[j]),
+    typed: at.map((j) => typed[w.start + j]),
+  });
   const p = program(w[0]);
   const rest = w.slice(1);
   if (p === "npm" || p === "pnpm" || p === "yarn") {
     let dir = null;
-    const own = [w[0]];
+    const own = [0];
     for (let i = 0; i < rest.length; i += 1) {
       const a = rest[i];
       if (["--prefix", "-C", "--dir", "--cwd"].includes(a)) {
@@ -154,10 +173,11 @@ export function kind(words) {
         i += 1;
         continue;
       }
-      own.push(a);
+      own.push(i + 1);
       if (a.startsWith("-")) continue;
       if (/^(test|t|tst)(:.*)?$/.test(a) || ((a === "run" || a === "run-script") && /^test(:.*)?$/.test(rest[i + 1] ?? ""))) {
-        return found("npm", dir, own.concat(rest.slice(i + 1)));
+        for (let j = i + 2; j < w.length; j += 1) own.push(j);
+        return found("npm", dir, own);
       }
       return null;
     }
@@ -235,11 +255,13 @@ export function find(text, { shell = "bash", cwd = ".", home = "", windows = pro
     // The key launcher: `node with-key.mjs <name> <VAR> <program> ...` starts the program.
     if (p === "node" && program(w[1] ?? "") === "with-key.mjs" && w.length > 4) {
       const k = kind(w.slice(4));
-      if (k) out.runs.push({ ...k, dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: w.slice(4).join(" ") });
+      if (k) out.runs.push({ ...k, typed: null, dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: w.slice(4).join(" ") });
       continue;
     }
-    const k = kind(c.words);
-    if (k) out.runs.push({ ...k, dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: c.raw });
+    // Words typed for bash go on as typed (globs, $VAR, ~ and quotes keep their meaning);
+    // PowerShell's are rebuilt with POSIX quoting.
+    const k = kind(c.words, c.typed);
+    if (k) out.runs.push({ ...k, typed: shell === "powershell" ? null : k.typed, dir: k.dir ? place(here, k.dir, { home, windows }) : here, raw: c.raw });
   }
   return out;
 }
@@ -248,15 +270,28 @@ export const marked = (comments) => comments.some((c) => MARKER.test(c));
 
 // The command to run instead, for one run in a listed repository.
 // repo: { top, prefix, deps (package.json lists any), lock, requirements, semgrep (pinned version) }
-// The command is rebuilt from its parsed words with POSIX quoting, so PowerShell text, a
-// wrapper or a folder option of this PC never reaches the sandbox as it was typed.
+// The command is rebuilt from its parsed words: a wrapper, a folder option and a redirection
+// of this PC never reach the sandbox; bash words go as typed, PowerShell's with POSIX quoting.
 export const sh = (w) => (/^[A-Za-z0-9_\/.:=@%+,-]+$/.test(w) ? w : /^[^$`"\\!]*$/.test(w) ? `"${w}"` : `'${w.replace(/'/g, "'\\''")}'`);
+const REDIRECT = /^\d*(>>?|<|&>|>&)/;
+const BARE_REDIRECT = /^\d*(>>?|<|&>)$/;
 
 export function instead(run, repo, { script, shell = "bash" }) {
   const cd = repo.prefix ? `cd ${sh(repo.prefix.replace(/\/$/, ""))} && ` : "";
-  const env = (run.env ?? []).map((e) => { const at = e.indexOf("="); return `${e.slice(0, at + 1)}${sh(e.slice(at + 1))}`; });
-  const words = [...run.words];
-  const p = program(words[0]);
+  const asTyped = Array.isArray(run.typed) && run.typed.length === run.words.length;
+  const env = asTyped && run.envTyped
+    ? run.envTyped
+    : (run.env ?? []).map((e) => { const at = e.indexOf("="); return `${e.slice(0, at + 1)}${sh(e.slice(at + 1))}`; });
+  const parts = asTyped ? [...run.typed] : run.words.map(sh);
+  const words = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    if (i > 0 && REDIRECT.test(run.words[i])) {
+      if (BARE_REDIRECT.test(run.words[i])) i += 1; // and its target
+      continue;
+    }
+    words.push(parts[i]);
+  }
+  const p = program(run.words[0]);
   words[0] = ["python", "py"].includes(p) ? "python3" : p;
   let size = "--timeout 1200";
   let install = "";
@@ -268,7 +303,7 @@ export function instead(run, repo, { script, shell = "bash" }) {
     size = "--type default --timeout 1800";
     words.splice(0, 1, "uvx", `semgrep${repo.semgrep ? `@${repo.semgrep}` : ""}`);
   }
-  const body = `${cd}${install}${[...env, ...words.map(sh)].join(" ")}`;
+  const body = `${cd}${install}${[...env, ...words].join(" ")}`;
   const quoted = shell === "powershell" ? `'${body.replace(/'/g, "''")}'` : `'${body.replace(/'/g, "'\\''")}'`;
   return `node "${script}" ${size} --push "${repo.top}" -- bash -c ${quoted}`;
 }
