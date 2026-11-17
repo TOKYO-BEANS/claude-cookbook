@@ -24,6 +24,14 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 - **A narrow brief.** It names the paths the question is about and carries this line: "Read
   only what this question needs, and nothing outside the repository."
 
+## The audit, before and after
+
+In either mode, before the call note, and afterwards compare: `git status --short --ignored`,
+`git rev-parse HEAD`, the branch on the remote, and a hash of `.git/config` and of every file
+under `.git/hooks`. A hook or setting written there runs with the next Git command, so run
+none in that checkout until they match. The audit sees the repository only: an unattended
+run's write elsewhere would go unseen.
+
 ## The owner's decisions
 
 What the owner allowed, with dates and words: [codex-decisions](codex-decisions.md).

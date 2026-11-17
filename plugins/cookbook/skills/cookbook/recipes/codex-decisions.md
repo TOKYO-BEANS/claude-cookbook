@@ -21,6 +21,7 @@ consult, with dates and words. The checks before the call are on the limits page
   sandbox does not fence reading and that the session decides alone.
 - The unattended yes accepts no security finding in advance. On #113 the owner accepted four
   of Graphify's as known limits of the mode (only the brief keeps it from writing; the audit
-  sees the repository only; repository text could steer it; the hook has no gate of its own
-  for this mode). Any other finding is fixed or goes to the owner.
+  sees the repository only; repository text could steer it; the hook runs the same start check
+  for both modes and none of its own for this one, so the scan and ignored-files checks are
+  the session's). Any other finding is fixed or goes to the owner.
 - Loosening either yes is the owner's decision.

@@ -27,10 +27,9 @@ point against the code and decides. What may be sent, the refused models and the
   findings with file, line and evidence, and what it could not check. No secrets and no
   customer data in a brief. Advice without evidence you can check is not taken.
 - **Nothing keeps an unattended run from writing** but the brief: it has full access. A
-  supervised run's read-only sandbox stops writes, not reads (see the limits page). So, in
-  either mode, note `git status --short` and `git rev-parse HEAD` before; afterwards compare
-  both, and the branch on the remote. Report a change the child made; never keep one unseen.
-  The audit sees the repository only: an unattended run's write elsewhere would go unseen.
+  supervised run's read-only sandbox stops writes, not reads. In either mode, run the audit
+  before and after: [codex-limits](codex-limits.md), "The audit". Report a change the child
+  made; never keep one unseen.
 - **While it runs.** Nothing else writes in that checkout, so the audit sees only the child.
   A timeout, an error or no reply is not agreement. One consult per question; a re-check is a
   new `delegate_task`, three rounds at most.

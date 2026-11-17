@@ -76,3 +76,10 @@ child runs (it was "do not edit the files it reads").
 **Fourth fallback review**, of 3eb0a5a: one medium (`recipes/codex.md` had lost the date of
 the owner's yes, which the owner's answer asked for) and two low (`options/ship.md` line width
 and "one consult"); all fixed on the next head.
+
+**Graphify on 3eb0a5a.** Three medium: prose-only gating is an accepted limit. New: the audit
+missed `.git` and ignored files, and a hook written to `.git/hooks` would run with the next Git
+command; the audit, now on `recipes/codex-limits.md` ("The audit, before and after"), adds
+`--ignored` and a hash of `.git/config` and `.git/hooks`, and no Git command runs in the
+checkout until they match. The decisions page now says the hook runs the same start check for
+both modes and none of its own for the unattended one, which Graphify read as a contradiction.
