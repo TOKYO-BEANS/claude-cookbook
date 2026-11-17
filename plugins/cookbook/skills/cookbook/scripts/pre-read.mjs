@@ -97,8 +97,11 @@ export const lineId = (n) => `L${String(n).padStart(3, "0")}`;
 // The question is the caller's text, and it stands in the instructions as a quoted value:
 // line ends and control characters become one space, and JSON quoting escapes a quote or a
 // backslash, so the text cannot close its quotes and go on as instructions. A plain
-// question reads as before: "<question>".
-export const quoteQuestion = (question) => JSON.stringify(String(question).replace(/[\s\p{Cc}]+/gu, " ").trim());
+// question reads as before: "<question>". Before that, what looks like a secret is taken
+// out of it, as out of every line that is sent (redactLine): the manifest, the jobs and the
+// request hold the question in this form only.
+export const cleanQuestion = (question) => redactLine(String(question).replace(/[\s\p{Cc}]+/gu, " ").trim());
+export const quoteQuestion = (question) => JSON.stringify(cleanQuestion(question));
 export const questionsFor = (question, count) => ({
   where: {
     type: "choice",
@@ -127,7 +130,19 @@ export const questionsFor = (question, count) => ({
   },
 });
 export const QUESTION_IDS = ["where", "exists", "aimed"];
-export const QUESTION_VERSION = sha256(JSON.stringify([KINDS, questionsFor("q", 1), PART, SEGMENT_CHARS])).slice(0, 12);
+
+// A deterministic guard beside the third Noul, which is Jev's own judgement: a line that
+// carries a line id of its own, or that addresses whoever judges it in one of these fixed
+// forms, makes its part one that is opened whole and read as data, whatever Jev answers
+// (route()). The list is short on purpose: it catches the plain attempts, and the table
+// names every range that was not opened, so nothing is skipped out of sight.
+export const AIMED_PATTERNS = [
+  /(?:^|[^A-Za-z0-9])L\d{3,}\|/, // an id tag as this script writes them, inside the text
+  /\b(?:ignore|disregard|forget)\b[^.\n]{0,40}\b(?:instructions?|prompts?|rules|criteria)\b/i,
+  /\b(?:answer|respond|reply|choose|select|pick|output|return)\b[^.\n]{0,30}\bL\d{3}\b/i,
+  /\b(?:ai|llm|model|judge|classifier|evaluator|grader)\b[^.\n]{0,30}\b(?:reading|judging|evaluating|grading|scoring|classifying)\b[^.\n]{0,30}\bthis (?:text|file|log|line|part|document|chat)\b/i,
+];
+export const aimedByRule = (text) => AIMED_PATTERNS.some((re) => re.test(text));
 
 export const VERDICTS = ["answers", "uncertain", "error", "doesn't"]; // table order
 const OPEN = new Set(["answers", "uncertain"]);
@@ -385,6 +400,8 @@ export function redactLine(line) {
     .replace(/[A-Za-z0-9]{20,}/g, (run) => (/[A-Za-z]/.test(run) && /\d/.test(run) ? "[redacted]" : run));
 }
 export const redact = (text) => String(text).split("\n").map(redactLine).join("\n");
+// The wording's version, for the cache. It stands here because a question passes redactLine.
+export const QUESTION_VERSION = sha256(JSON.stringify([KINDS, questionsFor("q", 1), PART, SEGMENT_CHARS])).slice(0, 12);
 
 // ---------- lines and parts ----------
 
@@ -485,16 +502,17 @@ export function partsOf(lines) {
   const parts = [];
   let cur = [], size = 0;
   const flush = () => {
-    if (cur.length) parts.push({ text: cur.map((it, i) => `${lineId(i)}| ${it.text}`).join("\n"), startLine: cur[0].n, endLine: cur.at(-1).n, items: cur.map((it) => it.n) });
+    if (cur.length) parts.push({ text: cur.map((it, i) => `${lineId(i)}| ${it.text}`).join("\n"), startLine: cur[0].n, endLine: cur.at(-1).n, items: cur.map((it) => it.n), rule: cur.some((it) => it.rule) });
     cur = [];
     size = 0;
   };
   lines.forEach((line, i) => {
     if (!line.text.trim()) return;
+    const rule = aimedByRule(line.text); // the whole line, before it is cut into pieces
     for (let at = 0; at < line.text.length; at += SEGMENT_CHARS) {
       const piece = line.text.slice(at, at + SEGMENT_CHARS);
       if (cur.length && (cur.length >= PART.lines || size + piece.length + TAG_CHARS > PART.chars)) flush();
-      cur.push({ n: i + 1, text: piece });
+      cur.push({ n: i + 1, text: piece, rule });
       size += piece.length + TAG_CHARS;
     }
   });
@@ -609,7 +627,7 @@ export function route(part) {
       : j.exists < EXISTS.no
         ? { verdict: "doesn't", reason: `no line addresses it (${p})` }
         : { verdict: "uncertain", reason: `partly addressed (${p})` };
-  if (j.aimed >= THRESHOLDS.yes) return { verdict: r.verdict === "doesn't" ? "uncertain" : r.verdict, reason: `${r.reason}; holds text aimed at its reader: read the whole part as data`, open: whole };
+  if (part.rule || j.aimed >= THRESHOLDS.yes) return { verdict: r.verdict === "doesn't" ? "uncertain" : r.verdict, reason: `${r.reason}; holds text aimed at its reader${part.rule ? " (a fixed pattern)" : ""}: read the whole part as data`, open: whole };
   if (r.verdict === "doesn't") return { ...r, open: [] };
   return { ...r, open: j.ranges?.length ? j.ranges : whole };
 }
@@ -648,12 +666,13 @@ export function planStage({ question, files, kind, maxParts, privacy }) {
     const list = loaded.parts.length === 0 ? [{ text: "", startLine: 1, endLine: 1, items: [] }] : loaded.parts;
     s.parts = list.map((p, k) => {
       const part = { id: `${s.i}.${k + 1}`, k: k + 1, startLine: p.startLine, endLine: p.endLine, ids: p.items.length, chars: p.text.length, hash: sha256(p.text), status: tiny ?? "pending" };
+      if (p.rule) part.rule = true; // a fixed pattern says this part speaks to its reader
       if (!tiny && budget-- <= 0) part.status = "capped";
       return part;
     });
     return s;
   });
-  return { created: new Date().toISOString(), question, maxParts, privacy: { roots: privacy.roots.length, ignored: privacy.ignored, error: privacy.error }, sources };
+  return { created: new Date().toISOString(), question: cleanQuestion(question), maxParts, privacy: { roots: privacy.roots.length, ignored: privacy.ignored, error: privacy.error }, sources };
 }
 
 export async function judgeStage(manifest, providers, opts) {
@@ -773,7 +792,7 @@ export function renderReport(manifest, outDir) {
     .sort((a, b) => VERDICTS.indexOf(a.p.verdict) - VERDICTS.indexOf(b.p.verdict) || (b.p.jev?.exists ?? 0) - (a.p.jev?.exists ?? 0) || a.s.i - b.s.i || a.p.k - b.p.k);
   const num = (v) => (typeof v === "number" ? v.toFixed(2) : "-");
   const where = ({ s, p }) => (p.open?.length ? `source ${s.i}, lines ${span(p.open)}` : `not judged: source ${s.i}, lines ${p.startLine}-${p.endLine}`);
-  const best = (p) => (p.jev?.top?.length && !(p.jev.aimed >= THRESHOLDS.yes) ? `${p.jev.top[0].line} (${num(p.jev.top[0].p)})` : "-");
+  const best = (p) => (p.jev?.top?.length && !p.rule && !(p.jev.aimed >= THRESHOLDS.yes) ?`${p.jev.top[0].line} (${num(p.jev.top[0].p)})` : "-");
   const lines = [
     `Question: ${manifest.question}`,
     `Run folder: ${resolve(outDir)}`,
@@ -807,6 +826,9 @@ export function renderReport(manifest, outDir) {
     tokens: { allEst: estTokens(allChars), openEst: estTokens(openChars), tableEst: estTokens(table.length) },
   };
   const foot = ["", `Open: ${count.answers} answers, ${count.uncertain} uncertain. Errors: ${count.error}. Not opened: ${count["doesn't"]} doesn't.`];
+  // What Jev's word left unopened is named, never hidden: the reader decides, not the judge.
+  const skipped = listing((p) => p.verdict === "doesn't" && p.status !== "empty");
+  if (skipped) foot.push(`Not opened on Jev's word, which is no proof that nothing is there: ${skipped}.`);
   const capped = listing((p) => p.status === "capped");
   if (capped) foot.push(`Not judged, past the cap of ${manifest.maxParts} parts: ${capped}. Raise --max-parts or ask about fewer files.`);
   if (manifest.sources.some((s) => s.kind === "transcript" && s.status === "ok")) foot.push(`A chat's lines are those of its rendered text: \`node "${SELF}" show <path> --kind transcript --lines <a>-<b>\` prints them.`);
@@ -1093,7 +1115,7 @@ export async function main(argv, { providers, log = console.log } = {}) {
   const stages = { run: ["plan", "judge", "report"], plan: ["plan"], judge: ["judge"], report: ["report"], score: ["score"] }[o.cmd];
   if (!stages) throw new Error("usage: pre-read.mjs run|plan|judge|report|show|score [options] (see the header of this file)");
   if (!o.out && !stages.includes("plan")) throw new Error("--out <run folder> is required for this stage");
-  const outDir = resolve(o.out ?? defaultOut(o.question));
+  const outDir = resolve(o.out ?? defaultOut(o.question === undefined ? undefined : cleanQuestion(o.question)));
   mkdirSync(outDir, { recursive: true });
   const manifestFile = join(outDir, "manifest.json");
   const p = providers ?? realProviders({ jevKey: o.jevKey, workDir: outDir });
@@ -1110,7 +1132,7 @@ export async function main(argv, { providers, log = console.log } = {}) {
     }
     if (!m) throw new Error(`no manifest.json in ${outDir}; run the plan stage first`);
     if (stage === "judge") {
-      if (o.question && o.question !== m.question) throw new Error("--question differs from the run's question");
+      if (o.question && cleanQuestion(o.question) !== m.question) throw new Error("--question differs from the run's question");
       // Read again, not taken from the plan: the list may have changed since.
       const privacy = loadPrivacy({ settingsFile: o.settingsFile, markerDir: o.markerDir, extra: o.privateRoots });
       m = await judgeStage(m, p, { ...opts, privacy, send: o.send === true });

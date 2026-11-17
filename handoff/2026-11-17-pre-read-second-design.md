@@ -94,7 +94,8 @@ changed, so 35 requests were new and 132 answers came from the cache.
   where a few lines had changed: an answer is sensitive to small changes of the text.
 - Jev input tokens: 2,035 (the one call), 717,847 (development, 123 requests), 919,572 (first
   run, 167 requests) and 176,412 (second run, 35 requests): about 1.8M, under 10 cents.
-- No wording or setting was changed after the first measured run. These labels are used up.
+- No wording or setting was changed after the first measured run, and the fixes for the
+  security review left the measured requests as they were. These labels are used up.
 
 ## The review before the pull request was marked ready
 
@@ -129,15 +130,28 @@ commit ids, and one `process.env` name behind a key name. No key value had gone 
   under its real id. A source can always mislead its judge by what it says; the third Noul
   and reading as data are the answer to that, not a rewrite of the text.
 
-## The security review thread on the pull request
+## The security review threads on the pull request
 
-GitHub's security review wrote one thread on the first push ("prompt injection": the
-question from the command line stood in the instructions as it was typed, so a question
-taken from somewhere else could close its quotes and go on as instructions). Fixed in code,
-as the thread proposed: line ends and control characters in the question become one space
-and the question is written as a JSON string (`quoteQuestion`), with a test. A plain question
-reads as before, so the 14 measured requests are unchanged: run again, all 167 answers came
-from the cache and the scores are the second run's (`runs3/`, `measure-3.log`).
+GitHub's security review wrote three threads; each is fixed in code, none answered away. No
+fix changes a measured request: after each, the 14 questions were run again, all 167 answers
+came from the cache and the scores are the second run's (`runs3/`, `runs4/`).
+
+- "Prompt injection", on the first push: the question from the command line stood in the
+  instructions as it was typed, so a question taken from somewhere else could close its
+  quotes and go on as instructions. Fixed as the thread proposed: line ends and control
+  characters become one space and the question is written as a JSON string
+  (`quoteQuestion`). A plain question reads as before.
+- "Sensitive information disclosure", on the second push: a secret typed into the question
+  would go to TypeSafe. Fixed: the question passes the same redaction as every line
+  (`cleanQuestion`), and the manifest, the jobs and the request hold it in that form only.
+- "Prompt injection", on the second push: text in a source can steer Jev, and the only guard
+  (the third Noul) is Jev's own judgement. The thread proposed a policy text and an envelope
+  in the state; not done, as in #98, since Jev answers typed questions and the measured
+  request would change. Fixed with two guards that are code: a short list of fixed patterns
+  (`AIMED_PATTERNS`: a line with a line id of its own, "ignore ... instructions", an id
+  named as the answer, a judge addressed about "this text") makes a part one that is opened
+  whole and read as data whatever Jev answers, and the table's footer names every range that
+  was not opened on Jev's word. No part of the measured sources matched a pattern.
 
 ## Kept from the reviews of #98
 
@@ -147,6 +161,8 @@ without their line ids) and JSON strings, asked again at the judge for every sou
 or chat text in the run folder, the cache or the job file (the cache holds probabilities per
 line id); a failed call, a malformed answer and a part past the cap are `error` rows; a part
 that speaks to its reader is never skipped, and now never narrowed to a few lines either.
+New beside them: the question is redacted and quoted, fixed patterns flag a part without
+Jev, and the footer names what was not opened.
 
 ## Verification
 

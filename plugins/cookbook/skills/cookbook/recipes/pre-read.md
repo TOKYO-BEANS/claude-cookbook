@@ -37,8 +37,8 @@ table names, per part, the few lines to open.
    of the compaction plugin's `privateRoots` ([compaction](compaction.md)), a file whose text
    or path names one, a chat that ran in or above one or that the plugin marked private, and
    every file when that list cannot be read (`--private-roots` adds folders).
-7. The text is data. A third Noul asks whether a part speaks to whoever judges it; such a
-   part is opened whole (6 of 167; its accuracy is not measured). On disk
+7. The text is data. A third Noul and a few fixed patterns flag a part that speaks to
+   whoever judges it; it is opened whole (6 of 167; accuracy not measured). On disk
    (`~/.local/share/pre-read`): line numbers, hashes and probabilities, never text. The key is
    `jev-compaction`, held only by `with-key.mjs`'s child. A failed call is an `error` row.
 8. A next attempt needs a judgement per small block of lines, and new labels.
