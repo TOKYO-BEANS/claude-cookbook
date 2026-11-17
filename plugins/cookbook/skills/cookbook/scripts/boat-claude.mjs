@@ -25,6 +25,7 @@
 // - "BOAT-CLAUDE: not started: <why>" and exit 75: nothing ran. Exit 0: the agent finished
 //   and wrote its report. Exit 1: it ran and did not finish cleanly; the line says why.
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -46,6 +47,9 @@ export const CLAUDE = {
   pollSeconds: 20, // how often the request count is read during a run
 };
 export const DOLLARS_PER_REQUEST = 0.001;
+// boat's own id where it differs from the Claude id (its list, 17 November 2026: it refused
+// "claude-opus-5-5" and names Opus "opus-5-5").
+export const BOAT_MODEL = { "claude-opus-5-5": "opus-5-5" };
 export const ENVIRONMENT = "claude-proxy";
 export const TASK_BYTES = 60000;
 
@@ -140,11 +144,11 @@ export function promptText(folder) {
 }
 
 export function promptArgv(run, id, folder) {
-  return ["prompt", id, "--provider", "claude", "--model", run.model, ...(run.effort ? ["--reasoning-effort", run.effort] : []), "--json", promptText(folder)];
+  return ["prompt", id, "--provider", "claude", "--model", BOAT_MODEL[run.model] ?? run.model, ...(run.effort ? ["--reasoning-effort", run.effort] : []), "--json", promptText(folder)];
 }
 
-export function newArgv(run, taskFile, environment) {
-  return ["new", "--type", run.type, "--environment", environment, "--ttl", String(run.timeout + CLAUDE.setupSeconds), "--name", "boat-claude", "--file", `TASK.md=${taskFile}`, "--json"];
+export function newArgv(run, taskFile, environment, name) {
+  return ["new", "--type", run.type, "--environment", environment, "--ttl", String(run.timeout + CLAUDE.setupSeconds), "--name", name, "--file", `TASK.md=${taskFile}`, "--json"];
 }
 
 const lines = (text) => String(text ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
@@ -223,34 +227,47 @@ export function runPrompt(run, id, folder, events, io = {}) {
     const child = start(promptArgv(run, id, folder));
     let stopped = null;
     let failed = null;
-    let rest = "";
+    let unconfirmed = false;
     let missed = 0;
-    const take = (chunk) => {
-      const text = rest + chunk.toString("utf8");
-      const parts = text.split("\n");
-      rest = parts.pop();
-      for (const l of parts) {
-        writeFileSync(events, `${l}\n`, { flag: "a" });
-        failed ??= failure(l);
-      }
+    // One partial line per stream: a line split across chunks of stdout is never joined to
+    // a chunk of stderr.
+    const reader = () => {
+      let rest = "";
+      const lines = (text) => {
+        const parts = text.split("\n");
+        rest = parts.pop();
+        for (const l of parts) {
+          writeFileSync(events, `${l}\n`, { flag: "a" });
+          failed ??= failure(l);
+        }
+      };
+      const take = (chunk) => lines(rest + chunk.toString("utf8"));
+      take.flush = () => { if (rest) lines(`${rest}\n`); };
+      return take;
     };
-    child.stdout.on("data", take);
-    child.stderr.on("data", take);
+    const out = reader();
+    const err = reader();
+    child.stdout.on("data", out);
+    child.stderr.on("data", err);
     let ended = false;
     const finish = () => {
       if (ended) return;
       ended = true;
       clearInterval(poll);
       clearTimeout(clock);
-      if (rest) take("\n");
-      done({ stopped, failed });
+      out.flush();
+      err.flush();
+      done({ stopped, failed, unconfirmed });
     };
     const halt = (why) => {
       if (stopped) return;
       // The block is what stops the spending: asked twice before it counts as failed.
       const blocked = [0, 1].some(() => ask(["ai", "block", id])?.status === 0);
+      const interrupted = ask(["interrupt", id])?.status === 0;
+      // Neither confirmed: the agent may still be spending, so main deletes the sandbox
+      // before it fetches anything.
+      unconfirmed = !blocked && !interrupted;
       stopped = blocked ? why : `${why}; boat did not confirm the block`;
-      ask(["interrupt", id]);
       // On this PC boat runs under a launcher: killing it may leave boat.exe holding the
       // pipes, so "close" may never come. The run ends anyway, and main deletes the sandbox.
       setTimeout(() => {
@@ -300,6 +317,15 @@ const REAL = {
   exec,
   prompt: runPrompt,
   remove: (id) => removeSandbox(id),
+  runName: () => `boat-claude-${randomUUID().slice(0, 8)}`,
+  findByName: (name) => {
+    try {
+      const list = boatJson(["list", "--json"]).sandboxes;
+      return (Array.isArray(list) ? list.find((x) => x?.name === name)?.id : null) ?? null;
+    } catch {
+      return null;
+    }
+  },
   // A script stopped by Ctrl-C, Ctrl-Break or a closed window still refuses the sandbox's
   // placeholders, deletes it and removes its copies. A forced kill (a tool's time limit; on
   // Windows SIGTERM is never delivered) runs no handler: then only the sandbox's TTL ends it,
@@ -354,6 +380,8 @@ export async function main(argv, deps = REAL) {
   let asked = false; // boat new was called: a sandbox may exist from here on
   let taskCopy = null;
   let offStop = null;
+  let gone = false; // the sandbox was deleted before the end
+  let name = null; // this run's sandbox name, unique, set before boat new
   try {
     let plan;
     let envs;
@@ -385,15 +413,21 @@ export async function main(argv, deps = REAL) {
     writeFileSync(sent, readFileSync(task));
     const taskScan = deps.scan(join(taskCopy, "task"), taskCopy);
     if (!taskScan.ok) return stop(`the secret scan of the task file: ${taskScan.reason}`);
-    asked = true;
-    const made = deps.boat(newArgv(run, sent, environment.name), 180000);
-    id = made.error ? null : newId(made.stdout);
-    if (id) offStop = deps.onStop(() => {
-      deps.boat(["ai", "block", id]);
-      deps.remove(id);
+    // Each run has a name of its own: a start that ends without boat saying the sandbox's id
+    // (a time-out, a cut answer) is found by it and deleted below. A signal is handled only
+    // after boat new returns (it is a synchronous call), so the handler always has the id.
+    name = deps.runName();
+    offStop = deps.onStop(() => {
+      if (id) {
+        deps.boat(["ai", "block", id]);
+        deps.remove(id);
+      }
       if (staged) staged.remove();
       if (taskCopy) rmSync(taskCopy, { recursive: true, force: true });
     });
+    asked = true;
+    const made = deps.boat(newArgv(run, sent, environment.name, name), 180000);
+    id = made.error ? null : newId(made.stdout);
     if (!id) {
       const any = /"id":"(bx_[a-z0-9]{4,40})"/.exec(String(made.stdout ?? ""));
       id = any ? any[1] : null;
@@ -414,6 +448,12 @@ export async function main(argv, deps = REAL) {
     const events = join(out, "events.jsonl");
     deps.say(`BOAT-CLAUDE: ${id} (environment ${environment.name}) runs ${run.model}; caps: ${run.requests} requests, ${run.timeout} seconds; events in ${events}`);
     const ran = await deps.prompt(run, id, folder, events);
+    if (ran.unconfirmed) {
+      // Neither the block nor the interrupt was confirmed: nothing is fetched first.
+      gone = deps.remove(id);
+      deps.say(`BOAT-CLAUDE: not finished: stopped at ${ran.stopped}; boat confirmed neither the block nor the interrupt, so ${gone ? "the sandbox was deleted before anything was fetched" : "nothing was fetched and the delete is tried once more"}`);
+      return 1;
+    }
     const report = deps.exec(id, "cat /home/user/RESULT.md");
     if (report.ok) writeFileSync(join(out, "RESULT.md"), report.stdout);
     let patch = null;
@@ -445,7 +485,14 @@ export async function main(argv, deps = REAL) {
   } catch (e) {
     if (!id && !asked) return stop(oneLine(e?.message));
     if (!id) {
-      deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}; a sandbox may still exist: run 'boat list' and delete what this run left`);
+      // boat new was asked and named no sandbox: look for this run's own name.
+      const found = name ? deps.findByName(name) : null;
+      if (found) {
+        id = found; // from here on it is this run's sandbox: finally retries a failed delete
+        deps.boat(["ai", "block", found]);
+        gone = deps.remove(found);
+      }
+      deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}; ${gone ? `its sandbox ${found}, found by the run's name, is deleted` : found ? `its sandbox ${found}, found by the run's name, could not be deleted yet; the delete is tried once more` : "a sandbox may still exist: run 'boat list' and delete what this run left"}`);
       return 1;
     }
     deps.say(`BOAT-CLAUDE: not finished: ${oneLine(e?.message)}`);
@@ -453,7 +500,7 @@ export async function main(argv, deps = REAL) {
   } finally {
     offStop?.();
     if (taskCopy) rmSync(taskCopy, { recursive: true, force: true });
-    if (id && !deps.remove(id)) deps.say(`BOAT-CLAUDE: the sandbox ${id} may still exist: run 'boat list' and delete it`);
+    if (id && !gone && !deps.remove(id)) deps.say(`BOAT-CLAUDE: the sandbox ${id} may still exist: run 'boat list' and delete it`);
     if (staged) staged.remove();
     claudeSlot.release();
     slot.release();
