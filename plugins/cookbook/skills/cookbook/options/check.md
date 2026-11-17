@@ -1,7 +1,7 @@
 # Options weighed: check
 
 Chosen by fit for the job on 15 November 2026. Security has had one owner per job since
-3-5 November 2026; the reasons are repeated here so the whole design is in one place.
+3-5 November 2026; one platform for it all: [security-platforms](security-platforms.md).
 
 - **CI: Depot CI.** Fast cached runners, run diagnostics, and one place for tests and
   container builds. Weighed: GitHub Actions (kept only for two documented exceptions: the
