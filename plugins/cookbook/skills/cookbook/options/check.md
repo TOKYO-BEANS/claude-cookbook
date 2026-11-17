@@ -17,8 +17,8 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   `sa-review` (the owner of a range with no pull request; the fallback is in the ai-review recipe).
 - **Our code: CodeQL.** Native to GitHub and required through the ruleset. Weighed: Semgrep
   Code (its code rules were dropped so that one scanner owns the job); Snyk Code (a second vendor).
-- **Dependencies: Semgrep Supply Chain.** It blocks only on a reachable high or critical
-  vulnerability. Weighed: Dependabot alerts (off in the organisation configuration: one owner); OSV-Scanner
+- **Dependencies: Semgrep Supply Chain.** It blocks high or critical ones not
+  classed unreachable. Weighed: Dependabot alerts (off in the organisation configuration: one owner); OSV-Scanner
   in CI (kept for outside code only); Snyk and Socket (a second vendor for the same job).
 - **Keys at push: GitHub Secret Protection.** It blocks before the key lands and checks
   validity. Weighed: Gitleaks in CI (finds a key after the push).
