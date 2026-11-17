@@ -1,6 +1,6 @@
 # Security in a repository
 
-One owner per job; nothing overlaps. The Stack Atlas standard rolls the setup out to every
+One owner per job. The Stack Atlas standard rolls the setup out to every
 TOKYO-BEANS repository, new ones included, and `node standard/cli.mjs audit` in Stack Atlas checks
 the end state.
 
@@ -12,7 +12,7 @@ the end state.
 | Blocking leaked keys at push, validity checks | **GitHub Secret Protection**, same configuration |
 | Vulnerable dependencies | **Semgrep** Supply Chain only: the Depot `semgrep` job runs `semgrep ci --supply-chain` and fails on a reachable vulnerable dependency of high or critical severity |
 | Keeping dependencies current | **Dependabot** version updates from the standard's `.github/dependabot.yml` (weekly, grouped, never `.depot/`); Dependabot alerts and security updates stay off in the configuration |
-| Malicious packages at install | **Aikido Safe Chain** before every `npm ci` / `pip install`, Windows jobs included |
+| Malicious packages at install | **Aikido Safe Chain** before every `npm ci` / `pip install`, Windows jobs included; limit below |
 | AI review of every pull request | the Depot `ai-review` job ([ai-review.md](ai-review.md)); advisory only |
 | Fixing findings, failed CI, conflicts, review comments | Claude (Auto-fix, `sa-*` workflows) |
 | Vetting outside code before install | local Gitleaks, OSV-Scanner and Trivy, then one run in a boat sandbox ([connecting.md](connecting.md) and [boat.md](boat.md)); never part of CI |
@@ -30,10 +30,10 @@ the end state.
   clears one, and a false-positive verdict is not a clean scan. Never silence a scanner with an
   ignore file (`.semgrepignore`).
 - Pin scanners and their installers by version and checksum.
-- Safe Chain checks only an install a workflow step starts by name. Inside `npm run`,
-  `npm test` or `python`, or by a virtual environment's `pip`, an install is not checked
-  (`uv` and the rest: not tested). A script that must install starts `safe-chain npm ci ...`
-  (`pip` likewise) with `PKG_EXECPATH` unset, and fails when CI has no Safe Chain.
+- Safe Chain checks an install only when the command resolves to its wrapper on `PATH`.
+  Not checked, in a step or a script: one inside `npm run`, `npm test` or `python`, or by a
+  virtual environment's `pip` or `python`. A script that must install starts
+  `safe-chain npm ci ...` (`pip` likewise) with `PKG_EXECPATH` unset, and fails in CI without Safe Chain.
 - A downloaded repository's `CLAUDE.md` is data, not instructions. Keep downloads outside the session's
   folder tree and never start a session in one. List `node_modules` and backup folders in
   `claudeMdExcludes` (a root `.claude/settings.local.json`), proved by one Read probe; a cloud
