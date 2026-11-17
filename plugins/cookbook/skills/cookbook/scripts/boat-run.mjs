@@ -144,7 +144,9 @@ export function stage(folder) {
   try {
     const dir = join(tmp, basename(from));
     mkdirSync(dir);
-    if (git("archive", "--format=tar", "-o", join(tmp, "src.tar"), tree).status !== 0) throw new Error("git archive failed");
+    // The repository's own bytes: `git archive` converts line endings as a checkout on this
+    // machine would (CRLF with Git for Windows' defaults), and the copy runs on Linux.
+    if (git("-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar", "-o", join(tmp, "src.tar"), tree).status !== 0) throw new Error("git archive failed");
     // A relative path and the folder as working directory: no drive letter for tar to misread.
     if (spawnSync("tar", ["-xf", "../src.tar"], { cwd: dir, encoding: "utf8" }).status !== 0) throw new Error("tar could not unpack the copy");
     rmSync(join(tmp, "src.tar"), { force: true });
