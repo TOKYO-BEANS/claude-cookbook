@@ -21,19 +21,23 @@ through boat's AI credentials proxy (owner, 17 November 2026: "Keep on, build it
   `not started: <why>`: nothing ran; report it, never go around it.
 - **The spend guard, numbers in the script:** the proxy bills the boat wallet, USD 1 a day
   while on and USD 1 per 1,000 requests (17 November 2026). A run stops at its request cap
-  (200 unless `--requests`, at most 500) or its timeout: boat refuses the sandbox's
-  placeholders, the agent is interrupted and the sandbox deleted. Nothing starts past
-  2,000 requests a day, with under USD 5 left after the cap, or beside 3 other Claude runs.
+  (200 unless `--requests`, at most 500; read every 20 seconds, so a fast run passes it by a
+  few) or its timeout: boat refuses the sandbox's placeholders, the agent is interrupted
+  and the sandbox deleted. Nothing starts past 2,000 requests a day, with under USD 5 left
+  after the cap, or beside 3 other Claude runs.
   boat-run's plan checks hold too, with 600 seconds of setup added to the timeout (`small`:
   6,600 at most). A job past these is the owner's yes for that job.
-- **The environment `claude-proxy`** is made once by the owner on boat's dashboard (the key
-  gets 403 on `environment.write`): safe for third parties on, proxy AI credentials on. It
-  passes no GitHub token, boat credentials or secrets: only the Claude sign-in, as a proxy
-  placeholder. The script checks both settings before each run. `base` injects the GitHub
-  token and boat credentials, so it is never used; `--no-env` has no sign-in ("Claude login
-  required", and `boat prompt` still exits 0).
+- **The environment** is `claude-proxy` when boat has one, else the default one. The owner
+  sets it on boat's dashboard (the key gets 403 on `environment.write`): safe for third
+  parties on, proxy AI credentials on. On 17 November 2026 the owner set both on `base`,
+  the default: it then passes no GitHub token, boat credentials or secrets, only the Claude
+  sign-in as a proxy placeholder. The script checks both before each run. `--no-env` has
+  no sign-in ("Claude login required", and `boat prompt` still exits 0).
 - **The proxy** is turned on and off by the owner on the dashboard (the key gets 403 on
   `boat ai proxy`). Off, the placeholders fail and the run ends "not finished".
 - **A run under way, by hand:** `boat events <id>` reads it; `boat ai block <id>` and
   `boat interrupt <id>` stop it. Never `boat prompt` outside the script, and no kept
   sandbox for a follow-up: a second turn is a new run with the first report in its task.
+- **Proven on 17 November 2026:** Haiku 5.5 on the `claude-subscription` credential counted
+  the recipe pages right (66) and sent a one-file patch: 6 requests, USD 0.006. A cap of 5
+  stopped a run at 9; the block held it to 10 (USD 0.010). Both sandboxes were deleted.

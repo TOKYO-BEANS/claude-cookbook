@@ -7,10 +7,11 @@
 //                        [--requests <n>] [--effort <level>] [--type small|default|large]
 //                        [--push <folder>]
 //
-// - The sandbox starts in the boat environment "claude-proxy", which must inject nothing of
-//   the account (no GitHub token, no boat credentials, no secrets) except the Claude sign-in
-//   as a proxy placeholder. It is checked before every run; the base environment is never
-//   used, and --no-env carries no sign-in at all.
+// - The sandbox starts in the boat environment "claude-proxy", or the default environment
+//   when there is none of that name. Either must inject nothing of the account (no GitHub
+//   token, no boat credentials, no secrets) except the Claude sign-in as a proxy
+//   placeholder: "safe for third parties" and "proxy AI credentials" on, checked before
+//   every run. --no-env carries no sign-in at all.
 // - Everything boat-run.mjs checks holds here too, from the same code: the plan, its time and
 //   starts, the runs under way, the upload list, data-shaped files and Gitleaks on the copy.
 // - The proxy bills the boat wallet per request. A run stops at its request cap (default
@@ -88,15 +89,17 @@ export function parseArgs(argv) {
 // The plan's time this run may take: the agent's timeout and the sandbox's own setup.
 export const sandboxRun = (run) => ({ type: run.type, timeout: run.timeout + CLAUDE.setupSeconds });
 
-// null when the environment is the narrow one, else why not. `list` is `boat env list --json`.
-export function checkEnvironment(list) {
+// The environment a run starts in, { name } or { error }: "claude-proxy" when it exists,
+// else the default one, and only when it passes nothing of the account but the proxied
+// sign-in. `list` is `boat env list --json`.
+export function pickEnvironment(list) {
   const envs = list?.environments;
-  if (!Array.isArray(envs)) return "no result (the environments could not be read from boat env list)";
-  const e = envs.find((x) => x?.name === ENVIRONMENT);
-  if (!e) return `boat has no environment "${ENVIRONMENT}": the owner makes it once on boat's dashboard (Environments: "${ENVIRONMENT}", safe for third parties on, proxy AI credentials on)`;
-  if (e.safeForThirdParties !== true) return `the environment "${ENVIRONMENT}" is not "safe for third parties", so the account's GitHub token, boat credentials or secrets could go in: the owner turns it on`;
-  if (e.proxyAiCredentials !== true) return `the environment "${ENVIRONMENT}" does not pass the Claude sign-in as a proxy placeholder: the owner turns "proxy AI credentials" on`;
-  return null;
+  if (!Array.isArray(envs)) return { error: "no result (the environments could not be read from boat env list)" };
+  const e = envs.find((x) => x?.name === ENVIRONMENT) ?? envs.find((x) => x?.isDefault === true);
+  if (!e || typeof e.name !== "string" || !/^[A-Za-z0-9._-]{1,64}$/.test(e.name)) return { error: `boat has no environment "${ENVIRONMENT}" and no default one that can be named: the owner makes one on boat's dashboard (safe for third parties on, proxy AI credentials on)` };
+  if (e.safeForThirdParties !== true) return { error: `the environment "${e.name}" is not "safe for third parties", so the account's GitHub token, boat credentials or secrets could go in: the owner turns it on, or makes "${ENVIRONMENT}" with it on` };
+  if (e.proxyAiCredentials !== true) return { error: `the environment "${e.name}" does not pass the Claude sign-in as a proxy placeholder: the owner turns "proxy AI credentials" on` };
+  return { name: e.name };
 }
 
 // null when the wallet and the day's requests leave room for this run's cap, else why not.
@@ -125,8 +128,8 @@ export function promptArgv(run, id, folder) {
   return ["prompt", id, "--provider", "claude", "--model", run.model, ...(run.effort ? ["--reasoning-effort", run.effort] : []), "--json", promptText(folder)];
 }
 
-export function newArgv(run, taskFile) {
-  return ["new", "--type", run.type, "--environment", ENVIRONMENT, "--ttl", String(run.timeout + CLAUDE.setupSeconds), "--name", "boat-claude", "--file", `TASK.md=${taskFile}`, "--json"];
+export function newArgv(run, taskFile, environment) {
+  return ["new", "--type", run.type, "--environment", environment, "--ttl", String(run.timeout + CLAUDE.setupSeconds), "--name", "boat-claude", "--file", `TASK.md=${taskFile}`, "--json"];
 }
 
 const lines = (text) => String(text ?? "").split("\n").map((l) => l.trim()).filter(Boolean);
@@ -296,7 +299,8 @@ export async function main(argv, deps = REAL) {
     } catch (e) {
       return stop(`no result (${oneLine(e?.message)})`);
     }
-    const refusal = gate(sandboxRun(run), plan, slot.waiting) ?? checkEnvironment(envs) ?? checkBudget(run, usage, plan?.wallet?.balanceDollars, deps.today());
+    const environment = pickEnvironment(envs);
+    const refusal = gate(sandboxRun(run), plan, slot.waiting) ?? environment.error ?? checkBudget(run, usage, plan?.wallet?.balanceDollars, deps.today());
     if (refusal) return stop(refusal);
     if (run.push !== null) {
       const permit = deps.permit(run.push);
@@ -308,7 +312,7 @@ export async function main(argv, deps = REAL) {
       const result = deps.scan(staged.dir, staged.tmp);
       if (!result.ok) return stop(`the secret scan of the upload: ${result.reason}`);
     }
-    const made = deps.boat(newArgv(run, task), 180000);
+    const made = deps.boat(newArgv(run, task, environment.name), 180000);
     id = made.error ? null : newId(made.stdout);
     if (!id) {
       const any = /"id":"(bx_[a-z0-9]{4,40})"/.exec(String(made.stdout ?? ""));
@@ -328,7 +332,7 @@ export async function main(argv, deps = REAL) {
     mkdirSync(out, { recursive: true });
     writeFileSync(join(out, "TASK.md"), readFileSync(task));
     const events = join(out, "events.jsonl");
-    deps.say(`BOAT-CLAUDE: ${id} runs ${run.model}; caps: ${run.requests} requests, ${run.timeout} seconds; events in ${events}`);
+    deps.say(`BOAT-CLAUDE: ${id} (environment ${environment.name}) runs ${run.model}; caps: ${run.requests} requests, ${run.timeout} seconds; events in ${events}`);
     const ran = await deps.prompt(run, id, folder, events);
     const report = deps.exec(id, "cat /home/user/RESULT.md");
     if (report.ok) writeFileSync(join(out, "RESULT.md"), report.stdout);

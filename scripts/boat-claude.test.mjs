@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CLAUDE, ENVIRONMENT, TASK_BYTES, checkBudget, checkEnvironment, failure, main, newArgv, newId, parseArgs, promptArgv, promptText, requestsOf, sandboxRun } from "../plugins/cookbook/skills/cookbook/scripts/boat-claude.mjs";
+import { CLAUDE, ENVIRONMENT, TASK_BYTES, checkBudget, pickEnvironment, failure, main, newArgv, newId, parseArgs, promptArgv, promptText, requestsOf, sandboxRun } from "../plugins/cookbook/skills/cookbook/scripts/boat-claude.mjs";
 import { NOT_STARTED } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
 const base = ["--model", "claude-sonnet-5-5", "--timeout", "1800", "--task", "t.md"];
@@ -31,14 +31,21 @@ test("the plan's time counts the setup beside the agent's timeout", () => {
   assert.deepEqual(sandboxRun(args(...base)), { type: "small", timeout: 1800 + CLAUDE.setupSeconds });
 });
 
-const env = (over = {}) => ({ environments: [{ name: "base", safeForThirdParties: false, proxyAiCredentials: false }, { name: ENVIRONMENT, safeForThirdParties: true, proxyAiCredentials: true, ...over }] });
+const env = (over = {}, base = {}) => ({ environments: [{ name: "base", isDefault: true, safeForThirdParties: false, proxyAiCredentials: false, ...base }, { name: ENVIRONMENT, safeForThirdParties: true, proxyAiCredentials: true, ...over }] });
+const onlyBase = (over = {}) => ({ environments: [{ name: "base", isDefault: true, safeForThirdParties: true, proxyAiCredentials: true, ...over }, { name: "other", safeForThirdParties: true, proxyAiCredentials: true }] });
 
-test("only the narrow environment: nothing of the account, the sign-in as a proxy placeholder", () => {
-  assert.equal(checkEnvironment(env()), null);
-  assert.match(checkEnvironment({ environments: [{ name: "base", safeForThirdParties: false }] }), /no environment "claude-proxy".*dashboard/);
-  assert.match(checkEnvironment(env({ safeForThirdParties: false })), /safe for third parties/);
-  assert.match(checkEnvironment(env({ proxyAiCredentials: false })), /proxy AI credentials/);
-  for (const broken of [null, {}, { environments: "x" }]) assert.match(checkEnvironment(broken), /no result/);
+test("only a narrow environment: nothing of the account, the sign-in as a proxy placeholder", () => {
+  assert.deepEqual(pickEnvironment(env()), { name: ENVIRONMENT });
+  // With no "claude-proxy", the default environment, as the owner set it on 17 November 2026.
+  assert.deepEqual(pickEnvironment(onlyBase()), { name: "base" });
+  assert.match(pickEnvironment(onlyBase({ safeForThirdParties: false })).error, /"base" is not "safe for third parties"/);
+  assert.match(pickEnvironment(onlyBase({ proxyAiCredentials: false })).error, /proxy AI credentials/);
+  // "claude-proxy" wins over a narrow default, and is checked on its own settings.
+  assert.match(pickEnvironment(env({ safeForThirdParties: false }, { safeForThirdParties: true, proxyAiCredentials: true })).error, /"claude-proxy" is not "safe/);
+  assert.match(pickEnvironment(env({ proxyAiCredentials: false })).error, /proxy AI credentials/);
+  assert.match(pickEnvironment({ environments: [{ name: "x" }] }).error, /no environment/);
+  assert.match(pickEnvironment({ environments: [{ name: "bad name;rm", isDefault: true, safeForThirdParties: true, proxyAiCredentials: true }] }).error, /no environment/);
+  for (const broken of [null, {}, { environments: "x" }]) assert.match(pickEnvironment(broken).error, /no result/);
 });
 
 const usage = (requests, day = "2026-11-17") => ({ usage: [{ day, requests }, { day: "2026-11-16", requests: 5000 }] });
@@ -56,7 +63,7 @@ test("the wallet and the day: a run's cap must fit both", () => {
 
 test("the boat commands: the narrow environment, a TTL, the task as a file, a full model id", () => {
   const run = args(...base, "--effort", "high");
-  assert.deepEqual(newArgv(run, "C:/t/task.md"), ["new", "--type", "small", "--environment", ENVIRONMENT, "--ttl", String(1800 + CLAUDE.setupSeconds), "--name", "boat-claude", "--file", "TASK.md=C:/t/task.md", "--json"]);
+  assert.deepEqual(newArgv(run, "C:/t/task.md", ENVIRONMENT), ["new", "--type", "small", "--environment", ENVIRONMENT, "--ttl", String(1800 + CLAUDE.setupSeconds), "--name", "boat-claude", "--file", "TASK.md=C:/t/task.md", "--json"]);
   const p = promptArgv(run, "bx_abcd", "repo");
   assert.deepEqual(p.slice(0, 9), ["prompt", "bx_abcd", "--provider", "claude", "--model", "claude-sonnet-5-5", "--reasoning-effort", "high", "--json"]);
   assert.match(p[9], /TASK\.md.*\/home\/user\/repo.*RESULT\.md/);
@@ -141,7 +148,7 @@ test("a finished run: report and patch come back, the sandbox is deleted, both p
 
 test("nothing starts without the narrow environment, room in the budget, or a readable task", async () => {
   const cases = [
-    [{ environments: () => ({ environments: [{ name: "base" }] }) }, /no environment/],
+    [{ environments: () => ({ environments: [{ name: "base", isDefault: true }] }) }, /"base" is not "safe/],
     [{ usage: () => usage(1900) }, /a day/],
     [{ limits: () => ({}) }, /no result/],
     [{ claudeSlot: () => null }, /Claude runs from this PC/],
