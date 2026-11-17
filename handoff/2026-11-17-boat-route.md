@@ -22,8 +22,9 @@ command as its test command (a failing one is still a blocking fact). Its Semgre
 `semgrep-supply-chain.mjs` with the token, which the hook does not see and boat may not take
 without the owner's yes: the three `semgrep-core-proprietary` processes come from there.
 
-**Verification.** Suite on boat at each head (last: 670 tests, 663 pass, 0 fail, 7 Windows-only
-skipped, about 30 seconds in a `small` sandbox; about 150 seconds locally before). Stack-Atlas's
+**Verification.** Suite on boat at each head (668 tests, 661 pass, 0 fail, 7 Windows-only
+skipped at `f23e04a`; 670 and 663 on this entry's branch, `main` at `37630c9` plus the entry;
+about 30 seconds in a `small` sandbox, against about 150 seconds locally). Stack-Atlas's
 suite on boat with `npm ci --ignore-scripts`: 743 tests, 740 pass, 1 fail ("this repository's own
 tree holds no scanner ignore file", in the Desktop clone's working tree, not looked into here).
 All eight checks passed on `9e989af`; release check `verified` (execution 1694). The installed
@@ -32,17 +33,22 @@ the boat-run command and lets the `# local-run:` form through.
 
 **The review.** The `ai-review` job was unavailable on every head (the API credit balance);
 the owner chose fallback reviews over a top-up. Five fallback rounds by a `cookbook:review`
-subagent, each recorded in the pull request: 1 medium and 4 low, 1 medium and 2 low, 2 medium
-and 4 low, 1 medium and 4 low, then none. Rounds four and five were the owner's yes past the
-three-round budget (the fifth on the delta only).
+subagent. Rounds one and two (on `cccadcc` and `e0b2ec9`: 1 medium and 4 low, 1 medium and 2
+low) were not posted as records; their fixes are commits `f23e04a` and `61ec434`. Rounds three
+to five are records on #108: 2 medium and 4 low, 1 medium and 4 low, then none. Rounds four and
+five were the owner's yes past the three-round budget (the fifth on the delta only). Graphify's
+advisory review was not answered on #108; its points are under Outstanding.
 
 **Failure and dead end.** A hand-written shell reader drew new parse findings each round
 (nested quotes in `"$(...)"`, here-documents, redirections). After two rounds of fixes the
 approach changed instead of a third variant: the reader stops modelling and lets anything it
 does not read through. Owner rule of 17 November 2026, simple first.
 
-**Measured after** (15:40, minutes after the plugin update): boat 650 of 2,000,000 seconds as
-`boat limits` reads it, 0 sandboxes running; RAM 13.0 of 14.8 GB, CPU 82%; 6 `node --test` and 5
+**Measured after** (15:40, minutes after the plugin update): boat 650 of 2,000,000 seconds used
+(`subscriptionQuotaSeconds` minus `subscriptionRemainingSeconds` of `boat limits --json`), 0
+sandboxes running. That is below the opening chat's 730 although about fifteen runs went in
+between: the two readings do not measure the same thing, and the opening chat's field is not
+known. Read the same two fields next time; RAM 13.0 of 14.8 GB, CPU 82%; 6 `node --test` and 5
 `npm test` processes, all started by sessions that predate the update (a plugin hook loads at a
 session's start), 0 `semgrep-core`, 0 `merge-when-green`. The effect shows once sessions restart:
 measure again then.
@@ -51,6 +57,10 @@ measure again then.
 - Follow-up pull request, the two open low findings of round four: the suggestion for `yarn
   test`, `pnpm test`, `poetry run pytest` and `py -3 -m pytest` assumes npm or uv; information
   calls (`pytest --version`, `npm test -- --help`) are denied as runs.
+- Graphify's advisory review of `9e989af` (each "Escalate, medium", none blocking): `find()`'s
+  coupling (Ca·Ce 15); `python script.py -m pytest` read as a pytest run (an extra denial);
+  `--push "<top>"` unescaped (a Windows path holds no `"`); the fixed node path in `hooks.json`
+  (as the other hooks, for the desktop app's short PATH). The first two go with the follow-up.
 - Stack Atlas: sa-review's Semgrep Supply Chain run with the token stays on this PC. For a pull
   request head, reading the CI `semgrep` job instead would take it off; a token in a sandbox needs
   the owner's yes.
@@ -59,5 +69,6 @@ measure again then.
   `merge`, `apply` and `Workflow` children.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-17-boat-route/`:
-`release-cookbook-108-merge.log`, `boat-npm-test-f23e04a.log`, `boat-stack-atlas-test.log`,
-`upload-allowed-after.txt`. The review records are comments on #108.
+`release-cookbook-108-merge.log`, `boat-npm-test-f23e04a.log`, `boat-npm-test-handoff-75f7367.log`,
+`boat-stack-atlas-test.log`, `upload-allowed-after.txt`. The records of rounds three to five are
+comments on #108.
