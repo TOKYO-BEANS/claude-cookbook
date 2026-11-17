@@ -41,22 +41,29 @@ minutes of the private repositories were about to run out.
   was then added for the SKU `code_security_ai_unit`: USD 0, hard stop (`POST
   organizations/<org>/settings/billing/budgets`, `budget_type: SkuPricing`). The next two
   pushes each ran a whole session again, minutes after the budget. Disabling the workflow
-  (`PUT .../actions/workflows/<id>/disable`) is refused with 422. **AI Scan is not proven
-  off.**
+  (`PUT .../actions/workflows/<id>/disable`) is refused with 422. The Stack Atlas chat on
+  these settings found the third switch (12:36 UTC): "Scan for AI applications", the
+  `xpia-reviewer` agent that wrote the prompt-injection threads, has no API and lives only
+  on the organisation's Settings, Advanced Security, Global settings, "Code scanning". The
+  owner unticked it there. The last session started at 12:05:45 UTC; pushes at 12:17 and
+  12:24 UTC started CodeQL and no session. The click detached `TOKYO-BEANS standard` from
+  all eight repositories; the standard's `org --apply` attached it again at 12:20 UTC, all
+  eight `enforced`, runners unchanged. Evidence:
+  `~/.local/share/stack-atlas/evidence/2026-11-17-ai-scan/`.
 - The Cookbook: `recipes/security-costs.md` and `options/security-platforms.md` are new;
   `recipes/security.md`, `recipes/ai-review.md`, `recipes/review-threads.md`,
   `options/check.md` and the catalog's GitHub entry say the same. No tool was added or
   retired.
 
 **Outstanding.**
-- AI Scan still runs. Either the budget stops it once the bill catches up (the usage read
-  lags by hours) or the real switch is in the organisation's settings page. Check on a push
-  and in the next day's usage read. Owner: Claude, in the Stack Atlas chat on these
-  settings; if only the settings page can do it, that step is the owner's.
-- Stack Atlas does not write the runner setting or the AI Scan setting yet, and its
-  `docs/depot-ci.md` still calls CodeQL on GitHub-hosted runners a permanent exception. Until
-  it does, a new private repository gets GitHub's runners, and a re-applied configuration
-  may put them back. Owner: Claude, in a Stack Atlas chat opened today.
+- The proof that AI scanning is off is the 18 November usage read with no new AI rows
+  (17 November read USD 12.17 at 12:25 UTC). Whether the USD 0 budget bites is unproven.
+  Owner: Claude, the Stack Atlas chat on these settings, which scheduled the read; from
+  Stack-Atlas #217 its `org --check` and audit flag any AI scanning run after 12:06 UTC.
+- Stack Atlas writes the runner from Stack-Atlas #217 (onboarding step 6c,
+  `codeql-runner <repo> --apply`, and `org --apply`); until it merges a new private
+  repository gets GitHub's runners. Owner: the Stack Atlas chat, which also changes the
+  "by hand" line in `recipes/security-costs.md` afterwards.
 - The review on the plan: not built. Owner: Claude, its own chat. It takes AI Scan's risk
   types into the rubric; the thread rule stays for threads still open.
 - The measurement of Semgrep's code rules, due 24 November 2026, before the trial ends.
@@ -69,9 +76,8 @@ minutes of the private repositories were about to run out.
   AI Scan is proven off, the private repositories use about 10 minutes a day there.
 
 **Failures and dead ends.**
-- The `ai-scan` endpoints are not in GitHub's REST docs that were found; the switch was
-  accepted and read back, and a scan ran all the same. Whether it takes effect later, or is
-  not the control, is not known. What clears it: the Stack Atlas chat on these settings.
+- I took the `ai-scan` endpoints for undocumented; they are in GitHub's REST docs (public
+  preview since 10 September 2026). They were real switches, only not the one that ran.
 - Parallel's connector answered "free-tier rate limit" after two calls in the main session;
   the research runs had finished, and the vendor pages were read with Firecrawl.
 - Firecrawl timed out twice on Semgrep's pricing page: its free tier is from a research

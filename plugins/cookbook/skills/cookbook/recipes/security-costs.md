@@ -16,13 +16,14 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   `gh api "organizations/<org>/settings/billing/usage?year=<y>&month=<m>"` (per day,
   repository and SKU) and `.../settings/billing/budgets`. Depot's: `node ~/.local/bin/with-key.mjs
   depot-org DEPOT_TOKEN depot org invoices list` (then `line-items <id>`), finalized months only.
-- **GitHub's AI Scan: the owner decided to turn it off (17 November 2026); not proven off.**
-  `gh api -X PATCH orgs/<org>/code-scanning/ai-scan -f pr_scan=disabled -f repository_scan=disabled`.
-  It reviewed every push and wrote the security review threads. It is billed by use as
-  "Code Security AI Credits" (USD 0.01 each): USD 136 in 17 days, about USD 0.53 a pull
-  request, plus a quarter of the minutes. Scans still ran after the switch read `disabled`
-  and after a budget for the SKU `code_security_ai_unit` (USD 0, hard stop) was added. Count
-  it as on until a push starts no "Code scanning AI findings" session and the bill stops.
+- **GitHub's AI scanning is off** (owner, 17 November 2026). Three switches, each billed as
+  "Code Security AI Credits" (USD 0.01): `pr_scan` and `repository_scan` through `gh api -X
+  PATCH orgs/<org>/code-scanning/ai-scan`, and "Scan for AI applications", which wrote the
+  review threads, only on the organisation's Settings, Advanced Security, Global settings.
+  That click detached the standard's configuration: the standard's `org --apply` attaches it
+  again. Before: USD 136 in 17 days, a quarter of the minutes. Proof is behaviour, never a
+  setting: no run of `dynamic/agents/github-advanced-security` after a push, no AI rows in
+  the usage read. A USD 0 hard-stop budget on `code_security_ai_unit` stays as a lock.
 - **The `ai-review` job is paid in cash once the plan's monthly API credit is used.** It was
   used up on 16 November. From the token counts in the review comments, a floor: USD 17 to 27 for the
   40 reviews of 16 November. With no balance the job answers "credit balance too low" and
