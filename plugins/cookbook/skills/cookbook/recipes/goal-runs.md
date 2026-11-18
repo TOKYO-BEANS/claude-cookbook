@@ -17,7 +17,9 @@ like a pass/fail test, the longer an agent can work on it without a person.
   `/goal` typed in a T3 Code thread, and inside a [boat-claude](boat-claude.md) task.
 - **Hooks off, no goal:** `/goal` is a Stop hook, so it is unavailable where hooks are off
   (`disableAllHooks`, `allowManagedHooksOnly` in managed settings) or the folder is not
-  trusted. There, run the check and `claude -p --continue` by hand until it passes.
+  trusted. There, start a fresh `claude -p` under the same rules each round, with the check's
+  last output in the prompt, until the check passes (`--no-session-persistence` leaves
+  nothing for `--continue` to resume).
 - **The condition** (up to 4,000 characters):
   - one end state and the command that proves it, which must print its result: the
     evaluator runs nothing and reads only what the transcript shows;
