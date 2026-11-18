@@ -23,6 +23,14 @@ standard v22; the Cookbook ran v21, which reads only the API key.
 **Verification.** This pull request is the proof: its `ai-review` comment must read on the
 Claude plan, not `review unavailable`.
 
+**Failures.** Since #139 the `ai-review` job fails in about 10 seconds: CI's Safe Chain still
+holds packages for 48 hours (#136, which moves it to 24, is open) and blocks the pinned
+`@anthropic-ai/claude-code-linux-x64` 2.1.326, published 16 November 18:43 UTC (Depot job
+`7f6s07gclw`). It clears at about 18:44 UTC on 18 November; no check is loosened for it. Every
+pull request asked before then gets a failed job, not a review and not a fallback case: ask
+again after the hold. #139's fallback reviewer had judged the version outside "the 24-hour
+hold" and missed the 48 hours CI still runs. Seen by the chat of #142.
+
 **Outstanding.** The other seven repositories still review through the API key (empty credit,
 so fallback reviews): their secret and onboarding, then retiring the API key, its secret and
 workspace, belong to the Stack Atlas chat (its handoff of 17 November names Claude as owner).
