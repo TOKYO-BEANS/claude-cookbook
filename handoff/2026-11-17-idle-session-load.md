@@ -35,10 +35,13 @@ session) arrives as sessions are replaced.
 
 **Outstanding.**
 - The rest of the RAM is the number of sessions at once: each is about 270 MB for Claude itself
-  plus its servers. A limit on chats at once is the owner's choice (asked in the chat).
+  plus its servers. Asked whether to limit chats at once, the owner answered "No limit"
+  (18 November 2026): not to be asked again unless something changes.
 - Measure again once the sessions running on 17 November have ended: Stagehand processes should
   be 0. Owner: Claude, next chat in this repository.
 - #108's open low findings: a separate small pull request (boat route handoff).
+- Tests: on 17 November boat-run refused this branch's suite (a funded wallet; #121 then let it
+  start again). CI ran the suite on every head.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-17-idle-session-load/`: the
 before and after summaries, the scripts that made them, the Stagehand proof, the settled ids.
