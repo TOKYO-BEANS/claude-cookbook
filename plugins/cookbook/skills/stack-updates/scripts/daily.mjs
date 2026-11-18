@@ -49,7 +49,8 @@ function stopTree(child) {
 }
 
 /**
- * Runs one command and waits for it: `{ status, stderr, pid, timedOut, error }`.
+ * Runs this Node (`command` must be `process.execPath`; anything else is an `error`) and
+ * waits for it: `{ status, stderr, pid, timedOut, error }`.
  * Only stderr is kept. After `timeoutMs` the whole process tree is stopped.
  */
 export function runChild(command, args, { cwd, timeoutMs }) {
@@ -70,7 +71,9 @@ export function runChild(command, args, { cwd, timeoutMs }) {
       }
     }, timeoutMs);
     try {
-      child = spawn(command, args, { cwd, windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
+      // The daily run starts this Node and nothing else.
+      if (command !== process.execPath) throw new Error(`not this Node: ${command}`);
+      child = spawn(process.execPath, args, { cwd, windowsHide: true, stdio: ["ignore", "ignore", "pipe"] });
     } catch (e) {
       finish({ status: null, error: e });
       return;

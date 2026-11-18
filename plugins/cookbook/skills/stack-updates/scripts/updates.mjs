@@ -627,7 +627,8 @@ async function stageRead(ctx) {
       continue;
     }
     if (reads.count + reads.failed >= READ_LIMIT) {
-      Object.assign(c, { answers: null, notRead: "cap" });
+      c.answers = null;
+      c.notRead = "cap";
       continue;
     }
     const tool = ctx.toolById.get(c.tool) ?? { id: c.tool };

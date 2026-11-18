@@ -103,6 +103,8 @@ function ghEnv() {
 // One program with its arguments as an array: no shell reads them. Never throws.
 export function run(file, args, { cwd, timeoutMs = 20_000 } = {}) {
   try {
+    // the absolute gh path found on PATH, argument array, no shell (owner's dismissal 18 Nov 2026)
+    // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
     const r = spawnSync(file, args, {
       cwd,
       shell: false,

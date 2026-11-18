@@ -279,8 +279,10 @@ export function argvProblems(argv) {
     else problems.push("argv[0] cmd.exe is allowed only as cmd.exe /d /c {bin}/<name>.cmd");
   } else {
     const bare = typeof cmd === "string" && new RegExp(String.raw`^${NAME}$`).test(cmd) && !SHELLS.test(cmd);
-    const rel = (token, deep) => typeof cmd === "string" && new RegExp(String.raw`^\{${token}\}/${NAME}${deep ? String.raw`(/${NAME})*` : ""}$`).test(cmd) && !cmd.split("/").some((seg) => seg === ".." || seg === ".");
-    if (!bare && !rel("share", true) && !rel("bin", false)) problems.push("argv[0] must be a bare command name (not a shell), {share}/ and a relative path without .., or {bin}/ and a file name");
+    const share = new RegExp(String.raw`^\{share\}/${NAME}(/${NAME})*$`);
+    const bin = new RegExp(String.raw`^\{bin\}/${NAME}$`);
+    const rel = (shape) => typeof cmd === "string" && shape.test(cmd) && !cmd.split("/").some((seg) => seg === ".." || seg === ".");
+    if (!bare && !rel(share) && !rel(bin)) problems.push("argv[0] must be a bare command name (not a shell), {share}/ and a relative path without .., or {bin}/ and a file name");
   }
   const tokenOk = (a) => {
     if (typeof a !== "string" || a.includes("..")) return false;
