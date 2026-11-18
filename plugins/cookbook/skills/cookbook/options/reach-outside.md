@@ -9,7 +9,9 @@ Chosen by fit for the job on 15 November 2026.
 - **Pages, PDFs, crawls, developer and paper indexes, typed records: Firecrawl.** One service
   renders a JS-heavy page, parses a PDF, maps a site and holds the developer and research
   indexes and Alexandria. Weighed: Parallel `web_fetch` (the fallback for one page); Jina
-  Reader (single pages only); `gh search` (the fallback for public code).
+  Reader (single pages only); `gh search` (the fallback for public code); Apify (store of
+  outside-written scrapers billed per result, repeating Firecrawl, Parallel and Browserbase;
+  not chosen, 18 November 2026).
 - **A cited answer from several sources: `sa-research`.** Parallel first, Firecrawl for gaps,
   inside an agent budget. Weighed: Parallel Task and deep research (one vendor's synthesis,
   priced per run: the fallback is its quick `web_research`); the bundled deep-research skill
