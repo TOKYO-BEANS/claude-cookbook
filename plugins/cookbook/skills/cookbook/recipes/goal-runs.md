@@ -9,12 +9,13 @@ like a pass/fail test, the longer an agent can work on it without a person.
   queue reaches zero. Not for a job only taste decides, and never past a stop: a change
   customers see still needs its visual check, a merge still needs every check on the pull
   request.
-- **How, headless:** `claude -p "/goal <condition>"` under the
-  [scripted-runs](scripted-runs.md) rules (model, permission mode with `--allowedTools`,
-  `--max-budget-usd`, `--no-session-persistence`), plus `--output-format stream-json
-  --verbose`, or a long goal looks stuck. Tried 18 November 2026 on Claude Code 2.1.327:
-  `claude-haiku-5-5`, plan login (`apiKeySource` `none`), met in 2 turns. Not tried yet:
-  `/goal` typed in a T3 Code thread, and inside a [boat-claude](boat-claude.md) task.
+- **How:** in a T3 Code thread, `/goal <condition>` as the message. Headless,
+  `claude -p "/goal <condition>"` under the [scripted-runs](scripted-runs.md) rules (model,
+  permission mode with `--allowedTools`, `--max-budget-usd`, `--no-session-persistence`),
+  plus `--output-format stream-json --verbose`, or a long goal looks stuck. Not in a
+  [boat-claude](boat-claude.md) task: the script sends its own prompt, so `/goal` in
+  `TASK.md` is text. Tried 18 November 2026, Claude Code 2.1.327, `claude-haiku-5-5`, plan:
+  in T3 and headless the goal was set, judged met and ended; in boat none was set.
 - **Hooks off, no goal:** `/goal` is a Stop hook, so it is unavailable where hooks are off
   (`disableAllHooks`, `allowManagedHooksOnly` in managed settings) or the folder is not
   trusted. There, start a fresh `claude -p` under the same rules each round, with the check's
