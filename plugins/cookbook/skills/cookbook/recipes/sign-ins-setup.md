@@ -23,7 +23,9 @@
   moved 1254 to 1255, Chrome for Testing 159.0.8154.6), the browser does not start until the new
   build is downloaded. That download is a program the vetting did not cover, so it needs the
   owner's yes each time, even for an update the script marks routine (the yes of 18 November
-  2026 covered 1255 only). With it, in `~/.local/share/site-login` after `pinned-install.sh`:
+  2026 covered 1255 only). Before `pinned-install.sh`, compare the vetted copy's revision with
+  the installed one; when it moved and there is no yes, stop and keep the old copy. With the yes,
+  in `~/.local/share/site-login` after `pinned-install.sh`:
   `PLAYWRIGHT_BROWSERS_PATH=~/.local/share/ms-playwright PLAYWRIGHT_SKIP_BROWSER_GC=1 node
   node_modules/playwright-core/cli.js install chromium`, then one `agent-browser goto` call; only
   after it passes, move the old `chromium-*` and `chromium_headless_shell-*` folders to

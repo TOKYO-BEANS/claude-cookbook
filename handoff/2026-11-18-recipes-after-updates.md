@@ -27,7 +27,9 @@ unavailable on `ece85d4` (credit balance); its fallback review had three lows, f
 branch: the Chromium download is not an install script, the cloudflare bullet lacked the
 `access.json` limit, and the quotation left out "configured". The fallback review of
 `616ba37` had two lows: `with-key.mjs` passes one key, so it was dropped as a route for the
-two-key token, and the pull request's description was brought in line with the files.
+two-key token, and the pull request's description was brought in line with the files. The
+fallback review of `ece0907` had one low: the revision is now compared before
+`pinned-install.sh`, and without a yes the install stops with the old copy kept.
 
 **Outstanding.** None from this change.
 
