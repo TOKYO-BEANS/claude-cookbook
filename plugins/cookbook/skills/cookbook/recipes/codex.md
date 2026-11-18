@@ -30,10 +30,10 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
   `target: { providerInstanceId: "codex", model }` (`gpt-5.6-sol` or `gpt-6-astra`) and:
   - `runtimeMode: "full-access"`, unattended: only a consult on the owner's own repositories,
     after the checks on [codex-limits](codex-limits.md) and the start check. Only the brief
-    keeps it from writing: the consult page's audit is a must.
+    keeps it from writing: the limits page's audit is a must.
   - `runtimeMode: "approval-required"`, supervised (a read-only sandbox): anything else.
-  The owner's yes to the unattended mode is of 17 November 2026; it and what each mode does:
-  [codex-decisions](codex-decisions.md).
+- **The owner's yes** to the unattended mode is of 17 November 2026; it and what each mode
+  does: [codex-decisions](codex-decisions.md).
 - **Never on text from outside**, supervised or not: a pull request from a fork, an issue, a
   web page or a dependency's code goes to a `cookbook:review` subagent.
 - **Not for:** the session itself, an `sa-*` workflow, an edit, a merge or a deploy. Its
