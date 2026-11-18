@@ -8,16 +8,20 @@
 mb_root="$1"
 mb_head=""
 # The hook input starts with session_id, and a subagent's names agent_id within its first few
-# hundred characters; 1,024 is enough to see both. The rest stays in the pipe for Node.
+# hundred characters, before hook_event_name and the tool's own input; 1,024 is enough to see
+# both. Only that part is searched, so a tool input with an agent_id key is not taken for a
+# subagent. The rest stays in the pipe for Node.
 IFS= read -r -N 1024 mb_head
-if [[ $mb_head != *'"agent_id":'* ]]; then
+mb_keys="${mb_head%%\"hook_event_name\":*}"
+if [[ $mb_keys != *'"agent_id":'* ]]; then
   mb_re='^\{"session_id":"([A-Za-z0-9_-]{1,80})"'
   mb_gate=""
   mb_next=0
   if [[ $mb_head =~ $mb_re ]]; then
     mb_gate="${USERPROFILE:-$HOME}/.local/share/model-budget/sessions/${BASH_REMATCH[1]}.gate"
     { IFS= read -r mb_next < "$mb_gate"; } 2>/dev/null
-    [[ $mb_next =~ ^[0-9]{1,12}$ ]] || mb_next=0
+    # No leading zero: bash would read 08 as octal and fail.
+    [[ $mb_next =~ ^(0|[1-9][0-9]{0,11})$ ]] || mb_next=0
   fi
   printf -v mb_now '%(%s)T' -1
   # A gate further ahead than one window (a clock set back) counts as none.

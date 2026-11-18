@@ -47,6 +47,17 @@ turn with tools, 95% fewer; 3 per long turn (median). Per tool call, all hooks: 
 was already paid by every hook; the 1,024-character read adds about 9 ms), a call that starts
 Node 284 ms.
 
+**The review.** `ai-review` was unavailable (credit balance), so a `cookbook:review` subagent
+reviewed `2f2a4b8`: three low findings, all fixed in the next commit. A gate file with a
+leading zero (`08`) was octal to bash and silenced the note for good (the check now refuses a
+leading zero); an `agent_id` key in a main session's tool input was taken for a subagent (only
+the keys before `hook_event_name` are searched now); the 14-day cleanup looked at only 500
+names, which two files a session would soon pass (now 5,000). Two open questions it raised:
+a skipped call leaves the rest of the input unread (the probe's printf hook read none of its
+input and the run went on normally; so do Claude Code hooks that ignore stdin), and Linux or
+macOS shells (the plugin's other hooks already name `C:/Program Files/nodejs/node.exe`: it
+runs on this PC).
+
 **Outstanding.**
 - context-mode's hooks (a third-party plugin, not changed here) start Node before and after
   shell, read, search and edit calls, and after every MCP call, each with a 5-second limit: most of

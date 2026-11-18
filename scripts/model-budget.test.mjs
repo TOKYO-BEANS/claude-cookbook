@@ -823,6 +823,19 @@ test("gate: Node starts once per five minutes per session, with the hook input w
   assert.equal(runGate(home, root, input).runs.length, 4, "a gate more than one window ahead counts as none");
   writeFileSync(gateFile(home, "s-g1"), "not a time\n");
   assert.equal(runGate(home, root, input).runs.length, 5, "an unreadable gate starts Node");
+  // Review of #130: a leading zero would be octal to bash ("08" fails), so it counts as no gate.
+  writeFileSync(gateFile(home, "s-g1"), "08\n");
+  const octal = runGate(home, root, input);
+  assert.equal(octal.runs.length, 6, "a gate with a leading zero starts Node");
+  assert.equal(octal.stderr, "");
+  assert.match(readFileSync(gateFile(home, "s-g1"), "utf8"), /^[1-9]\d+\n$/, "and is written again");
+});
+
+test("gate: an agent_id inside a main session's tool input is not a subagent", { skip: noBash }, (t) => {
+  const home = tmp(t);
+  const root = stubRoot(home);
+  const input = { session_id: "s-g6", transcript_path: "C:/t.jsonl", hook_event_name: "PostToolUse", tool_name: "mcp__x__send", tool_input: { agent_id: "worker-1" } };
+  assert.equal(runGate(home, root, input).runs.length, 1);
 });
 
 test("gate: a subagent's tool call starts no Node; without a session id or a state folder, Node starts", { skip: noBash }, (t) => {

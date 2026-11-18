@@ -85,7 +85,9 @@ try {
     }
     if (text) process.stdout.write(`${JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: text } })}\n`);
     if (event === "SessionStart") {
-      for (const name of readdirSync(sessions).slice(0, 500)) {
+      // Two files a session (the note's and the gate's): about 1,600 in 14 days at the rate of 18
+      // November 2026, so the cap stays well above what the folder holds.
+      for (const name of readdirSync(sessions).slice(0, 5000)) {
         const file = join(sessions, name);
         if (/\.(json|gate)$/.test(name) && now - statSync(file).mtimeMs > KEEP_MS) rmSync(file, { force: true });
       }
