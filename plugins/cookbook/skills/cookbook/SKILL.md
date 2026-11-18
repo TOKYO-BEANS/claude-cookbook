@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening (Adobe Firefly), photo masks and cut-outs (Adobe for creativity), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening, masks and cut-outs (no tool yet: say so), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -32,8 +32,8 @@ fallback and say that you did.
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a Claude API call with a typed answer | [judgement](recipes/judgement.md) |
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
-| Sharpen a soft real photo | **Adobe Firefly** | none: say so | [photos](recipes/photos.md) |
-| Edit a real photo: masks, cut-out, straighten, colour by region | **Adobe for creativity**, in its own child session | the same connector in a Claude Desktop chat | [photos-adobe-connector](recipes/photos-adobe-connector.md) |
+| Sharpen a soft real photo | none: say so | — | [photos](recipes/photos.md) |
+| Edit a real photo: masks, cut-out, straighten, colour by region | none: say so | — | [photos](recipes/photos.md) |
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
@@ -75,7 +75,7 @@ fallback and say that you did.
 | Web logins | the **Proton Pass CLI**, vault "Claude" | the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Keys and tokens | the DPAPI store (`agent-key.ps1`, `with-key.mjs`, `key-header.mjs`) | — | [keys](recipes/keys.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
-| Run code away from this PC: tests on Linux before a push, a Linux-only failure, a long or parallel job | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md) |
+| Run code away from this PC: tests on Linux before a push, a Linux-only failure, a long or parallel job, a long Claude job that stands alone | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md), [boat-claude](recipes/boat-claude.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
 | Connect a new app or service | the **Cookbook** first, then the lightest route | — | [connecting](recipes/connecting.md) |
 | Office files and PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |

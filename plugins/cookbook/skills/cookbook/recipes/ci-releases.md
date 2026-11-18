@@ -39,5 +39,5 @@
 - **After a merge or deploy**, in the same task: Release Maintenance (commit, checks, deployed
   version, health), recorded with the release verifier, before calling it done. A failed release
   check: roll back to the last good version first, then fix through a new pull request.
-- Do not merge two PRs into the same `main` back to back: a new push can cancel the earlier
-  merge's CI.
+- **Merges queue up:** a push cancels `main`'s running CI; `merge-when-green.sh` waits for it,
+  a hand merge must check first.

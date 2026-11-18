@@ -39,8 +39,8 @@ not in a headless run and was not measured.
      (`"enabledPlugins": {"<plugin>@<source>": true}`): OpenSEO, Wix, Aikido. The file is
      not in git, so a T3 worktree thread does not have it: open the chat in the project
      folder. A deny in `deniedMcpServers` cannot be lifted by a project.
-  3. A child session that loads the one server
-     ([Adobe](photos-adobe-connector-setup.md)). For a plugin switched off:
+  3. A child session that loads the one server. For a plugin switched off:
      `claude -p --setting-sources "" --plugin-dir <the plugin's folder under
      ~/.claude/plugins/cache>`; OpenSEO connected that way with its stored sign-in (no call
-     was made). Write the limits as the Adobe script does before a real run.
+     was made). Before a real run, set its limits as [scripted-runs.md](scripted-runs.md)
+     says.
