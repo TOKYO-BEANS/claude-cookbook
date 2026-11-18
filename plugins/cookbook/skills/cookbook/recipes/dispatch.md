@@ -12,6 +12,11 @@ work: it gives a second opinion, a consult, under its own rules ([codex](codex.m
   Parallel and Firecrawl, no shell or writes), `cookbook:review` (Opus, high: read-only, with Bash
   and Graphify), `cookbook:reader` (Sonnet, medium: Read, Grep and Glob only) and
   `cookbook:reader-graph` (the same plus four Graphify read tools).
+- **Effort follows the piece, not the stakes of the task.** More effort is a bigger bet that the
+  piece needs thinking: on a clear, small piece it invents work (a refactor next door, a case that
+  cannot happen) and only costs time. Low for a known edit, medium to read and judge, high to
+  review or design. `xhigh` and `max` only on a named need: published runs (August 2026) show the
+  strongest models gain a few points past high for several times the cost and time.
 - **A step that reads text other people wrote** (a diff, evidence, a brief, finding titles) runs
   on a reader profile: it has no shell, no file write, no tool search and no subagent, so the
   tool list is the limit, not the prompt. A Workflow step takes one with `agentType`.

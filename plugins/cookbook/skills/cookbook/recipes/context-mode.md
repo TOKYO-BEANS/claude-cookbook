@@ -15,7 +15,9 @@ Elastic-2.0) at user scope. No project turns it off; a new project gets it witho
 - **Use it:** when a step counts, sums, filters or finds something in more than about 20 lines of
   data, run it through `ctx_execute` (or `ctx_batch` for several commands) and print only the
   answer. `ctx_search` finds the rest of a result that was cut. Small output and edits use the
-  normal tools.
+  normal tools. To read long texts whole (articles to understand, not search), a script saves
+  them to the scratchpad in files under 3,700 bytes, read many to a message: 15 web pages,
+  167 KB, took 48 reads in six messages (18 November 2026).
 - **What it refuses:** a `Read` of a file over 16 KB without `offset`/`limit` (use a ranged Read
   or `ctx_execute` with `file`), large `cat`-style shell dumps, and `WebFetch`. Its deny message
   offers `ctx_index`; web pages still go to Parallel or Firecrawl, as [research.md](research.md) says, and
