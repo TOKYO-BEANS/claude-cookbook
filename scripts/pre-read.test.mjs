@@ -480,7 +480,7 @@ test("the part cap: parts past it are listed as not judged, never as doesn't", a
     assert.equal(m.calls.jobs.length, 4);
     assert.deepEqual(manifest.sources[1].parts.map((p) => p.verdict), ["doesn't", "error"]);
     const report = renderReport(manifest, dir).text;
-    assert.match(report, new RegExp(`Not judged, past the cap of 4 parts: source 2 lines ${part(manifest, "2.2").startLine}-`));
+    assert.ok(report.includes(`Not judged, past the cap of 4 parts: source 2 lines ${part(manifest, "2.2").startLine}-`), report);
     assert.throws(() => parseArgs(["run", "--max-parts", String(LIMITS.maxParts + 1)]), /capped/);
   } finally {
     rmSync(dir, { recursive: true, force: true });

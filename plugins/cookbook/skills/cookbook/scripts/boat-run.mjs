@@ -327,8 +327,11 @@ export function boatCommand(argv) {
 // hold the run, and its place, for good: it is ended after this long.
 export const CALL_SECONDS = 60;
 
+// It starts one of the two programs boatCommand names, boat or this Node, and nothing else:
+// any other program comes back as a failed start, the way a missing one does.
 export function call(file, args, options = {}, ms = CALL_SECONDS * 1000) {
-  return spawnSync(file, args, { ...options, timeout: ms, killSignal: "SIGKILL" });
+  if (file !== "boat" && file !== process.execPath) return { error: new Error(`not a boat call: ${file}`), status: null, signal: null, output: null, pid: 0 };
+  return spawnSync(file === "boat" ? "boat" : process.execPath, args, { ...options, timeout: ms, killSignal: "SIGKILL" });
 }
 
 function boat(argv, options) {

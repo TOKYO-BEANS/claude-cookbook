@@ -36,7 +36,8 @@ export const sessionKey = (session) => sha(str(session)).slice(0, 24);
 export const entryId = (session, question) => sha(`${str(session)}\n${words(question)}`).slice(0, 16);
 
 // The shapes a note's fields may have. Anything else in the file is not a note.
-const HEX = (n) => new RegExp(`^[0-9a-f]{${n}}$`);
+const HEX16 = /^[0-9a-f]{16}$/;
+const HEX24 = /^[0-9a-f]{24}$/;
 // A chat's id as T3 Code writes it: a UUID or a run of hexadecimal digits, after "mcp:",
 // "mcp:launch:" or "thread:" at most. Letters a to f spell nothing a model could follow.
 const CHAT_ID = /^(?:(?:mcp|launch|thread):){0,2}[0-9a-f]{8}[0-9a-f-]{0,56}$/;
@@ -67,9 +68,9 @@ export function parseLedger(text) {
     } catch {
       continue;
     }
-    if (!isObject(e) || !HEX(16).test(str(e.id)) || !Number.isSafeInteger(e.at) || e.at < FIRST_AT) continue;
+    if (!isObject(e) || !HEX16.test(str(e.id)) || !Number.isSafeInteger(e.at) || e.at < FIRST_AT) continue;
     if (e.state !== "asked" && e.state !== "answered") continue;
-    if (!HEX(24).test(str(e.session)) || !REPO.test(str(e.repo))) continue;
+    if (!HEX24.test(str(e.session)) || !REPO.test(str(e.repo))) continue;
     if (e.state === "asked" && byId.get(e.id)?.state === "answered") continue;
     byId.set(e.id, { id: e.id, at: e.at, state: e.state, session: e.session, thread: chatId(e.thread), repo: e.repo });
   }

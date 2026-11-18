@@ -238,12 +238,17 @@ export async function fetchStage(manifest, outDir, providers, opts) {
   const before = await providers.balance(); // throws when unreadable: nothing is spent
   if (!before || typeof before.remaining !== "number") throw new Error("could not read the Firecrawl balance; refusing to spend");
   const todo = manifest.pages.filter((p) => p.status !== "ok");
+  const settle = (p, status, error) => {
+    p.status = status;
+    p.error = error;
+    return p;
+  };
   // Plan within the cap; pages past it are listed as skipped, never dropped.
   let planned = 0;
   for (const p of todo) {
     p.plannedCost = planCost(p.url, pdfPages);
     if (planned + p.plannedCost > maxCredits) {
-      Object.assign(p, { status: "skipped", error: `skipped: credit cap ${maxCredits} reached` });
+      settle(p, "skipped", `skipped: credit cap ${maxCredits} reached`);
     } else planned += p.plannedCost;
   }
   if (planned > before.remaining) {
@@ -254,8 +259,8 @@ export async function fetchStage(manifest, outDir, providers, opts) {
   let outOfCredits = false;
   const go = todo.filter((p) => p.status !== "skipped");
   await pool(go, opts.scrapeConcurrency ?? DEFAULTS.scrapeConcurrency, async (p) => {
-    if (outOfCredits) return Object.assign(p, { status: "error", error: "not fetched: Firecrawl reported no credits (402)" });
-    if (spent + p.plannedCost > maxCredits) return Object.assign(p, { status: "skipped", error: `skipped: credit cap ${maxCredits} reached` });
+    if (outOfCredits) return settle(p, "error", "not fetched: Firecrawl reported no credits (402)");
+    if (spent + p.plannedCost > maxCredits) return settle(p, "skipped", `skipped: credit cap ${maxCredits} reached`);
     spent += p.plannedCost; // reserve before the call so parallel scrapes cannot pass the cap
     let res;
     for (let attempt = 0; ; attempt++) {
@@ -271,7 +276,7 @@ export async function fetchStage(manifest, outDir, providers, opts) {
       spent -= p.plannedCost; // a failed scrape is not billed; the after-balance checks this
       if (res.kind === "credits") outOfCredits = true;
       const label = res.kind === "credits" ? "Firecrawl: no credits (402)" : res.kind === "rate" ? "Firecrawl: rate limited, retries used up" : "Firecrawl";
-      return Object.assign(p, { status: "error", error: `${label}: ${short(res.error, 140)}` });
+      return settle(p, "error", `${label}: ${short(res.error, 140)}`);
     }
     const md = res.markdown ?? "";
     const meta = res.metadata ?? {};
@@ -280,17 +285,14 @@ export async function fetchStage(manifest, outDir, providers, opts) {
     p.file = `pages/${p.i}.md`;
     writeFileSync(join(outDir, p.file), md);
     const isPdf = /pdf/i.test(meta.contentType ?? "") || isPdfUrl(p.url);
-    Object.assign(p, {
-      status: "ok",
-      error: null,
-      chars: md.length,
-      title: meta.title ?? p.searchTitle ?? null,
-      contentType: meta.contentType ?? null,
-      creditsUsed: used,
-      pdf: isPdf,
-    });
+    settle(p, "ok", null);
+    p.chars = md.length;
+    p.title = meta.title ?? p.searchTitle ?? null;
+    p.contentType = meta.contentType ?? null;
+    p.creditsUsed = used;
+    p.pdf = isPdf;
   });
-  for (const p of manifest.pages) if (p.status === "pending") Object.assign(p, { status: "error", error: "not fetched" });
+  for (const p of manifest.pages) if (p.status === "pending") settle(p, "error", "not fetched");
   let after = null;
   try {
     after = await providers.balance();
@@ -385,7 +387,9 @@ export async function judgeStage(manifest, outDir, providers, opts) {
   }
   for (const p of manifest.pages) {
     if (p.jevError) delete p.jev; // a page with any failed chunk is an error row
-    Object.assign(p, route(p));
+    const { verdict, reason } = route(p);
+    p.verdict = verdict;
+    p.reason = reason;
   }
   manifest.jev = { requestedModel: opts.model, models: [...models], questionVersion: QUESTION_VERSION, usage };
   return manifest;

@@ -114,7 +114,7 @@ test("field rules", () => {
 
 const P = (name, extra = {}) => ({ name, installed: { kind: "command" }, feed: { kind: "none", reason: "test" }, ...extra });
 const broken = (patch, id = "git") =>
-  errors({ catalogText: withTools((t) => (Object.assign(t.find((x) => x.id === id), patch), t)) });
+  errors({ catalogText: withTools((t) => t.map((x) => (x.id === id ? { ...x, ...patch } : x))) });
 const part = (patch) =>
   errors({ catalogText: withTools((t) => ((t.find((x) => x.id === "git").parts[0] = { ...t.find((x) => x.id === "git").parts[0], ...patch }), t)) });
 const withTop = (patch) => JSON.stringify({ ...catalog, ...patch });
@@ -305,7 +305,7 @@ test("connection checks: no token after the cmd.exe shim", () => {
 
 // The Browserbase service part: hosted, with the one changelog feed left in the catalog.
 const hosted = (patch) =>
-  errors({ catalogText: withTools((t) => (Object.assign(t.find((x) => x.id === "browserbase").parts.find((p) => p.name === "service"), patch), t)) });
+  errors({ catalogText: withTools((t) => t.map((x) => (x.id === "browserbase" ? { ...x, parts: x.parts.map((p) => (p.name === "service" ? { ...p, ...patch } : p)) } : x))) });
 
 test("a changelog feed is allowed only on a hosted or none part, and the error names the part", () => {
   const page = { kind: "changelog", url: "https://www.browserbase.com/changelog" };
