@@ -451,7 +451,10 @@ test("a handoff entry names its five parts, and its evidence is durable", async 
   // A .claude folder inside the repository is durable; only the home folder's is not.
   for (const inRepo of ["`.claude/agents/x.md`", "`plugins/cookbook/.claude-plugin/plugin.json`"])
     assert.deepEqual(handoffEntryErrors({ name, text: `${good}\n${inRepo}` }), [], inRepo);
-  for (const home of ["`C:\\Users\\x\\.claude\\projects\\y.jsonl`", "`$HOME/.claude/z`", "`%USERPROFILE%\\.claude\\z`"])
+  for (const home of [
+    "`C:\\Users\\x\\.claude\\projects\\y.jsonl`", "`$HOME/.claude/z`", "`%USERPROFILE%\\.claude\\z`",
+    "`${HOME}/.claude/z`", "`$env:USERPROFILE\\.claude\\z`", "`/home/x/.claude/z`", "`/Users/x/.claude/z`",
+  ])
     assert.equal(handoffEntryErrors({ name, text: `${good}\n${home}` }).length, 1, home);
 });
 
