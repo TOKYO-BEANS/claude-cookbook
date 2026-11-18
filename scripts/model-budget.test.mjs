@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +11,7 @@ import { RULES, advice, decide, line, parseT3, parseUsage, readUsage, sealCache 
 
 const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/model-budget-note.mjs", import.meta.url));
 const HOOKS_JSON = fileURLToPath(new URL("../plugins/cookbook/hooks/hooks.json", import.meta.url));
+const GATE = fileURLToPath(new URL("../plugins/cookbook/hooks/model-budget-gate.sh", import.meta.url));
 const SCRIPT = fileURLToPath(new URL("../plugins/cookbook/skills/cookbook/scripts/model-budget.mjs", import.meta.url));
 
 const HOUR = 3600000;
@@ -768,13 +769,132 @@ test("hook: bad input ends in silence and exit code 0, and writes nothing outsid
   assert.equal(bad.stdout, "");
 });
 
-test("hooks.json runs the note at session start, on a prompt and after a tool", () => {
+test("hooks.json runs the note at session start and on a prompt, and after a tool through the gate", () => {
   const { hooks } = JSON.parse(readFileSync(HOOKS_JSON, "utf8"));
   for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse"]) {
     const commands = hooks[event].flatMap((g) => g.hooks.map((h) => h.command));
-    assert.ok(commands.some((c) => c.includes("${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-note.mjs")), event);
+    if (event === "PostToolUse") {
+      // Sourced in the hook's own bash, so the gate starts no process; no matcher, so every tool call reaches it.
+      const group = hooks[event].find((g) => g.hooks.some((h) => h.command.includes("model-budget-gate.sh")));
+      assert.equal(group.matcher, undefined);
+      assert.equal(group.hooks[0].command, '. "${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-gate.sh" "${CLAUDE_PLUGIN_ROOT}"');
+      assert.ok(!commands.some((c) => c.includes("model-budget-note.mjs")), "no ungated note after a tool");
+    } else assert.ok(commands.some((c) => c.includes("${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-note.mjs")), event);
     for (const g of hooks[event]) for (const h of g.hooks) assert.ok(h.timeout <= 10, `${event} timeout`);
   }
+  assert.match(readFileSync(GATE, "utf8"), /\| node "\$mb_root\/hooks\/model-budget-note\.mjs"/);
+});
+
+// The gate runs in Git Bash on Windows, as Claude Code's hooks do, and in bash elsewhere.
+const BASH = process.platform === "win32" ? "C:/Program Files/Git/bin/bash.exe" : "bash";
+const noBash = process.platform === "win32" && !existsSync(BASH) ? "Git Bash is not installed" : false;
+// A stub plugin root whose note only logs its input, so a test sees when Node started and what it read.
+const stubRoot = (home) => {
+  const root = join(home, "plugin");
+  mkdirSync(join(root, "hooks"), { recursive: true });
+  writeFileSync(join(root, "hooks", "model-budget-note.mjs"), 'import { appendFileSync } from "node:fs";\nlet s = "";\nfor await (const c of process.stdin) s += c;\nappendFileSync(process.env.MB_TEST_LOG, JSON.stringify(s) + "\\n");\n');
+  return root;
+};
+const runGate = (home, root, input) => {
+  const text = typeof input === "string" ? input : JSON.stringify(input);
+  const log = join(home, "runs.log");
+  const run = spawnSync(BASH, ["-c", `. "${GATE.replaceAll("\\", "/")}" "${root.replaceAll("\\", "/")}"`], { input: text, encoding: "utf8", env: { ...process.env, USERPROFILE: home, HOME: home, MB_TEST_LOG: log } });
+  const runs = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
+  return { ...run, runs };
+};
+const gateFile = (home, id) => join(home, ".local", "share", "model-budget", "sessions", `${id}.gate`);
+
+test("gate: Node starts once per five minutes per session, with the hook input whole", { skip: noBash }, (t) => {
+  const home = tmp(t);
+  const root = stubRoot(home);
+  mkdirSync(join(home, ".local", "share", "model-budget", "sessions"), { recursive: true });
+  // Longer than the 1,024 characters the gate reads, with text that is not ASCII past that point.
+  const input = { session_id: "s-g1", transcript_path: "C:/t.jsonl", hook_event_name: "PostToolUse", tool_name: "Bash", tool_response: `${"x".repeat(1500)} æøå “quoted” \\ end` };
+  const first = runGate(home, root, input);
+  assert.equal(first.status, 0);
+  assert.deepEqual(first.runs, [JSON.stringify(input)]);
+  const next = Number(readFileSync(gateFile(home, "s-g1"), "utf8"));
+  assert.ok(Math.abs(next - (Date.now() / 1000 + 300)) < 30, "the gate opens again in five minutes");
+  assert.equal(runGate(home, root, input).runs.length, 1, "within the window Node does not start");
+  assert.equal(runGate(home, root, { ...input, session_id: "s-g2" }).runs.length, 2, "another session has its own gate");
+  writeFileSync(gateFile(home, "s-g1"), `${Math.floor(Date.now() / 1000) - 1}\n`);
+  assert.equal(runGate(home, root, input).runs.length, 3, "after the window Node starts again");
+  writeFileSync(gateFile(home, "s-g1"), `${Math.floor(Date.now() / 1000) + 3600}\n`);
+  assert.equal(runGate(home, root, input).runs.length, 4, "a gate more than one window ahead counts as none");
+  writeFileSync(gateFile(home, "s-g1"), "not a time\n");
+  assert.equal(runGate(home, root, input).runs.length, 5, "an unreadable gate starts Node");
+  // Review of #130: a leading zero would be octal to bash ("08" fails), so it counts as no gate.
+  writeFileSync(gateFile(home, "s-g1"), "08\n");
+  const octal = runGate(home, root, input);
+  assert.equal(octal.runs.length, 6, "a gate with a leading zero starts Node");
+  assert.equal(octal.stderr, "");
+  assert.match(readFileSync(gateFile(home, "s-g1"), "utf8"), /^[1-9]\d+\n$/, "and is written again");
+});
+
+test("gate: an agent_id inside a main session's tool input is not a subagent", { skip: noBash }, (t) => {
+  const home = tmp(t);
+  const root = stubRoot(home);
+  const input = { session_id: "s-g6", transcript_path: "C:/t.jsonl", hook_event_name: "PostToolUse", tool_name: "mcp__x__send", tool_input: { agent_id: "worker-1" } };
+  assert.equal(runGate(home, root, input).runs.length, 1);
+});
+
+test("gate: a subagent's tool call starts no Node; without a session id or a state folder, Node starts", { skip: noBash }, (t) => {
+  const home = tmp(t);
+  const root = stubRoot(home);
+  const sub = runGate(home, root, { session_id: "s-g3", transcript_path: "C:/t.jsonl", agent_id: "a1", agent_type: "general-purpose", hook_event_name: "PostToolUse" });
+  assert.equal(sub.status, 0);
+  assert.deepEqual(sub.runs, []);
+  // No state folder yet: the gate cannot be written, so every call starts Node until the note makes the folder.
+  const main = { session_id: "s-g3", hook_event_name: "PostToolUse", tool_name: "Read" };
+  assert.equal(runGate(home, root, main).runs.length, 1);
+  assert.equal(runGate(home, root, main).runs.length, 2);
+  assert.ok(!existsSync(gateFile(home, "s-g3")));
+  // With the folder there, a gate could be written: an input whose session id the gate does not
+  // accept still starts Node every time and writes no gate (review of #130: on Windows a path
+  // through a missing folder resolves by text, so `sessions/../evil.gate` would land beside it).
+  const sessions = join(home, ".local", "share", "model-budget", "sessions");
+  mkdirSync(sessions, { recursive: true });
+  let n = runGate(home, root, main).runs.length;
+  for (const odd of [{ hook_event_name: "PostToolUse", session_id: "s-g4" }, { session_id: "../evil", hook_event_name: "PostToolUse" }, "not json"]) {
+    for (let i = 0; i < 2; i++) {
+      const r = runGate(home, root, odd);
+      assert.equal(r.runs.length, n + 1, `no gate for ${JSON.stringify(odd)}`);
+      n = r.runs.length;
+    }
+  }
+  assert.deepEqual(readdirSync(sessions).filter((f) => f.endsWith(".gate")), ["s-g3.gate"]);
+  assert.ok(!existsSync(join(home, ".local", "share", "model-budget", "evil.gate")));
+});
+
+test("note: a session start removes session and gate files older than 14 days, and keeps fresh ones", (t) => {
+  const home = tmp(t);
+  const sessions = join(home, ".local", "share", "model-budget", "sessions");
+  mkdirSync(sessions, { recursive: true });
+  const old = (Date.now() - 15 * 24 * HOUR) / 1000;
+  for (const name of ["old.json", "old.gate", "fresh.json", "fresh.gate", "keep.txt"]) writeFileSync(join(sessions, name), "0\n");
+  for (const name of ["old.json", "old.gate", "keep.txt"]) utimesSync(join(sessions, name), old, old);
+  assert.equal(runHook(home, { hook_event_name: "SessionStart", session_id: "s-c1" }).status, 0);
+  assert.deepEqual(readdirSync(sessions).sort(), ["fresh.gate", "fresh.json", "keep.txt", "s-c1.json"]);
+});
+
+test("gate: with the real note, a tool call after the window hears a changed advice", { skip: noBash }, (t) => {
+  const home = tmp(t);
+  const root = fileURLToPath(new URL("../plugins/cookbook", import.meta.url));
+  const input = { session_id: "s-g5", hook_event_name: "PostToolUse", tool_name: "Bash" };
+  const seedCache = (opts) => {
+    const stateDir = join(home, ".local", "share", "model-budget");
+    mkdirSync(stateDir, { recursive: true });
+    seedHome(home, { expiresAt: Date.now() + HOUR });
+    writeFileSync(join(stateDir, "usage.json"), sealCache("tok-secret-1", { at: Date.now(), tried: Date.now(), usage: parseUsage(live(opts)) }));
+  };
+  seedCache();
+  const context = (r) => (r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.additionalContext : "");
+  assert.match(context(runGate(home, root, input)), /^Model budget: use Fable 5\.2 high\./);
+  assert.equal(context(runGate(home, root, input)), "", "same advice: silent, and the gate is now set");
+  seedCache({ week: 50, fable: 93 });
+  assert.equal(context(runGate(home, root, input)), "", "inside the window the change waits");
+  writeFileSync(gateFile(home, "s-g5"), "0\n");
+  assert.match(context(runGate(home, root, input)), /^Model budget changed\. Model budget: use Opus 5\.5 high\./);
 });
 
 test("the script prints the line, and --json the reading and the decision", (t) => {
