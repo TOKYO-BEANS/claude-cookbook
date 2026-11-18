@@ -47,10 +47,8 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
 - **A lock around the read.** Its takeover after a crash was not race-free. A failed read
   now writes only its own mark file, so it cannot replace a reading.
 
-## Weighed, not in the stack: several subscriptions through one hub
+## Several subscriptions through one hub: installed, idle
 
-CLIProxyAPI (and EasyCLIProxyAPI) pools several Claude and Codex sign-ins behind one address,
-on one home machine that stays on, reached over Tailscale; T3 Code can read a hub's limits
-(Settings, Providers, Usage providers, Add hub). Its author warns of account bans. Not set up:
-a second subscription is spending, and a proxy is a new route for a credential. Both are the
-owner's decision. If set up, the budget then reads each account and the rules stay the same.
+CLIProxyAPI, installed 18 November 2026 with no account signed in:
+[subscription-proxy](subscription-proxy.md). T3 Code can read a hub's limits (Settings,
+Providers, Usage providers, Add hub). With accounts signed in, the budget's rules stay.

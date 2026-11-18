@@ -104,6 +104,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "trivy/cli": ["Version: 0.76.2\nVulnerability DB:\n  Version: 2\n", "0.76.2"],
     "osv-scanner/cli": ["osv-scanner version: 2.7.0\nosv-scalibr version: 0.5.3\n", "2.7.0"],
     "boat/cli": ["boat 1.0.97\n", "1.0.97"],
+    "cliproxyapi/cli": ["CLIProxyAPI Version: 8.0.76, Commit: 7df56074, BuiltAt: 2026-11-17T02:10:49Z\nUsage of cli-proxy-api.exe\n", "8.0.76"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
     "google-workspace-cli/cli": ["gws 0.22.5\nThis is not an officially supported Google product.\n", "0.22.5"],
   };
