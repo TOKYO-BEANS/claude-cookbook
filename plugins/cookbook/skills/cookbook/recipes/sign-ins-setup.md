@@ -28,8 +28,8 @@
   in `~/.local/share/site-login` after `pinned-install.sh`:
   `PLAYWRIGHT_BROWSERS_PATH=~/.local/share/ms-playwright PLAYWRIGHT_SKIP_BROWSER_GC=1 node
   node_modules/playwright-core/cli.js install chromium`, then one `agent-browser goto` call; only
-  after it passes, move the old `chromium-*` and `chromium_headless_shell-*` folders to
-  `~/.local/share/backups/`.
+  after it passes and `updates.mjs verify` exits 0, move the old `chromium-*` and
+  `chromium_headless_shell-*` folders to `~/.local/share/backups/` (a rollback needs them).
 - Vetted on 12 and 13 November 2026: the `pass-cli` download matched the checksum in Proton's own
   version list and carries a valid Proton AG signature; Trivy 0.76.2 and OSV-Scanner 2.7.0 could
   not parse the closed binary, which is no result, not a clean one. OSV-Scanner found no issue in

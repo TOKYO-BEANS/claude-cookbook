@@ -34,7 +34,8 @@ two-key token, and the pull request's description was brought in line with the f
 fallback review of `ece0907` had one low: the revision is now compared before
 `pinned-install.sh`, and without a yes the install stops with the old copy kept. The
 fallback review of `a5bb047` had one low: the `pinned` row and step 4 lacked that order and
-stop; both now have it.
+stop; both now have it. The fallback review of `8bf9acb` had one low: the old builds moved
+before `verify`, which a rollback needs; they now move only after `verify` exits 0.
 
 **Outstanding.** None from this change.
 
