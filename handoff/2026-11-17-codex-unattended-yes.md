@@ -95,3 +95,8 @@ other branches, tags or pull requests, anything outside the repository). The own
 the question dialog (this chat, 18 November 2026) and answered "Accept as known limits". The
 low ones are fixed: "Write nothing in that checkout" is a rule again, the decisions page gives
 years, `options/ship.md` is rewrapped, and this handoff is brought up to date.
+
+**Graphify on f374909.** Two medium: `git status` running before the `.git` hashes is gone with
+the hashes (Git's own folder is an accepted blind spot). New: a further edit to a file that was
+already changed does not change `git status --short`; the audit now starts an unattended run
+only from a clean checkout.

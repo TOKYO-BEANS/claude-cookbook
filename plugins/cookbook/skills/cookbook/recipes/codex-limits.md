@@ -27,7 +27,9 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 ## The audit, before and after
 
 In either mode, before the call note, and afterwards compare: `git status --short`,
-`git rev-parse HEAD` and the branch on the remote. It does not see Git's own folder (a hook or
+`git rev-parse HEAD` and the branch on the remote. Start an unattended run only from a clean
+checkout (`git status --short` empty), or a further edit to a changed file shows nothing. It
+does not see Git's own folder (a hook or
 setting written there runs with the next Git command), files inside ignored folders such as
 `node_modules`, other branches, tags or pull requests pushed with the owner's sign-in, or
 anything outside the repository. The owner accepted these as known limits of the unattended
