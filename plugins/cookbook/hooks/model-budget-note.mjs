@@ -2,7 +2,9 @@
 // Hook of the Cookbook plugin (SessionStart, UserPromptSubmit, PostToolUse): tells a session
 // which model the budget asks for, and nothing about the account's usage (the figures are
 // printed only when the script is run). A session start gets the advice; later events are silent
-// until the advice changes, so a long turn hears it while it can still switch. Only a session
+// until the advice changes, so a long turn hears it while it can still switch. After a tool, the
+// bash gate in model-budget-gate.sh starts this file at most once per five minutes per session and
+// never for a subagent, so a change is heard within minutes, not at the next tool call. Only a session
 // start may read over the network (one read per ten minutes for all sessions); every other
 // event uses a saved reading, the script's own or T3 Code's. The list of banked resets is used
 // only while T3 Code's file shows it, and saved nowhere; in the minutes that file has none, a
@@ -85,7 +87,7 @@ try {
     if (event === "SessionStart") {
       for (const name of readdirSync(sessions).slice(0, 500)) {
         const file = join(sessions, name);
-        if (name.endsWith(".json") && now - statSync(file).mtimeMs > KEEP_MS) rmSync(file, { force: true });
+        if (/\.(json|gate)$/.test(name) && now - statSync(file).mtimeMs > KEEP_MS) rmSync(file, { force: true });
       }
     }
   }
