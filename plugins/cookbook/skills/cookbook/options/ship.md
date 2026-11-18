@@ -18,13 +18,12 @@ Chosen by fit for the job on 15 November 2026.
   `gpt-6.1-sol` (an older one, `gpt-5.6-sol`, answers); it starts its reviewer in the session's
   own mode, round after round, and the owner's yes to an unattended Codex run covers a
   consult, not a loop ([codex](../recipes/codex.md)). `council` needs three providers and two
-  are on. Neither checks the merge condition in code, and the review of a pull request has
-  its owner. Their
-  job, a review by another provider's model, is done by a consult, as advice
-  ([codex-consult](../recipes/codex-consult.md)). What the comparison showed
-  is kept as practice in `recipes/ci-releases.md`: the reviews inside the `sa-*` route found
-  almost nothing, the AI review in CI and one reviewer that had not built the change found the
-  defects, and a budget of three review rounds held where an unbudgeted change took six.
+  are on. Neither checks the merge condition in code, and the review of a pull request has its
+  owner. Their job, a review by another provider's model, is done by a consult, as advice
+  ([codex-consult](../recipes/codex-consult.md)). What the comparison showed is kept as practice
+  in `recipes/ci-releases.md`: the reviews inside the `sa-*` route found almost nothing, the AI
+  review in CI and one reviewer that had not built the change found the defects, and a budget of
+  three review rounds held where an unbudgeted change took six.
 - **After a merge or deploy: Release Maintenance.** It checks the exact commit, the CI
   identities, the deployed version and health, and the release verifier keeps the ledger.
   Weighed: a look at the CI page (no record, no deployed version); a periodic monitor (late,

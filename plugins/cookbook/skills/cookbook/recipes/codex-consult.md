@@ -30,7 +30,7 @@ point against the code and decides. What may be sent, the refused models and the
   supervised run's read-only sandbox stops writes, not reads. In either mode, run the audit
   before and after: [codex-limits](codex-limits.md), "The audit". Report a change the child
   made; never keep one unseen.
-- **While it runs.** Nothing else writes in that checkout, so the audit sees only the child.
+- **While it runs.** Write nothing in that checkout, so the audit sees only the child.
   A timeout, an error or no reply is not agreement. One consult per question; a re-check is a
   new `delegate_task`, three rounds at most.
 - **Afterwards.** Report what was said, taken and declined, and why.

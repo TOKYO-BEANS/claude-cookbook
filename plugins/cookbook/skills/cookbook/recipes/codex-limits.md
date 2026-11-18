@@ -26,11 +26,12 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 
 ## The audit, before and after
 
-In either mode, before the call note, and afterwards compare: `git status --short --ignored`,
-`git rev-parse HEAD`, the branch on the remote, and a hash of `.git/config` and of every file
-under `.git/hooks`. A hook or setting written there runs with the next Git command, so run
-none in that checkout until they match. The audit sees the repository only: an unattended
-run's write elsewhere would go unseen.
+In either mode, before the call note, and afterwards compare: `git status --short`,
+`git rev-parse HEAD` and the branch on the remote. It does not see Git's own folder (a hook or
+setting written there runs with the next Git command), files inside ignored folders such as
+`node_modules`, other branches, tags or pull requests pushed with the owner's sign-in, or
+anything outside the repository. The owner accepted these as known limits of the unattended
+mode ([codex-decisions](codex-decisions.md)).
 
 ## The owner's decisions
 
