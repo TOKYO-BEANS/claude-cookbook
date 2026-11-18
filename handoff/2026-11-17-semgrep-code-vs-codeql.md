@@ -7,7 +7,8 @@ have, by 24 November, then the owner chooses.
 **What was measured.** The result and the method are in
 `options/semgrep-code-vs-codeql.md`. In short: Semgrep found none of CodeQL's 78 alerts
 (20 of them fixed in product code); on all eight default branches it found 89 things of its
-own, all hints, none with outside input reaching the line on reading; Semgrep's free tier
+own, from audit rules, none with outside input reaching the line on reading (a reading
+clears nothing); Semgrep's free tier
 has no Secrets (refused with our key). Nothing was uploaded: local `semgrep scan` with the
 `semgrep` key from the DPAPI store, `--metrics=off`.
 
@@ -15,7 +16,7 @@ has no Secrets (refused with our key). Nothing was uploaded: local `semgrep scan
 `options/security-platforms.md` and `recipes/security-costs.md` point to it. No tool was
 added, changed or retired.
 
-**Verification.** `npm test`. The counts come from the scripts in the evidence folder; the
+**Verification.** `npm test` on boat. The counts come from the scripts in the evidence folder; the
 CodeQL alerts were read on 17 November.
 
 **Outstanding.**
@@ -27,8 +28,10 @@ CodeQL alerts were read on 17 November.
   seven private repositories: GitHub blocks a merge when "a required tool is not configured
   for the repository" (<https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets>).
   Removing that rule is a weakened check, which is the owner's too.
-- Two findings Semgrep alone raised (unsanitised catalogue HTML rendered in a shop's
-  storefront) go to triage in that repository. Owner: Claude, a chat of its own.
+- The 89 findings Semgrep alone raised (`semgrep/head-findings-distinct.json`) go to
+  triage in their repositories, by hand: `sa-triage` reads CodeQL and Supply Chain only.
+  First the two that render a shop's catalogue HTML unsanitised. Owner: Claude, a chat of
+  its own; a dismissal is the owner's.
 - The three open CodeQL alerts in one repository stay with `sa-triage` there.
 
 **Failures and dead ends.**
