@@ -401,16 +401,20 @@ export function handoffErrors({ closedText, entryNames, pinned = HANDOFF_CLOSED_
 export const HANDOFF_CONTENT_FROM = "2026-11-19";
 export const HANDOFF_PARTS = ["What changed", "Verification", "Outstanding", "Dead ends", "Evidence"];
 const isLabel = (line) => /^\s*(\*\*|#{1,6}\s)/.test(line);
-const NOT_DURABLE = /AppData[\\/]Local[\\/]Temp|[\\/]scratchpad[\\/]|(^|[\s`'"(])\/tmp\/|\.claude[\\/]/i;
+// The label's own text: the bold span that opens the line, or the heading's text. A word in the
+// text after a bold label names no part.
+const labelText = (line) => /^\s*\*\*(.+?)\*\*/.exec(line)?.[1] ?? /^\s*#{1,6}\s+(.*)/.exec(line)?.[1] ?? "";
+// Home-folder forms of .claude only: a .claude folder committed in a repository is durable.
+const NOT_DURABLE = /AppData[\\/]Local[\\/]Temp|[\\/]scratchpad[\\/]|(^|[\s`'"(])\/tmp\/|(~|\$HOME|%USERPROFILE%|[A-Za-z]:[\\/]Users[\\/][^\\/\s`]+)[\\/]\.claude[\\/]/i;
 export function handoffEntryErrors({ name, text }) {
   if (name.slice(0, 10) < HANDOFF_CONTENT_FROM) return [];
   const lines = String(text).split(/\r?\n/);
   const errors = [];
   for (const part of HANDOFF_PARTS) {
     const named = new RegExp(`\\b${part}\\b`, "i");
-    if (!lines.some((l) => isLabel(l) && named.test(l))) errors.push(`handoff/${name}: no "${part}" part (a bold label or a heading; "None." is an answer)`);
+    if (!lines.some((l) => named.test(labelText(l)))) errors.push(`handoff/${name}: no "${part}" part (a bold label or a heading; "None." is an answer)`);
   }
-  const start = lines.findIndex((l) => isLabel(l) && /\bevidence\b/i.test(l));
+  const start = lines.findIndex((l) => /\bevidence\b/i.test(labelText(l)));
   if (start >= 0) {
     const next = lines.findIndex((l, i) => i > start && isLabel(l));
     if (lines.slice(start, next < 0 ? undefined : next).some((l) => NOT_DURABLE.test(l)))
