@@ -6,7 +6,7 @@ have, by 24 November, then the owner chooses.
 
 **What was measured.** The result and the method are in
 `options/semgrep-code-vs-codeql.md`. In short: Semgrep found none of CodeQL's 78 alerts
-(20 of them fixed in product code); on all eight default branches it found 89 things of its
+(20 of them fixed in product code; 5 alert files not fully analysed); on all eight default branches it found 89 things of its
 own, from audit rules, none with outside input reaching the line on reading (a reading
 clears nothing); Semgrep's free tier
 has no Secrets (refused with our key). Nothing was uploaded: local `semgrep scan` with the

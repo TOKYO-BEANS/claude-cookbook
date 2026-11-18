@@ -15,10 +15,10 @@ Measured the same day on our eight repositories (A to H), one committer.
 - **CodeQL's 78 alerts** (5 repositories; by path 26 in product code, 52 in tests; 35 fixed, 3 open,
   40 dismissed): each alert's files were scanned at the alert's commit, tests included.
   Semgrep flagged **none** of the 78 weaknesses, the 20 fixed in product code among them
-  (file-system races, file data sent over HTTP, insecure randomness, ReDoS, tag filters,
-  incomplete sanitising) and the 3 open ones. Three lines nearby carried a
+  (file-system races, file data sent over HTTP, network data written to a file, insecure
+  randomness, ReDoS, tag filters, double escaping, incomplete sanitising) and the 3 open ones. Three lines nearby carried a
   different rule. Not analysed in full: four alerts' files timed out (the open stack-trace
-  alert and three in tests) and one did not parse.
+  alert and three in tests) and one parsed only in part.
 - **What only Semgrep found**, on all eight default branches (three large ones with
   `--pro-intrafile`, cross-file being too slow here): 89 findings, 24 of them in
   files the standard writes. By rule: child process 17, non-literal RegExp 19, `replaceAll`

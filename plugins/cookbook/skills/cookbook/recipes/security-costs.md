@@ -34,8 +34,8 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   ([ai-review](ai-review.md)).
 - **The purchase when the trial ends, about 28 November 2026.** Secret Protection is USD 19
   and Code Security USD 30 for each active committer a month (one active committer,
-  17 November). Measured: Semgrep's free code rules found none of CodeQL's 78 alerts, and
-  Semgrep's free tier has no Secrets
+  17 November). Measured: Semgrep's free code rules found none of CodeQL's 78 alerts (5 not
+  fully analysed), and Semgrep's free tier has no Secrets
   ([semgrep-code-vs-codeql](../options/semgrep-code-vs-codeql.md)). The purchase is the
   owner's: "not now" on 18 November. What was weighed: [security-platforms](../options/security-platforms.md).
 - A number of pull requests is the multiplier: every push runs the tests, CodeQL and Semgrep,

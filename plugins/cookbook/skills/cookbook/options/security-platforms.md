@@ -12,8 +12,8 @@ vendors' pricing pages) for one committer and eight repositories. Result: none.
   (<https://www.aikido.dev/pricing>). Its free plan was in use and removed on 3 November 2026.
 - **Semgrep**, already here for dependencies. Free up to 10 contributors and 10 private
   repositories, with code rules; Secrets is not in it. Its code rules in place of CodeQL
-  would save USD 30 a month; measured on our code, they found none of CodeQL's 78 alerts
-  ([semgrep-code-vs-codeql](semgrep-code-vs-codeql.md)).
+  would save USD 30 a month; measured on our code, they found none of CodeQL's 78 alerts,
+  5 not fully analysed ([semgrep-code-vs-codeql](semgrep-code-vs-codeql.md)).
 - **GitHub for all of it** (Dependabot alerts in place of Semgrep): the same USD 49, and the
   reachability filter is lost.
 - **Snyk.** Free has 100 code tests a month, too few for our pull requests; Team is USD 25 a
