@@ -48,8 +48,8 @@ session) arrives as sessions are replaced.
   apps (2.1 GB), not by Claude.
 - Hooks under load (another chat's measurement, checked here): at 17:15 on 17 November a bare
   Node start took 5 s, so context-mode's 5-second hooks (a plugin of its own, not changed here)
-  missed and the owner saw "hook did not answer in time". A tool call starts up to five Node
-  processes: context-mode before and after (shell, read, search, edit and MCP tools), and of the
+  missed and the owner saw "hook did not answer in time". A tool call starts up to four Node
+  processes: context-mode before (shell, read, search, edit) and after (those plus MCP tools), and of the
   Cookbook's: `model-budget-note.mjs` after every tool (`PostToolUse` with no matcher),
   `boat-route.mjs` before shell calls, `owner-answers.mjs` before `AskUserQuestion`, edits and
   new threads and after `AskUserQuestion`, `codex-start-gate.mjs` before delegations and new
