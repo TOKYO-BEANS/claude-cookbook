@@ -70,6 +70,7 @@
     { "name": "key-header.mjs", "reason": "prints one stored key as a header for an MCP client's headers helper, a copy of the cookbook skill's scripts/key-header.mjs" },
     { "name": "firecrawl-secure.mjs", "reason": "launcher behind the firecrawl shim, a copy of the cookbook skill's scripts/firecrawl-secure.mjs" },
     { "name": "parallel-secure.mjs", "reason": "launcher behind the parallel-cli shim, a copy of the cookbook skill's scripts/parallel-secure.mjs" },
+    { "name": "claude-pool.mjs", "reason": "launcher for Claude Code through CLIProxyAPI, a copy of the cookbook skill's scripts/claude-pool.mjs" },
     { "name": "pysemgrep.exe", "reason": "Semgrep's own helper binary, installed with semgrep.exe" },
     { "name": "shopify", "reason": "the shim for the Shopify CLI tool (shopify-cli), pinned in ~/.local/share" },
     { "name": "parallel-cli", "reason": "the shim for the Parallel CLI tool (parallel), pinned in ~/.local/share" },
