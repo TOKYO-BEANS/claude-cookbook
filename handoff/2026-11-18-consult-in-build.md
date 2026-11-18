@@ -17,4 +17,15 @@ it is now.
 reverse gets one Codex consult on that choice before the build starts, under
 `recipes/codex-consult.md`; routine changes get none.
 
+**Verification.** #140 merged as `2f92977` on 18 November 2026 through `sa-release`. Every
+check passed on head `0af7efb`: Depot CI test and semgrep, test (windows-2025), CodeQL. The
+`ai-review` job said `review unavailable` (credit balance too low), so a `cookbook:review`
+subagent did the fallback review, which found one low: this entry had no Verification and no
+Dead ends line, added here. The first merge run was refused before that record existed; the
+second merged it, and the release check read `verified`. Evidence:
+`~/.local/share/claude-cookbook/evidence/2026-11-18-consult-in-build`, both runs recorded with
+`workflows.mjs record`.
+
+**Dead ends.** None.
+
 **Outstanding.** None from this job.
