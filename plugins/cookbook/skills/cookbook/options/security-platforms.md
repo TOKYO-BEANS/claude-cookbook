@@ -11,10 +11,9 @@ vendors' pricing pages) for one committer and eight repositories. Result: none.
   pull request gating, no malware detection and no review. Paid: USD 350 a month for 10 users
   (<https://www.aikido.dev/pricing>). Its free plan was in use and removed on 3 November 2026.
 - **Semgrep**, already here for dependencies. Free up to 10 contributors and 10 private
-  repositories, with code and secret rules too, by a research run: its pricing page timed out
-  twice, so the measurement confirms what the free tier scans. It runs in our own CI job, so
-  it needs no new check. The one real saving: its code rules in place of CodeQL (USD 30 a
-  month). Not decided: measured first ([security-costs](../recipes/security-costs.md)).
+  repositories, with code rules; Secrets is not in it. Its code rules in place of CodeQL
+  would save USD 30 a month; measured on our code, they found none of CodeQL's 78 alerts
+  ([semgrep-code-vs-codeql](semgrep-code-vs-codeql.md)).
 - **GitHub for all of it** (Dependabot alerts in place of Semgrep): the same USD 49, and the
   reachability filter is lost.
 - **Snyk.** Free has 100 code tests a month, too few for our pull requests; Team is USD 25 a
@@ -31,6 +30,6 @@ vendors' pricing pages) for one committer and eight repositories. Result: none.
   than one review on the Claude plan.
 - **Depot's larger plan** (USD 200 a month, 20,000 runner minutes): CodeQL needs under 2,000.
 - **Not found**: an independent 2025 or 2026 comparison of finding quality between CodeQL,
-  Semgrep, Snyk Code and Aikido. Hence the measurement on our own code.
+  Semgrep, Snyk Code and Aikido. Hence the measurement on our own code (Semgrep only).
 - Prices are list prices read on 17 November 2026; a claim without a link here was in a
   research run's sources and is not checked against the vendor's page.
