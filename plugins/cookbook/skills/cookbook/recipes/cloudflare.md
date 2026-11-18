@@ -15,10 +15,12 @@
   DPAPI token (`with-key.mjs cloudflare-wrangler CLOUDFLARE_API_TOKEN`), or the Cloudflare plugin's
   `execute` once its login grants the observability and D1 scopes (the owner re-authorizes it in
   `/mcp`). `cloudflare-docs` stays for documentation search.
-- The plugin's `cloudflare-one` skill (1.0.4) reads an Access service token from "the project's
-  secret store or environment variables". Here that store is the DPAPI store: the token reaches a
-  site through `agent-browser access` ([sign-ins](sign-ins-mail-and-access.md)) or `with-key.mjs`,
-  never a saved environment variable, a `.env` file or a command line ([keys](keys.md)).
+- The plugin's `cloudflare-one` skill (1.0.4) reads an Access service token "from the project's
+  configured secret store or environment variables". Here that store is the DPAPI store: the
+  token reaches a site through `agent-browser access` ([sign-ins](sign-ins-mail-and-access.md))
+  or `with-key.mjs`, never a saved environment variable, a `.env` file or a command line
+  ([keys](keys.md)). Only for a site listed in `site-login/access.json`; a new site is an access
+  change and needs the owner's yes.
 - `wrangler dev` reads a Worker's required secrets from the environment, so start it without
   secret-looking variables set. For local dev, keep `compatibility_date` at or below the date of the
   bundled workerd.
