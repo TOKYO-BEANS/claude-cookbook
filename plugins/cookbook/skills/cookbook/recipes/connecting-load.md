@@ -14,11 +14,13 @@ within 10 tokens. With all nine servers 67,356; with none 48,100.
 | context-mode (plugin) | 885 | 79 | every session |
 | cloudflare (plugin) | 91 | 10 | every session (owner: leave) |
 | cloudflare-docs | 52 | 10 | every session (owner: leave) |
-| stagehand | 39 | 1 | every session (owner: leave) |
+| stagehand | 39 | 1 | a child session only, since 17 November (its memory; the owner's "leave" was on tokens) |
 
 After the two moves a session start is 55,308 tokens: 12,048 fewer. T3 Code's own server is
 not in a headless run and was not measured.
 
+- **Memory, not only tokens.** A `stdio` server is a process in every session: Stagehand's two
+  were about 450 MB across 14 sessions (17 November), so it moved to way 3 below.
 - **What costs.** Tool search already keeps a tool's definition out until it is needed: a
   server costs its tool names and its instructions. The rest is tools its author marked to
   load in full (five of Firecrawl's: 10,031 tokens).
