@@ -442,6 +442,17 @@ test("a handoff entry names its five parts, and its evidence is durable", async 
   }
   // The same path outside the evidence part is not the evidence.
   assert.deepEqual(handoffEntryErrors({ name, text: good.replace("One page.", "Edited `~/.claude/settings.json`.") }), []);
+  // Only the label's own text names a part: a word in the text after the label does not.
+  const outstandingInText = good.replace("**Outstanding.** None.", "**Why.** Nothing is outstanding.");
+  assert.match(handoffEntryErrors({ name, text: outstandingInText })[0], /"Outstanding"/);
+  // An earlier label whose text mentions evidence does not move the evidence part.
+  const early = good.replace("**What changed.** One page.", "**What changed.** The evidence was saved.");
+  assert.equal(handoffEntryErrors({ name, text: `${early}\n\`/tmp/run.log\`` }).length, 1);
+  // A .claude folder inside the repository is durable; only the home folder's is not.
+  for (const inRepo of ["`.claude/agents/x.md`", "`plugins/cookbook/.claude-plugin/plugin.json`"])
+    assert.deepEqual(handoffEntryErrors({ name, text: `${good}\n${inRepo}` }), [], inRepo);
+  for (const home of ["`C:\\Users\\x\\.claude\\projects\\y.jsonl`", "`$HOME/.claude/z`", "`%USERPROFILE%\\.claude\\z`"])
+    assert.equal(handoffEntryErrors({ name, text: `${good}\n${home}` }).length, 1, home);
 });
 
 test("the plugin has no version number: none in the manifest, none in the marketplace entry", async () => {
