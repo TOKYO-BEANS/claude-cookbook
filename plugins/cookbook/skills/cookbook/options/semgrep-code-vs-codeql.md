@@ -2,7 +2,7 @@
 
 The owner asked on 17 November 2026 to measure before the trial ends (about 28 November):
 could Semgrep's free code rules replace GitHub Code Security (USD 30 a committer a month)?
-Measured the same day on our eight repositories (A to H), one committer.
+Measured the same day on our eight repositories, one committer.
 
 - **Semgrep's free tier, read and tried with our key.** Code (Pro rules, cross-file
   analysis) and Supply Chain, up to 10 contributors and 10 private repositories
