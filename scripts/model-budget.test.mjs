@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -849,11 +849,32 @@ test("gate: a subagent's tool call starts no Node; without a session id or a sta
   assert.equal(runGate(home, root, main).runs.length, 1);
   assert.equal(runGate(home, root, main).runs.length, 2);
   assert.ok(!existsSync(gateFile(home, "s-g3")));
+  // With the folder there, a gate could be written: an input whose session id the gate does not
+  // accept still starts Node every time and writes no gate (review of #130: on Windows a path
+  // through a missing folder resolves by text, so `sessions/../evil.gate` would land beside it).
+  const sessions = join(home, ".local", "share", "model-budget", "sessions");
+  mkdirSync(sessions, { recursive: true });
+  let n = runGate(home, root, main).runs.length;
   for (const odd of [{ hook_event_name: "PostToolUse", session_id: "s-g4" }, { session_id: "../evil", hook_event_name: "PostToolUse" }, "not json"]) {
-    const before = runGate(home, root, main).runs.length;
-    assert.equal(runGate(home, root, odd).runs.length, before + 1, `no gate for ${JSON.stringify(odd)}`);
+    for (let i = 0; i < 2; i++) {
+      const r = runGate(home, root, odd);
+      assert.equal(r.runs.length, n + 1, `no gate for ${JSON.stringify(odd)}`);
+      n = r.runs.length;
+    }
   }
+  assert.deepEqual(readdirSync(sessions).filter((f) => f.endsWith(".gate")), ["s-g3.gate"]);
   assert.ok(!existsSync(join(home, ".local", "share", "model-budget", "evil.gate")));
+});
+
+test("note: a session start removes session and gate files older than 14 days, and keeps fresh ones", (t) => {
+  const home = tmp(t);
+  const sessions = join(home, ".local", "share", "model-budget", "sessions");
+  mkdirSync(sessions, { recursive: true });
+  const old = (Date.now() - 15 * 24 * HOUR) / 1000;
+  for (const name of ["old.json", "old.gate", "fresh.json", "fresh.gate", "keep.txt"]) writeFileSync(join(sessions, name), "0\n");
+  for (const name of ["old.json", "old.gate", "keep.txt"]) utimesSync(join(sessions, name), old, old);
+  assert.equal(runHook(home, { hook_event_name: "SessionStart", session_id: "s-c1" }).status, 0);
+  assert.deepEqual(readdirSync(sessions).sort(), ["fresh.gate", "fresh.json", "keep.txt", "s-c1.json"]);
 });
 
 test("gate: with the real note, a tool call after the window hears a changed advice", { skip: noBash }, (t) => {

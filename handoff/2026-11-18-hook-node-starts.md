@@ -56,7 +56,13 @@ names, which two files a session would soon pass (now 5,000). Two open questions
 a skipped call leaves the rest of the input unread (the probe's printf hook read none of its
 input and the run went on normally; so do Claude Code hooks that ignore stdin), and Linux or
 macOS shells (the plugin's other hooks already name `C:/Program Files/nodejs/node.exe`: it
-runs on this PC).
+runs on this PC). The second round, on `577bb35`, found the fixes right and two low test gaps,
+fixed in the next commit: the "no gate" inputs are now tried with the state folder present (on
+Windows `sessions/../evil.gate` would resolve by text) and must write no gate, and a test ages
+a `.json` and a `.gate` past 14 days and sees a session start remove both. Graphify's review of
+`2f2a4b8` named the `agent_id` finding (fixed) and a race: tool calls of one session finishing
+together can each start Node once; answered on the pull request, not changed (never more starts
+than before, and a lock would need its own stale-lock handling).
 
 **Outstanding.**
 - context-mode's hooks (a third-party plugin, not changed here) start Node before and after
