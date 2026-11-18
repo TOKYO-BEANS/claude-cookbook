@@ -70,8 +70,24 @@ than before, and a lock would need its own stale-lock handling).
   the 2.44 Node starts per tool call. A change there is its maintainer's or a fork's; nothing
   is planned. Owner: Claude, only if "hook did not answer in time" comes back; cleared by a
   load measurement with no such warning.
-- The `ai-review` credit is out: this pull request takes a fallback review.
+- A working folder of about 250 characters or more pushes `"hook_event_name":` past the 1,024
+  characters the gate reads, so a subagent's call there starts Node and spends the parent's
+  five-minute window (the third fallback review's low finding, answered on #130, not changed):
+  the parent's next note comes at most five minutes later, never lost. This PC's deepest working
+  folders are about 80 characters. Owner: Claude, if such folders come into use; cleared by
+  treating a missing marker as doubt (Node starts, no gate is written), with a test.
+
+**The merge.** #130 merged as `49ba20f` on 18 November: every check passed (Graphify Formal
+Verification skipped, outside the gate). The `ai-review` job was unavailable on all three heads
+(credit balance), so three fallback reviews were recorded on the pull request: `2f2a4b8` (three
+lows, fixed), `577bb35` (two test lows, fixed), `3335da7` (one low, answered). Release check
+`verified` (execution 1746). Plugin updated to `49ba20f`. Live proof the same day: a headless
+session with the installed plugin and three Bash calls wrote its `.gate` at the first call
+only (09:12:13), five minutes ahead; the next two calls left it untouched, so they started no
+Node.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-18-hook-node-starts/`:
 `before.json`, `gate-300.json`, `gate-180.json`, the two scripts that made them, `probe/` (the
-probe's hook settings and what it logged) and `gate-tests-windows.txt`.
+probe's hook settings and what it logged), `gate-tests-windows.txt`, the boat outputs
+(`boat-npm-test-*.txt`), and the release log and result (`release-cookbook-130-merge.log`,
+`result-cookbook-130-merge.json`).
