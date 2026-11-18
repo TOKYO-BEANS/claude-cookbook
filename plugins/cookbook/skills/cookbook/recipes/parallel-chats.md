@@ -1,9 +1,8 @@
 # Several chats at once
 
-Each chat has its own worktree and branch, and every change merges through a pull request,
-so chats never overwrite each other's files. What they lack is sight of each other: on
-16 November 2026 the owner got the same question in two chats, and every running chat had
-been started by another chat, two of them on one subject.
+Every change merges through a pull request, and a worktree thread has a branch of its own;
+a chat without one shares the main checkout. None sees the others: on 16 November 2026 the
+owner got the same question in two chats, and two running chats had one subject.
 
 ## A question another chat already asked
 
@@ -29,23 +28,26 @@ it was given.
 - None of them is yours: call `AskUserQuestion` again, and it passes.
 
 The hook judges nothing and shows no text a chat wrote: counts, dates and chat ids in the
-host's own shape. The cost is one short turn, and a
-look at another chat, when another chat has asked something new. An error in the hook lets
-the call go ahead. Nothing is noted outside a repository or told across two, so the same
-question can still reach the owner once per repository.
+host's own shape. An error in the hook lets the call go ahead. Nothing is noted outside a
+repository or told across two, so the same question can still reach the owner once per
+repository.
 
-## Before a chat starts a new chat
+## Before a chat changes a file or starts a new chat
 
-The same hook stops `t3_thread_launch` and `create_threads` once (a delegate is not a chat):
+The same hook stops a chat once before its first `Edit`, `Write` or `NotebookEdit` in a
+GitHub repository (again after four hours; no subagent), and before `t3_thread_launch`
+and `create_threads` (then passing ten minutes); no delegate ever. The look:
 
-1. `t3_thread_list` with `allProjects: true`, `settled: false`: the titles and the linked
-   pull requests.
-2. `gh pr list` in the job's repository.
+1. `t3_thread_list` with `allProjects: true`, `settled: false`, `includeSubagents: false`:
+   the titles and the linked pull requests.
+2. `gh pr list --json number,title,headRefName,files` in the job's repository.
 
-A chat or pull request that has the job gets what you know (`t3_thread_send`), and no second
-chat starts. One that only edits the same files is named in the new chat's brief, with the
-files that stay out. The call then passes for ten minutes. Take the same look before
-starting a job the owner gave, when it may already be running.
+A chat or pull request that has the job gets what you know (`t3_thread_send`): change
+nothing, start no second chat. One that only changes the same files: build on its branch,
+wait for its merge or keep to other files, and name it in a new chat's brief. On the
+default branch, move to a worktree or a branch first.
+
+Not caught: a change by a shell command alone, and two chats that look in the same minutes.
 
 ## The handoff is a file per entry
 

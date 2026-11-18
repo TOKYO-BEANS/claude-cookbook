@@ -31,14 +31,13 @@ fair trial; they never pick an owner.
   system, in the tool already open. Weighed: Figma with its MCP server (a second tool and
   a hand-off step); v0 and similar generators (they emit their own stack's code); Adobe
   Express (posters and social graphics, not product screens).
-- **Photos: Adobe Firefly.** Sharpest on real faces in the side-by-side test, without
-  redrawing them. Weighed: Nero AI Unblur (half the sharpness score), Upscayl (no gain),
-  Topaz Photo AI (not tested; a paid desktop app).
-- **Photo editing: Adobe for creativity.** Its masks (subject, skin, a named object) carried a
-  colour fix on 14 photos that one preset could not do. Weighed: Firefly's web app (no masks;
-  its "remove object" re-rendered the whole photo small); the connector in every session (109
-  tool names each time, the reason it was once switched off); a subagent with the server
-  defined inline (Adobe refuses a direct connection).
+- **Photos: no tool.** Adobe Firefly (sharpening) and Adobe for creativity (masks) left on
+  17 November 2026 with the Adobe trial. PhotoCraft 0.23.1 (local, Apache/MIT) was tested
+  that day on 10 public-domain photos: Select Subject was right on 1 of 5 people, a box drawn
+  around the person on 3 of 5; no object by name, no face-aware skin mask, no auto
+  straighten. Its segmentation has no learned model. Next: LightCraft with Meta's SAM 3
+  (gated weights, SAM License). Weighed for sharpening: Nero AI Unblur, Upscayl, Topaz Photo
+  AI (paid). ArtCraft Studio is generative only: never on photos of real people.
 - **Skills: Superpowers `writing-skills`.** It tests a skill the way code is tested. Weighed:
   the bundled `skill-creator` (the fallback: it ships with the app).
 - **Model per turn: the model budget.** Weighed: a T3 Code router, both apps' fallbacks,

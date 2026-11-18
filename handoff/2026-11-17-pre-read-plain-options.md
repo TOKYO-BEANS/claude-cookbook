@@ -100,7 +100,8 @@ of a twice-failed approach.
   answers right. Asked in the chat on 17 November 2026, the owner chose "Yes,
   answer-based bar": write a bar scored on whether the opened text answers the question,
   before any run; new labels; measure Claude's own Grep, then ranged Reads, against it. If
-  it passes, a map row as a plain recipe, no new tool.
+  it passes, a map row as a plain recipe, no new tool. Done the same day, and missed:
+  `handoff/2026-11-17-pre-read-answer-bar.md`.
 - The launcher test that failed once under load (`scripts/key-header.test.mjs:213`):
   unchanged, its own job.
 

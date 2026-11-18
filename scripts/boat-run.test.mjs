@@ -18,6 +18,8 @@ const plan = (over = {}) => ({
   subscriptionQuotaSeconds: 2000000,
   subscriptionRemainingSeconds: 1999000,
   wallet: { balanceDollars: 0 },
+  nextStartDollars: 0,
+  starts: { day: { remaining: 147 }, hour: { remaining: 58 }, minute: { remaining: 12 } },
   ...over,
 });
 const args = (...a) => parseArgs(a);
@@ -80,9 +82,17 @@ test("a fifth of the month's time is kept back for the vetting step, with the ot
 test("no run while something could bill past the plan, or while the plan cannot be read", async () => {
   const run = args("--timeout", "60", "--", "x");
   assert.match(gate(run, plan({ keepGoing: { enabled: true } })), /extra starts/);
-  assert.match(gate(run, plan({ wallet: { balanceDollars: 5 } })), /wallet/);
+  // Money in the wallet (the AI proxy's, since 17 November 2026) is not spent on runs: a run
+  // starts only while boat prices its start at nothing, starts are left and the plan's time
+  // holds it.
+  assert.equal(gate(run, plan({ wallet: { balanceDollars: 29 } })), null);
+  assert.match(gate(run, plan({ wallet: { balanceDollars: 29 }, nextStartDollars: 0.03 })), /bill the next start/);
+  assert.match(gate(run, plan({ starts: { day: { remaining: 10 }, hour: { remaining: 58 }, minute: { remaining: 12 } } })), /starts are nearly used/);
+  assert.match(gate(run, plan({ starts: { day: { remaining: 147 }, hour: { remaining: 10 }, minute: { remaining: 12 } } })), /starts are nearly used/);
+  assert.match(gate(run, plan({ starts: { day: { remaining: 147 }, hour: { remaining: 58 }, minute: { remaining: 2 } } }), 2), /starts are nearly used/);
+  assert.equal(gate(run, plan({ starts: { day: { remaining: 147 }, hour: { remaining: 58 }, minute: { remaining: 3 } } }), 2), null);
   assert.match(gate(run, plan({ canStart: false })), /cannot start/);
-  for (const broken of [null, {}, "text", plan({ subscriptionQuotaSeconds: "many" }), plan({ activeSandboxes: undefined }), plan({ keepGoing: undefined }), plan({ wallet: undefined }), plan({ canStart: undefined }), plan({ canStart: "yes" }), plan({ canStart: 1 })]) {
+  for (const broken of [null, {}, "text", plan({ subscriptionQuotaSeconds: "many" }), plan({ activeSandboxes: undefined }), plan({ keepGoing: undefined }), plan({ wallet: undefined }), plan({ nextStartDollars: undefined }), plan({ starts: undefined }), plan({ starts: { day: { remaining: 1 } } }), plan({ canStart: undefined }), plan({ canStart: "yes" }), plan({ canStart: 1 })]) {
     assert.match(gate(run, broken), /no result/);
   }
 });
