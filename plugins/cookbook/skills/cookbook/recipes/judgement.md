@@ -16,3 +16,14 @@
   the same request: "does it point to any of these?" and "could it mean more than one?". In that test
   this scored 0.917 on 24 held-out requests (7 of them answered with "which one?") against 0.417 for
   word overlap.
+- From TypeSafe's own demos (MEGA livestream, 8 October 2026):
+  - The menu is the product. Jev always lands on an option, so a missing choice wins as its
+    nearest neighbour: add "none of these". A list that grows with the data is narrowed in code
+    first (a search), then picked from; a pick takes at most 255 options.
+  - Gate a Choice on its lead over an even split (1/n of the options), not on the raw top score,
+    with a bar per action set by what a mistake costs. The same text scores a little differently
+    each time: keep the bar clear of where everyday inputs land. Pin the tested model, never
+    `jev-latest`.
+  - Ask every question that may apply in one request and read only those that do.
+  - Log each pick and its scores. A pick that never varies becomes a plain rule in code and stops
+    reaching the model; Jev stays for the text not seen before.

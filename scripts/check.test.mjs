@@ -408,6 +408,42 @@ test("the handoff: HANDOFF.md is closed, and an entry is a dated file in handoff
   assert.ok(HANDOFF_ENTRY_NAME.test("2026-11-16-parallel-chats.md"));
 });
 
+test("a handoff entry names its five parts, and its evidence is durable", async () => {
+  const { HANDOFF_CONTENT_FROM, handoffEntryErrors } = await import("./check.mjs");
+  const { readdirSync } = await import("node:fs");
+  for (const name of readdirSync(new URL("../handoff/", import.meta.url)))
+    assert.deepEqual(handoffEntryErrors({ name, text: read(`handoff/${name}`) }), [], name);
+  const good = [
+    "# A job", "", "**What changed.** One page.", "## Verification", "npm test passed.",
+    "**Outstanding.** None.", "**Failures and dead ends.** None.",
+    "**Evidence.** `~/.local/share/claude-cookbook/evidence/x.json`", "and `handoff/` itself.",
+  ].join("\n");
+  const name = `${HANDOFF_CONTENT_FROM}-a-job.md`;
+  assert.deepEqual(handoffEntryErrors({ name, text: good }), []);
+  assert.deepEqual(handoffEntryErrors({ name, text: good.replace(/\n/g, "\r\n") }), []);
+  // An entry from before the check is not read.
+  assert.deepEqual(handoffEntryErrors({ name: "2026-11-01-old.md", text: "no labels" }), []);
+  // A part named only in running text, not as a label, is missing.
+  const noDeadEnds = good.replace("**Failures and dead ends.** None.", "No dead ends.");
+  assert.match(handoffEntryErrors({ name, text: noDeadEnds })[0], /"Dead ends"/);
+  assert.equal(handoffEntryErrors({ name, text: "# Only a title" }).length, 5);
+  // "Verification and evidence" names both parts.
+  const joined = good.replace("## Verification", "## Verification and evidence").replace(/\*\*Evidence\.\*\*/, "");
+  assert.deepEqual(handoffEntryErrors({ name, text: joined }), []);
+  for (const temp of [
+    "C:\\Users\\x\\AppData\\Local\\Temp\\claude\\run.log",
+    "C:/Users/x/AppData/Local/Temp/claude/abc/scratchpad/out.json",
+    "`/tmp/run.log`",
+    "`~/.claude/projects/x/transcript.jsonl`",
+  ]) {
+    const errors = handoffEntryErrors({ name, text: `${good}\n${temp}` });
+    assert.equal(errors.length, 1, temp);
+    assert.match(errors[0], /temp folder or ~\/\.claude/);
+  }
+  // The same path outside the evidence part is not the evidence.
+  assert.deepEqual(handoffEntryErrors({ name, text: good.replace("One page.", "Edited `~/.claude/settings.json`.") }), []);
+});
+
 test("the plugin has no version number: none in the manifest, none in the marketplace entry", async () => {
   const { MARKETPLACE, PLUGIN_MANIFEST, versionErrors } = await import("./check.mjs");
   const manifestText = read(PLUGIN_MANIFEST), marketplaceText = read(MARKETPLACE);
