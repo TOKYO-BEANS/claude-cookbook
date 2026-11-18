@@ -62,10 +62,11 @@ as an answer to security findings) and four low; all fixed on the next head.
 **Graphify's four findings (medium, advisory).** On e0a4f70 Graphify raised four: only the
 brief keeps an unattended run from writing; the audit is repository-scoped, so a write outside
 the repository goes unseen; repository text could steer a full-access run; the hook has no
-`runtimeMode`-specific gate. `recipes/codex-consult.md` now states the audit's limit. The owner
-was asked in the question dialog (this chat, 17 November 2026) and answered "Accept as known
-limits": the four are known limits of the unattended mode, answered with that yes. A new
-finding that is not one of these four is handled as any other.
+`runtimeMode`-specific gate. `recipes/codex-consult.md` stated the audit's limit then (the
+audit later moved to `recipes/codex-limits.md`). The owner was asked in the question dialog
+(this chat, 17 November 2026) and answered "Accept as known limits": the four are known limits
+of the unattended mode, answered with that yes. A new finding that is not one of these four is
+handled as any other.
 
 **Graphify on 24c9eed.** Four medium findings: three are the limits the owner accepted (only
 prose controls, no gate of its own for the mode, steering by repository text); the start check
@@ -100,3 +101,10 @@ years, `options/ship.md` is rewrapped, and this handoff is brought up to date.
 the hashes (Git's own folder is an accepted blind spot). New: a further edit to a file that was
 already changed does not change `git status --short`; the audit now starts an unattended run
 only from a clean checkout.
+
+**Merged** as 9d1d68f on 18 November 2026 through `merge-when-green.sh` (gate state
+`fallback`: the sixth fallback review, of b733bcc, found four low and nothing higher); the
+release check verified it. A follow-up pull request fixed those four: `recipes/codex.md` names
+the limits page's audit and gives the owner's yes its own bullet (it rendered inside the
+supervised bullet), `recipes/codex-decisions.md` quotes the second answer in full, and this
+handoff no longer says the consult page holds the audit's limit.

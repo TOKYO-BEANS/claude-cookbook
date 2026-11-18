@@ -9,7 +9,8 @@ consult, with dates and words. The checks before the call are on the limits page
 - **Unattended**, 17 November 2026, two yeses in the question dialog: "May Claude start Codex
   without you watching, for read-only second opinions on our own work?", then "Claude may
   start a consult that runs without your clicks, with full access, on your own repositories
-  only, after the scan, ignored-files and start checks." Only the second names full access.
+  only, after the scan, ignored-files and start checks. Recorded with today's date in
+  recipes/codex.md through a pull request." Only the second names full access.
 - **The two modes.** Unattended (`runtimeMode: "full-access"`): Codex's own
   `approval_policy = "never"` and `sandbox_mode = "danger-full-access"` apply and Claude's
   deny rules do not reach it. Supervised (`runtimeMode: "approval-required"`): a read-only
