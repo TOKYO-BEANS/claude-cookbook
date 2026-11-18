@@ -11,9 +11,11 @@ setup: [security.md](security.md).
   someone detects it, which usually takes hours. The hold covers that gap.
 - How the standard sets it: the Safe Chain step writes `SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24` to
   `$GITHUB_ENV` after the installer. An `env:` on the step would end with the step, and the installs
-  run in later steps. The variable outranks a repository's `.aikido` file, so no repository holds
-  less (standard v23, Stack-Atlas #226; proved in Depot CI run `jzfz1w4lbz`).
-- **CVE fixes pass the hold.** Safe Chain itself (from the pinned 1.5.27 on) lets through a release
+  run in later steps. The variable outranks the hours a repository's `.aikido` sets (standard v23,
+  Stack-Atlas #226; proved in Depot CI run `jzfz1w4lbz`). It does not stop a repository's own
+  `.aikido` exclusions, a `--safe-chain-...` flag on an install, or an `env:` on an install step,
+  and the standard does not read those: never add one to get a young release through.
+- **CVE fixes pass the hold.** Safe Chain itself (from 1.5.27 on) lets through a release
   that Aikido has confirmed as a malware-free patch for an urgent CVE: an exact name and version
   from Aikido's safe-patches list, for npm and pip. If that list cannot be loaded, the full hold
   applies.
