@@ -6,12 +6,13 @@
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readKey } from "./with-key.mjs";
+import { dropVariable, readKey } from "./with-key.mjs";
 
 const HOME = homedir();
 const CLAUDE = join(HOME, ".local", "bin", "claude.exe");
 const env = { ...process.env };
-for (const k of ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"]) delete env[k];
+// Matched without regard to case on Windows, as Windows reads them.
+for (const name of ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "CLAUDE_CONFIG_DIR"]) dropVariable(env, name, process.platform);
 
 let key;
 try { ({ key } = await readKey("cliproxyapi-client")); }

@@ -5,39 +5,83 @@
 // - the management secret is in the DPAPI store (cliproxyapi-management) and reaches the proxy
 //   only as MANAGEMENT_PASSWORD in its own process;
 // - the client key is new on every start, saved to the DPAPI store (cliproxyapi-client) for
-//   claude-pool, written into private/config.yaml, and that file is deleted when the proxy stops.
+//   claude-pool, written into private/config.yaml, and that file is deleted when the proxy stops
+//   (Ctrl+C, Ctrl+Break, closing the window) and before every start.
+// One start or login at a time: private/launcher.lock holds the pid of the launcher that runs.
 //
 //   cliproxyapi start                 run the proxy in this window (Ctrl+C stops it)
 //   cliproxyapi login <provider>      claude | codex | codex-device | ... (the proxy's -<x>-login)
-//   cliproxyapi panel                 open the console; the management secret goes to the clipboard
+//   cliproxyapi panel                 open the console; the management secret goes to the
+//                                     clipboard, kept out of clipboard history; this window
+//                                     clears it after 45 s
 //   cliproxyapi status                is it up, and how many models it serves
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readKey } from "./with-key.mjs";
+import { dropVariable, isMain, readKey } from "./with-key.mjs";
 
 const HOME = homedir();
 const BASE = join(HOME, ".local", "share", "cliproxyapi");
-const EXE = join(BASE, "bin", "cli-proxy-api.exe");
-const PRIVATE = join(BASE, "private");
-const CONFIG = join(PRIVATE, "config.yaml");
-const TEMPLATE = join(BASE, "config.template.yaml");
+export const PATHS = Object.freeze({
+  exe: join(BASE, "bin", "cli-proxy-api.exe"),
+  private: join(BASE, "private"),
+  config: join(BASE, "private", "config.yaml"),
+  lock: join(BASE, "private", "launcher.lock"),
+  template: join(BASE, "config.template.yaml"),
+});
 const URL_BASE = "http://127.0.0.1:8317";
 const AGENT_KEY = join(HOME, ".local", "bin", "agent-key.ps1");
-const PLACEHOLDER = "__CLIENT_KEY__";
+export const PLACEHOLDER = "__CLIENT_KEY__";
+const CLIPBOARD_SECONDS = 45;
 
 const say = (line) => process.stderr.write(`cliproxyapi: ${line}\n`);
 
-function writeConfig(clientKey) {
-  const template = readFileSync(TEMPLATE, "utf8");
-  if (!template.includes(PLACEHOLDER)) throw new Error(`the template has no ${PLACEHOLDER}`);
-  writeFileSync(CONFIG, template.replace(PLACEHOLDER, clientKey), { encoding: "utf8" });
+// "-claude-login" for "claude"; null for anything that is not a plain lower-case name.
+export function providerFlag(provider) {
+  return typeof provider === "string" && /^[a-z]+(-[a-z]+)*$/.test(provider) ? `-${provider}-login` : null;
 }
 
-function removeConfig() {
-  try { rmSync(CONFIG, { force: true }); } catch (e) { say(`could not delete ${CONFIG} (${e.code ?? e})`); }
+export function fillTemplate(template, clientKey) {
+  if (!template.includes(PLACEHOLDER)) throw new Error(`the template has no ${PLACEHOLDER}`);
+  if (!/^[A-Za-z0-9_-]{20,}$/.test(clientKey)) throw new Error("the client key is not a plain token");
+  return template.replace(PLACEHOLDER, clientKey);
+}
+
+// The proxy's environment: the parent's, without the secrets it reads, plus `extra`.
+// Names are matched without regard to case on Windows, as Windows reads them.
+export function proxyEnv(base, extra = {}, platform = process.platform) {
+  const env = { ...base };
+  for (const name of ["MANAGEMENT_PASSWORD", "PGSTORE_DSN", "HOME_JWT", "WRITABLE_PATH"]) dropVariable(env, name, platform);
+  return { ...env, ...extra };
+}
+
+const alive = (pid) => {
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === "EPERM"; }
+};
+
+// Takes the lock for this process. Returns null when taken, or the pid of a live holder.
+export function takeLock(path = PATHS.lock, pid = process.pid, isAlive = alive) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try { writeFileSync(path, String(pid), { flag: "wx" }); return null; } catch (e) { if (e.code !== "EEXIST") throw e; }
+    const holder = Number.parseInt(readFileSync(path, "utf8"), 10);
+    if (Number.isInteger(holder) && holder > 0 && holder !== pid && isAlive(holder)) return holder;
+    rmSync(path, { force: true }); // left by a launcher that is gone
+  }
+  throw new Error(`could not take ${path}`);
+}
+
+export function releaseLock(path = PATHS.lock, pid = process.pid) {
+  try { if (Number.parseInt(readFileSync(path, "utf8"), 10) === pid) rmSync(path, { force: true }); } catch { /* gone */ }
+}
+
+export function writeConfig(clientKey, paths = PATHS) {
+  writeFileSync(paths.config, fillTemplate(readFileSync(paths.template, "utf8"), clientKey), { encoding: "utf8" });
+}
+
+export function removeConfig(paths = PATHS) {
+  try { rmSync(paths.config, { force: true }); } catch (e) { say(`could not delete ${paths.config} (${e.code ?? e})`); }
 }
 
 // A new client key, kept in the DPAPI store for claude-pool. Never printed.
@@ -50,50 +94,76 @@ function rotateClientKey() {
   return key;
 }
 
-function proxyEnv(extra = {}) {
-  const env = { ...process.env, WRITABLE_PATH: PRIVATE, ...extra };
-  for (const k of ["MANAGEMENT_PASSWORD", "PGSTORE_DSN", "HOME_JWT"]) if (!(k in extra)) delete env[k];
-  return env;
-}
-
 async function isUp() {
   try { const r = await fetch(`${URL_BASE}/management.html`, { signal: AbortSignal.timeout(3000) }); return r.status > 0; }
   catch { return false; }
 }
 
 async function start() {
-  if (await isUp()) { say(`already running at ${URL_BASE}`); return 0; }
+  const holder = takeLock();
+  if (holder) { say(`another launcher (pid ${holder}) is starting or running the proxy`); return 1; }
+  if (await isUp()) { releaseLock(); say(`something already answers at ${URL_BASE}; not starting a second one`); return 1; }
+  const done = () => { removeConfig(); releaseLock(); };
+  process.on("exit", done);
+  removeConfig(); // a file a crashed run left
   const { key: management } = await readKey("cliproxyapi-management");
   say("saving a new client key to the DPAPI store (PowerShell; can take up to a minute)...");
   writeConfig(rotateClientKey());
   say(`starting at ${URL_BASE} (console: cliproxyapi panel)`);
-  const child = spawn(EXE, ["-config", CONFIG, "-local-model"], { cwd: PRIVATE, stdio: "inherit", env: proxyEnv({ MANAGEMENT_PASSWORD: management }) });
-  process.on("SIGINT", () => child.kill("SIGINT"));
-  process.on("SIGTERM", () => child.kill("SIGTERM"));
+  const child = spawn(PATHS.exe, ["-config", PATHS.config, "-local-model"],
+    { cwd: PATHS.private, stdio: "inherit", env: proxyEnv(process.env, { WRITABLE_PATH: PATHS.private, MANAGEMENT_PASSWORD: management }) });
+  const stop = (signal) => () => { done(); child.kill(signal === "SIGINT" ? "SIGINT" : "SIGTERM"); };
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) process.on(signal, stop(signal));
   return await new Promise((resolve) => {
-    child.on("error", (e) => { removeConfig(); say(`could not start (${e.code ?? e})`); resolve(127); });
-    child.on("exit", (code, signal) => { removeConfig(); say(`stopped; ${CONFIG} deleted`); resolve(code ?? (signal ? 130 : 1)); });
+    child.on("error", (e) => { done(); say(`could not start (${e.code ?? e})`); resolve(127); });
+    child.on("exit", (code, signal) => { done(); say(`stopped; ${PATHS.config} deleted`); resolve(code ?? (signal ? 130 : 1)); });
   });
 }
 
 async function login(provider) {
-  if (!/^[a-z-]+$/.test(provider ?? "")) { say("usage: cliproxyapi login <claude|codex|codex-device|...>"); return 2; }
-  const made = !existsSync(CONFIG);
+  const flag = providerFlag(provider);
+  if (!flag) { say("usage: cliproxyapi login <claude|codex|codex-device|...>"); return 2; }
+  const run = () => spawnSync(PATHS.exe, ["-config", PATHS.config, flag],
+    { cwd: PATHS.private, stdio: "inherit", env: proxyEnv(process.env, { WRITABLE_PATH: PATHS.private }) }).status ?? 1;
+  const holder = takeLock();
+  if (holder) {
+    // A running proxy's own config serves the login; it is neither rewritten nor deleted.
+    if (existsSync(PATHS.config) && await isUp()) return run();
+    say(`another launcher (pid ${holder}) is starting the proxy; try again when it is up`);
+    return 1;
+  }
+  const done = () => { removeConfig(); releaseLock(); };
+  process.on("exit", done);
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) process.on(signal, () => { done(); process.exit(130); });
   // A login does not serve the API; a throwaway key fills the template while it runs.
-  if (made) writeConfig(randomBytes(32).toString("base64url"));
-  try {
-    const r = spawnSync(EXE, ["-config", CONFIG, `-${provider}-login`], { cwd: PRIVATE, stdio: "inherit", env: proxyEnv() });
-    return r.status ?? 1;
-  } finally { if (made) removeConfig(); }
+  try { writeConfig(randomBytes(32).toString("base64url")); return run(); } finally { done(); }
 }
+
+// The secret goes on the clipboard marked to stay out of clipboard history and the cloud
+// clipboard, and the same PowerShell clears it after CLIPBOARD_SECONDS if it is still there.
+const CLIPBOARD_SCRIPT = [
+  "Add-Type -AssemblyName System.Windows.Forms",
+  "$s = $env:CPA_PANEL_SECRET; $env:CPA_PANEL_SECRET = $null",
+  "$d = New-Object Windows.Forms.DataObject",
+  "$d.SetData([Windows.Forms.DataFormats]::UnicodeText, $s)",
+  "$zero = [BitConverter]::GetBytes([int]0)",
+  "$d.SetData('ExcludeClipboardContentFromMonitorProcessing', (New-Object IO.MemoryStream (,$zero)))",
+  "$d.SetData('CanIncludeInClipboardHistory', (New-Object IO.MemoryStream (,$zero)))",
+  "$d.SetData('CanUploadToCloudClipboard', (New-Object IO.MemoryStream (,$zero)))",
+  "[Windows.Forms.Clipboard]::SetDataObject($d, $true)",
+  `Start-Sleep -Seconds ${CLIPBOARD_SECONDS}`,
+  "if ([Windows.Forms.Clipboard]::GetText() -ceq $s) { [Windows.Forms.Clipboard]::Clear() }",
+].join("; ");
 
 async function panel() {
   if (!(await isUp())) { say("not running: start it first with `cliproxyapi start`"); return 1; }
   const { key } = await readKey("cliproxyapi-management");
-  const clip = spawnSync("clip.exe", [], { input: key, windowsHide: true });
-  if (clip.status !== 0) { say("could not copy the management secret to the clipboard"); return 1; }
   spawnSync("cmd.exe", ["/c", "start", "", `${URL_BASE}/management.html`], { windowsHide: true });
-  say("console opened; the management secret is on the clipboard (paste it into the login box)");
+  say(`console opened; the management secret is on the clipboard for ${CLIPBOARD_SECONDS} seconds (paste it into the login box); this window clears it then`);
+  const r = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-STA", "-ExecutionPolicy", "Bypass", "-Command", CLIPBOARD_SCRIPT],
+    { env: { ...process.env, CPA_PANEL_SECRET: key }, stdio: ["ignore", "ignore", "pipe"], encoding: "utf8", windowsHide: true, timeout: (CLIPBOARD_SECONDS + 60) * 1000 });
+  if (r.status !== 0) { say(`the clipboard step failed (${r.error?.code ?? `exit ${r.status}`}): ${(r.stderr ?? "").trim().slice(0, 300)}`); return 1; }
+  say("clipboard cleared");
   return 0;
 }
 
@@ -107,7 +177,9 @@ async function status() {
   return r.ok ? 0 : 1;
 }
 
-const [cmd, arg] = process.argv.slice(2);
-const run = { start, login: () => login(arg), panel, status }[cmd];
-if (!run) { say("usage: cliproxyapi start | login <provider> | panel | status"); process.exit(2); }
-run().then((code) => process.exit(code), (e) => { say(String(e?.message ?? e)); process.exit(1); });
+if (isMain(import.meta.url)) {
+  const [cmd, arg] = process.argv.slice(2);
+  const run = { start, login: () => login(arg), panel, status }[cmd];
+  if (!run) { say("usage: cliproxyapi start | login <provider> | panel | status"); process.exit(2); }
+  run().then((code) => process.exit(code), (e) => { say(String(e?.message ?? e)); process.exit(1); });
+}

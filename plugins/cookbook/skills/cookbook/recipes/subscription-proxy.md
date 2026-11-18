@@ -10,11 +10,12 @@ account is signed in, and nothing starts it on its own.
   is the owner's step, never Claude's.
 - **Start, sign in, use:** `cliproxyapi start` runs it in a window (Ctrl+C stops it);
   `cliproxyapi login claude` (or `codex`, `codex-device`) opens the provider's sign-in;
-  `cliproxyapi panel` opens the console and puts the management secret on the clipboard;
+  `cliproxyapi panel` opens the console and puts the management secret on the clipboard for
+  45 seconds, kept out of clipboard history;
   `cliproxyapi status` answers whether it is up; `claude-pool` is Claude Code through it, in a
   home of its own (`CLAUDE_CONFIG_DIR`), so the normal sign-in is never touched.
-- **Where things are:** the binary in `~/.local/share/cliproxyapi/bin`, the config template
-  beside it (edit that, not the copy), and the private folder `~/.local/share/cliproxyapi/private`,
+- **Where things are:** in `~/.local/share/cliproxyapi`: the binary in `bin`, the config
+  template `config.template.yaml` (edit that, not the copy), and the private folder `private`,
   which only the owner and SYSTEM can open. The launchers are this skill's
   `scripts/cliproxyapi.mjs` and `scripts/claude-pool.mjs`, copied to `~/.local/bin` with `.cmd`
   shims.
@@ -22,7 +23,7 @@ account is signed in, and nothing starts it on its own.
   client key only from `config.yaml` and keeps sign-ins as JSON files, so both may be plain
   files in the private folder and nowhere else. The launcher writes a new client key on every
   start (also saved in the DPAPI store as `cliproxyapi-client` for `claude-pool`) and deletes
-  `config.yaml` when the proxy stops. The management secret is the store's
+  `config.yaml` when the proxy stops and before each start; one start or login runs at a time. The management secret is the store's
   `cliproxyapi-management` and reaches the proxy only as `MANAGEMENT_PASSWORD`.
 - **Hardened:** it listens on 127.0.0.1:8317 only; the API and the management API refuse a
   call without their key; plugins are off; the model list is the built-in one; the console is
