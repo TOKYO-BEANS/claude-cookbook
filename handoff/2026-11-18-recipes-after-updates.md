@@ -15,7 +15,10 @@ to 1.0.4. The stack-updates skill says a recipe that names the old version is up
   package whose own install script fetches a program (the Parallel CLI): site-login's lockfile
   has no install script, and the build comes from `cli.js install chromium` when
   `browsers.json` moves the revision.
-- `skills/stack-updates/SKILL.md`: the `pinned` row names that download and its yes.
+- `skills/stack-updates/SKILL.md`: the `pinned` row names that download, the comparison
+  before `pinned-install.sh` and its yes; step 4 stops a routine install for a yes the owner
+  has not given; step 7 no longer says a recipe pull request's merge needs the owner's yes
+  (the owner's rule of 15 November 2026: checks decide).
 - `recipes/cloudflare.md`: the plugin's `cloudflare-one` skill (1.0.4) reads an Access
   service token "from the project's configured secret store or environment variables"; here
   that is the DPAPI store, and the token (two keys) goes only through `agent-browser access`,
@@ -29,7 +32,9 @@ branch: the Chromium download is not an install script, the cloudflare bullet la
 `616ba37` had two lows: `with-key.mjs` passes one key, so it was dropped as a route for the
 two-key token, and the pull request's description was brought in line with the files. The
 fallback review of `ece0907` had one low: the revision is now compared before
-`pinned-install.sh`, and without a yes the install stops with the old copy kept.
+`pinned-install.sh`, and without a yes the install stops with the old copy kept. The
+fallback review of `a5bb047` had one low: the `pinned` row and step 4 lacked that order and
+stop; both now have it.
 
 **Outstanding.** None from this change.
 

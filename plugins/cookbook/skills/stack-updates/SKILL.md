@@ -124,7 +124,8 @@ Steps, in an interactive session only (an unattended session installs nothing):
 4. Stop that install, and leave the old copy in place, when a scan finds a high or critical
    advisory, when the sandbox run shows a surprise or "no result" ("Vetting outside code: reading the sandbox report" in
    the Cookbook says what counts), when the recipe needs something this session cannot do (an
-   admin prompt, a sign-in), or when the diff of a plugin adds a hook, an MCP server, a network host, a read of credentials,
+   admin prompt, a sign-in) or a yes the owner has not given (site-login's Chromium revision
+   moved), or when the diff of a plugin adds a hook, an MCP server, a network host, a read of credentials,
    or code that hides what it does. A doubt can stop an install; it never starts one.
 5. After each install, and after each one that was stopped, run
    `node <this skill's folder>/scripts/updates.mjs verify <tool id>/<part>`. The script refuses a
@@ -136,8 +137,8 @@ Steps, in an interactive session only (an unattended session installs nothing):
 6. Tell the owner in one short list what was installed (from, to) and what failed and why. Every
    report repeats it, under "Installed since the last report" and "Install failed", until one of
    those reports has been shown.
-7. Recipes that name the old version are updated in one Cookbook pull request for the day. Its
-   merge needs the owner's yes, as every merge does.
+7. Recipes that name the old version are updated in one Cookbook pull request for the day. It
+   merges under the normal merge condition (the owner, 15 November 2026: checks decide).
 
 ## After the owner says "update X"
 
@@ -152,7 +153,7 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json` 
 | Kind | What to do | Recipe |
 | --- | --- | --- |
 | `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>`. No sandbox run (a plugin starts only inside Claude Code); say so in the report | "Context window (context-mode)"; for a local `claude-local` port, "Compaction" (Updates) |
-| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`scripts/vetting/pinned-vet.sh` beside this skill does all of these, and `pinned-install.sh` there installs the vetted lockfile; read its `SANDBOX` lines as "Vetting outside code: reading the sandbox report" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), and for site-login the Chromium build its `playwright-core` CLI downloads when `browsers.json` moves the revision (the owner's yes each time), one real call | "Cloud browser (Browserbase): setup and updates" (To update) |
+| `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`scripts/vetting/pinned-vet.sh` beside this skill does all of these, and `pinned-install.sh` there installs the vetted lockfile; read its `SANDBOX` lines as "Vetting outside code: reading the sandbox report" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), and for site-login the Chromium build its `playwright-core` CLI downloads when `browsers.json` moves the revision (compared before `pinned-install.sh`; the owner's yes each time, as "Sign-ins: setup and evidence" says), one real call | "Cloud browser (Browserbase): setup and updates" (To update) |
 | `command`, a pinned binary | Download it with the published checksum list, compare, replace, run its version command. No sandbox run (the Windows binary installed here; the sandbox is Linux); say so in the report | "Cloud sandboxes (boat): the plan, setup and evidence"; "Sign-ins: setup and evidence"; "Google accounts: setup and evidence" |
 | `command`, a winget tool (Git, GitHub CLI) | The owner's elevated shell; ask for the UAC yes | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
