@@ -17,10 +17,10 @@
 //   cliproxyapi status                is it up, and how many models it serves
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { dropVariable, isMain, readKey } from "./with-key.mjs";
+import { dropVariable, exitCode, isMain, readKey } from "./with-key.mjs";
 
 const HOME = homedir();
 const BASE = join(HOME, ".local", "share", "cliproxyapi");
@@ -62,12 +62,20 @@ const alive = (pid) => {
 };
 
 // Takes the lock for this process. Returns null when taken, or the pid of a live holder.
+// A stale lock (its launcher is gone) is moved aside in one rename, so of two launchers that
+// both saw it stale only one moves it. A launcher that moved a lock other than the stale one it
+// read (another launcher took over in between) puts it back and reads the new holder.
 export function takeLock(path = PATHS.lock, pid = process.pid, isAlive = alive) {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
     try { writeFileSync(path, String(pid), { flag: "wx" }); return null; } catch (e) { if (e.code !== "EEXIST") throw e; }
-    const holder = Number.parseInt(readFileSync(path, "utf8"), 10);
+    let seen;
+    try { seen = readFileSync(path, "utf8"); } catch (e) { if (e.code === "ENOENT") continue; throw e; }
+    const holder = Number.parseInt(seen, 10);
     if (Number.isInteger(holder) && holder > 0 && holder !== pid && isAlive(holder)) return holder;
-    rmSync(path, { force: true }); // left by a launcher that is gone
+    const aside = `${path}.${pid}.stale`;
+    try { renameSync(path, aside); } catch (e) { if (e.code === "ENOENT") continue; throw e; }
+    if (readFileSync(aside, "utf8") === seen) { rmSync(aside, { force: true }); continue; }
+    try { renameSync(aside, path); } catch { rmSync(aside, { force: true }); }
   }
   throw new Error(`could not take ${path}`);
 }
@@ -116,7 +124,7 @@ async function start() {
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) process.on(signal, stop(signal));
   return await new Promise((resolve) => {
     child.on("error", (e) => { done(); say(`could not start (${e.code ?? e})`); resolve(127); });
-    child.on("exit", (code, signal) => { done(); say(`stopped; ${PATHS.config} deleted`); resolve(code ?? (signal ? 130 : 1)); });
+    child.on("exit", (code, signal) => { done(); say(`stopped; ${PATHS.config} deleted`); resolve(exitCode(code, signal)); });
   });
 }
 
@@ -134,7 +142,7 @@ async function login(provider) {
   }
   const done = () => { removeConfig(); releaseLock(); };
   process.on("exit", done);
-  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) process.on(signal, () => { done(); process.exit(130); });
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) process.on(signal, () => { done(); process.exit(exitCode(null, signal)); });
   // A login does not serve the API; a throwaway key fills the template while it runs.
   try { writeConfig(randomBytes(32).toString("base64url")); return run(); } finally { done(); }
 }

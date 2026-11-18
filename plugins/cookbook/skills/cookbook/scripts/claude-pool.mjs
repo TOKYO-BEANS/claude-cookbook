@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { dropVariable, readKey } from "./with-key.mjs";
+import { dropVariable, exitCode, readKey } from "./with-key.mjs";
 
 const HOME = homedir();
 const CLAUDE = join(HOME, ".local", "bin", "claude.exe");
@@ -26,4 +26,4 @@ Object.assign(env, {
 const child = spawn(CLAUDE, process.argv.slice(2), { stdio: "inherit", env });
 process.on("SIGINT", () => {});
 child.on("error", (e) => { process.stderr.write(`claude-pool: could not start Claude Code (${e.code ?? e})\n`); process.exit(127); });
-child.on("exit", (code, signal) => process.exit(code ?? (signal ? 130 : 1)));
+child.on("exit", (code, signal) => process.exit(exitCode(code, signal)));

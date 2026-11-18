@@ -2,7 +2,7 @@
 // proxy's environment and the one-launcher lock. The proxy itself is not started here.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PLACEHOLDER, fillTemplate, providerFlag, proxyEnv, releaseLock, removeConfig, takeLock, writeConfig } from "../plugins/cookbook/skills/cookbook/scripts/cliproxyapi.mjs";
@@ -61,6 +61,21 @@ test("takeLock: a lock whose launcher is gone, or that holds no pid, is taken ov
   writeFileSync(lock, "not a pid");
   assert.equal(takeLock(lock, 300, () => true), null);
   assert.equal(readFileSync(lock, "utf8"), "300");
+});
+
+test("takeLock: of two launchers that both saw a stale lock, only one takes it", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cpa-lock-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const lock = join(dir, "launcher.lock");
+  writeFileSync(lock, "100");
+  // Launcher 300 reads the stale "100"; while it checks that pid, launcher 200 takes the lock over.
+  const held = takeLock(lock, 300, (pid) => {
+    if (pid === 100) { assert.equal(takeLock(lock, 200, (p) => p !== 100), null); return false; }
+    return pid === 200;
+  });
+  assert.equal(held, 200);
+  assert.equal(readFileSync(lock, "utf8"), "200");
+  assert.deepEqual(readdirSync(dir), ["launcher.lock"]);
 });
 
 test("writeConfig and removeConfig: the config is written from the template and deleted", (t) => {
