@@ -32,6 +32,12 @@
 #   ANTHROPIC_WORKSPACE_ID_REVIEW (that workspace's id, sent as the
 #   anthropic-workspace-id header). Both are organisation-wide in Depot org
 #   bn9mw0t770; never paste a key into chat or a file.
+# - On the Claude plan instead (owner, question dialog of 17 November 2026:
+#   "Token in Depot CI (Recommended)"): where the Depot CI secret
+#   CLAUDE_CODE_OAUTH_TOKEN_REVIEW is set (a `claude setup-token` token, which
+#   can only make model requests), review.mjs runs one `claude -p` with no
+#   tools on the plan and does not use the API key. The same comment, the same
+#   check, the same merge gate.
 name: AI review
 on:
   pull_request:
@@ -115,6 +121,8 @@ jobs:
       - name: AI review (advisory)
         if: steps.reviewer.outputs.ready == 'true'
         env:
+          # The Claude plan token (claude setup-token): when set, the review runs on the plan, not the API.
+          CLAUDE_CODE_OAUTH_TOKEN_REVIEW: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_REVIEW }}
           ANTHROPIC_API_KEY_REVIEW: ${{ secrets.ANTHROPIC_API_KEY_REVIEW }}
           ANTHROPIC_WORKSPACE_ID_REVIEW: ${{ vars.ANTHROPIC_WORKSPACE_ID_REVIEW }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
