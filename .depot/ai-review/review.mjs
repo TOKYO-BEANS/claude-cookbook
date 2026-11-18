@@ -389,6 +389,8 @@ export function planEnvironment(env, home) {
     CLAUDE_CODE_DISABLE_FILE_MENTIONS: "1",
     // The word "ultrathink" in the prompt would raise the effort above EFFORT.
     CLAUDE_CODE_DISABLE_ULTRATHINK: "1",
+    // The word "ultracode" in the prompt would add a workflow reminder to the turn.
+    CLAUDE_CODE_DISABLE_WORKFLOWS: "1",
     CLAUDE_CODE_DISABLE_ADVISOR_TOOL: "1",
     CLAUDE_CODE_DISABLE_AUTO_MEMORY: "1",
     DISABLE_AUTOUPDATER: "1",
@@ -430,30 +432,29 @@ export function readPlanStream(text) {
   if (called.some((b) => b.name !== "StructuredOutput")) return { unavailable: "the reviewer called a tool" };
   const result = events.findLast((e) => e?.type === "result");
   if (!result) return { unavailable: spent ? LIMIT : "the reviewer gave no result" };
+  // From here on every answer carries the usage and stop reason, so the usage
+  // line is logged for a refused run too; the four token fields stay apart, as
+  // the API path logs them.
+  const u = result.usage ?? {};
+  const usage = {};
+  for (const name of ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"])
+    if (Number.isFinite(u[name])) usage[name] = u[name];
+  const stopReason = result.stop_reason ?? null;
+  const refuse = (reason) => ({ unavailable: reason, usage, stopReason });
   if (result.is_error || result.subtype !== "success") {
     const status = Number(result.api_error_status);
-    if (spent || status === 429) return { unavailable: LIMIT };
-    if (status === 401) return { unavailable: "authentication failed (401)" };
-    if (status === 403) return { unavailable: "permission denied (403)" };
-    if (status >= 500 && status <= 599) return { unavailable: `Claude API error (${status})` };
-    return { unavailable: "the reviewer ended with an error" };
+    if (spent || status === 429) return refuse(LIMIT);
+    if (status === 401) return refuse("authentication failed (401)");
+    if (status === 403) return refuse("permission denied (403)");
+    if (status >= 500 && status <= 599) return refuse(`Claude API error (${status})`);
+    return refuse("the reviewer ended with an error");
   }
-  if (result.stop_reason === "refusal") return { unavailable: "the model declined to review (refusal)" };
-  if (!Object.keys(result.modelUsage ?? {}).includes(MODEL))
-    return { unavailable: `the review was not served by ${MODEL}` };
+  if (result.stop_reason === "refusal") return refuse("the model declined to review (refusal)");
+  if (!Object.keys(result.modelUsage ?? {}).includes(MODEL)) return refuse(`the review was not served by ${MODEL}`);
   const out = result.structured_output;
   if (!out || !Array.isArray(out.findings) || !out.findings.every(validFinding))
-    return { unavailable: "the answer did not match the findings schema" };
-  const u = result.usage ?? {};
-  const n = (v) => (Number.isFinite(v) ? v : 0);
-  return {
-    findings: out.findings,
-    stopReason: result.stop_reason ?? null,
-    usage: {
-      input_tokens: n(u.input_tokens) + n(u.cache_creation_input_tokens) + n(u.cache_read_input_tokens),
-      output_tokens: n(u.output_tokens),
-    },
-  };
+    return refuse("the answer did not match the findings schema");
+  return { findings: out.findings, stopReason, usage };
 }
 
 // One `claude -p`: the system prompt in a file (with the rules it is longer
@@ -502,9 +503,14 @@ async function callPlan({ env, params, log, run = runClaude, binary }) {
   }
   if (ran.timedOut) return { unavailable: "the Claude API timed out" };
   const read = readPlanStream(ran.stdout);
+  // A run that gave no result has no usage; its line says "unknown".
   log(usageLine({ requestId: "plan", model: MODEL, usage: read.usage, stopReason: read.stopReason }));
   if (read.unavailable) return { unavailable: read.unavailable };
-  return { findings: read.findings, model: `${MODEL} on the Claude plan`, usage: read.usage };
+  // "with the plan token", not "on the plan": the stream proves only that no
+  // API key was used. A token made with a Console account looks the same and
+  // bills the API credit, so a token is proven by a real call before it is set
+  // as the secret (docs/claude-code.md).
+  return { findings: read.findings, model: `${MODEL} with the plan token`, usage: read.usage };
 }
 
 async function callModel({ env, Anthropic, params, log }) {
