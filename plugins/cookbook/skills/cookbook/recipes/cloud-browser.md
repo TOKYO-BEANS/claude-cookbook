@@ -5,7 +5,7 @@ and no MCP server, so it adds nothing to a session.
 
 - **Use it** when a public page has to be operated, not just read (click, fill, wait for a
   state, read a value, take a screenshot), from a script or for one step. Several steps
-  inside a session go to Stagehand ([stagehand.md](stagehand.md)), with `browse` as its
+  go to Stagehand in a child session ([stagehand.md](stagehand.md)), with `browse` as its
   fallback. Reading a page stays on Firecrawl and Parallel. A site that needs a sign-in goes to agent-browser ([sign-ins.md](sign-ins.md)), never to a cloud session.
 - **A session:** `browse open <url> --remote --session <name>`, then `browse snapshot` (the page as
   an accessibility tree with element refs), `browse click <ref>`, `browse fill <ref> "<text>"`,

@@ -14,7 +14,7 @@ within 10 tokens. With all nine servers 67,356; with none 48,100.
 | context-mode (plugin) | 885 | 79 | every session |
 | cloudflare (plugin) | 91 | 10 | every session (owner: leave) |
 | cloudflare-docs | 52 | 10 | every session (owner: leave) |
-| stagehand | 39 | 1 | a child session only, since 17 November (its memory) |
+| stagehand | 39 | 1 | a child session only, since 17 November (its memory; the owner's "leave" was on tokens) |
 
 After the two moves a session start is 55,308 tokens: 12,048 fewer. T3 Code's own server is
 not in a headless run and was not measured.

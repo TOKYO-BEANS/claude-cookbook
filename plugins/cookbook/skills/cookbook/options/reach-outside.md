@@ -16,11 +16,10 @@ Chosen by fit for the job on 15 November 2026.
   (no budget).
 - **Operating a public page: Browserbase, by two routes.** The page runs in a cloud browser,
   away from this PC and from any signed-in profile. From a script, or for one step: the
-  `browse` CLI, which adds nothing to a session. Several steps inside a session: Stagehand,
-  the same cloud browser as an MCP server. On the same four screenshots one Stagehand call
+  `browse` CLI, which adds nothing to a session. Several steps: Stagehand, the same cloud
+  browser as an MCP server, in a child session since 17 November 2026 (memory). On the same four screenshots one Stagehand call
   took 8 seconds and one browser minute; nine `browse` commands took 137 seconds and two.
-  Its price: three tool names and two Node processes in every session, and a source build
-  the update check cannot follow. The visual check uses neither. The owner chose on
+  Its price: a child session's start-up, and a source build the update check cannot follow. The visual check uses neither. The owner chose on
   15 November 2026 to keep Stagehand for "In-session browser work". Weighed:
   - the built-in browser (holds the owner's signed-in sessions: keep unknown pages out of it);
   - Playwright MCP and Chrome DevTools MCP (a local browser on this PC, and a server in every

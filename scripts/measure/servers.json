@@ -6,8 +6,7 @@
     "graphify",
     "plugin:cloudflare:cloudflare",
     "plugin:context-mode:context-mode",
-    "plugin:parallel:parallel-search",
-    "stagehand"
+    "plugin:parallel:parallel-search"
   ],
   "plugins": [
     "cloudflare@cloudflare"
