@@ -21,6 +21,17 @@
 Owner, question dialog, 18 November 2026: "No, just exploring". Apify is not adopted;
 `options/reach-outside.md` lists it as weighed. Nothing was installed and no account was made.
 
+## Verification and evidence
+
+- `npm test` on boat: 667 tests, 660 pass, 0 fail, 7 skipped (Windows-only). `node
+  scripts/check.mjs` passes; the page needed three small trims to stay under the 4,000-byte
+  Read limit.
+- The `ai-review` job was unavailable (API credit balance too low), so a `cookbook:review`
+  subagent did the fallback review; its record is on the pull request.
+- The prices and the Actor count come from Parallel Search excerpts of apify.com/pricing and
+  mcp.apify.com on 18 November 2026. No copy was kept: re-read those pages before relying on
+  them.
+
 ## Still outstanding
 
 None. If a job comes up that Firecrawl's Alexandria records cannot serve, the route is one
