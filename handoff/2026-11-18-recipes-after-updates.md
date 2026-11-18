@@ -18,14 +18,16 @@ to 1.0.4. The stack-updates skill says a recipe that names the old version is up
 - `skills/stack-updates/SKILL.md`: the `pinned` row names that download and its yes.
 - `recipes/cloudflare.md`: the plugin's `cloudflare-one` skill (1.0.4) reads an Access
   service token "from the project's configured secret store or environment variables"; here
-  that is the DPAPI store, through `agent-browser access` or `with-key.mjs`, never a saved
-  environment variable, a `.env` file or a command line, and only for a site listed in
+  that is the DPAPI store, and the token (two keys) goes only through `agent-browser access`,
+  never an environment variable, a `.env` file or a command line, and only for a site listed in
   `site-login/access.json` (a new site needs the owner's yes). No page named plugin 1.0.1.
 
 **Verification.** `node scripts/check.mjs`; `npm test` on boat. The API review was
 unavailable on `ece85d4` (credit balance); its fallback review had three lows, fixed on the
 branch: the Chromium download is not an install script, the cloudflare bullet lacked the
-`access.json` limit, and the quotation left out "configured".
+`access.json` limit, and the quotation left out "configured". The fallback review of
+`616ba37` had two lows: `with-key.mjs` passes one key, so it was dropped as a route for the
+two-key token, and the pull request's description was brought in line with the files.
 
 **Outstanding.** None from this change.
 
