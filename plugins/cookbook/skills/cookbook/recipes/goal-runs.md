@@ -15,6 +15,9 @@ like a pass/fail test, the longer an agent can work on it without a person.
   --verbose`, or a long goal looks stuck. Tried 18 November 2026 on Claude Code 2.1.327:
   `claude-haiku-5-5`, plan login (`apiKeySource` `none`), met in 2 turns. Not tried yet:
   `/goal` typed in a T3 Code thread, and inside a [boat-claude](boat-claude.md) task.
+- **Hooks off, no goal:** `/goal` is a Stop hook, so it is unavailable where hooks are off
+  (`disableAllHooks`, `allowManagedHooksOnly` in managed settings) or the folder is not
+  trusted. There, run the check and `claude -p --continue` by hand until it passes.
 - **The condition** (up to 4,000 characters):
   - one end state and the command that proves it, which must print its result: the
     evaluator runs nothing and reads only what the transcript shows;
@@ -24,7 +27,7 @@ like a pass/fail test, the longer an agent can work on it without a person.
   check green".
 - **A judge instead of a program** (screenshots, prose) is weaker: pin the reference, judge
   on another model ([visual-check](visual-check.md)). A public run of this kind drifted
-  brighter until its reference image was changed.
+  brighter until its author swapped the reference image.
 - **"Met" is not done.** The evaluator only reads Claude's own account. The work is done when
   the checks on the result pass: tests, CI, the review.
 - **Usage:** the plan only, never bought usage ([model-budget](model-budget.md)): read the
@@ -38,5 +41,6 @@ like a pass/fail test, the longer an agent can work on it without a person.
 
 Weighed, 18 November 2026: `/loop` (a time interval, not a condition); a Stop hook of our own
 (the fallback, for a check a script must decide); many Claude subscriptions run flat out, as
-in a public video of 28 October 2026 (outside Anthropic's terms for ordinary individual use,
-and the owner buys no usage).
+in a public video of 28 October 2026 (plan limits "assume ordinary, individual usage":
+[Claude Code legal page](https://code.claude.com/docs/en/legal-and-compliance); and the owner
+buys no usage).
