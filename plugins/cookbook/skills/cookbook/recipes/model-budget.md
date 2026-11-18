@@ -8,12 +8,12 @@ Opus 5.5 high, and a script chooses.
 - **The line.** `node <skill folder>/scripts/model-budget.mjs` (`--json` for the numbers)
   prints the week, the Fable share, the pace, the weekly reset, the model to use and the
   banked resets. The plugin's hook gives every session the advice alone (the model, or a
-  reset to ask for), with no figures, at its start, and again as "Model budget changed" when
-  it changes. Only a session start reads the usage over the network, once per ten minutes for
-  all sessions, and saves it signed with the sign-in, so a changed file is ignored. While
-  T3 Code runs that read is mostly refused: the last signed reading stands in for an hour,
-  then T3 Code's own saved one (not signed; a point or two behind). With no reading under an
-  hour old a session says "unknown" once. Before a long piece of work, run the script for
+  reset to ask for), no figures, at its start, and as "Model budget changed" when it changes
+  (after a tool, checked at most every five minutes). Only a session start reads the usage
+  over the network, once per ten minutes for all sessions, and saves it signed with the
+  sign-in, so a changed file is ignored. While T3 Code runs that read is mostly refused: the
+  last signed reading stands in for an hour, then T3 Code's own saved one. With no reading
+  under an hour old a session says "unknown" once. Before a long piece of work, run the script for
   the figures. Follow the advice: it is arithmetic, not a view to weigh. A model the owner
   names in a message wins over it.
 - **The rules** (`RULES` in the script):
