@@ -43,12 +43,35 @@ session) arrives as sessions are replaced.
 - The rest of the RAM is the number of sessions at once: each is about 270 MB for Claude itself
   plus its servers. Asked whether to limit chats at once, the owner answered "No limit"
   (18 November 2026): not to be asked again unless something changes.
-- Measure again once the sessions running on 17 November have ended: Stagehand processes should
-  be 0. Owner: Claude, next chat in this repository.
-- #108's open low findings: a separate small pull request (boat route handoff).
+- Measured again on 18 November: 6 sessions, Stagehand processes 0, CPU 31%, a bare `node -e 0`
+  in about 0.3 s. Free RAM was still 1.2 GB, mostly held by the browser (2.3 GB) and WebView2
+  apps (2.1 GB), not by Claude.
+- Hooks under load (another chat's measurement, checked here): at 17:15 on 17 November a bare
+  Node start took 5 s, so context-mode's 5-second hooks (a plugin of its own, not changed here)
+  missed and the owner saw "hook did not answer in time". A tool call starts up to four Node
+  processes: context-mode before (shell, read, search, edit) and after (those plus MCP tools), and of the
+  Cookbook's: `model-budget-note.mjs` after every tool (`PostToolUse` with no matcher),
+  `boat-route.mjs` before shell calls, `owner-answers.mjs` before `AskUserQuestion`, edits and
+  new threads and after `AskUserQuestion`, `codex-start-gate.mjs` before delegations and new
+  threads. Next small job: narrow `model-budget-note`'s `PostToolUse` matcher without losing
+  "a long turn hears the advice". Owner: Claude, next chat in this repository.
+- A local Semgrep comparison (`~/.local/share/claude-cookbook/work/semgrep-vs-codeql/scan.sh`,
+  another chat's job) ran repositories one after another on 17 November; it was not running on
+  18 November, so nothing was stopped.
+- #108's open low findings: a separate small pull request (boat route handoff). Owner: Claude;
+  cleared by that pull request's merge.
 - Tests: on 17 November boat-run refused this branch's suite (a funded wallet). On 18 November
   the branch's own `boat-run.mjs` (after #121) ran it: 666 tests, 659 pass, 0 fail, 7 skipped;
-  the installed plugin's older copy still refuses until `claude plugin update`.
+  the installed plugin's older copy refused until `claude plugin update` (done after the merge).
+
+**The merge.** #119 merged as `08ff727` on 18 November: every check passed (Graphify Formal
+Verification skipped, set aside as outside the gate); the `ai-review` job
+was unavailable (credit balance), so a fallback review of the head `8daf754` was recorded (first
+pass seven findings, all fixed; second pass one low, answered: the child-session command sends
+its prompt at once, proven by one run with the debug log, guarded by "reply NO TOOL"). Release
+check `verified` (execution 1740). Plugin updated to `08ff727`.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-17-idle-session-load/`: the
-before and after summaries, the scripts that made them, the Stagehand proof, the settled ids.
+before and after summaries, the scripts that made them, the Stagehand proof, the settled ids,
+the child-session command and debug excerpt, and `2026-11-18-measured-again.txt` (the second
+measurement, and the other chat's 17 November figures, marked as not re-measured).
