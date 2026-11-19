@@ -33,10 +33,10 @@
   after it passes and `updates.mjs verify` exits 0, move the old `chromium-*` and
   `chromium_headless_shell-*` folders to `~/.local/share/backups/` (a rollback needs them).
 - Vetted on 19 November 2026: the Linux `pass-cli` matched the checksum in Proton's own version
-  list (Trivy and OSV-Scanner could not parse the PC's copy: no result, not a clean one). In
-  `playwright-core` 1.65.1 OSV-Scanner and Trivy found no issue (2 packages), and Gitleaks
-  marked two lines of the package's own bundled code.
+  list (Trivy and OSV-Scanner could not parse the PC's copy: no result, not a clean one). In the
+  lockfile with `playwright-core` 1.65.1 (2 packages) OSV-Scanner and Trivy found no issue.
+  Gitleaks marked two lines of it: the handoff of 19 November has them.
 - Proven on the laptop on 19 November 2026: `agent-browser goto`, `status` and `stop`, and a
-  login item read from the vault through `pass-cli`. Not tried on Linux: `login` on a real
-  site, `mail-link` and `access` (proven on the PC, 13 and 14 November). Never tried: a one-time
-  code on a real site, a two-step sign-in, a mail forwarded from the owner's mailbox.
+  vault login read through `pass-cli`. Not tried on Linux: `login` on a real site, `mail-link`
+  and `access` (proven on the PC, 13 and 14 November). Never tried: a one-time code on a real
+  site, a two-step sign-in, a forward from the owner's mailbox.

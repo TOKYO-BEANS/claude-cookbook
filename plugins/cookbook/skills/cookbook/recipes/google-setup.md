@@ -26,7 +26,8 @@
 - Vetted on 13 November 2026, and the Linux build on 19 November: the gws download matched the
   release checksum and passed `gh attestation verify` (built by the repository's release workflow
   at the tag). On the PC the binary was not signed, and Trivy and OSV-Scanner could not parse it,
-  which is no result, not a clean one.
+  which is no result, not a clean one; no signature check and no scan is recorded for the Linux
+  build.
 - Proven on the laptop on 19 November 2026: `google adopt` for both accounts, `google status`
   (both grants work), one `google api owner GET` on Drive (200) and `google gws owner drive files
   list`. Not tried on Linux: `google login` (a new consent) and `logout`.

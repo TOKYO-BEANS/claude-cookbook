@@ -28,10 +28,11 @@ list of the code's files, the Proton AG signature of the PC's `pass-cli` copy, a
 details of the `playwright-core` 1.65.1 vetting. All three are in the sign-in-tools
 repository (`README.md`, `HANDOFF.md`).
 
-**Verification.** `npm test` on boat (local runs of this repository go there), on top of
-`main` with #157 in it: 702 tests, 695 pass, 7 skipped, 0 fail. Each statement was read against the sign-in-tools repository at `39c32cb`
-(`HANDOFF.md`, `README.md`, `google-auth/google.mjs`), the two `PROVENANCE.txt` files of the
-pinned copies and that repository's evidence of 19 November.
+**Verification.** `npm test` on boat (local runs of this repository go there), on top of `main`
+with #157 in it: 702 tests, 695 pass, 7 skipped, 0 fail. Each statement was read against the
+sign-in-tools repository at `39c32cb` (`HANDOFF.md`, `README.md`, `google-auth/google.mjs`),
+the two `PROVENANCE.txt` files of the pinned copies and that repository's evidence of 19
+November.
 
 **Outstanding.**
 - Not tried on Linux: `agent-browser login` on a real site, `mail-link`, `access`, `google
@@ -39,9 +40,21 @@ pinned copies and that repository's evidence of 19 November.
   the "Proven" lines of the two setup pages.
 - No scanner result is recorded for the Linux `pass-cli` and `gws` binaries: their checksums
   (and gws's attestation) were checked at install. Owner: Claude.
+- Gitleaks marked two lines in `playwright-core` 1.65.1 as `generic-api-key` when it was
+  vetted (sign-in-tools, 19 November; `pinned-vet.sh` reports such marks and does not judge
+  them). Read again here in the installed copy: `lib/coreBundle.js` line 41033 holds the sample
+  nonce of RFC 6455 after `Sec-WebSocket-Key:`, and line 5 of
+  `lib/vite/traceViewer/assets/xtermModule-Cv6bi7od.js` holds xterm theme property names
+  (`selectionBackgroundTransparent` and the like). Only Claude has read them; a model's
+  reading clears no finding. Owner: the owner. Clears: the owner's word on the two marks.
 - The "On this PC" label of the `pass-cli` bullet in `sign-ins-setup.md`, and "on the owner's
   PC" in the catalog's `agent-browser` entry, are left: the first is #157's line, the second
   goes with the catalog's Linux pass.
+
+**The review.** Three low findings on the first head, all fixed in the second commit: the
+Gitleaks marks were listed under "Vetted" with no triage (now the item above), the "2
+packages" read as `playwright-core` alone (they are the lockfile's two), and "On the PC" for
+the unsigned gws binary left the Linux build unsaid.
 
 **Dead ends.** None.
 
