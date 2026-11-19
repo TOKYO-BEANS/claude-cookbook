@@ -19,6 +19,16 @@ and to the required checks; nothing else is loosened.
 `Analyze (javascript-typescript)`, `Analyze (actions)`): `merge-when-green.sh ... 4`. Tests
 that run only on `win32` now run nowhere.
 
+**Verification.** `npm test` on boat: 724 pass, 0 fail, 10 skipped (the Windows-only
+tests). The ruleset read back after the change: `active`, `Depot CI / semgrep` and
+`Depot CI / test`.
+
+**Dead ends.** `Analyze (actions)` failed on this pull request: "CodeQL could not process any
+code written in GitHub Actions". CodeQL default setup still lists `actions`, and with the last
+workflow gone the pull request's scan finds nothing. GitHub updates default setup's languages
+by itself when a language leaves the default branch; dropping it by hand before the merge
+removes a check, so it went to the owner.
+
 **Outstanding.** The standard's `windows-ci` item reads `blocked`
 (`owner-approval-required`) while the repository holds Windows files
 (`agent-key.ps1` and three stack-updates test fixtures, `.ps1`/`.cmd`); it reads
