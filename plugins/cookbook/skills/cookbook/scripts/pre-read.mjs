@@ -986,7 +986,7 @@ export async function jevWorker(jobsFile, resultsFile, { env = process.env, fetc
     // Set only by a run that was given --send: a worker started any other way sends nothing.
     results = jobs.map(() => ({ ok: false, error: "not sent: the run did not say --send" }));
   } else if (!key) {
-    results = jobs.map(() => ({ ok: false, error: "TYPESAFE_API_KEY missing: the DPAPI key could not be decrypted" }));
+    results = jobs.map(() => ({ ok: false, error: "TYPESAFE_API_KEY missing: the key could not be read from the key store" }));
   } else {
     results = new Array(jobs.length);
     const loaded = new Map();
@@ -1014,7 +1014,7 @@ export function realProviders({ binDir = DEFAULTS.binDir, jevKey = DEFAULTS.jevK
   return {
     async judge(jobs) {
       const shim = join(binDir, "with-key.mjs");
-      if (!existsSync(shim)) throw new Error(`${shim} not found (the DPAPI shims live in ~/.local/bin)`);
+      if (!existsSync(shim)) throw new Error(`${shim} not found (the key-store launchers live in ~/.local/bin)`);
       const jobsFile = join(workDir, "jev-jobs.json");
       const resultsFile = join(workDir, "jev-results.json");
       writeJson(jobsFile, jobs);

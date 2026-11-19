@@ -120,8 +120,8 @@
       "job": "Job: the owner has a new API key for a service and wants your scripts to use it.",
       "fields": { "STORE": "where the key is kept", "HOW_IT_IS_SAVED": "the command or step that saves it", "ASK_FOR_IT_IN_CHAT": "yes or no", "HOW_A_SCRIPT_GETS_IT": "how a program receives the key at run time" },
       "checks": [
-        { "field": "STORE", "pattern": "dpapi|agent-key", "label": "the DPAPI store" },
-        { "field": "HOW_IT_IS_SAVED", "pattern": "-Mode save|masked", "label": "-Mode save, a masked window" },
+        { "field": "STORE", "pattern": "keyring|secret service|secret-tool|key store", "label": "the OS key store (GNOME Keyring)" },
+        { "field": "HOW_IT_IS_SAVED", "pattern": "proton pass|pass-cli|secret-tool store", "label": "from the Proton Pass vault into secret-tool store" },
         { "field": "ASK_FOR_IT_IN_CHAT", "pattern": "^[^a-z]*no\\b", "label": "never in chat" },
         { "field": "HOW_A_SCRIPT_GETS_IT", "pattern": "with-key", "label": "with-key.mjs" }
       ]

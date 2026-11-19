@@ -29,7 +29,7 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   weekly grouped updates need).
 - **Outside code before an install: three scanners, then one boat sandbox run.** The scanners
   read the code; the sandbox shows what it does. Weighed: scanners alone (they cannot see
-  behaviour); a run on this PC or in WSL (that is the machine being protected).
+  behaviour); a run on this PC or in Docker (that is the machine being protected).
 - **Visual check of a live site: the site's own script.** The repository's Playwright (its
   own dependency, like a test runner) and a plain Chromium take the pictures; a Claude API request on another model than the builder's
   judges them. Built for the first site on 15 November 2026. Weighed for the pictures, on
