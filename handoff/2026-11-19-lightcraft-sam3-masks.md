@@ -17,7 +17,8 @@ switch to Linux, finished on the Ubuntu laptop once Meta approved the model acce
 - Line 34 of `handoff/2026-11-17-adobe-retired-photocraft-weighed.md`: PhotoCraft's baseline
   is that test's saved results only (a low finding on #116).
 
-**Verification.** `npm test` on boat: 687 tests, 680 pass, 0 fail, 7 skipped (Windows-only).
+**Verification.** `npm test` on boat, after `main` was merged in: 706 tests, 699 pass, 0 fail,
+7 skipped (Windows-only).
 The vetting and the test follow.
 
 **Vetting of the Linux build** (the Windows folder of 18 November did not come over, so this
@@ -49,8 +50,7 @@ is a full vetting).
 - The runner now measures with `/usr/bin/time -v` instead of PowerShell.
 
 - The update check reads the version with `{share}/lightcraft/bin/lightcraft-cli --version`
-  (`tables.mjs`). Pull request #160 (another chat) adds entries to the same table and test a
-  few lines below: whichever merges second merges `main` in first.
+  (`tables.mjs`), beside the Linux paths #156 put there.
 
 **Outstanding.**
 - Not measured: several masks on one photo in one process (the image is analysed once).
