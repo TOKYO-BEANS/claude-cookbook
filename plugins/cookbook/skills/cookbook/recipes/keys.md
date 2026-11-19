@@ -22,7 +22,7 @@ One store, and helpers that read it. Linux since 19 November 2026.
   key in its own process imports `readKey` from `with-key.mjs`.
 - **How it reads:** on Linux `secret-tool lookup` (package `libsecret-tools`), ended after
   15 seconds (a locked keyring waits on a prompt). On Windows the old DPAPI store
-  (`~/.secrets`, `agent-key.ps1`) is still read, for the Windows CI job's tests.
+  (`~/.secrets`, `agent-key.ps1`) is still read; no CI job tests it since the Windows job went.
 - **A key that cannot be read does not stop the program.** `with-key.mjs` says why on
   stderr (`with-key: could not read key "x" (...)`) and starts it without the variable, on
   purpose: a server must start to answer "no key" (the owner-questions broker does). A
