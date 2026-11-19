@@ -36,7 +36,7 @@ day, not assumed.
   not the tools on this PC); each tool's self-update (unvetted, and it replaces a pinned copy).
 - **Where a session runs: T3 Code.** Worktrees per thread, delegates, pull request watches and
   scheduled tasks around the Claude Code harness. Weighed: the Claude desktop app (its Code
-  tab; still home to three scheduled tasks and to Claude Design); a plain terminal (the
+  tab; home to Claude Design; no scheduled tasks since 19 November 2026); a plain terminal (the
   fallback).
 - **Prompt cache and status rows: nothing owns this.** A mod can draw a row above the prompt
   of a terminal or desktop session. A T3 Code session is headless to mods (the compaction log

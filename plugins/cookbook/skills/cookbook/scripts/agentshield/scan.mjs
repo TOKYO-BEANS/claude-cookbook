@@ -177,9 +177,11 @@ export function scan({ rebaseline = false, env = process.env, afterCopy, olderNo
 
     const reportPath = path.join(out, "report.json");
     const tool = startTool({ pkg: f.pkg, work, out, copy }, "json", reportPath);
-    log.push(`scanner exit ${tool.status}, guard ready ${tool.ready}, blocked calls ${tool.blocked.length}`, "--- stdout", tool.stdout.slice(-4000), "--- stderr", tool.stderr.slice(-4000));
+    // What the scanner printed can quote the files it read: it gets the strict mask before
+    // it reaches the log or a failure's reason.
+    log.push(`scanner exit ${tool.status}, guard ready ${tool.ready}, blocked calls ${tool.blocked.length}`, "--- stdout", maskOutput(tool.stdout.slice(-4000)), "--- stderr", maskOutput(tool.stderr.slice(-4000)));
     if (!tool.ready) throw new Error("the scanner did not start under the permission model with the network guard");
-    if (tool.status !== 0 && tool.status !== 2) throw new Error(`the scanner ended with ${tool.status}: ${tool.stderr.trim().split("\n").filter((l) => !l.startsWith("NETGUARD")).slice(-2).join(" / ").slice(0, 300)}`);
+    if (tool.status !== 0 && tool.status !== 2) throw new Error(`the scanner ended with ${tool.status}: ${maskOutput(tool.stderr.trim().split("\n").filter((l) => !l.startsWith("NETGUARD")).slice(-2).join(" / ").slice(0, 300))}`);
     let report;
     try { report = JSON.parse(readFileSync(reportPath, "utf8")); } catch { throw new Error("the scanner wrote no report that can be read"); }
     if (!Array.isArray(report.findings) || typeof report.score?.numericScore !== "number") throw new Error("the report has no findings list or no score");

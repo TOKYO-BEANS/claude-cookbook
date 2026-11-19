@@ -313,6 +313,10 @@ const rules = fs.existsSync(path.join(root, "home/.claude/CLAUDE.md")) ? fs.read
 if (rules.includes("STUB-FETCH")) { try { await fetch("https://example.com"); } catch {} }
 if (rules.includes("STUB-SPAWN")) { const cp = await import("node:child_process"); try { cp.spawnSync("id"); } catch {} }
 if (rules.includes("STUB-OUTSIDE")) fs.readFileSync("/etc/hostname");
+const say = /STUB-SAY (\\S+)/.exec(rules);
+if (say) { console.log("quoting " + say[1]); console.error("quoting " + say[1]); }
+if (rules.includes("STUB-FAIL")) process.exit(1);
+if (rules.includes("STUB-HANG")) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60000);
 if (rules.includes("STUB-WRITE")) fs.writeFileSync(path.join(root, "planted.md"), "x");
 const findings = [];
 for (const file of files) fs.readFileSync(file, "utf8").split("\\n").forEach((line, i) => { const m = /FINDING (\\w+) (.+)/.exec(line); if (m) findings.push({ id: "stub-" + i, severity: m[1], category: "test", title: m[2].trim(), file: path.relative(root, file), line: i + 1, description: "from a marker line", evidence: line.trim() }); });
@@ -464,6 +468,33 @@ test("what the scanner quotes from a file is masked again in everything the scan
   assert.match(readFileSync(path.join(dir, "state", "baseline.json"), "utf8"), /<masked:output>/);
   // The masked text is what the next run compares with: nothing is new.
   assert.deepEqual([go(s).mode, s.head().NEW_FINDINGS], ["compare", "0"]);
+
+  // The scanner's own output is no exception: what it prints, in a run that works and in
+  // one that fails, reaches neither the log nor the reason of the failure.
+  const holders = () => ["new-findings.md", ...readdirSync(path.join(dir, "work", "out", "logs")).map((n) => `work/out/logs/${n}`)].filter((name) => readFileSync(path.join(dir, name), "utf8").includes(value));
+  s.rules(`STUB-SAY ${value}\n`);
+  assert.equal(go(s).mode, "compare");
+  assert.deepEqual(holders(), []);
+  s.rules(`STUB-SAY ${value} STUB-FAIL\n`);
+  assert.equal(go(s).mode, "failed");
+  assert.match(s.head().REASON, /the scanner ended with 1: quoting <masked:output>/);
+  assert.deepEqual(holders(), []);
+  const lastLog = readdirSync(path.join(dir, "work", "out", "logs")).sort().pop();
+  assert.match(readFileSync(path.join(dir, "work", "out", "logs", lastLog), "utf8"), /--- stdout\nquoting <masked:output>/);
+});
+
+test("scan.sh stops a run that hangs, and removes the copy the run could not remove", { skip: newNode }, (t) => {
+  const s = setup(t);
+  writePin(s.folders);
+  s.rules("STUB-HANG\n");
+  const started = Date.now();
+  const r = spawnSync("bash", [path.join(FOLDER, "scan.sh")], { encoding: "utf8", env: { ...process.env, ...s.env, AGENTSHIELD_NODE: process.execPath, AGENTSHIELD_TIMEOUT: "3" } });
+  assert.equal(r.status, 124, r.stdout + r.stderr);
+  assert.ok(Date.now() - started < 30_000, "the scanner outlived the limit");
+  assert.match(r.stderr, /its copy of the configuration was removed/);
+  assert.deepEqual(readdirSync(path.join(s.env.AGENTSHIELD_DIR, "work")), ["out"]);
+  assert.match(s.head().REASON, /did not finish/);
+  assert.equal(s.head().MODE, "failed");
 });
 
 test("the scanner cannot reach the network, start a program, or read and write outside its folders", { skip }, (t) => {

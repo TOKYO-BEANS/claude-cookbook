@@ -7,7 +7,16 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 node="${AGENTSHIELD_NODE:-/usr/bin/node}"
 [ -x "$node" ] || node="$(command -v node)"
-# A run takes seconds. One that hangs is stopped after ten minutes; new-findings.md then
-# still says that the run did not finish.
-if command -v timeout > /dev/null; then exec timeout 600 "$node" "$here/scan.mjs" "$@"; fi
-exec "$node" "$here/scan.mjs" "$@"
+# A run takes seconds. One that hangs is stopped after ten minutes (AGENTSHIELD_TIMEOUT
+# seconds otherwise; the tests use it), with everything it started. new-findings.md then
+# still says that the run did not finish, and the copy it left is removed here, since a
+# stopped run cannot do that itself.
+command -v timeout > /dev/null || exec "$node" "$here/scan.mjs" "$@"
+timeout --kill-after=10 "${AGENTSHIELD_TIMEOUT:-600}" "$node" "$here/scan.mjs" "$@"
+code=$?
+if [ "$code" -eq 124 ] || [ "$code" -eq 137 ]; then
+  dir="${AGENTSHIELD_DIR:-${AGENTSHIELD_HOME:-$HOME}/.local/share/stack-atlas/agentshield}"
+  rm -rf "$dir/work/copy" "$dir/work/home"
+  echo "scan.sh: the run was stopped after its time limit; its copy of the configuration was removed" >&2
+fi
+exit "$code"

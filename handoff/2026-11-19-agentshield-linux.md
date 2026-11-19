@@ -65,11 +65,11 @@ desktop app's sidebar is dropped, and this scan is the third.
   the project, no process left. In one sandbox both trees gave the same 49 findings and
   score on a fixture and the same exit from the corpus gate. The owner saw these numbers and
   chose the install with the fixed versions (question dialog, this chat, 19 November).
-- Tests: `scripts/agentshield.test.mjs`, 22 tests. `npm test` in a boat sandbox on Node 24
-  (Depot's version): 731 tests, 722 pass, 9 skip, 0 fail. Two of the skips are here (the command-line run and the proof
-  that the permission model alone refuses the network: both need Node 25). On Node 26 in
-  the same sandbox, this file and `vetting.test.mjs`: 47 pass, 2 skip (the two that skip are the
-  refusals on an older Node).
+- Tests: `scripts/agentshield.test.mjs`, 23 tests. `npm test` in a boat sandbox on Node 24
+  (Depot's version): 732 tests, 722 pass, 10 skip, 0 fail. Three of the skips are here (the
+  two command-line runs and the proof that the permission model alone refuses the network:
+  they need Node 25). On Node 26 in the same sandbox, this file and `vetting.test.mjs`: 48
+  pass, 2 skip (the two refusals on an older Node).
 - Runs on the laptop (19:22 to 20:04 UTC), the last with the final code: 169 files copied,
   all 169 read by the scanner, nothing skipped, a value taken out in 3 files (a package
   folder name and two documentation examples, none a credential), 0 blocked calls, 3
@@ -105,6 +105,13 @@ desktop app's sidebar is dropped, and this scan is the third.
 - An update of the pinned copy stops the scan (`MODE: failed`, "differs from the pinned
   copy") until the version line in `scan.mjs` is changed through a pull request and
   `scan.sh --pin` is run: intended, and the update report does not say it yet.
+
+- The AI review of the first ready head found one medium and two lows, fixed in the next
+  commit: what the scanner prints went into the log and a failure's reason with the weaker
+  mask; a run stopped by `scan.sh`'s time limit left its copy behind (the script removes it
+  now, and the scanner it started is stopped with it); one stale sentence on
+  `options/keep-healthy.md`. The test of the time limit needs Node 25 and so runs in a
+  sandbox on Node 26, not in Depot CI. Owner: Claude; nothing open.
 
 **Dead ends.**
 - No copy of the old `scan.sh` exists: the migration kit, the standard's evidence folder
