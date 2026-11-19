@@ -26,9 +26,9 @@ day, not assumed.
   does).
 - **Scheduled agent runs: T3 Code scheduled tasks.** Checked: a one-off task ran on time in
   its own thread and worktree. The run shows up where the owner works, can be started by a
-  webhook, and has the pull request tools. Weighed: Claude Desktop scheduled tasks (the
-  fallback: a model per task, but results land in an app the owner no longer works in; three
-  tasks ran there on Windows); Claude Code cloud routines (no access to this PC's keys and CLIs);
+  webhook, and has the pull request tools. Weighed: Claude Desktop scheduled tasks (a
+  model per task, but results land in an app the owner no longer works in; the three that
+  ran there on Windows are T3 tasks or dropped since 19 November 2026); Claude Code cloud routines (no access to this PC's keys and CLIs);
   a timer that starts `claude -p` (right for one bounded read inside a script, not for
   a run that opens pull requests).
 - **Updates: the `stack-updates` skill.** A script decides what is routine; a model only

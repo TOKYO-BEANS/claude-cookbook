@@ -1,7 +1,7 @@
 # Scheduled runs
 
 Two owners, by what the run needs. Checked on 15 November 2026; T3 task binding on 16 November;
-the timer on the Ubuntu laptop on 19 November.
+the timer and the tasks on the Ubuntu laptop on 19 November.
 
 - **A plain script, with no model: a systemd user timer.** A timer and a service in
   `~/.config/systemd/user/` start `/usr/bin/node` on a script in `~/.local/bin`; no session,
@@ -14,23 +14,22 @@ the timer on the Ubuntu laptop on 19 November.
 - **An agent run: a T3 Code scheduled task** (`schedule_task`: a fixed time, an interval, once,
   or a webhook). The run is a thread in the project's sidebar, where the owner works, with the
   T3 tools. Proven: a `once` task ran on time in a thread of its own, in its own worktree, and
-  answered in 25 seconds. Today: "Daily sidebar sweep" (07:45, Cookbook project;
-  [owner-questions.md](owner-questions.md)).
-  - The task has no model field. A run uses its thread's model, the project's default on a
-    new thread; for a cheaper run, set the bound thread's model (`t3_thread_configure`). Not
-    yet proven that a later run keeps it (first check: the sweep on 17 November 2026).
+  answered in 25 seconds. Today, in the Cookbook project: "Daily sidebar sweep" (07:45;
+  [owner-questions.md](owner-questions.md)), "AgentShield weekly scan" (Mondays 08:00;
+  [agent-audit.md](agent-audit.md)) and the weekly fixer (Mondays 08:30); in the standard's
+  project its daily run (07:30).
+  - The task tool takes no model: a task stores the model of the chat that made it. For a
+    cheaper run, set the model on the task's thread (`t3_thread_configure`). Not yet proven
+    that a later run keeps it.
   - A task not bound to a thread makes a new thread and worktree per run: bind a recurring
     task, and delete a task when its job ends (`delete_scheduled_task`). Seen once (16 November
     2026): with `freshSession` and no thread, the first run made a thread and bound the task to
     it (`boundThreadId` in `list_scheduled_tasks`). Not yet proven that later runs reuse it
     (first check: the sweep on 17 November 2026).
   - A run loads everything a session loads. Keep the prompt to one job and name its stops.
-- **The fallback: a Claude Desktop scheduled task**, when a run needs its model set per task
-  before the bound-thread route is proven. Three ran there on the Windows PC and are not
-  back on Linux yet (`handoff/2026-11-19-linux-schedules.md` says what each needs):
-  `stack-atlas-standard-daily` (07:30), `agentshield-weekly` and `daily-sidebar-cleanup`
-  (which tidies the desktop app's own sidebar).
-  Their quirks: [scheduled-runs-desktop.md](scheduled-runs-desktop.md).
+- **No task runs in Claude Desktop any more** (owner, 19 November 2026). Of the three that
+  ran there on the Windows PC, the standard's daily run and the AgentShield scan are T3
+  tasks, and the clean-up of the desktop app's own sidebar is dropped.
 - **Not used for the setup:** cloud routines (they cannot reach this PC's key store or
   command lines) and a session's own cron tools (they end with the session).
 - A scheduled run is unattended: it installs nothing, and text it reads from release notes,
