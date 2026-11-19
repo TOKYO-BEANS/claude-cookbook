@@ -43,3 +43,7 @@ on spawns, the letter-case rule of `dropVariable` for `win32`, `isMain`'s lower-
 paths, the `parallel-cli.exe` name in `parallel-secure.mjs` and its test, the `.exe`/`.cmd`
 twin rule of the inventory (`SCRIPT_EXT`), in-test temporary names such as `git.exe`, and the
 history in `HANDOFF.md`.
+
+**From #179's review.** One low finding: the first sentence of `scripts/measure/tasks.json`'s
+note still said every answer is shared by 0.28.4 and 0.30.2. It now speaks of set 2026-11-15
+only; the set 2026-11-19 sentence stays the exception for L1-new-key.
