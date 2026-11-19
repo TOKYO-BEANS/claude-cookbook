@@ -1,6 +1,6 @@
 // Tests of the header helper (skills/cookbook/scripts/key-header.mjs) and of the two
-// launchers behind the `firecrawl` and `parallel-cli` commands. Every value is synthetic;
-// the parts that need Windows' DPAPI run on Windows only.
+// launchers behind the `firecrawl` and `parallel-cli` commands. Every value is synthetic, and
+// a stand-in secret-tool keeps every test away from the real keyring.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -9,45 +9,28 @@ import { delimiter, dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { HEADER_KEYS, main as header } from "../plugins/cookbook/skills/cookbook/scripts/key-header.mjs";
-import { loadFfi } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scripts = join(here, "..", "plugins", "cookbook", "skills", "cookbook", "scripts");
 const windows = process.platform === "win32";
-const ffi = windows ? await loadFfi().catch(() => null) : null;
-const needsFfi = { skip: !ffi && "needs Windows and node:ffi" };
+const onLinux = { skip: process.platform !== "linux" && "needs Linux" };
 
-function home(files = {}) {
-  const dir = mkdtempSync(join(tmpdir(), "key-header-test-"));
-  mkdirSync(join(dir, ".secrets"));
-  mkdirSync(join(dir, "AppData", "Local"), { recursive: true });
-  for (const [name, text] of Object.entries(files)) writeFileSync(join(dir, ".secrets", name), text);
-  return dir;
+function home() {
+  return mkdtempSync(join(tmpdir(), "key-header-test-"));
 }
-const noPowerShell = () => { throw new Error("PowerShell must not be started"); };
-// On Linux the launcher reads the desktop's keyring through secret-tool on PATH. A process
-// started by these tests finds this stand-in first instead: it answers "no such item" (exit 1),
-// so no test reaches the real keyring and CI without secret-tool behaves the same.
-function noKeyring(dir, env) {
+const notRead = () => { throw new Error("no key must be read"); };
+// The launchers read the desktop's keyring through secret-tool on PATH. A process started by
+// these tests finds this stand-in first instead. Without a value it answers "no such item"
+// (exit 1); with one it prints that value for the one key name given, so no test reaches the
+// real keyring and CI without secret-tool behaves the same.
+function noKeyring(dir, env, saved = null) {
   const bin = join(dir, "test-bin");
   mkdirSync(bin, { recursive: true });
-  writeFileSync(join(bin, "secret-tool"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  const body = saved ? `[ "$*" = "lookup service claude-keys name ${saved.name}" ] && printf %s '${saved.value}' && exit 0\n` : "";
+  writeFileSync(join(bin, "secret-tool"), `#!/bin/sh\n${body}exit 1\n`, { mode: 0o755 });
   return { ...env, PATH: `${bin}${delimiter}${env.PATH ?? ""}` };
 }
-const noFfi = async () => { throw Object.assign(new Error("No such built-in module: node:ffi"), { code: "ERR_UNKNOWN_BUILTIN_MODULE" }); };
-
-// A DPAPI blob in the store's format, made without PowerShell.
-function protect(text) {
-  const system = join(process.env.SystemRoot ?? "C:\\Windows", "System32");
-  const crypt = ffi.dlopen(join(system, "crypt32.dll"), { CryptProtectData: { return: "int32", arguments: ["pointer", "pointer", "pointer", "pointer", "pointer", "uint32", "pointer"] } });
-  const plain = Buffer.alloc(Buffer.byteLength(text, "utf16le"));
-  plain.write(text, "utf16le");
-  const input = Buffer.alloc(16); const output = Buffer.alloc(16);
-  input.writeUInt32LE(plain.length, 0);
-  input.writeBigUInt64LE(ffi.getRawPointer(plain), 8);
-  assert.ok(crypt.functions.CryptProtectData(input, null, null, null, null, 1, output));
-  return Buffer.from(ffi.toBuffer(output.readBigUInt64LE(8), output.readUInt32LE(0))).toString("hex");
-}
+const noItem = () => { throw Object.assign(new Error("no such item"), { status: 1 }); };
 
 // Runs the helper in this process with a pipe for stdout, as an MCP client starts it.
 async function run(argv, deps) {
@@ -56,20 +39,16 @@ async function run(argv, deps) {
   return { code, out: out.join(""), err: err.join("") };
 }
 
-test("the helper prints one Authorization header, in the form agent-key.ps1 prints", async () => {
-  const dir = home({ "k.dpapi": "00" });
-  try {
-    const got = await run(["k"], { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: () => JSON.stringify({ Authorization: "Bearer synthetic-key" }) });
-    assert.deepEqual(got, { code: 0, out: "{\"Authorization\":\"Bearer synthetic-key\"}\n", err: "" });
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+test("the helper prints one Authorization header", async () => {
+  const got = await run(["k"], { platform: "linux", runSecretTool: () => "synthetic-key\n" });
+  assert.deepEqual(got, { code: 0, out: "{\"Authorization\":\"Bearer synthetic-key\"}\n", err: "" });
 });
 
 test("a key that cannot be read prints nothing, says why on stderr and ends with code 1", async () => {
-  const dir = home();
-  try {
-    const got = await run(["absent"], { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: noPowerShell });
-    assert.deepEqual(got, { code: 1, out: "", err: "key-header: could not read key \"absent\" (no key is saved as \"absent\")\n" });
-  } finally { rmSync(dir, { recursive: true, force: true }); }
+  const got = await run(["absent"], { platform: "linux", runSecretTool: noItem });
+  assert.deepEqual(got, { code: 1, out: "", err: "key-header: could not read key \"absent\" (no key is saved as \"absent\")\n" });
+  const off = await run(["k"], { platform: "win32", runSecretTool: notRead });
+  assert.deepEqual(off, { code: 1, out: "", err: "key-header: could not read key \"k\" (the key store is read on Linux only (this is win32))\n" });
 });
 
 test("only a key the source lists for a header is printed: any other name is refused and not read", async () => {
@@ -97,24 +76,23 @@ test("the helper refuses to print to a terminal, and reads no key for it", async
 
 test("usage: exactly one key name", async () => {
   for (const argv of [[], ["a", "b"], [""]]) {
-    const got = await run(argv, { readKey: noPowerShell });
+    const got = await run(argv, { readKey: notRead });
     assert.equal(got.code, 2);
     assert.equal(got.out, "");
     assert.match(got.err, /usage: node key-header\.mjs <key-name>/);
   }
 });
 
-test("Windows: the helper as a process prints the header by the direct route", needsFfi, () => {
-  const value = "synthetic-header-key-æøå";
-  const dir = home({ "firecrawl.dpapi": protect(value) });
-  const empty = home();
+test("Linux: the helper as a process prints the header from the keyring", onLinux, () => {
+  const value = "synthetic-header-key";
+  const dir = home(); const empty = home();
   try {
-    const env = { ...process.env, USERPROFILE: dir };
+    const env = noKeyring(dir, { ...process.env, HOME: dir }, { name: "firecrawl", value });
     const got = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "firecrawl"], { env, encoding: "utf8", timeout: 60000 });
     assert.equal(got.status, 0, got.stderr);
     assert.deepEqual(JSON.parse(got.stdout), { Authorization: `Bearer ${value}` });
-    assert.equal(got.stderr, "", "no warning about node:ffi on stderr");
-    const none = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "firecrawl"], { env: { ...env, USERPROFILE: empty }, encoding: "utf8", timeout: 60000 });
+    assert.equal(got.stderr, "");
+    const none = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "firecrawl"], { env: noKeyring(empty, { ...process.env, HOME: empty }), encoding: "utf8", timeout: 60000 });
     assert.equal(none.status, 1);
     assert.equal(none.stdout, "");
     const other = spawnSync(process.execPath, [join(scripts, "key-header.mjs"), "synthetic"], { env, encoding: "utf8", timeout: 60000 });
@@ -129,15 +107,15 @@ const HOSTED = "https://api.firecrawl.dev";
 // The pinned CLI never updates itself: both of its switches are set on every start.
 const OFF = ["1", "1"];
 const READ_TRIED = /with-key: could not read key "firecrawl" \(no key is saved as "firecrawl"\)/;
-function firecrawlHome(files) {
-  const dir = home(files);
+function firecrawlHome() {
+  const dir = home();
   const cli = join(dir, ".local", "share", "firecrawl-cli", "node_modules", "firecrawl-cli", "dist");
   mkdirSync(cli, { recursive: true });
   writeFileSync(join(cli, "index.js"), STUB);
   return dir;
 }
-function firecrawl(dir, extra, args = ["scrape", "https://example.test"]) {
-  const env = noKeyring(dir, { ...process.env, USERPROFILE: dir, HOME: dir, ...extra });
+function firecrawl(dir, extra, args = ["scrape", "https://example.test"], saved = null) {
+  const env = noKeyring(dir, { ...process.env, HOME: dir, ...extra }, saved);
   for (const name of Object.keys(env)) if (/^firecrawl_/i.test(name) && !(name in extra)) delete env[name];
   return spawnSync(process.execPath, [join(scripts, "firecrawl-secure.mjs"), ...args], { env, encoding: "utf8", timeout: 60000 });
 }
@@ -219,26 +197,28 @@ test("firecrawl launcher: the pinned CLI's self-update is off on both paths, wha
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("Windows: the firecrawl launcher hands the stored key to the hosted API only", needsFfi, () => {
+
+test("Linux: the firecrawl launcher hands the stored key to the hosted API only", onLinux, () => {
   const value = "synthetic-firecrawl-key";
-  const dir = firecrawlHome({ "firecrawl.dpapi": protect(value) });
+  const dir = firecrawlHome();
+  const saved = { name: "firecrawl", value };
   try {
     for (const [extra, args, url = HOSTED] of [[{}], [{ FIRECRAWL_API_URL: "https://api.firecrawl.dev/v2" }, undefined, "https://api.firecrawl.dev/v2"], [{}, ["scrape", "x", "--api-url", HOSTED]], [{}, ["search", "env"]], [{}, ["--status"]]]) {
-      const got = firecrawl(dir, extra, args);
+      const got = firecrawl(dir, extra, args, saved);
       assert.equal(JSON.parse(got.stdout).key, value, got.stderr);
       assert.equal(JSON.parse(got.stdout).url, url);
       assert.deepEqual(JSON.parse(got.stdout).updates, OFF);
       assert.equal(got.stderr, "");
     }
-    for (const args of [["scrape", "x", "--api-url=https://example.test"], ["env"], ["launch", "claude"], ["--enable", "alexandria", "env"]]) assert.equal(JSON.parse(firecrawl(dir, {}, args).stdout).key, null, args.join(" "));
-    assert.equal(JSON.parse(firecrawl(dir, { FIRECRAWL_API_URL: "https://example.test/api.firecrawl.dev" }).stdout).key, null);
+    for (const args of [["scrape", "x", "--api-url=https://example.test"], ["env"], ["launch", "claude"], ["--enable", "alexandria", "env"]]) assert.equal(JSON.parse(firecrawl(dir, {}, args, saved).stdout).key, null, args.join(" "));
+    assert.equal(JSON.parse(firecrawl(dir, { FIRECRAWL_API_URL: "https://example.test/api.firecrawl.dev" }, undefined, saved).stdout).key, null);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("parallel launcher: reads the key named parallel and starts the pinned CLI, which is absent here", () => {
   const dir = home();
   try {
-    const got = spawnSync(process.execPath, [join(scripts, "parallel-secure.mjs"), "search", "x"], { env: noKeyring(dir, { ...process.env, USERPROFILE: dir, HOME: dir }), encoding: "utf8", timeout: 60000 });
+    const got = spawnSync(process.execPath, [join(scripts, "parallel-secure.mjs"), "search", "x"], { env: noKeyring(dir, { ...process.env, HOME: dir }), encoding: "utf8", timeout: 60000 });
     assert.equal(got.status, 127, got.stderr);
     assert.match(got.stderr, /with-key: could not read key "parallel" \(no key is saved as "parallel"\); continuing without PARALLEL_API_KEY\n/);
     assert.match(got.stderr, windows ? /with-key: could not start .*parallel-cli\.exe \(ENOENT\)\n$/ : /with-key: could not start .*vendor[/\\]parallel-cli[/\\]parallel-cli \(ENOENT\)\n$/);
