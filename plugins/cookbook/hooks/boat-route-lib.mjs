@@ -293,7 +293,7 @@ export function instead(run, repo, { script, shell = "bash" }) {
   }
   const p = program(run.words[0]);
   words[0] = ["python", "py"].includes(p) ? "python3" : p;
-  let size = "--timeout 1200";
+  let size = "--type default --timeout 1200";
   let install = "";
   if (run.kind === "npm" || run.kind === "node") {
     if (repo.deps) install = `${repo.lock ? "npm ci" : "npm install"} --ignore-scripts && `;
