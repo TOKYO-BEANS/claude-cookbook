@@ -39,7 +39,10 @@ is a full vetting).
   (3,439,938,512 bytes, SHA-256 equal to LightCraft's pin) are in
   `~/.local/share/lightcraft-sam3`, fetched with Claude's read-only Hugging Face token.
 
-**The test.** The same 10 public-domain photos as the PhotoCraft test.
+**The test.** The same 10 public-domain photos as the PhotoCraft test: outside files, so the
+test stretched the owner's "own photos only" condition. Asked in a question dialog (this chat,
+19 November 2026), the owner chose "Accept the test as done": the ten test photos are
+accepted, and the condition stays as it was for everything after.
 - Describe "person": all 5 people photos of the PhotoCraft test right (PhotoCraft: 1 of 5
   automatic, 3 of 5 with a box), the flag at the edge left out; also the people on three more
   photos. Edges clean at 1600 px.

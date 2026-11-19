@@ -18,7 +18,9 @@
 - SAM 3 is gated (SAM License, Meta's terms). Claude's own Hugging Face account fetched it once
   (token `huggingface-read`, at run time only); LightCraft checks its pinned SHA-256.
 - **No tool:** sharpening a soft photo, and a cut-out (transparent background). Say so. Do not
-  stand in a generative tool that redraws the photo.
+  stand in a generative tool that redraws the photo. Straightening is not tested against the
+  bar: LightCraft's `crop.autoStraighten` changed 5 of 10 photos on 18 November, one crop over
+  10 %; check every crop by the rule below.
 - Adobe was retired on 17 November 2026; PhotoCraft 0.23.1 failed the masks test
   ([plan-and-build options](../options/plan-and-build.md)). Wherever PhotoCraft is installed,
   it never opens a PDF or a file from outside, only our own JPEG, PNG or TIFF: its PDF reader
