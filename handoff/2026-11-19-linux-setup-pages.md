@@ -7,8 +7,8 @@ map's "Keys and tokens" row still named the DPAPI store.
 **What changed.** Facts only; every rule and stop reads as before.
 - The map and `options/reach-outside.md`: keys are in the OS key store (GNOME Keyring).
 - `boat-setup.md`: the `boat` launcher, the pinned Linux binary with its `PROVENANCE.txt`, why
-  the installer is never run, the upload list (written again, below), the hook's escape in
-  the hook's own scope (a run that truly needs this PC).
+  the installer is never run, the upload list (written again, below), the hook's escape,
+  which points at the cases the hook's own message names.
 - `sign-ins-setup.md`: `pass-cli` 2.7.1 for Linux, the agent `claude-linux`, its token's end
   (about 19 February 2027), `install.sh`.
 - `cloud-browser-setup.md`, `google-setup.md`, `cloudflare.md`, `web-batch.md`,
@@ -26,8 +26,14 @@ repositories and every `data:` entry come back when first needed.
 
 **Verification.** `node scripts/check.mjs` passes (every page within the 4,000-byte limit);
 `npm test` passes. Each fact was read on the laptop: the three launchers in `~/.local/bin`,
-the two `PROVENANCE.txt` files, the Firecrawl pin's `package.json`. A real `firecrawl scrape`
-through the launcher answered with `zod` 4.6.7 installed and no `with-key:` line on stderr.
+the two `PROVENANCE.txt` files, the Firecrawl pin's `package.json`. With `zod` 4.6.7
+installed, real calls through the launcher answered (scrape, map, search, crawl, a question
+scrape; no `with-key:` line on stderr). A scrape with a schema returned no structured part:
+not proven either way.
+
+**The owner's answer.** 19 November 2026, question dialog, "Keep zod 4.6.7": the override on
+the Firecrawl pin crosses a major version of a dependency (3.25.76 to 4.6.7) to close a high
+advisory that no 3.x release fixes.
 
 **Outstanding.** Left as they are, and why:
 - The browser bullet of `sign-ins-setup.md` ("a token only this Windows user can read") and
@@ -44,4 +50,5 @@ through the launcher answered with `zod` 4.6.7 installed and no `with-key:` line
 
 **Dead ends.** None.
 
-**Evidence.** None beyond the pull request's checks: the facts are files on the laptop.
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-19-linux-scripts-and-pages/firecrawl-zod-override-proof.txt`;
+the other facts are files on the laptop.

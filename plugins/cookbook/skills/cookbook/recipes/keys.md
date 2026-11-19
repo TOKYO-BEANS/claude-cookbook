@@ -32,11 +32,11 @@ One store, and helpers that read it. Linux since 19 November 2026.
   lists, for `https://api.firecrawl.dev`. A setup command (`env`, `init`, `launch`, ...) or
   an unknown option before the command starts without it, with one line on stderr. Every
   start turns the CLI's self-update off. After an update of the pin, read its
-  `--help` against the launcher's lists. The pin (`firecrawl-cli` 1.29.0 in
-  `~/.local/share/firecrawl-cli`, `npm ci --ignore-scripts`) overrides `zod` to 4.6.7 since
-  19 November 2026: 1.29.0 resolves to 3.25.76 (GHSA-mrhx-c7xc-m3w5, high, fixed in 4.6.6).
-  A scrape through the launcher worked with it that day. Drop the override once the CLI
-  resolves to a fixed version.
+  `--help` against the launcher's lists. The pin (1.29.0 in
+  `~/.local/share/firecrawl-cli`) overrides `zod` to 4.6.7 (owner's yes, 19 November 2026):
+  it resolves to 3.25.76, which has a high advisory that no 3.x release fixes
+  (GHSA-mrhx-c7xc-m3w5). Scrape, map, search and crawl answered with it; a scrape with a
+  schema is not proven. Drop it once the CLI resolves to a fixed version.
 - **Where the helpers live.** This skill's `scripts/`: `with-key.mjs`, `key-header.mjs`,
   `agent-key.ps1`, and the launchers `firecrawl-secure.mjs` and `parallel-secure.mjs`.
   Tests: `scripts/with-key.test.mjs`, `scripts/key-header.test.mjs`. Callers use the copies
