@@ -3,7 +3,8 @@
 // is stopped once until the thread is settled.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { lstatSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -263,6 +264,32 @@ test("a broker of another question version answers 'version' and keeps serving i
     assert.equal((await askBroker("abc", { pipe, timeoutMs: 2000, version: "old" })).ok, true, "sessions of the old version still get answers");
   } finally {
     server.close();
+  }
+});
+
+test("a socket file left by a killed broker is taken over; a live broker and other files are not", { skip: process.platform === "win32" && "named pipes vanish with their process" }, async () => {
+  const pipe = join(tmpdir(), `oqs-${process.pid}.sock`);
+  // A broker killed hard leaves its socket file behind: nobody listens, but the path is taken.
+  const killed = spawnSync(process.execPath, ["-e", `require("node:net").createServer().listen(${JSON.stringify(pipe)}, () => process.kill(process.pid, "SIGKILL"))`]);
+  assert.equal(killed.signal, "SIGKILL");
+  assert.ok(lstatSync(pipe).isSocket(), "the stale socket file is there");
+  assert.match((await askBroker("x", { pipe, timeoutMs: 300 })).error, /no broker/);
+  const ask = async () => ({ ok: true, answers: { owner_item: 0, declares_done: 0 } });
+  const server = await startBroker({ pipe, ask, idleMs: 60_000 });
+  try {
+    assert.equal((await askBroker("abc", { pipe, timeoutMs: 2000 })).ok, true, "the new broker answers on the old path");
+    await assert.rejects(startBroker({ pipe, ask, idleMs: 60_000 }), { code: "EADDRINUSE" }, "a live broker is never displaced");
+    assert.equal((await askBroker("abc", { pipe, timeoutMs: 2000 })).ok, true, "and keeps answering");
+  } finally {
+    server.close();
+  }
+  const plain = join(tmpdir(), `oqf-${process.pid}.sock`);
+  writeFileSync(plain, "not a socket");
+  try {
+    await assert.rejects(startBroker({ pipe: plain, ask, idleMs: 60_000 }), { code: "EADDRINUSE" });
+    assert.equal(readFileSync(plain, "utf8"), "not a socket", "a file that is not a socket is left alone");
+  } finally {
+    unlinkSync(plain);
   }
 });
 
