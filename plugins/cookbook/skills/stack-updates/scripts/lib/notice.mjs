@@ -1,7 +1,7 @@
 // The session-start notice of the daily update check, and the record of which
 // reports the owner has been shown.
 //
-// The Windows task runs the check with nobody watching, so its report waits in the
+// The daily timer (a systemd user timer) runs the check with nobody watching, so its report waits in the
 // state folder. The Cookbook plugin's SessionStart hook prints `noticeText(...)`: one
 // short note built only from dates, counts and paths that this script wrote. It never
 // carries release text, a tool name or an error line, and it reads nothing under
@@ -117,15 +117,15 @@ export function noticeText({ stateDir, today, script }) {
     );
   }
 
-  // Only a PC where the Windows task has run at least once is told that it stopped or
-  // failed: both are measured from daily.json, which only the task's launcher writes.
+  // Only a PC where the daily timer has run at least once is told that it stopped or
+  // failed: both are measured from daily.json, which only the timer's launcher writes.
   const daily = readJson(join(stateDir, DAILY_FILE));
   if (isObject(daily) && isDay(daily.day) && daily.day <= today) {
     const last = runs.length ? runs[runs.length - 1].day : null;
     if (Number.isInteger(daily.exit) && daily.exit !== 0 && daysBetween(daily.day, today) <= NOTICE_DAYS && (!last || last <= daily.day)) {
       parts.push(`Daily update check: the scheduled run of ${daily.day} failed (exit ${daily.exit}). Its error lines are in ${join(stateDir, "daily.log")}. Tell the owner in an interactive session.`);
     } else if (daysBetween(daily.day, today) >= STALE_DAYS) {
-      parts.push(`Daily update check: the Windows task "stack-updates-daily" has not run since ${daily.day}. It may have stopped. Tell the owner in an interactive session.`);
+      parts.push(`Daily update check: the daily timer "stack-updates-daily" has not run since ${daily.day}. It may have stopped. Tell the owner in an interactive session.`);
     }
   }
   return parts.join("\n\n");

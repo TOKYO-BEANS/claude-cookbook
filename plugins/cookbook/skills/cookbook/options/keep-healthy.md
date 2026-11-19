@@ -19,8 +19,8 @@ day, not assumed.
   queue (ruled out by the owner); a fixed phrase list (0.667 on held-out closings, so only the
   fallback); a model prompt hook (a full model call at every turn's end); a daily agent sweep
   (a recurring run, which is the owner's call).
-- **Scheduled scripts: Windows Task Scheduler.** Checked: `stack-updates-daily` runs there
-  every day with no model. It reaches the DPAPI store and the pinned CLIs. Weighed: a
+- **Scheduled scripts: a systemd user timer.** Checked: `stack-updates-daily` runs there
+  every day with no model. It reaches the OS key store and the pinned CLIs. Weighed: a
   Cloudflare Cron Trigger (right for a hosted product's own periodic work, cannot reach this
   PC); a scheduled agent session (about 300,000 tokens on a quiet day for a job a script
   does).
@@ -28,8 +28,8 @@ day, not assumed.
   its own thread and worktree. The run shows up where the owner works, can be started by a
   webhook, and has the pull request tools. Weighed: Claude Desktop scheduled tasks (the
   fallback: a model per task, but results land in an app the owner no longer works in; three
-  tasks still run there); Claude Code cloud routines (no access to this PC's keys and CLIs);
-  a Windows task that starts `claude -p` (right for one bounded read inside a script, not for
+  tasks ran there on Windows); Claude Code cloud routines (no access to this PC's keys and CLIs);
+  a timer that starts `claude -p` (right for one bounded read inside a script, not for
   a run that opens pull requests).
 - **Updates: the `stack-updates` skill.** A script decides what is routine; a model only
   reads release notes, with no tools. Weighed: Dependabot and Renovate (repositories only,
