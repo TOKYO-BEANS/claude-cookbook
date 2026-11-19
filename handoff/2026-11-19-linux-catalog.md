@@ -21,6 +21,12 @@ Windows kept outside `~/.local/bin`.
 - The update report says "apt with your password, mise or uv" where it said winget and an
   elevated shell.
 
+**Low findings of the reviews of #157 and #159, fixed here.** `pinned-install.sh`: a retry
+after a failed first install is a first install again, so a failed copy cleans up and does
+not point at `--back` (with a test). `vetting-sandbox.md`: "the one exemption".
+`sign-ins-setup.md`: the Proton Pass sign-in command goes through the launcher, which keeps
+the update check off.
+
 **Left out, and why.**
 - No map row for the new tools: `SKILL.md` is 60 bytes under its limit. They are in the
   catalog and in the two recipe pages.

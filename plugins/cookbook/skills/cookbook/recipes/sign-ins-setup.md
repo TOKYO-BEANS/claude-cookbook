@@ -10,8 +10,8 @@
   `PROVENANCE.txt` there has the source, the checksum and how to update. Never run Proton's
   `install.sh` or `pass-cli update`. The agent is `claude-linux`; its token is the key-store key
   `proton-pass` and expires about 19 February 2027. To sign the CLI in
-  again: `PROTON_PASS_SESSION_DIR=<that session folder> node ~/.local/bin/with-key.mjs proton-pass
-  PROTON_PASS_PERSONAL_ACCESS_TOKEN <that folder>/pass-cli login`. A new token needs the owner:
+  again, through the launcher: `node ~/.local/bin/with-key.mjs proton-pass
+  PROTON_PASS_PERSONAL_ACCESS_TOKEN ~/.local/bin/pass-cli login`. A new token needs the owner:
   `pass-cli login` prints a Proton address the owner opens and confirms (being signed in to the
   Proton Pass web app is not enough), then `pass-cli agent create <name> --expiration 3m --vault
   Claude`, with the token saved straight into the key store and the owner's own session
