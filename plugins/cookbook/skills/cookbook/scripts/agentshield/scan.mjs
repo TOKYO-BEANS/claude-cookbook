@@ -168,6 +168,7 @@ export function scan({ rebaseline = false, env = process.env, afterCopy, olderNo
     const copied = buildCopy({ home: f.home, projectRoots: f.projectRoots, dest: copy });
     log.push(`copy: ${copied.files} files, ${copied.masked.length} with a value taken out, ${copied.skipped.length} skipped`);
     for (const skipped of copied.skipped) log.push(`  skipped ${skipped.file}: ${skipped.why}`);
+    if (copied.required.length) throw new Error(`a file the scan must read was left out of the copy: ${copied.required.map((r) => `${r.file} (${r.why})`).join(", ")}. Nothing was scanned`);
     afterCopy?.(copy);
     const problems = checkCopy(copy);
     if (problems.length) {

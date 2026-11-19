@@ -4,7 +4,7 @@
 // process, a file outside its folders) when a marker asks for it.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -222,6 +222,31 @@ test("the copy holds only the listed configuration files, and no credential in a
   assert.throws(() => buildCopy({ home, projectRoots, dest }), /already exists/);
 });
 
+test("the account file is read whatever its size, and one of the user's own files left out is named", (t) => {
+  const root = tmp(t);
+  const { home, projectRoots } = machine(root);
+  // The app keeps every project's usage in ~/.claude.json: it outgrows any ordinary limit.
+  const file = path.join(home, ".claude.json");
+  const grown = JSON.parse(readFileSync(file, "utf8"));
+  grown.projects["/work/big"] = { history: Array.from({ length: 14000 }, (_, i) => `a prompt of some length, number ${i}, kept by the app`) };
+  writeFileSync(file, JSON.stringify(grown));
+  assert.ok(statSync(file).size > 512 * 1024);
+  const first = buildCopy({ home, projectRoots, dest: path.join(root, "copy-1") });
+  assert.deepEqual(first.required, []);
+  assert.deepEqual(Object.keys(JSON.parse(readFileSync(path.join(root, "copy-1", "home", ".claude.json"), "utf8")).mcpServers), ["remote", "local"]);
+  assert.ok(existsSync(path.join(root, "copy-1", "home", ".claude", "mcp-configs", "local-1-site.json")));
+  assert.ok(!readFileSync(path.join(root, "copy-1", "home", ".claude.json"), "utf8").includes("a prompt of some length"));
+
+  // Left out, each for its own reason: without them the scan would see no MCP server and
+  // no permission, and a compare would call their findings resolved.
+  writeFileSync(file, "{ cut off");
+  writeFileSync(path.join(home, ".claude", "settings.json"), JSON.stringify({ note: "x".repeat(600 * 1024) }));
+  const second = buildCopy({ home, projectRoots, dest: path.join(root, "copy-2") });
+  assert.deepEqual(second.required, [{ file: "home/.claude/settings.json", why: "larger than 512 KB" }, { file: "home/.claude.json", why: "not valid JSON" }]);
+  // A plugin's or a project's file that is left out is counted, not required.
+  assert.ok(second.skipped.length > second.required.length);
+});
+
 test("the second look finds what the copy must not hold", { skip }, (t) => {
   const root = tmp(t);
   const { home, projectRoots } = machine(root);
@@ -287,7 +312,7 @@ test("compare: new, resolved, a finding counted twice, and the changed-evidence 
 });
 
 test("new-findings.md starts with the three lines a program reads, in every mode", () => {
-  const base = { at: "2026-11-19T20:00:00Z", tool: "ecc-agentshield@1.6.0", score: { numericScore: 40, grade: "F" }, copy: { files: 3, masked: [{ file: "a.json", counts: { jwt: 2 } }] }, filesScanned: 3, blockedCalls: 0, logs: "/logs" };
+  const base = { at: "2026-11-19T20:00:00Z", tool: "ecc-agentshield@1.6.0", score: { numericScore: 40, grade: "F" }, copy: { files: 3, masked: [{ file: "a.json", counts: { jwt: 2 } }], skipped: [{ file: "plugins/market/tool/hooks/tool.bin", why: "not a text file" }] }, filesScanned: 3, blockedCalls: 0, logs: "/logs" };
   const finding = { id: "x-1", severity: "high", category: "hooks", title: "A hook", file: "hooks.json", line: 3, description: "what", evidence: "curl" };
   const head = (text) => text.split("\n").slice(0, 3);
   assert.deepEqual(head(renderFindings({ ...base, mode: "compare", findings: [finding], added: [{ ...finding, hint: "x-0" }], resolved: [], baseline: { savedAt: "2026-11-12T20:00:00Z", score: { numericScore: 41 } } })), ["NEW_FINDINGS: 1", "RESOLVED_FINDINGS: 0", "MODE: compare"]);
@@ -296,6 +321,8 @@ test("new-findings.md starts with the three lines a program reads, in every mode
   assert.match(none, /## Critical and high findings \(1\)/);
   assert.doesNotMatch(none, /Minor/);
   assert.match(none, /a\.json: jwt x2/);
+  assert.match(none, /^SKIPPED: 1$/m);
+  assert.match(none, /## Files left out of the copy\n\n[^\n]+\n\n- plugins\/market\/tool\/hooks\/tool\.bin: not a text file\n/);
   assert.deepEqual(head(renderFindings({ ...base, mode: "baseline-created", findings: [finding] })), ["NEW_FINDINGS: 0", "RESOLVED_FINDINGS: 0", "MODE: baseline-created"]);
   const failed = renderFindings({ mode: "failed", at: base.at, reason: "the pin differs", logs: "/logs" });
   assert.deepEqual(head(failed), ["NEW_FINDINGS: unknown", "RESOLVED_FINDINGS: unknown", "MODE: failed"]);
@@ -406,6 +433,8 @@ test("a run: no baseline, the owner's baseline, then only what is new", { skip }
   assert.deepEqual(first.findings.map((f) => f.title), ["A permissive rule", "A note"], "the scanner saw the session's environment or home folder");
   assert.equal(s.head().NEW_FINDINGS, "unknown");
   assert.equal(s.head().BLOCKED_CALLS, "0");
+  assert.equal(s.head().SKIPPED, String(first.copy.skipped.length));
+  assert.ok(first.copy.skipped.length >= 3, "the stand-in machine has files that are left out");
   assert.equal(s.head().PREVIOUS_RUN, "none");
   assert.ok(!existsSync(path.join(s.env.AGENTSHIELD_DIR, "state", "baseline.json")), "a run without --rebaseline wrote a baseline");
   assert.ok(existsSync(path.join(s.env.AGENTSHIELD_DIR, "latest-report.json")));
@@ -495,6 +524,16 @@ test("scan.sh stops a run that hangs, and removes the copy the run could not rem
   assert.deepEqual(readdirSync(path.join(s.env.AGENTSHIELD_DIR, "work")), ["out"]);
   assert.match(s.head().REASON, /did not finish/);
   assert.equal(s.head().MODE, "failed");
+});
+
+test("a run does not start when one of the user's own files is left out of the copy", { skip }, (t) => {
+  const s = setup(t);
+  writePin(s.folders);
+  writeFileSync(path.join(s.home, ".claude.json"), "{ cut off");
+  assert.equal(go(s).mode, "failed");
+  assert.match(s.head().REASON, /a file the scan must read was left out of the copy: home\/\.claude\.json \(not valid JSON\)\. Nothing was scanned/);
+  assert.ok(!existsSync(path.join(s.env.AGENTSHIELD_DIR, "latest-report.json")));
+  assert.deepEqual(readdirSync(path.join(s.env.AGENTSHIELD_DIR, "work")), ["out"]);
 });
 
 test("the scanner cannot reach the network, start a program, or read and write outside its folders", { skip }, (t) => {

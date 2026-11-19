@@ -13,7 +13,8 @@
   under Node's permission model (Node 25 or newer: no network, no child process, one output
   folder), with `net-guard.mjs` counting the attempts it stops; deletes the copy; and writes
   `new-findings.md`, which starts with `NEW_FINDINGS`, `RESOLVED_FINDINGS` and `MODE`
-  (`failed` from a run's start until it ends).
+  (`failed` from a run's start until it ends). One of the user's own four files left out
+  of the copy fails the run; any other file left out is counted in `SKIPPED`.
 - **No list of credential shapes is complete.** The copy is best effort; what the scanner
   quotes is masked again, more strictly, before anything is written (`maskOutput`).
 - **AgentShield is a pinned copy** in `~/.local/share/agentshield`: `ecc-agentshield@1.6.0`

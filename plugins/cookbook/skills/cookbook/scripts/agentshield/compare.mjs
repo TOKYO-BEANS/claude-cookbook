@@ -70,6 +70,7 @@ export function renderFindings(run) {
     `TOTALS: ${totalsLine(t)}`,
     `PREVIOUS_RUN: ${run.previous ? `${text(run.previous.at, 40)}: ${totalsLine(run.previous.totals)}, score ${run.previous.score}/100` : "none"}`,
     `FILES: ${run.copy.files} copied, ${run.filesScanned ?? "?"} read by the scanner; ${run.copy.masked.length} with a masked or redacted value`,
+    `SKIPPED: ${run.copy.skipped?.length ?? 0}`,
     `BLOCKED_CALLS: ${run.blockedCalls}`,
     "",
   ];
@@ -82,6 +83,12 @@ export function renderFindings(run) {
   } else {
     lines.push(`## New findings (${run.added.length})`, "", ...(run.added.length ? run.added.map((f, i) => one(f, i + 1)) : ["None."]), "");
     lines.push(`## Resolved findings (${run.resolved.length})`, "", ...(run.resolved.length ? run.resolved.map((f) => `- [${f.severity}] ${text(f.title, 200)} (${text(f.file, 300) || "no file"})`) : ["None."]), "");
+  }
+  if (run.copy.skipped?.length) {
+    lines.push("## Files left out of the copy", "", "The scanner did not read these: a finding in one of them cannot show up, new or resolved.", "");
+    for (const skipped of run.copy.skipped.slice(0, 60)) lines.push(`- ${text(skipped.file, 300)}: ${text(skipped.why, 80)}`);
+    if (run.copy.skipped.length > 60) lines.push(`- and ${run.copy.skipped.length - 60} more files`);
+    lines.push("");
   }
   if (run.copy.masked.length) {
     lines.push("## Values the sanitizer took out", "", "Counts only, by file. A file that was not here in the last run is worth a look.", "");
