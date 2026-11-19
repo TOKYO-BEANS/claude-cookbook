@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { delimiter, dirname, join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { HEADER_KEYS, main as header } from "../plugins/cookbook/skills/cookbook/scripts/key-header.mjs";
@@ -25,6 +25,15 @@ function home(files = {}) {
   return dir;
 }
 const noPowerShell = () => { throw new Error("PowerShell must not be started"); };
+// On Linux the launcher reads the desktop's keyring through secret-tool on PATH. A process
+// started by these tests finds this stand-in first instead: it answers "no such item" (exit 1),
+// so no test reaches the real keyring and CI without secret-tool behaves the same.
+function noKeyring(dir, env) {
+  const bin = join(dir, "test-bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "secret-tool"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  return { ...env, PATH: `${bin}${delimiter}${env.PATH ?? ""}` };
+}
 const noFfi = async () => { throw Object.assign(new Error("No such built-in module: node:ffi"), { code: "ERR_UNKNOWN_BUILTIN_MODULE" }); };
 
 // A DPAPI blob in the store's format, made without PowerShell.
@@ -128,7 +137,7 @@ function firecrawlHome(files) {
   return dir;
 }
 function firecrawl(dir, extra, args = ["scrape", "https://example.test"]) {
-  const env = { ...process.env, USERPROFILE: dir, HOME: dir, ...extra };
+  const env = noKeyring(dir, { ...process.env, USERPROFILE: dir, HOME: dir, ...extra });
   for (const name of Object.keys(env)) if (/^firecrawl_/i.test(name) && !(name in extra)) delete env[name];
   return spawnSync(process.execPath, [join(scripts, "firecrawl-secure.mjs"), ...args], { env, encoding: "utf8", timeout: 60000 });
 }
@@ -229,7 +238,7 @@ test("Windows: the firecrawl launcher hands the stored key to the hosted API onl
 test("parallel launcher: reads the key named parallel and starts the pinned CLI, which is absent here", () => {
   const dir = home();
   try {
-    const got = spawnSync(process.execPath, [join(scripts, "parallel-secure.mjs"), "search", "x"], { env: { ...process.env, USERPROFILE: dir, HOME: dir }, encoding: "utf8", timeout: 60000 });
+    const got = spawnSync(process.execPath, [join(scripts, "parallel-secure.mjs"), "search", "x"], { env: noKeyring(dir, { ...process.env, USERPROFILE: dir, HOME: dir }), encoding: "utf8", timeout: 60000 });
     assert.equal(got.status, 127, got.stderr);
     assert.match(got.stderr, /with-key: could not read key "parallel" \(no key is saved as "parallel"\); continuing without PARALLEL_API_KEY\n/);
     assert.match(got.stderr, /with-key: could not start .*parallel-cli\.exe \(ENOENT\)\n$/);

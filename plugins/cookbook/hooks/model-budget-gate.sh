@@ -1,6 +1,6 @@
-# Gate of the Cookbook plugin's PostToolUse model-budget note. hooks.json sources this file (`.`) in
-# the hook's own `bash -c`, so it starts no process of its own: until Node starts it uses bash
-# builtins only. It starts hooks/model-budget-note.mjs at most once per five minutes per
+# Gate of the Cookbook plugin's PostToolUse model-budget note. hooks.json runs it with `bash`
+# (on Linux a hook command runs in /bin/sh, which cannot run this file; on Windows it was sourced
+# in Git Bash). Until Node starts it uses bash builtins only. It starts hooks/model-budget-note.mjs at most once per five minutes per
 # session, and never for a subagent's tool call (the note ignores those anyway). A long turn still
 # hears a changed advice within minutes: the reading it rests on changes at most once per ten
 # minutes. Any doubt (no session id found, no state folder yet, an unreadable gate) starts Node, as

@@ -1,6 +1,8 @@
-// Run a program with one API key from Windows user-scoped encryption (the DPAPI store that
-// agent-key.ps1 keeps in ~/.secrets) placed in its environment only. Stdio is inherited, so
-// this works as an MCP stdio server launcher.
+// Run a program with one API key from the key store placed in its environment only. On Linux
+// the store is the desktop's Secret Service (GNOME Keyring), read with `secret-tool` (package
+// libsecret-tools): the item with the attributes service=claude-keys and name=<key name>. On
+// Windows it is user-scoped encryption (the DPAPI store that agent-key.ps1 keeps in ~/.secrets).
+// Stdio is inherited, so this works as an MCP stdio server launcher.
 //   node with-key.mjs <key-name> <ENV_VAR> <program> [args...]
 // It prints no key: the key goes to the program's environment and nowhere else. (The one
 // helper that prints a key, for an MCP client's headers helper, is key-header.mjs.)
@@ -30,6 +32,11 @@ import { fileURLToPath } from "node:url";
 // A read through PowerShell takes about a second. One that has not answered after this
 // long is waiting on a script scan: it is ended, and the launcher says so.
 export const POWERSHELL_TIMEOUT_MS = 15000;
+
+// Linux: the Secret Service attribute every key item carries, and how long a read may take
+// (an unlocked keyring answers in milliseconds; a locked one waits on a prompt).
+export const SECRET_SERVICE = "claude-keys";
+export const SECRET_TOOL_TIMEOUT_MS = 15000;
 
 const USAGE = "usage: node with-key.mjs <key-name> <ENV_VAR> <program> [args...]\n";
 
@@ -85,6 +92,27 @@ function unprotect(ffi, hex) {
   }
 }
 
+// Runs secret-tool (found on PATH) and returns what it printed. Its stderr is dropped: a
+// failure is told by the exit status alone.
+export function runSecretTool(args, timeoutMs, { env = process.env } = {}) {
+  return execFileSync("secret-tool", args, { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "ignore"], env });
+}
+
+// Linux: one key from the Secret Service. secret-tool ends with 1 and prints nothing when no
+// item matches.
+function readSecretService(name, run) {
+  let out;
+  try { out = run(["lookup", "service", SECRET_SERVICE, "name", name], SECRET_TOOL_TIMEOUT_MS); } catch (e) {
+    if (e?.code === "ENOENT") throw new KeyError("secret-tool is not installed (package libsecret-tools)");
+    if (e?.code === "ETIMEDOUT") throw new KeyError(`the key store did not answer in ${SECRET_TOOL_TIMEOUT_MS / 1000} seconds (a locked keyring waits on a prompt)`);
+    if (e?.status === 1) throw new KeyError(`no key is saved as "${name}"`);
+    throw new KeyError(`the key store could not be read (${String(e?.code ?? (typeof e?.status === "number" ? `exit ${e.status}` : "error"))})`);
+  }
+  const key = String(out).replace(/\r?\n$/, "");
+  if (!key) throw new KeyError(`no key is saved as "${name}"`);
+  return { key, route: "secret-tool" };
+}
+
 // What may be said about a failure: our own message, or else only the error's code or name.
 export const reason = (e) => (e instanceof KeyError ? e.message : String(e?.code ?? e?.name ?? "error"));
 
@@ -93,6 +121,7 @@ export const reason = (e) => (e instanceof KeyError ? e.message : String(e?.code
 export async function readKey(name, deps = {}) {
   const { home = homedir(), platform = process.platform, arch = process.arch, loadFfi: load = loadFfi, runPowerShell: run = runPowerShell } = deps;
   const path = keyPath(name, home);
+  if (platform === "linux") return readSecretService(name, deps.runSecretTool ?? runSecretTool);
   let stat;
   try { stat = lstatSync(path); } catch (e) {
     throw new KeyError(e?.code === "ENOENT" ? `no key is saved as "${name}"` : `the credential file cannot be opened (${reason(e)})`);

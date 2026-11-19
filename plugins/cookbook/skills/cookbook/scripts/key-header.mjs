@@ -1,4 +1,4 @@
-// Print one key from the DPAPI store as an HTTP header, for an MCP client's headers helper
+// Print one key from the key store (with-key.mjs: GNOME Keyring on Linux, DPAPI on Windows) as an HTTP header, for an MCP client's headers helper
 // (Claude Code's `headersHelper`, Codex's `http_headers_helper`):
 //   node key-header.mjs <key-name>     prints  {"Authorization":"Bearer <key>"}
 //

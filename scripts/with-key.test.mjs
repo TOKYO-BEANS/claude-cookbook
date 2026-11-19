@@ -4,10 +4,10 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { delimiter, dirname, join, relative } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { POWERSHELL_TIMEOUT_MS, exitCode, keyPath, loadFfi, main, readKey, runPowerShell } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
+import { POWERSHELL_TIMEOUT_MS, SECRET_SERVICE, SECRET_TOOL_TIMEOUT_MS, exitCode, keyPath, loadFfi, main, readKey, runPowerShell } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scripts = join(here, "..", "plugins", "cookbook", "skills", "cookbook", "scripts");
@@ -27,6 +27,15 @@ function home(files = {}) {
   return dir;
 }
 const noPowerShell = () => { throw new Error("PowerShell must not be started"); };
+// On Linux the launcher reads the desktop's keyring through secret-tool on PATH. A process
+// started by these tests finds this stand-in first instead: it answers "no such item" (exit 1),
+// so no test reaches the real keyring and CI without secret-tool behaves the same.
+function noKeyring(dir, env) {
+  const bin = join(dir, "test-bin");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, "secret-tool"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+  return { ...env, PATH: `${bin}${delimiter}${env.PATH ?? ""}` };
+}
 const noFfi = async () => { throw Object.assign(new Error("No such built-in module: node:ffi"), { code: "ERR_UNKNOWN_BUILTIN_MODULE" }); };
 const headers = (key) => JSON.stringify({ Authorization: `Bearer ${key}` });
 const timedOut = () => { throw Object.assign(new Error("spawnSync powershell.exe ETIMEDOUT"), { code: "ETIMEDOUT" }); };
@@ -53,7 +62,7 @@ test("a key name is lower-case letters, digits and hyphens, as in the store", ()
 test("a key that is not saved is said at once, and no PowerShell starts", async () => {
   const dir = home();
   try {
-    await assert.rejects(readKey("absent", { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell }), /no key is saved as "absent"/);
+    await assert.rejects(readKey("absent", { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: noPowerShell }), /no key is saved as "absent"/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -61,7 +70,7 @@ test("a credential file that is a link is refused", async (t) => {
   const dir = home({ "real.dpapi": "00" });
   try {
     try { symlinkSync(join(dir, ".secrets", "real.dpapi"), join(dir, ".secrets", "linked.dpapi")); } catch { return t.skip("this user cannot make a link"); }
-    await assert.rejects(readKey("linked", { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell }), /must not be a link/);
+    await assert.rejects(readKey("linked", { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: noPowerShell }), /must not be a link/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -79,11 +88,11 @@ test("without node:ffi the key comes from PowerShell, with a time limit", async 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("off 64-bit Windows the direct route is not tried", async () => {
+test("off 64-bit Windows (and off Linux) the direct route is not tried", async () => {
   const dir = home({ "k.dpapi": "00" });
   try {
     const loud = async () => { throw new Error("node:ffi must not be loaded"); };
-    for (const where of [{ platform: "linux", arch: "x64" }, { platform: "win32", arch: "ia32" }]) {
+    for (const where of [{ platform: "darwin", arch: "x64" }, { platform: "win32", arch: "ia32" }]) {
       const got = await readKey("k", { home: dir, ...where, loadFfi: loud, runPowerShell: () => headers("v") });
       assert.equal(got.route, "powershell");
     }
@@ -120,7 +129,7 @@ test("the launcher says so and starts the program without the variable when the 
   const dir = home();
   const lines = []; const started = [];
   try {
-    const code = await main(["absent", "SOME_KEY", "prog", "a"], { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell, env: { PATH: "p" },
+    const code = await main(["absent", "SOME_KEY", "prog", "a"], { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: noPowerShell, env: { PATH: "p" },
       say: (l) => lines.push(l), start: (program, args, env) => { started.push([program, args, env]); return 0; } });
     assert.equal(code, 0);
     assert.deepEqual(started, [["prog", ["a"], { PATH: "p" }]]);
@@ -142,7 +151,7 @@ test("a value the caller already had under the variable's name is not passed on 
   const dir = home();
   const started = [];
   try {
-    await main(["absent", "SOME_KEY", "prog"], { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell, env: { PATH: "p", SOME_KEY: "stale" },
+    await main(["absent", "SOME_KEY", "prog"], { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: noPowerShell, env: { PATH: "p", SOME_KEY: "stale" },
       say: () => {}, start: (program, args, env) => { started.push(env); return 0; } });
     assert.deepEqual(started, [{ PATH: "p" }]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -179,7 +188,7 @@ test("the launcher as a process ends with 143 when SIGTERM ends its child", { sk
   const dir = home();
   try {
     const run = spawnSync(process.execPath, [launcher, "absent", "SYN_KEY", process.execPath, "-e", "process.kill(process.pid, 'SIGTERM'); setTimeout(() => {}, 5000)"],
-      { env: { ...process.env, HOME: dir, USERPROFILE: dir }, encoding: "utf8", timeout: 60000 });
+      { env: noKeyring(dir, { ...process.env, HOME: dir, USERPROFILE: dir }), encoding: "utf8", timeout: 60000 });
     assert.equal(run.status, 143, run.stderr);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -203,7 +212,7 @@ test("loading node:ffi leaves the process's warning handling as it was", async (
 test("a program that cannot start ends the launcher with code 127 and one line, no stack trace", () => {
   const dir = home();
   try {
-    const run = spawnSync(process.execPath, [launcher, "absent", "SYN_KEY", "no-such-program-for-with-key-test"], { env: { ...process.env, USERPROFILE: dir, HOME: dir }, encoding: "utf8", timeout: 60000 });
+    const run = spawnSync(process.execPath, [launcher, "absent", "SYN_KEY", "no-such-program-for-with-key-test"], { env: noKeyring(dir, { ...process.env, USERPROFILE: dir, HOME: dir }), encoding: "utf8", timeout: 60000 });
     assert.equal(run.status, 127, run.stderr);
     assert.match(run.stderr, /with-key: could not start no-such-program-for-with-key-test \(ENOENT\)\n$/);
     assert.doesNotMatch(run.stderr, /^\s+at /m);
@@ -291,5 +300,55 @@ test("Windows: a key saved by agent-key.ps1 reads the same by both routes", { sk
     assert.equal(run.status, 7, run.stderr);
     const out = runPowerShell([...ps, "-Mode", "headers", "-Name", "synthetic"], STORE_RUN_LIMIT_MS, { env });
     assert.equal(out, headers(value));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Linux: the key comes from the Secret Service by its name, with no PowerShell and no node:ffi", async () => {
+  const seen = [];
+  const loud = async () => { throw new Error("node:ffi must not be loaded"); };
+  const got = await readKey("synthetic", { home: "/nonexistent-home", platform: "linux", arch: "x64", loadFfi: loud, runPowerShell: noPowerShell,
+    runSecretTool: (args, ms) => { seen.push([args, ms]); return "synthetic-linux-key\n"; } });
+  assert.deepEqual(got, { key: "synthetic-linux-key", route: "secret-tool" });
+  assert.deepEqual(seen, [[["lookup", "service", SECRET_SERVICE, "name", "synthetic"], SECRET_TOOL_TIMEOUT_MS]]);
+  assert.equal(SECRET_SERVICE, "claude-keys");
+  assert.ok(SECRET_TOOL_TIMEOUT_MS <= 20000, "a locked keyring fails fast");
+});
+
+test("Linux: the name rule holds before secret-tool starts", async () => {
+  const never = () => { throw new Error("secret-tool must not be started"); };
+  for (const bad of ["", "Boat", "a b", "--all", "x".repeat(42)]) await assert.rejects(readKey(bad, { platform: "linux", runSecretTool: never }), /lower-case letters, digits and hyphens/);
+});
+
+test("Linux: each failure is named, and none repeats what secret-tool printed", async () => {
+  const fail = (extra) => () => { throw Object.assign(new Error("Synthetic-Secret-Value"), extra); };
+  for (const [run, want] of [
+    [fail({ status: 1 }), /^no key is saved as "k"$/],
+    [() => "", /^no key is saved as "k"$/],
+    [fail({ code: "ENOENT" }), /secret-tool is not installed \(package libsecret-tools\)/],
+    [fail({ code: "ETIMEDOUT" }), /did not answer in \d+ seconds/],
+    [fail({ status: 2 }), /could not be read \(exit 2\)/],
+  ]) {
+    const e = await readKey("k", { platform: "linux", runSecretTool: run }).then(() => null, (x) => x);
+    assert.ok(e, "the read fails");
+    assert.match(e.message, want);
+    assert.doesNotMatch(e.message, /synthetic-secret/i);
+  }
+});
+
+test("Linux: the launcher as a process, with a stand-in keyring, hands the key to its program only", { skip: process.platform !== "linux" && "needs Linux" }, () => {
+  const dir = home();
+  try {
+    const bin = join(dir, "test-bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "secret-tool"), '#!/bin/sh\n[ "$*" = "lookup service claude-keys name synthetic" ] && printf %s synthetic-linux-value && exit 0\nexit 1\n', { mode: 0o755 });
+    const env = { ...process.env, HOME: dir, PATH: `${bin}${delimiter}${process.env.PATH}` };
+    const check = "process.exit(process.env.SYN_KEY === 'synthetic-linux-value' ? 5 : 9)";
+    const run = spawnSync(process.execPath, [launcher, "synthetic", "SYN_KEY", process.execPath, "-e", check], { env, encoding: "utf8", timeout: 60000 });
+    assert.equal(run.status, 5, run.stderr);
+    assert.equal(run.stdout, "");
+    assert.doesNotMatch(run.stderr, /synthetic-linux-value/);
+    const none = spawnSync(process.execPath, [launcher, "absent", "SYN_KEY", process.execPath, "-e", "process.exit(process.env.SYN_KEY === undefined ? 5 : 9)"], { env, encoding: "utf8", timeout: 60000 });
+    assert.equal(none.status, 5);
+    assert.match(none.stderr, /could not read key "absent" \(no key is saved as "absent"\)/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

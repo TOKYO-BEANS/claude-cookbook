@@ -777,7 +777,7 @@ test("hooks.json runs the note at session start and on a prompt, and after a too
       // Sourced in the hook's own bash, so the gate starts no process; no matcher, so every tool call reaches it.
       const group = hooks[event].find((g) => g.hooks.some((h) => h.command.includes("model-budget-gate.sh")));
       assert.equal(group.matcher, undefined);
-      assert.equal(group.hooks[0].command, '. "${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-gate.sh" "${CLAUDE_PLUGIN_ROOT}"');
+      assert.equal(group.hooks[0].command, 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-gate.sh" "${CLAUDE_PLUGIN_ROOT}"');
       assert.ok(!commands.some((c) => c.includes("model-budget-note.mjs")), "no ungated note after a tool");
     } else assert.ok(commands.some((c) => c.includes("${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-note.mjs")), event);
     for (const g of hooks[event]) for (const h of g.hooks) assert.ok(h.timeout <= 10, `${event} timeout`);
