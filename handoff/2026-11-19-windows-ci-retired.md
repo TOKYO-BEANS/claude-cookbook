@@ -36,11 +36,11 @@ organisation configuration accepted the change.
 in `.github/workflows/ci.yml`. Whether those go is the owner's call, not asked here.
 
 **Outstanding.** The standard's `windows-ci` item reads `blocked`
-(`owner-approval-required`) while the repository holds Windows files, and #176 keeps them on
-purpose (`agent-key.ps1`, three stack-updates fixtures). The standard has to record the
-owner's answer so the item reads `not-needed` and is not put to the owner again. Owner:
-Claude, the Stack-Atlas chat "Stack Atlas: handoff for claude-cookbook's retired Windows CI
-job". Clears when the item reads `not-needed`.
+(`owner-approval-required`) while the repository holds Windows files (`agent-key.ps1`,
+three stack-updates fixtures). #178 removes them; it merges after this pull request, since
+it fails the Windows job by design. Owner: Claude, the chat "Cookbook: Linux rewrite of
+Windows-specific pages and scripts". Clears when the item reads `not-needed`; the Stack
+Atlas handoff records the owner's answer, so the item is not put to the owner again.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-19-retire-windows-ci/`: the
 ruleset and the CodeQL default setup before and after, the merge logs.
