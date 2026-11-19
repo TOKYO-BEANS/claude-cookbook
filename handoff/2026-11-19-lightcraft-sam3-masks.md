@@ -30,7 +30,8 @@ is a full vetting).
   November ("Accept, own photos only"): zip 7.4.0 (through candle-core, the model loader) and
   rustls-webpki 0.102.8 (the downloader). No advisory newer than that answer. Today's scan
   rates one of zip's ids critical (GHSA-m665-v7pm-7grj, 9.4), where the record of 18
-  November says "two high": asked of the owner before the merge.
+  November says "two high". Asked in a question dialog (this chat, 19 November 2026), the
+  owner answered "Yes, it stands": own photos only, as before.
 - boat sandbox run under the probe: quiet (no DNS name, no connection, no file outside the
   folder, no process left); $0.0002.
 - Installed unpacked at `~/.local/share/lightcraft` (no root). The SAM 3 weights
