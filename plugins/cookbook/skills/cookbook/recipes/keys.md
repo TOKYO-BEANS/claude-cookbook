@@ -21,7 +21,8 @@ One store, and helpers that read it. Linux since 19 November 2026.
   its source lists (now `firecrawl`); a new name is a pull request. A script that needs a
   key in its own process imports `readKey` from `with-key.mjs`.
 - **How it reads:** on Linux `secret-tool lookup` (package `libsecret-tools`), ended after
-  15 seconds (a locked keyring waits on a prompt). On Windows the old DPAPI store
+  15 seconds (a locked keyring waits on a prompt); with no D-Bus address
+  via `/run/user/<uid>/bus`. On Windows the old DPAPI store
   (`~/.secrets`, `agent-key.ps1`) is still read, for the Windows CI job's tests.
 - **A key that cannot be read does not stop the program.** `with-key.mjs` says why on
   stderr (`with-key: could not read key "x" (...)`) and starts it without the variable, on

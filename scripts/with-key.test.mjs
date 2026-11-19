@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { delimiter, dirname, join, relative } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { POWERSHELL_TIMEOUT_MS, SECRET_SERVICE, SECRET_TOOL_TIMEOUT_MS, exitCode, keyPath, loadFfi, main, readKey, runPowerShell } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
+import { POWERSHELL_TIMEOUT_MS, SECRET_SERVICE, SECRET_TOOL_TIMEOUT_MS, exitCode, keyPath, loadFfi, main, readKey, runPowerShell, sessionBusEnv } from "../plugins/cookbook/skills/cookbook/scripts/with-key.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const scripts = join(here, "..", "plugins", "cookbook", "skills", "cookbook", "scripts");
@@ -335,6 +335,33 @@ test("Linux: each failure is named, and none repeats what secret-tool printed", 
     assert.match(e.message, want);
     assert.doesNotMatch(e.message, /synthetic-secret/i);
   }
+});
+
+test("Linux: with no D-Bus address, the user's own session bus socket is used; anything else is left alone", () => {
+  const socket = (uid) => () => ({ isSocket: () => true, uid });
+  const seen = [];
+  const stat = (path) => { seen.push(path); return { isSocket: () => true, uid: 1000 }; };
+  assert.deepEqual(sessionBusEnv({ PATH: "p" }, { uid: 1000, stat }), { PATH: "p", DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/1000/bus" });
+  assert.deepEqual(seen, ["/run/user/1000/bus"]);
+  const set = { PATH: "p", DBUS_SESSION_BUS_ADDRESS: "unix:path=/elsewhere" };
+  assert.equal(sessionBusEnv(set, { uid: 1000, stat: socket(1000) }), set, "a set address is kept");
+  const env = { PATH: "p" };
+  assert.equal(sessionBusEnv(env, { uid: 1000, stat: () => { throw Object.assign(new Error("gone"), { code: "ENOENT" }); } }), env, "no socket");
+  assert.equal(sessionBusEnv(env, { uid: 1000, stat: () => ({ isSocket: () => false, uid: 1000 }) }), env, "not a socket");
+  assert.equal(sessionBusEnv(env, { uid: 1000, stat: socket(0) }), env, "another user's socket");
+  assert.equal(sessionBusEnv(env, { uid: null, stat: socket(1000) }), env, "no user id (not POSIX)");
+});
+
+test("Linux: secret-tool is started with the session bus address when the caller's environment has none", async () => {
+  const seen = [];
+  const saved = process.env.DBUS_SESSION_BUS_ADDRESS;
+  delete process.env.DBUS_SESSION_BUS_ADDRESS;
+  try {
+    await readKey("synthetic", { platform: "linux", sessionBus: { uid: 4242, stat: () => ({ isSocket: () => true, uid: 4242 }) },
+      runSecretTool: (_args, _ms, options) => { seen.push(options.env.DBUS_SESSION_BUS_ADDRESS); return "synthetic-linux-key"; } });
+  } finally { if (saved !== undefined) process.env.DBUS_SESSION_BUS_ADDRESS = saved; }
+  assert.deepEqual(seen, ["unix:path=/run/user/4242/bus"]);
+  assert.equal(process.env.DBUS_SESSION_BUS_ADDRESS, saved, "the process's own environment is not changed");
 });
 
 test("Linux: the launcher as a process, with a stand-in keyring, hands the key to its program only", { skip: process.platform !== "linux" && "needs Linux" }, () => {

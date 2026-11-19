@@ -98,12 +98,26 @@ export function runSecretTool(args, timeoutMs, { env = process.env } = {}) {
   return execFileSync("secret-tool", args, { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"], env });
 }
 
+// secret-tool finds the keyring through DBUS_SESSION_BUS_ADDRESS. A client that starts its
+// helper with a cleared environment (Codex's http_headers_helper does: PATH, HOME and a few
+// more, no D-Bus) leaves it unset, and every read fails. The user's session bus has a fixed
+// place under systemd, /run/user/<uid>/bus: when the variable is unset and that path is a
+// socket owned by this user, secret-tool is pointed at it. A set variable is left as it is.
+export function sessionBusEnv(env, { uid = process.getuid?.(), stat = lstatSync } = {}) {
+  if (env.DBUS_SESSION_BUS_ADDRESS || !Number.isInteger(uid)) return env;
+  const path = `/run/user/${uid}/bus`;
+  let found;
+  try { found = stat(path); } catch { return env; }
+  if (!found.isSocket() || found.uid !== uid) return env;
+  return { ...env, DBUS_SESSION_BUS_ADDRESS: `unix:path=${path}` };
+}
+
 // Linux: one key from the Secret Service. secret-tool ends with 1 and prints nothing when no
 // item matches; it also ends with 1 when it cannot reach a keyring (no D-Bus session, no
 // Secret Service, a refused unlock), and then says so on stderr.
-function readSecretService(name, run) {
+function readSecretService(name, run, env) {
   let out;
-  try { out = run(["lookup", "service", SECRET_SERVICE, "name", name], SECRET_TOOL_TIMEOUT_MS); } catch (e) {
+  try { out = run(["lookup", "service", SECRET_SERVICE, "name", name], SECRET_TOOL_TIMEOUT_MS, { env }); } catch (e) {
     if (e?.code === "ENOENT") throw new KeyError("secret-tool is not installed (package libsecret-tools)");
     if (e?.code === "ETIMEDOUT") throw new KeyError(`the key store did not answer in ${SECRET_TOOL_TIMEOUT_MS / 1000} seconds (a locked keyring waits on a prompt)`);
     if (e?.status === 1 && !String(e?.stderr ?? "").trim()) throw new KeyError(`no key is saved as "${name}"`);
@@ -123,7 +137,7 @@ export const reason = (e) => (e instanceof KeyError ? e.message : String(e?.code
 export async function readKey(name, deps = {}) {
   const { home = homedir(), platform = process.platform, arch = process.arch, loadFfi: load = loadFfi, runPowerShell: run = runPowerShell } = deps;
   const path = keyPath(name, home);
-  if (platform === "linux") return readSecretService(name, deps.runSecretTool ?? runSecretTool);
+  if (platform === "linux") return readSecretService(name, deps.runSecretTool ?? runSecretTool, sessionBusEnv(process.env, deps.sessionBus));
   let stat;
   try { stat = lstatSync(path); } catch (e) {
     throw new KeyError(e?.code === "ENOENT" ? `no key is saved as "${name}"` : `the credential file cannot be opened (${reason(e)})`);
