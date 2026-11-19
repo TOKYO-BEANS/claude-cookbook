@@ -835,18 +835,18 @@ test("hooks.json runs the gate before the three T3 tools that start an agent, an
   assert.equal(groups.filter((g) => JSON.stringify(g).includes("codex-start-gate")).length, 1);
   assert.deepEqual(groups[1], {
     matcher: "AskUserQuestion|Edit|Write|NotebookEdit|mcp__.+__(create_threads|t3_thread_launch)",
-    hooks: [{ type: "command", command: '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/owner-answers.mjs"', timeout: 10 }],
+    hooks: [{ type: "command", command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/owner-answers.mjs"', timeout: 10 }],
   });
   assert.deepEqual(groups[2], {
     matcher: "Bash|PowerShell",
-    hooks: [{ type: "command", command: '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/boat-route.mjs"', timeout: 15 }],
+    hooks: [{ type: "command", command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/boat-route.mjs"', timeout: 15 }],
   });
   const [group] = groups;
   const matcher = new RegExp(group.matcher);
   for (const tool of ["delegate_task", "create_threads", "t3_thread_launch"]) assert.ok(matcher.test(`mcp__t3-code__${tool}`), tool);
   for (const other of ["Bash", "mcp__t3-code__task_status", "mcp__t3-code__t3_thread_read"]) assert.ok(!new RegExp(`^(?:${group.matcher})$`).test(other), other);
   assert.match(group.matcher, /[^A-Za-z0-9_\-, |]/, "read as a regular expression, not as an exact name");
-  assert.deepEqual(group.hooks, [{ type: "command", command: '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/codex-start-gate.mjs"', timeout: 150, onFailure: "block" }]);
+  assert.deepEqual(group.hooks, [{ type: "command", command: 'node "${CLAUDE_PLUGIN_ROOT}/hooks/codex-start-gate.mjs"', timeout: 150, onFailure: "block" }]);
 });
 
 test("the hook's entry denies when its own code cannot be loaded", (t) => {
