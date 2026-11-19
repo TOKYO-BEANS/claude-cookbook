@@ -20,7 +20,7 @@
   `.gitleaksignore` from the scanned folder, and a planted one turns a real finding into a pass. A
   Gitleaks exception is one rule and one exact value pattern, never a `paths` allowlist.
 - **How a tool is installed here, without root:** a runtime or a release-binary CLI through
-  `mise` (pinned in `~/.config/mise/config.toml`), a Python tool through `uv tool` with
+  `mise` (`mise use -g <tool>@<version>`, never `mise upgrade`), a Python tool through `uv tool` with
   `--exclude-newer`, Rust through `rustup`, an npm CLI as a pinned copy from a vetted
   lockfile, never `npm install -g`. A release is installed once it is 24 hours old. An apt
   package needs the owner's password.
