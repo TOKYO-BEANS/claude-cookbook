@@ -328,6 +328,7 @@ test("Linux: each failure is named, and none repeats what secret-tool printed", 
     [fail({ code: "ENOENT" }), /secret-tool is not installed \(package libsecret-tools\)/],
     [fail({ code: "ETIMEDOUT" }), /did not answer in \d+ seconds/],
     [fail({ status: 2 }), /could not be read \(exit 2\)/],
+    [fail({ status: 1, stderr: "Synthetic-Secret-Value: Cannot autolaunch D-Bus without X11 $DISPLAY\n" }), /could not be reached \(exit 1;/],
   ]) {
     const e = await readKey("k", { platform: "linux", runSecretTool: run }).then(() => null, (x) => x);
     assert.ok(e, "the read fails");

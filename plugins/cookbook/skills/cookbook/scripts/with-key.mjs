@@ -92,20 +92,22 @@ function unprotect(ffi, hex) {
   }
 }
 
-// Runs secret-tool (found on PATH) and returns what it printed. Its stderr is dropped: a
-// failure is told by the exit status alone.
+// Runs secret-tool (found on PATH) and returns what it printed. Its stderr is captured, never
+// shown: only whether it said anything is used, to tell "no such item" from "no keyring".
 export function runSecretTool(args, timeoutMs, { env = process.env } = {}) {
-  return execFileSync("secret-tool", args, { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "ignore"], env });
+  return execFileSync("secret-tool", args, { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"], env });
 }
 
 // Linux: one key from the Secret Service. secret-tool ends with 1 and prints nothing when no
-// item matches.
+// item matches; it also ends with 1 when it cannot reach a keyring (no D-Bus session, no
+// Secret Service, a refused unlock), and then says so on stderr.
 function readSecretService(name, run) {
   let out;
   try { out = run(["lookup", "service", SECRET_SERVICE, "name", name], SECRET_TOOL_TIMEOUT_MS); } catch (e) {
     if (e?.code === "ENOENT") throw new KeyError("secret-tool is not installed (package libsecret-tools)");
     if (e?.code === "ETIMEDOUT") throw new KeyError(`the key store did not answer in ${SECRET_TOOL_TIMEOUT_MS / 1000} seconds (a locked keyring waits on a prompt)`);
-    if (e?.status === 1) throw new KeyError(`no key is saved as "${name}"`);
+    if (e?.status === 1 && !String(e?.stderr ?? "").trim()) throw new KeyError(`no key is saved as "${name}"`);
+    if (e?.status === 1) throw new KeyError("the key store could not be reached (exit 1; no D-Bus session or no unlocked keyring)");
     throw new KeyError(`the key store could not be read (${String(e?.code ?? (typeof e?.status === "number" ? `exit ${e.status}` : "error"))})`);
   }
   const key = String(out).replace(/\r?\n$/, "");

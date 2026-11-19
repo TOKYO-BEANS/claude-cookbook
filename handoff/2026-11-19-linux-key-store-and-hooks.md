@@ -19,6 +19,13 @@ with `.` in `/bin/sh` (dash), which fails on its bash syntax after every tool ca
   `secret-tool` (answers "no item") first on `PATH`, so they never read the real keyring and
   run the same in CI without `libsecret-tools`.
 
+**Review.** The AI review of `ab0f6b2` (on the plan) found three lows, all fixed on the next
+head: an exit 1 from `secret-tool` with an error on stderr (no D-Bus session, no unlocked
+keyring) now says the key store could not be reached instead of "no key is saved" (stderr is
+captured, never shown); `parallel-secure.mjs` starts `vendor/parallel-cli/parallel-cli` off
+Windows (its install script unpacks `parallel-cli.exe` only there), and its test expects that
+name per platform; the gate tests run the gate as `hooks.json` now does (`bash <gate> <root>`).
+
 **Verification.** On the Linux laptop: the key and hook test files pass (with-key and
 key-header 34 pass, 6 skipped Windows-only; model-budget, owner-questions and codex-start-check
 150 pass), then the full `npm test`: 687 tests, 680 pass, 7 skipped (Windows only), 0 fail,

@@ -241,6 +241,6 @@ test("parallel launcher: reads the key named parallel and starts the pinned CLI,
     const got = spawnSync(process.execPath, [join(scripts, "parallel-secure.mjs"), "search", "x"], { env: noKeyring(dir, { ...process.env, USERPROFILE: dir, HOME: dir }), encoding: "utf8", timeout: 60000 });
     assert.equal(got.status, 127, got.stderr);
     assert.match(got.stderr, /with-key: could not read key "parallel" \(no key is saved as "parallel"\); continuing without PARALLEL_API_KEY\n/);
-    assert.match(got.stderr, /with-key: could not start .*parallel-cli\.exe \(ENOENT\)\n$/);
+    assert.match(got.stderr, windows ? /with-key: could not start .*parallel-cli\.exe \(ENOENT\)\n$/ : /with-key: could not start .*vendor[/\\]parallel-cli[/\\]parallel-cli \(ENOENT\)\n$/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
