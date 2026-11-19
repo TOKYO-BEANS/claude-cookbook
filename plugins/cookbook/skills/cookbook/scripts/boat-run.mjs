@@ -314,8 +314,9 @@ function isAlive(pid) {
   }
 }
 
-// On the owner's PC the key comes from the encrypted store for this one process; elsewhere
-// `boat` is on the path.
+// On the Windows PC the key came from the encrypted store for this one process. On the laptop
+// and elsewhere `boat` is on the path; on the laptop it is the key-store launcher
+// (recipes/boat-setup.md).
 export function boatCommand(argv) {
   const key = join(homedir(), ".local", "bin", "with-key.mjs");
   const exe = join(homedir(), ".local", "share", "boat", "boat.exe");

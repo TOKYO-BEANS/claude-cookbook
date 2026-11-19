@@ -1,13 +1,11 @@
 // Launcher behind the `parallel-cli` command: runs the pinned Parallel CLI with the key
-// named "parallel" from the DPAPI store in its environment only (PARALLEL_API_KEY), with
+// named "parallel" from the OS key store in its environment only (PARALLEL_API_KEY), with
 // the same arguments. No OAuth login file is kept on disk. The key is read by with-key.mjs,
-// in this process, with no PowerShell.
+// in this process.
 //
-// The CLI is the pinned copy in ~/.local/share/parallel-cli (its lockfile is there):
-// outside AppData, because the desktop app's container and other apps see different AppData
-// folders. A copy of this file lives at ~/.local/bin/parallel-secure.mjs, beside
-// with-key.mjs, which it imports; the shims `parallel-cli` and `parallel-cli.cmd` there
-// call it (recipes/keys.md).
+// The CLI is the pinned copy in ~/.local/share/parallel-cli (its lockfile is there). A copy
+// of this file lives at ~/.local/bin/parallel-secure.mjs, beside with-key.mjs, which it
+// imports; the `#!/bin/sh` launcher `parallel-cli` there calls it (recipes/keys.md).
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { main } from "./with-key.mjs";

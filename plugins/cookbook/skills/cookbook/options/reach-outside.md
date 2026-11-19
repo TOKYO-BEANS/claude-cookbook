@@ -41,6 +41,6 @@ Chosen by fit for the job on 15 November 2026.
 - **Code away from this PC: boat.** A full Ubuntu machine in under a second, billed per
   second, deleted after the command, from one CLI. Weighed: Cloudflare Sandbox (in the stack,
   but needs a Worker around it); E2B, Daytona and Modal (the same job behind an SDK); GitHub
-  Codespaces (made for a person's editor); WSL on this PC (not away from this PC).
+  Codespaces (made for a person's editor); Docker on this PC (not away from it).
 - **SEO: OpenSEO.** Keyword, backlink and audit data with Search Console intake, in skills.
   Weighed: Ahrefs and Semrush (subscriptions for the same data).

@@ -1,7 +1,7 @@
-// The Jev broker of the owner-questions Stop hook. Reading a key from the DPAPI store takes
-// 2 to 27 seconds on this PC (PowerShell start), too slow for every turn's end. So the hook
+// The Jev broker of the owner-questions Stop hook. Reading a key from the store took 2 to 27
+// seconds on the Windows PC (PowerShell start), too slow for every turn's end. So the hook
 // starts this process once, through with-key.mjs; it holds the key in its own memory only and
-// answers "classify this closing text" on a local named pipe. It never returns the key.
+// answers "classify this closing text" on a local socket (a named pipe on Windows). It never returns the key.
 // The pipe's name is random and kept in the owner's profile, so another account cannot take
 // it first. The broker exits after IDLE_MS without a request, after MAX_LIFE_MS in all (so a
 // rotated key is picked up) and after NO_KEY_LIFE_MS without a key. Each question version has
