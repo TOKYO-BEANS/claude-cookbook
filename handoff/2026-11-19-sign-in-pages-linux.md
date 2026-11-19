@@ -45,8 +45,10 @@ November.
   them). Read again here in the installed copy: `lib/coreBundle.js` line 41033 holds the sample
   nonce of RFC 6455 after `Sec-WebSocket-Key:`, and line 5 of
   `lib/vite/traceViewer/assets/xtermModule-Cv6bi7od.js` holds xterm theme property names
-  (`selectionBackgroundTransparent` and the like). Only Claude has read them; a model's
-  reading clears no finding. Owner: the owner. Clears: the owner's word on the two marks.
+  (`selectionBackgroundTransparent` and the like). Only Claude had read them, and a model's
+  reading clears no finding. **Cleared:** the owner's yes of 19 November 2026 to the question
+  "Do you accept the two marks?": "Accept both". It covers these two lines of 1.65.1; a mark
+  in a later version is a new finding.
 - The "On this PC" label of the `pass-cli` bullet in `sign-ins-setup.md`, and "on the owner's
   PC" in the catalog's `agent-browser` entry, are left: the first is #157's line, the second
   goes with the catalog's Linux pass.
