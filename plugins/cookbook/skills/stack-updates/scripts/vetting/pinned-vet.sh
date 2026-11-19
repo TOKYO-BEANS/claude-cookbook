@@ -8,7 +8,7 @@
 # it once in a boat sandbox, and prints what that did.
 set -uo pipefail
 FOLDER="$1"; PKG="$2"; VER="$3"
-SHARE="${VETTING_SHARE:-${HOME:-/c/Users/bruger}/.local/share}"
+SHARE="${VETTING_SHARE:-$HOME/.local/share}"
 V="$SHARE/vetting/$FOLDER-$VER"
 [ -f "$SHARE/$FOLDER/package.json" ] || { echo "no package.json in $SHARE/$FOLDER"; exit 2; }
 mkdir -p "$V/cfg/empty" "$V/lock" "$V/out" "$V/copy"

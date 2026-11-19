@@ -33,7 +33,7 @@ day, not assumed.
   a run that opens pull requests).
 - **Updates: the `stack-updates` skill.** A script decides what is routine; a model only
   reads release notes, with no tools. Weighed: Dependabot and Renovate (repositories only,
-  not the tools on this PC); each tool's self-update (unvetted, and it writes into AppData).
+  not the tools on this PC); each tool's self-update (unvetted, and it replaces a pinned copy).
 - **Where a session runs: T3 Code.** Worktrees per thread, delegates, pull request watches and
   scheduled tasks around the Claude Code harness. Weighed: the Claude desktop app (its Code
   tab; still home to three scheduled tasks and to Claude Design); a plain terminal (the

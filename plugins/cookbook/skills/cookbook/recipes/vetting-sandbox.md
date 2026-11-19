@@ -13,16 +13,15 @@ repository's `scripts/vetting.test.mjs`. The files of the same names in
   folder> <package> <version>` ends with the sandbox run (`pinned-sandbox.sh`, same arguments,
   runs it alone). It sends the new `package.json` and `package-lock.json` and a probe script,
   installs with the install scripts on, and starts the package's command once with `--version`.
-- **Anything else that runs on Linux:** copy `sandbox-probe.sh` from that folder into the code's
+- **Anything else, a pinned binary included:** copy `sandbox-probe.sh` from that folder into the code's
   folder, then `boat run --type small --no-env --timeout 900 --push <folder> -- bash
   sandbox-probe.sh --cmd "<install command>" "<start command>"`. `--no-env` keeps the account's
   stored secrets out. A run without the probe shows only the command's own output: report it as
   "ran without a probe", never as a quiet run.
 - `pinned-vet.sh` exits 0 only with a sandbox result and a report from each scanner: a scanner
   that wrote none prints "no report" and the run exits 3.
-- The run is on Linux with install scripts on; this PC installs on Windows with
-  `--ignore-scripts`, so it shows what the package does, not what the install here will do. The
-  full output is kept in `<vetting folder>/out/sandbox.log`.
+- The run has install scripts on; this PC installs with `--ignore-scripts`, so it shows
+  what the package does, not what the install here will do. The full output is kept in `<vetting folder>/out/sandbox.log`.
 - Without a boat plan the step answers "no result" and every pinned npm update waits for the
   owner: if boat is ever cancelled, take the step out of the vetting scripts and these recipes
   in the same change.
