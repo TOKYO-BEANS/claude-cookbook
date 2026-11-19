@@ -14,10 +14,10 @@ Windows kept outside `~/.local/bin`.
   **Language servers** (four Claude Code plugins behind the `LSP` tool) and **ast-grep**.
   `code-navigation.md` has the last two; `connecting.md` has the install routes. Version
   commands for mise, uv, rustup and ast-grep.
-- `ignored`, with a reason each: linters, runtimes, the Rust toolchain's binaries, the
-  language servers' own binaries, general utilities (act, difftastic, dive, duckdb, lazygit,
-  watchexec, yq), npm globals from the Windows inventory, `t3`, `ollama`, and Aikido's plugin
-  (installed switched off). The `.exe` names and `agent-key.ps1` are gone.
+- `ignored`, with a reason each: linters, runtimes, the Rust toolchain's binaries,
+  rust-analyzer and gopls, general utilities (act, difftastic, dive, duckdb, lazygit,
+  watchexec, yq), `t3`, `ollama`, and Aikido's plugin (installed switched off). No npm
+  global is in it (below). The `.exe` names and `agent-key.ps1` are gone.
 - The update report says "apt with your password, mise or uv" where it said winget and an
   elevated shell.
 
@@ -42,6 +42,13 @@ on 19 November: the `LSP` tool answered for JavaScript (with TypeScript 6.0.3), 
 `ast-grep run -p 'readKey($NAME)' -l js` found the four calls in the skill's scripts.
 
 **Outstanding.**
+- **npm globals on the laptop, installed without a vetting** (`npm install -g` on
+  19 November 2026): the language servers' programs (`typescript-language-server`, `pyright`,
+  `typescript`), `@shopify/cli`, `@openai/codex`, `@napi-rs/keyring`, `firecrawl-mcp`,
+  `pi-coding-agent` and five `*-axi` tools. The Cookbook's route for an npm CLI is a pinned
+  copy from a vetted lockfile. They are not in `ignored`, so the update check lists them as
+  "not in the Cookbook" every day until each is a pinned copy or gone; removing one is an
+  uninstall and asks the owner. The AI review of this pull request raised it (medium).
 - Shopify CLI: vet `@shopify/cli` and install it as the pinned copy `shopify-cli`
   (`pinned-vet.sh`, `pinned-install.sh`); removing the npm global is an uninstall and asks
   the owner. Until then the check reads it as missing.
