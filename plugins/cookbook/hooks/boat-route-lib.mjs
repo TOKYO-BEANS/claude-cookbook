@@ -334,7 +334,7 @@ export function decide({ input, deps }) {
   const reason = [
     `Not run on this PC: ${[...repos].join(", ")} ${repos.size === 1 ? "is" : "are"} on boat-run's upload list, so tests and scans run on boat (recipes/boat.md).`,
     ...lines,
-    "A run that truly needs Windows or this PC (DPAPI, PowerShell, a local app) stays here: end the command with `# local-run: <why>`, a reason of at least ten characters. The repository's Windows CI job runs its suite on Windows on every push.",
+    "A run stays here only when it needs this PC itself: its key store, its display, or an app installed on it (owner, 19 November 2026). End such a command with `# local-run: <why>`, a reason of at least ten characters that says which of the three. Everything else runs on boat.",
   ].join("\n");
   return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } };
 }

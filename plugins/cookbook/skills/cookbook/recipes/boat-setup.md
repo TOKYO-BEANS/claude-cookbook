@@ -41,4 +41,5 @@
   since rewritten), then sent 176 tracked files and passed the tests in 22 seconds.
 - **The hook** `hooks/boat-route.mjs` denies local tests and `semgrep` in a listed repository,
   naming the boat-run command (`semgrep ci`: the CI job); give sa-review that command.
-  Windows-only: end `# local-run: <why, 10+ chars>`.
+  Only a run that needs this PC itself (its key store, its display or an app on it):
+  end `# local-run: <why, 10+ chars>`.
