@@ -7,8 +7,8 @@ map's "Keys and tokens" row still named the DPAPI store.
 **What changed.** Facts only; every rule and stop reads as before.
 - The map and `options/reach-outside.md`: keys are in the OS key store (GNOME Keyring).
 - `boat-setup.md`: the `boat` launcher, the pinned Linux binary with its `PROVENANCE.txt`, why
-  the installer is never run, the upload list (written again, below), the hook's escape,
-  which points at the cases the hook's own message names.
+  the installer is never run, the upload list (written again, below), the hook's escape left
+  word for word as it was.
 - `sign-ins-setup.md`: `pass-cli` 2.7.1 for Linux, the agent `claude-linux`, its token's end
   (about 19 February 2027), `install.sh`.
 - `cloud-browser-setup.md`, `google-setup.md`, `cloudflare.md`, `web-batch.md`,
@@ -43,8 +43,9 @@ advisory that no 3.x release fixes.
   `add-ons.md`: rules proven on Windows, not proven again on Linux.
 - `security.md` and `safe-chain.md` (the Windows CI job): they change with that job's
   retirement, its own pull request.
-- The boat-route hook's own message still names DPAPI and PowerShell as reasons for a local
-  run; `boat-setup.md` keeps the escape's scope (only a run that cannot run in boat).
+- The escape from the boat-route hook: `boat-setup.md` still says "Windows-only" and the
+  hook's own message still names DPAPI and PowerShell. Which runs may stay on the Linux
+  laptop is a rule, so it is the owner's to set; page and hook then change together.
 - The vetting pages (the "Windows binary" exemption from the sandbox run) and the update
   skill's install table: the next pull request of this job.
 
