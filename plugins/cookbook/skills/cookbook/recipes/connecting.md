@@ -19,6 +19,11 @@
   `GITLEAKS_CONFIG` and `GITLEAKS_CONFIG_TOML` unset. Otherwise Gitleaks loads `.gitleaks.toml` and
   `.gitleaksignore` from the scanned folder, and a planted one turns a real finding into a pass. A
   Gitleaks exception is one rule and one exact value pattern, never a `paths` allowlist.
+- **How a tool is installed here, without root:** a runtime or a release-binary CLI through
+  `mise` (pinned in `~/.config/mise/config.toml`), a Python tool through `uv tool` with
+  `--exclude-newer`, Rust through `rustup`, an npm CLI as a pinned copy from a vetted
+  lockfile, never `npm install -g`. A release is installed once it is 24 hours old. An apt
+  package needs the owner's password.
 - A scan proves only what it parsed. An ad-hoc OSV-Scanner run passes `--no-ignore` and `--config` with
   a file you control (otherwise it skips git-ignored files and reads a planted `osv-scanner.toml`); 0
   packages parsed or exit code 128 ("No package sources found") is no result, not a clean one.

@@ -85,7 +85,7 @@ const KIND_WORDS = { plugin: "plugin", pinned: "pinned copy", command: "installe
 const UPDATE_WORDS = {
   plugin: () => "read the diff from the installed commit, then update the marketplace and the plugin",
   pinned: () => "new lockfile in an empty folder, three scans, a clean install, one real call",
-  command: () => "a checked download or winget in your elevated shell, then a version check",
+  command: () => "a checked download, mise, uv or apt with your password, then a version check",
   skill: () => "read the diff, copy the skill, record the commit",
   project: (c) => `the version pull request in ${inert(c.repository) || "its repository"}, which Dependabot opens`,
 };

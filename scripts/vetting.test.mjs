@@ -3,7 +3,7 @@
 // against a stand-in for the `boat` command. No sandbox is started and nothing is installed.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -335,6 +335,27 @@ test("a first install: no earlier version to keep, the vetted lockfile is instal
   assert.equal(runIn(root, "pinned-install.sh", ["tool", "2.0.0"]).status, 0);
   assert.equal(at("package-lock.json"), lock("2.0.0"));
   assert.equal(at(".previous/package-lock.json"), lock("1.0.0"));
+});
+
+test("a first install that failed, then a retry whose copy fails: cleaned up, and nobody is sent to --back", { skip }, () => {
+  const root = shareWith({
+    "share/vetting/tool-1.0.0/lock/package.json": lock("1.0.0"),
+    "share/vetting/tool-1.0.0/lock/package-lock.json": lock("1.0.0"),
+  });
+  stub(root, "npm", ['exit "${STUB_NPM_EXIT:-0}"']);
+  const tool = path.join(root, "share", "tool");
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "1.0.0"], { STUB_NPM_EXIT: "1" }).status, 1);
+  assert.ok(existsSync(path.join(tool, ".previous", "pending")));
+  // The retry cannot copy the lockfile in: a folder sits where the file belongs.
+  rmSync(path.join(tool, "package-lock.json"));
+  mkdirSync(path.join(tool, "package-lock.json"));
+  const retry = runIn(root, "pinned-install.sh", ["tool", "1.0.0"]);
+  assert.equal(retry.status, 1, retry.out);
+  assert.match(retry.out, /an earlier first install did not finish: there is no earlier version to keep/);
+  assert.match(retry.out, /the vetted files could not be copied in: nothing was installed/);
+  assert.doesNotMatch(retry.out, /--back|the backup of the last good version/);
+  assert.ok(!existsSync(path.join(tool, ".previous", "pending")));
+  assert.ok(!existsSync(path.join(tool, "package.json")), "no half-copied package.json is left");
 });
 
 test("a folder that holds only one of the two files is not a first install: nothing is touched", { skip }, () => {

@@ -25,7 +25,11 @@ else
     exit 2
   fi
   mkdir -p "$D/.previous"
-  if [ -e "$D/.previous/pending" ]; then
+  if [ -e "$D/.previous/pending" ] && [ ! -e "$D/.previous/package-lock.json" ]; then
+    # A first install that did not finish left no backup: this run is a first install again.
+    FIRST=1
+    echo "an earlier first install did not finish: there is no earlier version to keep"
+  elif [ -e "$D/.previous/pending" ]; then
     echo "an earlier install did not finish: the backup of the last good version is kept"
   elif [ ! -e "$D/package.json" ] && [ ! -e "$D/package-lock.json" ]; then
     FIRST=1

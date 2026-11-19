@@ -154,3 +154,12 @@ test("decideAll: three lists; at most the daily limit is routine, the longest se
   const unchecked = decideAll([part()], () => facts({ notes: null, today: undefined }), TODAY);
   assert.deepEqual(unchecked.waiting, [{ key: "tool/cli", from: "1.2.3", to: "1.2.4", kind: "pinned", until: "2026-11-21", reason: REASONS.unchecked }]);
 });
+
+test("a command part outside the routine list asks, and names the Linux install routes", () => {
+  assert.equal(REASONS.outside, "it is not one of the script's routine installs (a checked download, mise, uv or apt with your password)");
+  assert.doesNotMatch(Object.values(REASONS).join(" "), /winget|PowerShell|elevated|admin prompt/i);
+  for (const key of ["depot/cli", "git/cli", "cliproxyapi/cli", "google-workspace-cli/cli"]) {
+    assert.ok(!ROUTINE_COMMAND_PARTS.includes(key));
+    assert.deepEqual(decide(part({ key }), facts({ kind: "command" })), ask(REASONS.outside), key);
+  }
+});

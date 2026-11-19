@@ -15,7 +15,7 @@ export const SOAK_DAYS = 3; // a release is routine only after it has been seen 
 export const DAILY_LIMIT = 5; // routine installs offered in one day
 // `command` parts a session may install: pinned binaries whose recipe downloads the
 // release and compares it with the published checksum. Every other `command` part
-// needs an admin prompt or an elevated shell outside Claude's container.
+// (another checked download, a mise or uv tool, an apt package) asks the owner.
 export const ROUTINE_COMMAND_PARTS = Object.freeze(["boat/cli", "proton-pass-cli/cli"]);
 const SESSION_KINDS = ["plugin", "pinned", "command"];
 const COMMIT = /^[0-9a-f]{40}$/;
@@ -23,7 +23,7 @@ const NEVER_KINDS = ["project", "hosted", "none"];
 
 export const REASONS = Object.freeze({
   failed: "an earlier install of this version failed",
-  outside: "it is installed outside a session (an admin prompt or an elevated shell)",
+  outside: "it is not one of the script's routine installs (a checked download, mise, uv or apt with your password)",
   localPort: "it is a local port with its own steps",
   skill: "a skill copy cannot be checked by the script after an install",
   unreadable: "its version change cannot be read",

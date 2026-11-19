@@ -26,5 +26,5 @@ repository's `scripts/vetting.test.mjs`. The files of the same names in
   owner: if boat is ever cancelled, take the step out of the vetting scripts and these recipes
   in the same change.
 
-Reading the report, what counts as a surprise and the two exemptions:
+Reading the report, what counts as a surprise and the one exemption:
 [vetting-sandbox-report.md](vetting-sandbox-report.md). The sandbox itself: [boat.md](boat.md).

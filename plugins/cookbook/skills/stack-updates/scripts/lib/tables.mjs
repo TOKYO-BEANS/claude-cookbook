@@ -47,6 +47,11 @@ export const VERSION_COMMANDS = Object.freeze({
   "cliproxyapi/cli": { argv: ["{share}/cliproxyapi/bin/cli-proxy-api", "-h"], pattern: /^CLIProxyAPI Version: (\d+\.\d+\.\d+),/m },
   "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
   "google-workspace-cli/cli": { argv: ["{share}/gws/gws", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },
+  // Written against the real output on the Ubuntu laptop on 19 November 2026.
+  "mise/cli": { argv: ["mise", "--version"], pattern: /^(\d{4}\.\d{1,2}\.\d+) /m },
+  "uv/cli": { argv: ["uv", "--version"], pattern: /^uv (\d+\.\d+\.\d+)/m },
+  "rustup/cli": { argv: ["rustup", "--version"], pattern: /^rustup (\d+\.\d+\.\d+)/m },
+  "ast-grep/cli": { argv: ["ast-grep", "--version"], pattern: /^ast-grep (\d+\.\d+\.\d+)/m },
 });
 
 // The only commands the daily update check runs to prove a service answers,
