@@ -159,6 +159,9 @@ test("decide: a listed repository is denied with the route; others run", () => {
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /github\.com\/o\/r is on boat-run's upload list/);
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /node "C:\/p\/boat-run\.mjs" --timeout 1200 --push "C:\/w\/r" -- bash -c 'npm test'/);
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /# local-run: <why>/);
+  // The escape is a closed list of three cases, and names nothing of Windows.
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /only when it needs this PC itself: its key store, its display, or an app installed on it/);
+  assert.doesNotMatch(out.hookSpecificOutput.permissionDecisionReason, /DPAPI|PowerShell|Windows/);
   assert.equal(decide({ input: ask("npm test"), deps: deps({ ...REPO, listed: false }) }), null);
   assert.equal(decide({ input: ask("npm test"), deps: deps(null) }), null);
   assert.equal(decide({ input: ask("npm test # local-run: the DPAPI tests need Windows"), deps: deps() }), null);
