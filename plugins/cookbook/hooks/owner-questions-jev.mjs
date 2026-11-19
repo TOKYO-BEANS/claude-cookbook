@@ -1,5 +1,5 @@
 // The typed questions the owner-questions Stop hook asks Jev about a turn's closing text,
-// and the call itself. The key comes from the caller (read at run time from the DPAPI store);
+// and the call itself. The key comes from the caller (read at run time from the OS key store);
 // nothing here reads a file or an environment setting for it.
 
 export const MODEL = "jev-1.14.0"; // pinned like web-batch; the answer records the model Jev reports
