@@ -27,6 +27,9 @@ export const REDACTED = "<redacted>";
 const MAX_FILE_BYTES = 512 * 1024;
 const MAX_FILES = 5000;
 const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
+// ~/.claude.json also holds usage data for every project and grows with use; only its MCP
+// servers go into the copy, so it is read at a size no other source may have.
+const MAX_ACCOUNT_FILE_BYTES = 32 * 1024 * 1024;
 const TEXT_EXTENSIONS = new Set([
   ".md", ".markdown", ".json", ".jsonc", ".sh", ".bash", ".zsh", ".js", ".cjs", ".mjs", ".ts", ".cts", ".mts",
   ".py", ".rb", ".toml", ".yaml", ".yml", ".txt", ".mdc", ".cmd", ".ps1", "",
@@ -186,11 +189,13 @@ const isFile = (p) => { try { return statSync(p).isFile(); } catch { return fals
 const list = (p) => { try { return readdirSync(p).sort(); } catch { return []; } };
 
 // Builds the copy in `dest` (which must not exist yet) and returns what it did:
-// { files, masked: [{ file, counts }], skipped: [{ file, why }] }.
+// { files, masked: [{ file, counts }], skipped: [{ file, why }], required: [{ file, why }] }.
+// `required` lists the user's own files that exist and were left out: a scan without one of
+// them would read as a clean result for what it never saw, so the run does not start.
 export function buildCopy({ home, projectRoots = [], dest }) {
   if (existsSync(dest)) throw new Error(`the copy folder already exists: ${dest}`);
   mkdirSync(dest, { recursive: true });
-  const result = { files: 0, bytes: 0, masked: [], skipped: [] };
+  const result = { files: 0, bytes: 0, masked: [], skipped: [], required: [] };
 
   const write = (target, text, counts) => {
     result.bytes += Buffer.byteLength(text);
@@ -205,16 +210,16 @@ export function buildCopy({ home, projectRoots = [], dest }) {
   const real = (p) => { try { return realpathSync(p); } catch { return null; } };
   // One file. A link is followed only to a file of the same name, and, where `base` is
   // given, only inside that folder: a link never brings in another kind of file.
-  const put = (source, target, { transform, base } = {}) => {
+  const put = (source, target, { transform, base, required = false, maxBytes = MAX_FILE_BYTES } = {}) => {
     const rel = target.split(path.sep).join("/");
     const file = real(source);
     if (!file || !isFile(file)) return;
-    const skip = (why) => { result.skipped.push({ file: rel, why }); };
+    const skip = (why) => { result.skipped.push({ file: rel, why }); if (required) result.required.push({ file: rel, why }); };
     if (DENIED_NAME.test(path.basename(file)) || DENIED_NAME.test(path.basename(source)) || DENIED_PATH.test(file)) return skip("a credential or session path");
     if (path.basename(file) !== path.basename(source)) return skip("a link to a file of another name");
     if (base && !within(real(base) ?? base, file)) return skip("a link out of its folder");
     if (!TEXT_EXTENSIONS.has(path.extname(file).toLowerCase())) return skip("not a text file");
-    if (statSync(file).size > MAX_FILE_BYTES) return skip("larger than 512 KB");
+    if (statSync(file).size > maxBytes) return skip(maxBytes === MAX_FILE_BYTES ? "larger than 512 KB" : `larger than ${maxBytes / 1024 / 1024} MB`);
     const counts = {};
     const raw = readFileSync(file, "utf8");
     if (raw.includes("\0")) return skip("not a text file");
@@ -249,12 +254,12 @@ export function buildCopy({ home, projectRoots = [], dest }) {
 
   // 1. The user's own configuration.
   const claude = path.join(home, ".claude");
-  for (const name of ["CLAUDE.md", "settings.json", "settings.local.json"]) put(path.join(claude, name), path.join("home", ".claude", name));
+  for (const name of ["CLAUDE.md", "settings.json", "settings.local.json"]) put(path.join(claude, name), path.join("home", ".claude", name), { required: true });
   putAgentFolders(claude, path.join("home", ".claude"));
   putSkills(path.join(claude, "skills"), path.join("skills", "personal"));
   // ~/.claude.json holds the account and usage data too: only the MCP servers are kept.
   const local = [];
-  put(path.join(home, ".claude.json"), path.join("home", ".claude.json"), { transform: (raw, counts) => {
+  put(path.join(home, ".claude.json"), path.join("home", ".claude.json"), { required: true, maxBytes: MAX_ACCOUNT_FILE_BYTES, transform: (raw, counts) => {
     let parsed;
     try { parsed = JSON.parse(raw); } catch { return null; }
     for (const [dir, entry] of Object.entries(parsed.projects ?? {})) {
