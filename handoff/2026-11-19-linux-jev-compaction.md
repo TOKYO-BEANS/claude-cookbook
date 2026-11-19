@@ -28,9 +28,13 @@ upstream with only what Linux needs, and nothing else from the old list was gues
 - The `claude-local` marketplace was added and the plugin installed for the user
   (`claude plugin marketplace add`, `claude plugin install --scope user`). `updates.mjs record
   jev/compaction e3f262a7f4d4...` was run, and the inventory now reads `jev/compaction` 0.5.0.
-- `recipes/compaction.md`: the Linux facts. The key comes from the OS key store through
-  `with-key.mjs` (it said DPAPI), with version 0.5.0, the `private-root` fallback, what goes to
-  TypeSafe, `claude plugin test` in the update steps, and the `machine-setup` copy.
+- `recipes/compaction.md`: the Linux facts. The key is read only by `with-key.mjs`, in a child
+  process, so the session, files and settings never hold it. The page also gives version
+  0.5.0, the `private-root` fallback, what goes to TypeSafe, `claude plugin test` in the
+  update steps, and the `machine-setup` copy.
+- `machine-setup` #22 (merged as `470336c`) keeps the marketplace folder under
+  `claude/vendor/compaction/local-marketplace/`, with `PROVENANCE.json` and the engine tests,
+  and its GUIDE line says the plugin is restored and how to reinstall it from there.
 
 **Vetting.** Upstream main is still `e3f262a` (17 September), the commit Windows ran, so there
 is no diff to read and the commit is past the 24-hour minimum. A reader agent read the whole
