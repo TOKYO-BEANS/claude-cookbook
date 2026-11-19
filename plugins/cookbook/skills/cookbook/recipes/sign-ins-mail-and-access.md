@@ -30,4 +30,5 @@
   in production (`<site>` is its key there): a reader for one hour that sees what the shared
   view link shows and is never the owner; `/admin` needs a personal account. Print status, address and title only from its pages: they hold staff and
   business data. A new site needs the owner's yes: a service token and its Access policy are an
-  access change. Proven on 14 November 2026.
+  access change. Proven on the PC on 14 November 2026;
+  not tried on Linux, and neither is `mail-link`.

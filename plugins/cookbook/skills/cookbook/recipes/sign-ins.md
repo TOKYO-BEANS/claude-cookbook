@@ -16,7 +16,7 @@ is for the sites that only have a web login.
   conversation either: no `agent-browser` command signs up from an item yet, so until one does
   the owner sets the account's password from the vault item. A login that is the owner's own is added by
   the owner, never typed in chat. Claude never edits or moves an item. The Proton Pass CLI
-  (`pass-cli`) is signed in as the agent `claude-pc`, which sees that vault and nothing else.
+  (`pass-cli`) is signed in as the agent `claude-linux`, which sees that vault and nothing else.
 - **Never read a credential into the conversation.** Do not run `pass-cli item view` on an item,
   a password or a one-time code in a shell whose output is shown, and do not pass a secret
   reference to `pass-cli run` or `inject` for a program that prints its environment. Listing titles

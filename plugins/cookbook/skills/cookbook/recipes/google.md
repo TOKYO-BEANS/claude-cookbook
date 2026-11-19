@@ -22,5 +22,9 @@ and gets a short-lived access token whenever it is used. Added on 13 November 20
   account and the list on Google's consent page and click Allow. The owner's yes is needed before
   each consent; a consent replaces the account's earlier grant, so name every scope it should keep.
   `google logout <account>` revokes a grant at Google and forgets it.
+- **A new machine:** `google status` lists an account only when its note is in
+  `google-auth/accounts/`, and the notes belong to one machine. `google adopt <account>` writes
+  the note again from a grant that is already in the key store: Google says whose grant it is
+  and what it covers, with no consent. A grant that no longer works needs `google login` instead.
 
 More: [setup and evidence](google-setup.md).
