@@ -281,7 +281,7 @@ test("hooks.json runs the Stop hook with absolute paths and a time limit", () =>
   const hooks = JSON.parse(readFileSync(new URL("../plugins/cookbook/hooks/hooks.json", import.meta.url), "utf8")).hooks;
   const stop = hooks.Stop?.[0]?.hooks?.[0];
   assert.ok(stop, "a Stop hook");
-  assert.equal(stop.command, '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/owner-questions.mjs"');
+  assert.equal(stop.command, 'node "${CLAUDE_PLUGIN_ROOT}/hooks/owner-questions.mjs"');
   assert.ok(stop.timeout > 0 && stop.timeout <= 20);
   assert.equal(hooks.SubagentStop, undefined, "never for subagents");
 });
