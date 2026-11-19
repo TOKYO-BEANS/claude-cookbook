@@ -18,14 +18,15 @@ started, files written outside the project, and processes left running.
   command timed out, the probe's last line is absent).
 - A surprise or "no result" stops the install until the owner has seen it, a routine update
   included.
-- **Two exemptions**, each said in the report to the owner and neither holding a routine update
-  on its own:
-  - the Windows binary installed here (boat, the Proton Pass CLI, gws): the sandbox is Linux,
-    and a publisher's Linux build is a different file. Its check is the publisher's checksum
-    list. The report says "no sandbox run (Windows binary)";
-  - a Claude Code plugin or a skill copy: it has no installer and no command to start outside a
-    session. Its check is the read of the whole diff between the two commits. The report says
-    "no sandbox run (plugin or skill)".
+- **One exemption**, said in the report to the owner and not holding a routine update on its
+  own: a Claude Code plugin or a skill copy. It has no installer and no command to start
+  outside a session. Its check is the read of the whole diff between the two commits. The
+  report says "no sandbox run (plugin or skill)".
+- **Gone since the move to Linux** (19 November 2026): the exemption for the Windows binary
+  installed here (boat, the Proton Pass CLI, gws). The installed build is now the Linux one,
+  which the sandbox runs: a pinned binary gets the run like any other code, after its
+  checksum. The three were installed that day on their checksums; each gets the run at its
+  next update.
 - In the sandbox the outside code runs as a user of its own, `vet`, who has no sudo: it cannot
   alter the probe, the trace files or the DNS capture. The files listed are only those that
   user wrote.

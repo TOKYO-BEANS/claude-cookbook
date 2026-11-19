@@ -26,7 +26,7 @@ runs the whole batch outside the conversation and prints one short table.
    when the plan exceeds the balance or the balance cannot be read. Pages past `--max-credits`
    become `error` rows, and a 402 stops the rest. The table's footer shows credits counted, the
    balance before and after (an unread balance is "unknown", not zero) and Jev's input tokens.
-5. Keys: the script holds none. Parallel and Firecrawl run through their DPAPI shims; Jev runs
+5. Keys: the script holds none. Parallel and Firecrawl run through their key-store launchers; Jev runs
    in a child started by `with-key.mjs` with the `jev-compaction` key (`--jev-key` names another).
    Jev's answers are cached by page part, question wording and model in
    `~/.local/share/web-batch/cache`, so a rerun asks again only about changed text.

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The launcher the Windows task "stack-updates-daily" runs. No model takes part.
+// The launcher the systemd user timer "stack-updates-daily" runs. No model takes part.
 //
 // A copy of this file lives at ~/.local/bin/stack-updates-daily.mjs, a path that does
 // not change when the plugin updates. It imports nothing from the plugin: it finds the
@@ -42,7 +42,8 @@ export function resolveScript(home) {
 }
 
 // Stops a process and everything it started. On Windows a plain kill ends only the
-// process itself and leaves its children (gh, claude -p) running.
+// process itself and leaves its children (gh, claude -p) running. Under the systemd
+// timer the service's control group ends whatever is left when this launcher exits.
 function stopTree(child) {
   if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
   else child.kill("SIGKILL");

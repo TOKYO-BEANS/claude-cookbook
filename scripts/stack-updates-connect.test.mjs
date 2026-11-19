@@ -249,7 +249,7 @@ test("the real table: frozen, at most one paid check, no Jev entry", () => {
 test("the real table: each ok pattern matches the line a working service prints", () => {
   const sample = {
     github: "some-login\n",
-    depot: "Organization ID,Name\nabc123,org\n",
+    depot: '{\n  "invoices":  [\n    {\n      "id":  "in_x",\n      "status":  "paid"\n    }\n  ]\n}\n',
     firecrawl: "  Authenticated via FIRECRAWL_API_KEY\n  Credits: 1,033 / 1,000 (103% left this cycle)\n",
     boat: '{"accessTier":"trial","billingStatus":"trialing","canStart":true}',
     browserbase: '[\n  {\n    "id": "x",\n    "concurrency": 25\n  }\n]',
@@ -359,6 +359,8 @@ test("the real table: no ok pattern matches an error line, a help text or a not-
   for (const [id, c] of Object.entries(CONNECTION_CHECKS)) {
     for (const text of negatives) assert.ok(!c.ok.test(text), `${id} pattern matched ${JSON.stringify(text)}`);
   }
+  // Depot: what the CLI prints without a token or without the right to read, and JSON that is not the invoice list, never match.
+  for (const text of ["unauthenticated: Missing bearer token\n", "permission_denied: Not authorized\n", '{"error":"x","invoices":[]}', '{"code":"unauthenticated"}', 'error: {"invoices": []}']) assert.ok(!CONNECTION_CHECKS.depot.ok.test(text), text);
   // Proton Pass: its own error and usage lines never match, whatever else is printed.
   const pass = CONNECTION_CHECKS["proton-pass-cli"].ok;
   assert.ok(!pass.test("Release track: stable\nError: This operation requires an authenticated client\n"));

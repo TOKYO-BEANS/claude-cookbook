@@ -364,9 +364,11 @@ function fakeRun({ paidOk = true } = {}) {
     if (argv[0] === "claude" && argv[1] === "mcp") return ok("");
     if (line === "gh --version") return ok("gh version 2.83.0 (2026-10-30)\nhttps://github.com/cli/cli/releases/tag/v2.83.0\n");
     if (line === "gh api user --jq .login") return ok("octocat\n");
-    if (line.includes("firecrawl.cmd")) return ok("Credits: 100 / 500\n");
-    if (line.includes("boat.cmd")) return ok('{"billingStatus":"trial"}');
-    if (line.includes("parallel-cli.cmd")) return paidOk ? ok('{"status": "ok"}') : { code: 1, stdout: "", stderr: "402 payment required" };
+    // A keyed CLI is started by its full path in ~/.local/bin (either slash: the path is normalized).
+    const launcher = (name) => String(argv[0]).replaceAll("\\", "/").endsWith(`/.local/bin/${name}`);
+    if (launcher("firecrawl")) return ok("Credits: 100 / 500\n");
+    if (launcher("boat")) return ok('{"billingStatus":"trial"}');
+    if (launcher("parallel-cli")) return paidOk ? ok('{"status": "ok"}') : { code: 1, stdout: "", stderr: "402 payment required" };
     return { code: 127, stdout: "", stderr: `no fake for ${argv[0]}` };
   };
   run.calls = calls;
@@ -659,7 +661,7 @@ test("a report nobody has seen is never written over by a second run on the same
     assert.match(r.err, /the report of 2026-11-13 has not been shown yet: print it with "page 1"/);
     assert.equal(f.run.count(/./), 0, `${command} ran nothing`);
   }
-  // The Windows task run again the same day: nothing runs, and it is not a failure.
+  // The daily timer run again the same day: nothing runs, and it is not a failure.
   const again = fakes();
   const u = await cli(["run", ...at(state, "2026-11-13"), "--unattended"], again);
   assert.equal(u.code, 0, u.err);
@@ -743,7 +745,7 @@ test("routine updates: a release waits three days, is then ready to install, and
 
   // With the owner's yes: the new version is there but its service does not answer. Not an install.
   const dead = fakes();
-  const down = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], { ...dead, run: async (argv, opts) => (argv.join(" ").includes("firecrawl.cmd") ? { code: 1, stdout: "", stderr: "401" } : dead.run(argv, opts)) });
+  const down = await cli(["verify", "firecrawl/cli", "--owner-yes", "1.31.0", ...on("2026-11-17")], { ...dead, run: async (argv, opts) => (String(argv[0]).replaceAll("\\", "/").endsWith("/.local/bin/firecrawl") ? { code: 1, stdout: "", stderr: "401" } : dead.run(argv, opts)) });
   assert.equal(down.code, 1);
   assert.match(down.err, /Firecrawl is at 1\.31\.0, but its connection check failed: recorded as a failed install/);
 

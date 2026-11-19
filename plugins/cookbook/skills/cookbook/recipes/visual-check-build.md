@@ -31,7 +31,7 @@ Built once per site, in the site's repository, as a script with tests. The patte
 - **Not a cloud browser:** `browse` and Stagehand cannot reach a local build and have no
   phone emulation; Stagehand runs in a child Claude session and the built-in browser inside a
   session, neither from the check's own script.
-- **The judge is paid:** the DPAPI key `anthropic-api` through `with-key.mjs`, with a
+- **The judge is paid:** the key-store key `anthropic-api` through `with-key.mjs`, with a
   workspace ID in the request. The script caps the spend of a run; try one page first.
 - **Prove it before asking the owner:** one pass (the live site against a build of the code
   that is live) and one fail (a deliberately broken local copy, never committed or

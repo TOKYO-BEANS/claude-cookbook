@@ -23,5 +23,5 @@
   until it is added to the catalog or to `ignored`.
 - Proven on 13 and 14 November 2026 on a trial state: 79 parts checked in about 45 s, 48 with a
   readable version, none unreadable, 15 already behind; one real read (GitHub CLI 2.104.0: 3,488 input and 238 output tokens, no
-  tools, on the plan). A Windows task on this PC sees Node, a signed-in `gh`, `claude`, the DPAPI
-  key store and no API key in its environment (probe task, 14 November 2026).
+  tools, on the plan). A systemd user unit on this PC sees Node, a signed-in `gh`, `claude`, the OS
+  key store and no API key in its environment (a probe unit, 19 November 2026).

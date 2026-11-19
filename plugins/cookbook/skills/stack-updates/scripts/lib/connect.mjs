@@ -8,7 +8,7 @@
 // detail: service names, and for a failure an error of at most 200 characters
 // with anything key-shaped removed. A service with no check is "unchecked",
 // never working. The script holds no key: tools that need one run through their
-// DPAPI shims in ~/.local/bin.
+// launchers in ~/.local/bin, which read the OS key store.
 import { open } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

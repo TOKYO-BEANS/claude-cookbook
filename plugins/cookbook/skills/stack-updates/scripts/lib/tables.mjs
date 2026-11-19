@@ -27,11 +27,12 @@ export const SELF_UPDATING_TOOLS = Object.freeze([
 
 // The only commands the daily update check ever runs to read an installed
 // version, keyed by part key "<tool id>/<part name>". argv[0] is a bare command
-// name that must be a real executable on PATH (no .cmd or .bat shim: it is run
-// without a shell), or `{share}/<relative path>` for a binary under ~/.local/share.
+// name that must be an executable on PATH (it is run without a shell), or `{share}/<relative path>` for a binary under ~/.local/share.
 // `{share}`, `{bin}` (~/.local/bin) and `{lib}` (this plugin's scripts/lib) are the only substitutions, allowed only in the tables of this file, never in the catalog. `pattern` is matched against stdout; group 1 is the version.
 // Each pattern was written against the real output on the owner's PC on
-// 13 November 2026. A part whose command cannot run here has no entry.
+// 13 November 2026 and read again on the Ubuntu laptop on 19 November 2026 (the
+// binaries under ~/.local/share have no `.exe` there). A part whose command cannot
+// run here has no entry.
 export const VERSION_COMMANDS = Object.freeze({
   "1c9ccea9-8ebf-4d9c-9512-38e6890ea5b6/cli": { argv: ["claude", "--version"], pattern: /^(\d+\.\d+\.\d+) \(Claude Code\)/m },
   "git/cli": { argv: ["git", "--version"], pattern: /^git version (\S+)/m },
@@ -43,10 +44,10 @@ export const VERSION_COMMANDS = Object.freeze({
   "trivy/cli": { argv: ["trivy", "--version"], pattern: /^Version: (\d+\.\d+\.\d+)/m },
   "osv-scanner/cli": { argv: ["osv-scanner", "--version"], pattern: /^osv-scanner version: (\d+\.\d+\.\d+)/m },
   "lightcraft/cli": { argv: ["{share}/lightcraft/bin/lightcraft-cli", "--version"], pattern: /^lightcraft-cli (\d+\.\d+\.\d+)/m },
-  "boat/cli": { argv: ["{share}/boat/boat.exe", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
-  "cliproxyapi/cli": { argv: ["{share}/cliproxyapi/bin/cli-proxy-api.exe", "-h"], pattern: /^CLIProxyAPI Version: (\d+\.\d+\.\d+),/m },
-  "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli.exe", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
-  "google-workspace-cli/cli": { argv: ["{share}/gws/gws.exe", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },
+  "boat/cli": { argv: ["{share}/boat/boat", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
+  "cliproxyapi/cli": { argv: ["{share}/cliproxyapi/bin/cli-proxy-api", "-h"], pattern: /^CLIProxyAPI Version: (\d+\.\d+\.\d+),/m },
+  "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
+  "google-workspace-cli/cli": { argv: ["{share}/gws/gws", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },
 });
 
 // The only commands the daily update check runs to prove a service answers,
@@ -54,23 +55,27 @@ export const VERSION_COMMANDS = Object.freeze({
 // `parallel` is the single paid check (one search, one result), allowed by the
 // owner on 7 October 2026. `argv` follows the rules of VERSION_COMMANDS and adds
 // tokens: `{bin}` is ~/.local/bin and `{lib}` is this plugin's scripts/lib folder.
-// A CLI that keeps its key in the DPAPI store is a `.cmd` shim in ~/.local/bin; Node
-// cannot start one without a shell, so it runs as the fixed argv
-// `cmd.exe /d /c {bin}/<name>.cmd <arguments>`. Every element is a constant of
-// this table: nothing from the catalog, a file or a command's output is put in one.
+// A CLI that gets its key from the OS key store is a launcher in ~/.local/bin: an
+// executable `#!/bin/sh` file with no extension, started without a shell as
+// `{bin}/<name> <arguments>` (by its full path, so the check never depends on the
+// PATH a scheduled run gets). Every element is a constant of this table: nothing from the catalog, a file or a command's output is put in one.
 // `ok` must match a line that proves the account answered (an identity, a plan or a
 // balance line), not just a zero exit. Each pattern was written against the real
 // output on the owner's PC on 13 November 2026, except `proton-pass-cli`, which
-// was signed out that day: its pattern was written against the signed-in output
-// on 14 November 2026.
+// was signed out that day (its pattern was written against the signed-in output
+// on 14 November 2026), and `depot`, written on the Ubuntu laptop on 19 November 2026.
 // No result keeps account detail: only the service name and, on a failure, a
 // scrubbed error of at most 200 characters. Jev has no entry: `connect.mjs` reads
 // the Jev compaction plugin's decision log instead. `claude mcp list` is run once by `connect.mjs`
 // for every hosted part that names a server.
-const shim = (name, ...args) => ["cmd.exe", "/d", "/c", `{bin}/${name}.cmd`, ...args];
+const shim = (name, ...args) => [`{bin}/${name}`, ...args];
 export const CONNECTION_CHECKS = Object.freeze({
   github: { argv: ["gh", "api", "user", "--jq", ".login"], ok: /^(?!(?:null|error|none|undefined|true|false)\s*$)[A-Za-z0-9][A-Za-z0-9-]{0,38}\s*$/im },
-  depot: { argv: ["depot", "org", "list"], ok: /^Organization ID,Name\r?\n[^\r\n,]+,[^\r\n]+/m },
+  // Depot answers with the organisation token of the key store (`depot-org`): the CLI is not
+  // signed in on Linux, and this read never asks for a login. One finalized invoice comes back
+  // as JSON (seen on 19 November 2026); the result keeps none of it. Not `org credits`: Depot
+  // allows that read once a minute, so a second run in that minute would read as broken.
+  depot: { argv: ["node", "{bin}/with-key.mjs", "depot-org", "DEPOT_TOKEN", "depot", "org", "invoices", "list", "--page-size", "1"], ok: /^\{\s*"invoices":\s*\[/ },
   firecrawl: { argv: shim("firecrawl", "--status"), ok: /Credits: [\d,]+ \/ [\d,]+/ },
   boat: { argv: shim("boat", "limits"), ok: /"billingStatus":"[a-z_]+"/ },
   browserbase: { argv: shim("browse", "cloud", "projects", "list"), ok: /"concurrency":\s*\d+/ },
