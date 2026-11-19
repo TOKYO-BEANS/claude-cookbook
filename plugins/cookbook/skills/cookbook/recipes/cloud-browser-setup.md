@@ -1,7 +1,7 @@
 # Cloud browser (Browserbase): setup and updates
 
-- **On this PC:** the `browse` command is a shim that decrypts the DPAPI key `browserbase` into
-  that one process (`with-key.mjs`) and turns the CLI's usage telemetry off
+- **On this PC:** the `browse` command is a `#!/bin/sh` launcher that hands the key-store key
+  `browserbase` to that one process (`with-key.mjs`) and turns the CLI's usage telemetry off
   (`BROWSERBASE_TELEMETRY_DISABLED=1`; it would send command names and exit codes to PostHog).
   The CLI is a pinned copy, `browse@0.11.4`, in `~/.local/share/browserbase-cli`, installed from
   a lockfile with `npm ci --ignore-scripts`: never `npm install -g browse` or

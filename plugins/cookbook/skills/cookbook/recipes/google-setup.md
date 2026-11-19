@@ -11,7 +11,7 @@
 - **On this PC:** the Google Cloud project is `claude-tools-514616` in the owner's Google account
   (sign-in screen "Claude tools", External, In production; Drive, Sheets, Docs,
   Calendar, Search Console, Analytics Data and Analytics Admin APIs switched on). The client secret
-  is the DPAPI key `google-oauth-client`, each grant the DPAPI key `google-<account>`. The code is
+  is the key-store key `google-oauth-client`, each grant the key `google-<account>`. The code is
   `~/.local/share/google-auth` (`npm test` runs 8 tests against a stand-in for Google; not in a
   repository yet). gws is a pinned copy in `~/.local/share/gws`; `PROVENANCE.txt` there has the
   source, checksum and how to update. Never `npm install -g @googleworkspace/cli`, and never use

@@ -75,7 +75,7 @@ fallback and say that you did.
 | A public page from a script, or one step | **Browserbase**, the `browse` CLI | Firecrawl, when reading is enough | [cloud-browser](recipes/cloud-browser.md) |
 | A site that needs a sign-in | **agent-browser**, with a login from the vault | the built-in browser, where the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Web logins | the **Proton Pass CLI**, vault "Claude" | the owner signs in | [sign-ins](recipes/sign-ins.md) |
-| Keys and tokens | the DPAPI store (`agent-key.ps1`, `with-key.mjs`, `key-header.mjs`) | — | [keys](recipes/keys.md) |
+| Keys and tokens | the OS key store (GNOME Keyring), read by `with-key.mjs` and `key-header.mjs` | — | [keys](recipes/keys.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
 | Run code away from this PC: tests on Linux before a push, a Linux-only failure, a long or parallel job, a long Claude job that stands alone | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md), [boat-claude](recipes/boat-claude.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
