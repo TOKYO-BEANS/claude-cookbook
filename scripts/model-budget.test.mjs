@@ -1084,3 +1084,44 @@ test("readUsage: T3 Code's file is read only as a plain file of the user's own, 
     assert.equal((await read(real)).usage, undefined, "a file others can write is not read");
   }
 });
+
+// Ubuntu gives every user a group of their own and a umask of 002, so T3 Code writes its file
+// as 664 there. Read as "others can write it", that left every Linux session with "unknown"
+// whenever the script's own read was refused (20 November 2026).
+test("readUsage: T3 Code's file may be writable by its group only when that group is the user's alone", { skip: typeof process.getuid !== "function" }, async (t) => {
+  const { chmodSync, statSync } = await import("node:fs");
+  const home = tmp(t);
+  seedHome(home);
+  const file = join(home, "claudeAgent.json");
+  writeFileSync(file, JSON.stringify(t3()));
+  const uid = process.getuid();
+  const { gid } = statSync(file);
+  const accounts = (passwd, group) => {
+    const dir = mkdtempSync(join(home, "etc-"));
+    if (passwd !== null) writeFileSync(join(dir, "passwd"), passwd);
+    if (group !== null) writeFileSync(join(dir, "group"), group);
+    return { passwd: join(dir, "passwd"), group: join(dir, "group") };
+  };
+  const source = async (mode, accountFiles) => {
+    chmodSync(file, mode);
+    return (await readUsage({ home, stateDir: join(home, "state"), t3File: file, accountFiles, now: NOW, fetchImpl: never, cacheOnly: true })).source;
+  };
+  const me = `me:x:${uid}:${gid}::/home/me:/bin/sh\n`;
+  const other = `other:x:${uid + 1}:${gid + 1}::/home/other:/bin/sh\n`;
+  const groups = `mine:x:${gid}:\ntheirs:x:${gid + 1}:\n`;
+  const alone = accounts(other + me, groups);
+
+  assert.equal(await source(0o664, alone), "t3", "the user's own group: no one else can write");
+  assert.equal(await source(0o660, accounts(me, `mine:x:${gid}:me\n`)), "t3", "the user named as the group's one member");
+  assert.equal(await source(0o664, accounts(other + me, `mine:x:${gid}:other\n`)), undefined, "another member of the group");
+  assert.equal(await source(0o664, accounts(me + `other:x:${uid + 1}:${gid}::/home/other:/bin/sh\n`, groups)), undefined, "another user with this group as their own");
+  assert.equal(await source(0o664, accounts(me + `twin:x:${uid}:${gid}::/home/twin:/bin/sh\n`, groups)), undefined, "a second name for the same user id");
+  assert.equal(await source(0o664, accounts(other + me, `theirs:x:${gid + 1}:\n`)), undefined, "a group the system's file does not list");
+  assert.equal(await source(0o664, accounts(other + me, `${groups}again:x:${gid}:\n`)), undefined, "a group listed twice");
+  assert.equal(await source(0o664, accounts(other, groups)), undefined, "a user the system's file does not list");
+  assert.equal(await source(0o664, accounts(other + me, null)), undefined, "no group file to ask");
+  assert.equal(await source(0o664, accounts(null, groups)), undefined, "no user file to ask");
+  assert.equal(await source(0o666, alone), undefined, "writable by everyone, whatever the group");
+  assert.equal(await source(0o646, alone), undefined, "writable by everyone and not by the group");
+  assert.equal(await source(0o644, accounts(null, null)), "t3", "not writable by the group: nothing is asked");
+});
