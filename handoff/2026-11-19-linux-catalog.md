@@ -36,8 +36,9 @@ the update check off.
   follow the catalog, not the other way round.
 - What is routine (`ROUTINE_COMMAND_PARTS`) is unchanged: widening it is the owner's decision.
 
-**Verification.** `npm test` on boat: 692 tests, 0 fail. A trial update check with this
-catalog: "not in the Cookbook" went from 57 to 1 (the claude.ai Docs connector). Real calls
+**Verification.** `npm test` on boat: 708 tests, 701 pass, 7 skipped, 0 fail. A trial update
+check with this catalog: "not in the Cookbook" went from 57 to 13 (twelve commands of npm
+globals and the claude.ai Docs connector). Real calls
 on 19 November: the `LSP` tool answered for JavaScript (with TypeScript 6.0.3), Python and Go;
 `ast-grep run -p 'readKey($NAME)' -l js` found the four calls in the skill's scripts.
 

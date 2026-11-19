@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo masks (LightCraft), sharpening, cut-outs (none), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo masks, sharpening, cut-outs and straightening, SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -33,8 +33,8 @@ fallback and say that you did.
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a Claude API call with a typed answer | [judgement](recipes/judgement.md) |
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
-| Sharpen or cut out a photo | none: say so | — | [photos](recipes/photos.md) |
-| Photo masks by a word, colour by region | **LightCraft** + SAM 3, own photos | none: say so | [photos](recipes/photos.md) |
+| Sharpen, cut out or straighten a photo | none: say so | — | [photos](recipes/photos.md) |
+| Photo masks by a word, colour by region | **LightCraft**, own photos | none: say so | [photos](recipes/photos.md) |
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
