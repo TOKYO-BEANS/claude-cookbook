@@ -6,7 +6,7 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
 - **CI: Depot CI.** Fast cached runners, run diagnostics, and one place for tests and
   container builds. Weighed: GitHub Actions (kept only for two documented exceptions: the
   Windows checks and CodeQL default setup); CircleCI and Buildkite (a second vendor for the
-  same job).
+  same job); Blacksmith (runners only: [measured](ci-depot-vs-blacksmith.md)).
 - **Review of every pull request: the `ai-review` job.** It runs once on a same-repository pull
   request, when marked ready for review, with a fixed rubric and no tools, and its comment on the head commit is part of the
   merge condition. Weighed: CodeRabbit (ruled out by the owner: do not use it); Greptile and
@@ -31,9 +31,9 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   read the code; the sandbox shows what it does. Weighed: scanners alone (they cannot see
   behaviour); a run on this PC or in Docker (that is the machine being protected).
 - **Visual check of a live site: the site's own script.** The repository's Playwright (its
-  own dependency, like a test runner) and a plain Chromium take the pictures; a Claude API request on another model than the builder's
-  judges them. Built for the first site on 15 November 2026. Weighed for the pictures, on
-  the same four screenshots: the `browse` CLI and Stagehand (a cloud browser cannot reach a
+  own dependency) and a plain Chromium take the pictures; a Claude API request on another
+  model than the builder's judges them. Weighed for the pictures, on the same four
+  screenshots: the `browse` CLI and Stagehand (a cloud browser cannot reach a
   local build, and neither emulates a phone) and the built-in browser (a model call per
   step, the visible window only). Weighed for the judge: TypeSafe / Jev (a typed probability
   cannot carry the faults in words, with their place on the page).
