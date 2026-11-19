@@ -7,7 +7,8 @@ map's "Keys and tokens" row still named the DPAPI store.
 **What changed.** Facts only; every rule and stop reads as before.
 - The map and `options/reach-outside.md`: keys are in the OS key store (GNOME Keyring).
 - `boat-setup.md`: the `boat` launcher, the pinned Linux binary with its `PROVENANCE.txt`, why
-  the installer is never run, the upload list (not carried over: empty), the hook's escape.
+  the installer is never run, the upload list (written again, below), the hook's escape in
+  the hook's own scope (a run that truly needs this PC).
 - `sign-ins-setup.md`: `pass-cli` 2.7.1 for Linux, the agent `claude-linux`, its token's end
   (about 19 February 2027), `install.sh`.
 - `cloud-browser-setup.md`, `google-setup.md`, `cloudflare.md`, `web-batch.md`,
@@ -16,9 +17,17 @@ map's "Keys and tokens" row still named the DPAPI store.
 - `keys.md`: the Firecrawl pin's new `zod` override (4.6.7; 1.29.0 resolves to 3.25.76,
   GHSA-mrhx-c7xc-m3w5, high).
 
+**The upload list.** `~/.local/share/boat-run/upload-allowed.txt` did not come over from
+Windows, and with an empty list the boat-route hook denies nothing: local tests ran on the
+laptop all day on 19 November, this job's included. It is written again with the three
+repositories it held before the move (this one, the standard's and the release tooling's),
+under the owner's standing yes of 16 November 2026 for the code of own repositories. Other
+repositories and every `data:` entry come back when first needed.
+
 **Verification.** `node scripts/check.mjs` passes (every page within the 4,000-byte limit);
 `npm test` passes. Each fact was read on the laptop: the three launchers in `~/.local/bin`,
-the two `PROVENANCE.txt` files, the Firecrawl pin's `package.json`.
+the two `PROVENANCE.txt` files, the Firecrawl pin's `package.json`. A real `firecrawl scrape`
+through the launcher answered with `zod` 4.6.7 installed and no `with-key:` line on stderr.
 
 **Outstanding.** Left as they are, and why:
 - The browser bullet of `sign-ins-setup.md` ("a token only this Windows user can read") and

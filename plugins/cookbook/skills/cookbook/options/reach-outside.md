@@ -31,9 +31,10 @@ Chosen by fit for the job on 15 November 2026.
   that holds only what Claude may use. Weighed: the built-in browser (the fallback, when only
   the owner can sign in); a cloud browser (never: a login does not go into a recorded cloud
   session); 1Password and Bitwarden CLIs (the same job; the owner already uses Proton).
-- **Keys and tokens: the OS key store** (GNOME Keyring; the DPAPI store on Windows before).
-  Unlocked by this user's sign-in, handed to one process at run time. Weighed: environment variables and `.env` files (plain text); a
-  hosted secrets manager (for production secrets in Cloudflare and Depot).
+- **Keys and tokens: the OS key store** (GNOME Keyring; DPAPI on Windows before). Unlocked
+  at sign-in, then any process of this user can read it, as with DPAPI; a key reaches one
+  process at run time. Weighed: `.env` files and environment variables (plain text); a
+  hosted secrets manager (production secrets).
 - **Google accounts: the `google` command with gws.** One consent per account, then
   short-lived tokens, for any Google API. Weighed: Google's MCP connectors (a server per
   product); gws's own sign-in (keeps a second copy of the grant, one account only).

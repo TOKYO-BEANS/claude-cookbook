@@ -35,7 +35,8 @@ One store, and helpers that read it. Linux since 19 November 2026.
   `--help` against the launcher's lists. The pin (`firecrawl-cli` 1.29.0 in
   `~/.local/share/firecrawl-cli`, `npm ci --ignore-scripts`) overrides `zod` to 4.6.7 since
   19 November 2026: 1.29.0 resolves to 3.25.76 (GHSA-mrhx-c7xc-m3w5, high, fixed in 4.6.6).
-  Drop the override once the CLI resolves to a fixed version.
+  A scrape through the launcher worked with it that day. Drop the override once the CLI
+  resolves to a fixed version.
 - **Where the helpers live.** This skill's `scripts/`: `with-key.mjs`, `key-header.mjs`,
   `agent-key.ps1`, and the launchers `firecrawl-secure.mjs` and `parallel-secure.mjs`.
   Tests: `scripts/with-key.test.mjs`, `scripts/key-header.test.mjs`. Callers use the copies
