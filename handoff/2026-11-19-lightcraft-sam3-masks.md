@@ -11,8 +11,8 @@ switch to Linux, finished on the Ubuntu laptop once Meta approved the model acce
   skill description says so.
 - `catalog.json`: a `lightcraft` entry (trial, github feed `storytold/lightcraft`, installed
   kind `command`). `recipes/photos.md` is the LightCraft page: how to run it, the own-photos
-  condition, the cost, the error on a word that finds nothing, the gated model. The PhotoCraft
-  PDF line left the page: PhotoCraft is not installed on this laptop.
+  condition, the cost, the error on a word that finds nothing, the gated model, how to update.
+  The PhotoCraft condition (never a PDF or a file from outside) stays on the page.
   `options/plan-and-build.md` records the result.
 - Line 34 of `handoff/2026-11-17-adobe-retired-photocraft-weighed.md`: PhotoCraft's baseline
   is that test's saved results only (a low finding on #116).

@@ -9,15 +9,20 @@
 - **Own photos only**, never a file from outside: two bundled crates (zip 7.4.0,
   rustls-webpki 0.102.8) have advisories the owner accepted on that condition (18 November
   2026). A new high finding at an update goes to the owner.
-- One mask takes 85 to 160 s and about 4.3 GB on this laptop's CPU, the model loaded each run;
-  several masks on one photo go in one script. A word that finds nothing is an error and the
-  export is the unchanged photo: read the log line, never the picture alone.
+- One mask takes 84 to 160 s and 3.3 to 4.3 GB on this laptop's CPU, the model loaded each
+  run (several masks in one process: not measured yet). A word that finds nothing is an error
+  and the export is the unchanged photo: read the log line, never the picture alone.
+- To update: the Linux tarball against `SHA256SUMS.txt` and its signature, then the vetting
+  ([connecting](connecting.md), [vetting-sandbox](vetting-sandbox.md)), then unpack into
+  `~/.local/share/lightcraft`. A new high finding goes to the owner.
 - SAM 3 is gated (SAM License, Meta's terms). Claude's own Hugging Face account fetched it once
   (token `huggingface-read`, at run time only); LightCraft checks its pinned SHA-256.
 - **No tool:** sharpening a soft photo, and a cut-out (transparent background). Say so. Do not
   stand in a generative tool that redraws the photo.
 - Adobe was retired on 17 November 2026; PhotoCraft 0.23.1 failed the masks test
-  ([plan-and-build options](../options/plan-and-build.md)).
+  ([plan-and-build options](../options/plan-and-build.md)). Wherever PhotoCraft is installed,
+  it never opens a PDF or a file from outside, only our own JPEG, PNG or TIFF: its PDF reader
+  has a high advisory the owner accepted on that condition (17 November 2026).
 - Photos of people are personal data. An upload never happens on Claude's own judgment: before
   any photo goes to an outside service, ask the owner in the current chat and get a clear yes that
   names the files, the account they go to, the operation and what it costs. A yes from an
