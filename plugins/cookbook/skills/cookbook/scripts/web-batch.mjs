@@ -10,8 +10,8 @@
 //   Stages on one run folder: search | fetch | judge | report --out <dir>
 //   Evaluation:               score --out <dir> --labels <labels.json>
 //
-// Keys: this process holds none. Parallel and Firecrawl run through their DPAPI
-// shims in ~/.local/bin; Jev runs in a child started by with-key.mjs, which puts
+// Keys: this process holds none. Parallel and Firecrawl run through their key-store
+// launchers in ~/.local/bin; Jev runs in a child started by with-key.mjs, which puts
 // the key in that child's environment only. Nothing here prints a key.
 //
 // Fixed rules live in code (THRESHOLDS, route(), the credit cap). Jev supplies
@@ -511,7 +511,7 @@ export async function jevWorker(jobsFile, resultsFile, { env = process.env, fetc
   const key = env.TYPESAFE_API_KEY;
   let results;
   if (!key) {
-    results = bodies.map(() => ({ ok: false, error: "TYPESAFE_API_KEY missing: the DPAPI key could not be decrypted" }));
+    results = bodies.map(() => ({ ok: false, error: "TYPESAFE_API_KEY missing: the key could not be read from the key store" }));
   } else {
     results = new Array(bodies.length);
     await pool(bodies, DEFAULTS.jevConcurrency, async (b, i) => {
@@ -546,7 +546,7 @@ export function runNode(args, { timeoutMs = 120_000, env } = {}) {
 export function realProviders({ binDir = DEFAULTS.binDir, jevKey = DEFAULTS.jevKey, workDir }) {
   const shim = (name) => {
     const f = join(binDir, name);
-    if (!existsSync(f)) throw new Error(`${f} not found (the DPAPI shims live in ~/.local/bin)`);
+    if (!existsSync(f)) throw new Error(`${f} not found (the key-store launchers live in ~/.local/bin)`);
     return f;
   };
   const utf8 = { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" };

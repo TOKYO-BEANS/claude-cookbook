@@ -1,12 +1,10 @@
 // Launcher behind the `firecrawl` command: runs the pinned Firecrawl CLI with the key named
-// "firecrawl" from the DPAPI store in its environment only (FIRECRAWL_API_KEY), with the
-// same arguments. The key is read by with-key.mjs, in this process, with no PowerShell.
+// "firecrawl" from the OS key store in its environment only (FIRECRAWL_API_KEY), with the
+// same arguments. The key is read by with-key.mjs, in this process.
 //
-// The CLI is the pinned copy in ~/.local/share/firecrawl-cli (its lockfile is there):
-// outside AppData, because the desktop app's container and other apps see different AppData
-// folders. A copy of this file lives at ~/.local/bin/firecrawl-secure.mjs, beside
-// with-key.mjs, which it imports; the shims `firecrawl` and `firecrawl.cmd` there call it
-// (recipes/keys.md).
+// The CLI is the pinned copy in ~/.local/share/firecrawl-cli (its lockfile is there). A copy
+// of this file lives at ~/.local/bin/firecrawl-secure.mjs, beside with-key.mjs, which it
+// imports; the `#!/bin/sh` launcher `firecrawl` there calls it (recipes/keys.md).
 //
 // Who gets the stored key is decided here, before the CLI runs, and narrowly: only a
 // command on the list below, only with options this launcher knows before it, and only for

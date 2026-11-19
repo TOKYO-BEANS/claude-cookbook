@@ -28,7 +28,7 @@ Measured the same day on our eight repositories, one committer.
   clears nothing. All 89 are listed in the evidence and go to triage in their
   repositories, two first: a shop's catalogue HTML rendered unsanitised.
 - **Time.** CodeQL on Depot runners: 45 to 100 seconds for JavaScript and TypeScript, about
-  35 for Actions (the five repositories with Depot runs). Semgrep's Pro engine on this Windows PC:
+  35 for Actions (the five repositories with Depot runs). Semgrep's Pro engine on the Windows PC:
   4 to 48 minutes a repository, with cross-file timeouts; Linux in CI may be faster, not
   measured. On a pull request `semgrep ci` scans the changed files only.
 - **Not covered by either:** Liquid templates.

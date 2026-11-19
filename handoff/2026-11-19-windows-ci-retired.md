@@ -31,12 +31,16 @@ removes a check, so it went to the owner: "Drop 'actions' now" (owner, 19 Novemb
 question dialog). Default setup now lists `javascript-typescript` only; the enforced
 organisation configuration accepted the change.
 
+**Left on purpose.** `security.md`, `safe-chain.md` and the catalog's Aikido entry keep
+"Windows jobs included": Probiz, Stack-Atlas and release-maintenance still run a Windows job
+in `.github/workflows/ci.yml`. Whether those go is the owner's call, not asked here.
+
 **Outstanding.** The standard's `windows-ci` item reads `blocked`
-(`owner-approval-required`) while the repository holds Windows files
-(`agent-key.ps1` and three stack-updates test fixtures, `.ps1`/`.cmd`); it reads
-`not-needed` once they go. Owner: Claude, the chat "Cookbook: Linux rewrite of
-Windows-specific pages and scripts" for those files; the Stack Atlas handoff records the
-owner's answer so the item is not put to the owner again.
+(`owner-approval-required`) while the repository holds Windows files, and #176 keeps them on
+purpose (`agent-key.ps1`, three stack-updates fixtures). The standard has to record the
+owner's answer so the item reads `not-needed` and is not put to the owner again. Owner:
+Claude, the Stack-Atlas chat "Stack Atlas: handoff for claude-cookbook's retired Windows CI
+job". Clears when the item reads `not-needed`.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-19-retire-windows-ci/`: the
 ruleset and the CodeQL default setup before and after, the merge logs.
