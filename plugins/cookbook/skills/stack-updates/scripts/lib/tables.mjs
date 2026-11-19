@@ -42,6 +42,7 @@ export const VERSION_COMMANDS = Object.freeze({
   "gitleaks/cli": { argv: ["gitleaks", "version"], pattern: /^(\d+\.\d+\.\d+)\s*$/m },
   "trivy/cli": { argv: ["trivy", "--version"], pattern: /^Version: (\d+\.\d+\.\d+)/m },
   "osv-scanner/cli": { argv: ["osv-scanner", "--version"], pattern: /^osv-scanner version: (\d+\.\d+\.\d+)/m },
+  "lightcraft/cli": { argv: ["{share}/lightcraft/bin/lightcraft-cli", "--version"], pattern: /^lightcraft-cli (\d+\.\d+\.\d+)/m },
   "boat/cli": { argv: ["{share}/boat/boat.exe", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
   "cliproxyapi/cli": { argv: ["{share}/cliproxyapi/bin/cli-proxy-api.exe", "-h"], pattern: /^CLIProxyAPI Version: (\d+\.\d+\.\d+),/m },
   "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli.exe", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },

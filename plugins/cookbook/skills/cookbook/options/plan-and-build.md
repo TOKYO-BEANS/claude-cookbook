@@ -31,13 +31,12 @@ fair trial; they never pick an owner.
   system, in the tool already open. Weighed: Figma with its MCP server (a second tool and
   a hand-off step); v0 and similar generators (they emit their own stack's code); Adobe
   Express (posters and social graphics, not product screens).
-- **Photos: no tool.** Adobe Firefly (sharpening) and Adobe for creativity (masks) left on
-  17 November 2026 with the Adobe trial. PhotoCraft 0.23.1 (local, Apache/MIT) was tested
-  that day on 10 public-domain photos: Select Subject was right on 1 of 5 people, a box drawn
-  around the person on 3 of 5; no object by name, no face-aware skin mask, no auto
-  straighten. Its segmentation has no learned model. Next: LightCraft with Meta's SAM 3
-  (gated weights, SAM License). Weighed for sharpening: Nero AI Unblur, Upscayl, Topaz Photo
-  AI (paid). ArtCraft Studio is generative only: never on photos of real people.
+- **Photo masks: LightCraft with SAM 3.** Adobe left on 17 November 2026. PhotoCraft 0.23.1
+  failed on 10 public-domain photos (Select Subject 1 of 5 people, a drawn box 3 of 5; no
+  learned model). LightCraft 0.21.1, same photos, 19 November: masks by a word (SAM 3, local)
+  right on every person, face and window; its Subject and People masks are heuristics, not
+  used. No cut-out. Sharpening weighed: Nero AI Unblur, Upscayl, Topaz Photo AI (paid).
+  ArtCraft Studio is generative only: never on photos of real people.
 - **Skills: Superpowers `writing-skills`.** It tests a skill the way code is tested. Weighed:
   the bundled `skill-creator` (the fallback: it ships with the app).
 - **Model per turn: the model budget.** Weighed: a T3 Code router, both apps' fallbacks
