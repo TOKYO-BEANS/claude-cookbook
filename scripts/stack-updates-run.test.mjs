@@ -138,7 +138,7 @@ test("the To update line follows the installed kind", () => {
     '- To update: say "update Superpowers" (read the diff from the installed commit, then update the marketplace and the plugin).');
   assert.equal(update({}), PINNED_UPDATE);
   assert.equal(update({ installedKind: "command", name: "GitHub gh-cli" }),
-    '- To update: say "update GitHub gh-cli" (a checked download or winget in your elevated shell, then a version check).');
+    '- To update: say "update GitHub gh-cli" (a checked download, mise, uv or apt with your password, then a version check).');
   assert.equal(update({ installedKind: "skill", name: "stop-slop" }),
     '- To update: say "update stop-slop" (read the diff, copy the skill, record the commit).');
   assert.equal(update({ installedKind: "project", name: "ts-rust", repository: "o/app" }),

@@ -107,6 +107,10 @@ test("every table entry runs a bare command name and matches its own sample outp
     "cliproxyapi/cli": ["CLIProxyAPI Version: 8.0.76, Commit: 7df56074, BuiltAt: 2026-11-17T02:10:49Z\nUsage of cli-proxy-api.exe\n", "8.0.76"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
     "google-workspace-cli/cli": ["gws 0.22.5\nThis is not an officially supported Google product.\n", "0.22.5"],
+    "mise/cli": ["2026.11.10 linux-x64 (2026-11-18)\n", "2026.11.10"],
+    "uv/cli": ["uv 0.13.9 (x86_64-unknown-linux-gnu)\n", "0.13.9"],
+    "rustup/cli": ["rustup 1.29.3 (edbc831ce 2026-11-02)\ninfo: This is the version for the rustup toolchain manager, not the rustc compiler.\n", "1.29.3"],
+    "ast-grep/cli": ["ast-grep 0.51.3\n", "0.51.3"],
   };
   assert.deepEqual(Object.keys(VERSION_COMMANDS).sort(), Object.keys(samples).sort());
   for (const [key, { argv, pattern }] of Object.entries(VERSION_COMMANDS)) {
