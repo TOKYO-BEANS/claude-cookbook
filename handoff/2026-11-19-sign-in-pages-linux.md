@@ -42,13 +42,20 @@ November.
   (and gws's attestation) were checked at install. Owner: Claude.
 - Gitleaks marked two lines in `playwright-core` 1.65.1 as `generic-api-key` when it was
   vetted (sign-in-tools, 19 November; `pinned-vet.sh` reports such marks and does not judge
-  them). Read again here in the installed copy: `lib/coreBundle.js` line 41033 holds the sample
-  nonce of RFC 6455 after `Sec-WebSocket-Key:`, and line 5 of
-  `lib/vite/traceViewer/assets/xtermModule-Cv6bi7od.js` holds xterm theme property names
-  (`selectionBackgroundTransparent` and the like). Only Claude had read them, and a model's
-  reading clears no finding. **Cleared:** the owner's yes of 19 November 2026 to the question
-  "Do you accept the two marks?": "Accept both". It covers these two lines of 1.65.1; a mark
-  in a later version is a new finding.
+  them). Their Gitleaks fingerprints: `playwright-core/lib/coreBundle.js:generic-api-key:41033`
+  and `playwright-core/lib/vite/traceViewer/assets/xtermModule-Cv6bi7od.js:generic-api-key:5`.
+  The first is the sample nonce of RFC 6455 in a `Sec-WebSocket-Key` header line. The second
+  is the statement in xterm's bundled code that assigns `void 0` to the exports `FourKeyMap`
+  and `TwoKeyMap`. Only Claude had read them, and a model's reading clears no finding.
+  **Cleared:** the owner's yes of 19 November 2026, "Accept both", and the same day "Yes, it
+  stands" to the corrected description of the second mark (next item). It covers these two
+  fingerprints in 1.65.1; a mark in a later version is a new finding.
+- A wrong reading, corrected. #161, #163 and #167 called the second mark "xterm theme
+  property names", and the owner was first asked with that description. The column numbers
+  in Gitleaks' report do not fit the installed file: they point into a list of theme names
+  on the same line, 65,000 characters before the marked text. The report's `Match` field
+  names the text, and the owner was asked again with it. Read a mark by `Match`, not by
+  column.
 - The "On this PC" label of the `pass-cli` bullet in `sign-ins-setup.md`, and "on the owner's
   PC" in the catalog's `agent-browser` entry, are left: the first is #157's line, the second
   goes with the catalog's Linux pass.
