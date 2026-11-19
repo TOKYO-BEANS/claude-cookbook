@@ -8,6 +8,8 @@
 # it once in a boat sandbox, and prints what that did.
 set -uo pipefail
 FOLDER="$1"; PKG="$2"; VER="$3"
+# Before any `cd`: started by a relative path, the folder of this file is found only from here.
+TOOLS="$(cd "$(dirname "$0")" && pwd)"
 SHARE="${VETTING_SHARE:-$HOME/.local/share}"
 V="$SHARE/vetting/$FOLDER-$VER"
 [ -f "$SHARE/$FOLDER/package.json" ] || { echo "no package.json in $SHARE/$FOLDER"; exit 2; }
@@ -60,7 +62,7 @@ if(!t)none("TRIVY");else{console.log("TRIVY: targets",(t.Results||[]).length,JSO
 process.exit(missing?3:0);' "$V"
 reports=$?
 # The sandbox run: what the package does when it is installed with scripts on and started.
-bash "$(cd "$(dirname "$0")" && pwd)/pinned-sandbox.sh" "$FOLDER" "$PKG" "$VER"; sandbox=$?
+bash "$TOOLS/pinned-sandbox.sh" "$FOLDER" "$PKG" "$VER"; sandbox=$?
 echo "sandbox exit $sandbox"
 # Not 0 when the sandbox gave no result, or when a scanner wrote no report (3): neither is
 # a clean vetting. A scanner's own exit code is shown above and decides nothing here, since

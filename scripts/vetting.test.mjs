@@ -449,6 +449,19 @@ test("a vetting run scans what this run unpacked, not an earlier copy", { skip }
   assert.match(r.out, /^sandbox exit 0$/m);
 });
 
+test("a vetting run started by a relative path still reaches its sandbox step", { skip }, () => {
+  const { root, calls } = vetShare();
+  // The script changes folder while it works: its own folder is found before that.
+  const r = spawnSync(
+    bash,
+    ["-c", 'N="$(dirname "$(command -v node)")"; export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" PATH="$PWD/stub:$N:/usr/bin:/bin"; cd "$1" && exec bash ./pinned-vet.sh tool some-cli 2.0.0', "run", vetting],
+    { cwd: root, encoding: "utf8" },
+  );
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(calls(), /boat\n$/);
+  assert.match(r.stdout, /^sandbox exit 0$/m);
+});
+
 test("a vetting run stops when the lockfile or the unpack fails", { skip }, () => {
   for (const [env, message] of [
     [{ STUB_CI_EXIT: "1" }, /VETTING: stopped, the packages did not unpack/],

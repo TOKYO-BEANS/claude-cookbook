@@ -88,7 +88,7 @@ fallback and say that you did.
 | Several chats at once: a question another chat already put to the owner, a job or a file another chat has | the **Cookbook**'s `owner-answers` hooks, which point at the chat that asked and stop a chat's first change until it has looked; **T3 Code**'s thread list and thread read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
 | Memory across sessions | the project's handoff for its state (`HANDOFF.md`, or a file per entry in `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md) |
 | A plain script on a schedule | a systemd user timer | — | [scheduled-runs](recipes/scheduled-runs.md) |
-| An agent run on a schedule | a **T3 Code** scheduled task | a Claude Desktop scheduled task | [scheduled-runs](recipes/scheduled-runs.md) |
+| An agent run on a schedule | a **T3 Code** scheduled task | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | Claude Code from a script (`claude -p`) | the scripted-runs rules | — | [scripted-runs](recipes/scripted-runs.md) |
 | Updates, broken connections, close dates | the **Cookbook**'s `stack-updates` skill | — | [update-check](recipes/update-check.md) |
 | Where a session runs | **T3 Code** | Claude Code in a terminal | — |
