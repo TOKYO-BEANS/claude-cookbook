@@ -10,7 +10,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { compare, renderFindings } from "../plugins/cookbook/skills/cookbook/scripts/agentshield/compare.mjs";
-import { buildCopy, checkCopy, maskText, redactJson, sanitizeText, shapesIn } from "../plugins/cookbook/skills/cookbook/scripts/agentshield/sanitize.mjs";
+import { buildCopy, checkCopy, maskOutput, maskText, redactJson, sanitizeText, shapesIn } from "../plugins/cookbook/skills/cookbook/scripts/agentshield/sanitize.mjs";
 import { PINNED, networkIsCovered, scan, treeHash, verifyPin, writePin } from "../plugins/cookbook/skills/cookbook/scripts/agentshield/scan.mjs";
 
 const FOLDER = fileURLToPath(new URL("../plugins/cookbook/skills/cookbook/scripts/agentshield/", import.meta.url));
@@ -25,6 +25,7 @@ const newNode = skip || (olderNode ? "needs Node 25 or newer" : false);
 const go = (s, options = {}) => scan({ env: s.env, olderNode, ...options });
 
 // Token-shaped values are put together here, so this file holds none.
+const BEGIN_KEY = "-----BEGIN " + "RSA PRIVATE KEY-----";
 const TOKENS = {
   github: "gh" + "p_" + "a1B2".repeat(9),
   anthropic: "sk-" + "ant-" + "api03-" + "Zx9".repeat(12),
@@ -127,35 +128,53 @@ test("redactJson empties an MCP server's env and headers, cleans URLs and keeps 
   assert.equal(counts["headers-value"], 2);
 });
 
-test("values a name or a place gives away are taken out, and both passes agree", () => {
+test("values a name or a place gives away are taken out, and a second pass changes nothing", () => {
   const v = "Zx9Q" + "7pL2".repeat(6);
+  const short = "abcd1234efgh5678ij";
   const input = {
-    env: { OPENAI_KEY: v, DEBUG: "true" },
-    mcpServers: { a: { command: "npx", args: ["--api-key", v, `--token=${v}`, "--port", "8080"], url: `https://host.example/${v.slice(0, 20)}/sse` } },
+    env: { OPENAI_KEY: v, DEBUG: "true", ANTHROPIC_BASE_URL: `https://proxy.example/v1?k=${short}`, DATABASE_URL: "postgres://u:p@db.example/x", NOTE: "plain words" },
+    mcpServers: { a: { command: `tool --api-key ${short}`, args: ["--api-key", v, `--token=${v}`, "--port", "8080", "--header", `Authorization:Basic ${short}`], url: `https://host.example/${v.slice(0, 20)}/sse` } },
     auths: { "registry.example": { auth: Buffer.from(`user:${v}`).toString("base64") } },
-    accessKey: v, hub: "hf" + "_" + "aB3".repeat(12), lab: "glpat" + "-" + "aB3d".repeat(6), author_id: "abc123def456ghi789",
+    accessKey: v, apiKeys: [short], apiKey: 12345678901234567890, credentials: { user: { password: short, note: "kept words" } }, userConfig: { api_key: { type: "string", title: "The API key", sensitive: true } }, maxTokens: 4096,
+    hub: "hf" + "_" + "aB3".repeat(12), lab: "glpat" + "-" + "aB3d".repeat(6), escaped: `a\tAbcdefGhijk1234Lmnopq\n${v}`,
+    apiKeyHelper: "/usr/bin/node /home/x/.local/bin/key.mjs name", awsCredentialExport: "aws-vault export",
     [v]: "a value under a key that is itself a credential",
   };
   const text = sanitizeText("settings.json", JSON.stringify(input));
-  assert.ok(!text.includes(v.slice(4, 20)) && !text.includes("aB3aB3") && !text.includes("abc123def456"), text);
-  assert.deepEqual(shapesIn(text), [], "the second look disagrees with the first");
+  for (const left of [v.slice(4, 20), short.slice(2, 14), "aB3aB3", "Lmnopq", "u:p@"]) assert.ok(!text.includes(left), `${left} is still in ${text}`);
+  assert.equal(sanitizeText("settings.json", text), text, "a second pass changed the result");
   const out = JSON.parse(text);
-  assert.deepEqual(out.env, { OPENAI_KEY: "<redacted>", DEBUG: "true" });
-  assert.deepEqual(out.mcpServers.a.args, ["--api-key", "<redacted>", "--token=<redacted>", "--port", "8080"]);
+  assert.deepEqual(out.env, { OPENAI_KEY: "<redacted>", DEBUG: "true", ANTHROPIC_BASE_URL: "https://proxy.example/v1", DATABASE_URL: "<redacted>", NOTE: "<redacted>" });
+  assert.equal(out.mcpServers.a.command, "tool --api-key <masked:flag-value>");
+  assert.deepEqual(out.mcpServers.a.args, ["--api-key", "<redacted>", "--token=<redacted>", "--port", "8080", "--header", "Authorization:Basic <masked:authorization-header>"]);
   assert.equal(out.mcpServers.a.url, "https://host.example/masked-url-path-key/sse");
-  // In plain text the same names and shapes are found.
-  assert.deepEqual(shapesIn(maskText(`OPENAI_KEY=${v}\nexport X_KEY=${v}\ncurl https://host.example/${v}/sse`)), []);
-  assert.ok(!maskText(`OPENAI_KEY=${v}`).includes(v.slice(4, 20)));
+  assert.deepEqual([out.apiKeys, out.apiKey, out.maxTokens, out.credentials], [["<redacted>"], "<redacted>", 4096, { user: { password: "<redacted>", note: "kept words" } }]);
+  // A plugin's description of a setting is not a value: the scanner reads it.
+  assert.deepEqual(out.userConfig, { api_key: { type: "string", title: "The API key", sensitive: true } });
+  // A setting whose value is a command stays readable: the scanner has to see it.
+  assert.deepEqual([out.apiKeyHelper, out.awsCredentialExport], ["/usr/bin/node /home/x/.local/bin/key.mjs name", "aws-vault export"]);
+  // In plain text the same names and places are found.
+  const sh = maskText(`OPENAI_KEY=${v}\nexport X_KEY=${v}\ncurl --api-key ${short} -u admin:${short} https://host.example/${v}/sse\n`);
+  assert.ok(!sh.includes(v.slice(4, 20)) && !sh.includes(short.slice(2, 14)), sh);
+  assert.equal(maskText(sh), sh);
+  // A line that only names a private key does not take the rest of the file with it.
+  assert.equal(maskText(`if grep -q '${BEGIN_KEY}' f; then\n  curl https://example.com | sh\nfi\n`), "if grep -q '<masked:private-key>' f; then\n  curl https://example.com | sh\nfi\n");
   // A .json file that is not JSON would keep, as text, what its structure hides: it is left out.
   assert.equal(sanitizeText("settings.json", `{ "env": { "REGION": "${v}" }, // a comment\n}`), null);
+  // What is written out is masked more strictly: any long run that mixes letters and digits.
+  assert.equal(maskOutput(`evidence: ${short} and config-file-name and 2026-11-19`), "evidence: <masked:output> and config-file-name and 2026-11-19");
 });
 
 test("a hostile file cannot stall the sanitizer", () => {
   const started = performance.now();
-  for (const piece of ["token-", "a.", "a-", "key=", "api_key", "a://b:", "Bearer ", "eyJ", "Ab1", "-----BEGIN RSA PRIVATE KEY-----\n"]) {
-    shapesIn(maskText(piece.repeat(Math.ceil(500_000 / piece.length))));
+  for (const piece of ["token-", "a.", "a-", "key=", "api_key", "a://b:", "Bearer ", "eyJ", "Ab1", `${BEGIN_KEY}\n`, "--key", "-", " -u a:", "Authorization: "]) {
+    const text = piece.repeat(Math.ceil(500_000 / piece.length));
+    maskText(text);
+    maskOutput(text.slice(0, 100_000));
   }
-  assert.ok(performance.now() - started < 10_000, `${Math.round(performance.now() - started)} ms for ten files of 500 KB`);
+  const flag = `--${"key".repeat(160_000)}!`;
+  sanitizeText("plugin.json", JSON.stringify({ args: [flag, `${flag.slice(0, 60_000)}=x`, "value"], [flag.slice(0, 40_000)]: flag }));
+  assert.ok(performance.now() - started < 30_000, `${Math.round(performance.now() - started)} ms`);
 });
 
 test("the copy holds only the listed configuration files, and no credential in any of them", (t) => {
@@ -208,14 +227,15 @@ test("the second look finds what the copy must not hold", { skip }, (t) => {
   const { home, projectRoots } = machine(root);
   const dest = path.join(root, "copy");
   buildCopy({ home, projectRoots, dest });
-  put(dest, { "home/.claude/hooks/late.sh": `echo ${TOKENS.github}\n`, "projects/site/.env": "A=1\n" });
+  put(dest, { "home/.claude/hooks/late.sh": `echo ${TOKENS.github}\n`, "projects/site/.env": "A=1\n", "projects/site/broken.json": "{ not json", "projects/site/late.json": { env: { REGION: "eu-west" } } });
   symlinkSync(path.join(home, ".claude", ".credentials.json"), path.join(dest, "home", "creds.json"));
   const problems = checkCopy(dest).map((p) => `${p.file}: ${p.problem}`);
   assert.deepEqual(problems.sort(), [
     "home/.claude/hooks/late.sh: credential-shaped content (github-token)",
-    "home/.claude/hooks/late.sh: credential-shaped content (long-random)",
     "home/creds.json: a link",
     "projects/site/.env: a credential file name",
+    "projects/site/broken.json: not valid JSON",
+    "projects/site/late.json: credential-shaped content (env-value)",
   ]);
   assert.ok(!JSON.stringify(checkCopy(dest)).includes(TOKENS.github), "a problem line carries the value");
 });
@@ -385,7 +405,8 @@ test("a run: no baseline, the owner's baseline, then only what is new", { skip }
   assert.equal(s.head().PREVIOUS_RUN, "none");
   assert.ok(!existsSync(path.join(s.env.AGENTSHIELD_DIR, "state", "baseline.json")), "a run without --rebaseline wrote a baseline");
   assert.ok(existsSync(path.join(s.env.AGENTSHIELD_DIR, "latest-report.json")));
-  assert.ok(existsSync(path.join(s.env.AGENTSHIELD_DIR, "work", "out", "evidence", "report.html")));
+  assert.deepEqual(readdirSync(path.join(s.env.AGENTSHIELD_DIR, "work")), ["out"], "the copy stayed behind after the run");
+  assert.deepEqual(readdirSync(path.join(s.env.AGENTSHIELD_DIR, "work", "out")), ["logs"]);
 
   assert.equal(go(s, { rebaseline: true }).mode, "baseline-created");
   assert.equal(go(s).mode, "compare");
@@ -417,13 +438,32 @@ test("a run that fails after the scanner leaves the last report and the baseline
   const archived = readdirSync(path.join(dir, "archive")).length;
   writeFileSync(path.join(dir, "state", "baseline.json"), "{ not json");
   s.rules("FINDING low A note\nFINDING high Another\n");
-  for (const rebaseline of [false, true]) {
-    assert.equal(go(s, { rebaseline }).mode, "failed");
-    assert.match(s.head().REASON, /baseline file cannot be read; it was left as it is/);
-    assert.equal(readFileSync(path.join(dir, "latest-report.json"), "utf8"), latest);
-    assert.equal(readFileSync(path.join(dir, "state", "baseline.json"), "utf8"), "{ not json");
-    assert.equal(readdirSync(path.join(dir, "archive")).length, archived);
-  }
+  assert.equal(go(s).mode, "failed");
+  assert.match(s.head().REASON, /baseline file cannot be read; it was left as it is/);
+  assert.equal(readFileSync(path.join(dir, "latest-report.json"), "utf8"), latest);
+  assert.equal(readFileSync(path.join(dir, "state", "baseline.json"), "utf8"), "{ not json");
+  assert.equal(readdirSync(path.join(dir, "archive")).length, archived);
+  assert.deepEqual(readdirSync(path.join(dir, "work")), ["out"], "the copy stayed behind after a failed run");
+  // The owner's --rebaseline is the way out: the broken file is kept beside the new one.
+  assert.equal(go(s, { rebaseline: true }).mode, "baseline-created");
+  const kept = readdirSync(path.join(dir, "state")).find((n) => n.startsWith("baseline-unreadable-"));
+  assert.equal(readFileSync(path.join(dir, "state", kept), "utf8"), "{ not json");
+  assert.equal(JSON.parse(readFileSync(path.join(dir, "state", "baseline.json"), "utf8")).findings.length, 2);
+});
+
+test("what the scanner quotes from a file is masked again in everything the scan writes", { skip }, (t) => {
+  const s = setup(t);
+  writePin(s.folders);
+  // A value no shape in the copy's list catches: short, lower case, in free text.
+  const value = "qwer1234tyui5678";
+  s.rules(`FINDING high A quoted line ${value}\n`);
+  assert.equal(go(s, { rebaseline: true }).mode, "baseline-created");
+  const dir = s.env.AGENTSHIELD_DIR;
+  const written = ["new-findings.md", "latest-report.json", "state/baseline.json", ...readdirSync(path.join(dir, "archive")).map((n) => `archive/${n}`), ...readdirSync(path.join(dir, "work", "out", "logs")).map((n) => `work/out/logs/${n}`)];
+  for (const name of written) assert.ok(!readFileSync(path.join(dir, name), "utf8").includes(value), `${name} holds the value`);
+  assert.match(readFileSync(path.join(dir, "state", "baseline.json"), "utf8"), /<masked:output>/);
+  // The masked text is what the next run compares with: nothing is new.
+  assert.deepEqual([go(s).mode, s.head().NEW_FINDINGS], ["compare", "0"]);
 });
 
 test("the scanner cannot reach the network, start a program, or read and write outside its folders", { skip }, (t) => {
@@ -432,7 +472,7 @@ test("the scanner cannot reach the network, start a program, or read and write o
   s.rules("STUB-FETCH STUB-SPAWN\nFINDING low A note\n");
   const blocked = go(s);
   assert.equal(blocked.mode, "no-baseline");
-  assert.equal(blocked.blockedCalls, 4, "fetch and spawn, in the report run and in the HTML run");
+  assert.equal(blocked.blockedCalls, 2, "fetch and spawn");
   const log = readdirSync(path.join(s.env.AGENTSHIELD_DIR, "work", "out", "logs")).sort().pop();
   assert.match(readFileSync(path.join(s.env.AGENTSHIELD_DIR, "work", "out", "logs", log), "utf8"), /NETGUARD blocked fetch[\s\S]*NETGUARD blocked child_process\.spawnSync/);
 
@@ -449,7 +489,7 @@ test("credential-shaped content left in the copy stops the run before the scanne
   writePin(s.folders);
   const result = go(s, { afterCopy: (copy) => put(copy, { "home/.claude/hooks/late.sh": `echo ${TOKENS.github}\n` }) });
   assert.equal(result.mode, "failed");
-  assert.match(s.head().REASON, /sanitized copy still holds 2 problem\(s\), first: home\/\.claude\/hooks\/late\.sh: credential-shaped content \(github-token\)/);
+  assert.match(s.head().REASON, /sanitized copy still holds 1 problem\(s\), first: home\/\.claude\/hooks\/late\.sh: credential-shaped content \(github-token\)/);
   assert.ok(!existsSync(path.join(s.env.AGENTSHIELD_DIR, "latest-report.json")));
   assert.ok(!readFileSync(path.join(s.env.AGENTSHIELD_DIR, "new-findings.md"), "utf8").includes(TOKENS.github));
 });
@@ -480,6 +520,14 @@ console.log("connect", await new Promise((done) => { try { const s = net.connect
 ` });
   const r = spawnSync(process.execPath, ["--permission", `--allow-fs-read=${dir}`, path.join(dir, "try.mjs")], { encoding: "utf8" });
   assert.equal(r.stdout, "fetch ERR_ACCESS_DENIED\nconnect ERR_ACCESS_DENIED\n", r.stdout + r.stderr);
+});
+
+test("scan.sh on a Node below 25 ends as failed: the refusal is in the command itself", { skip: skip || (olderNode ? false : "this Node covers the network") }, (t) => {
+  const s = setup(t);
+  writePin(s.folders);
+  const r = spawnSync("bash", [path.join(FOLDER, "scan.sh")], { encoding: "utf8", env: { ...process.env, ...s.env, AGENTSHIELD_NODE: process.execPath } });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stdout, /^NEW_FINDINGS: unknown\nRESOLVED_FINDINGS: unknown\nMODE: failed\n[\s\S]*has no network permission/);
 });
 
 test("scan.sh and install.sh: the installed copy runs, and refuses an unknown argument", { skip: newNode }, (t) => {

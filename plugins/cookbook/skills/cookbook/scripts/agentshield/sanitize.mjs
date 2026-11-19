@@ -4,6 +4,12 @@
 // again. Nothing here reads a credential store, a session transcript or an .env file: a
 // file is copied only when the list below names it.
 //
+// What this is and is not. Values are found by where they stand (JSON) and by shape (text),
+// and no list of shapes is complete: a short or unusual value in free text can stay in the
+// copy. Three things hold beyond the copy: the scanner that reads it has no network and
+// starts no program (scan.mjs), everything the scan writes out goes through the stricter
+// maskOutput(), and the copy is deleted when the run ends.
+//
 // The layout is the one AgentShield 1.6.0 discovers. It reads a skill only as a file directly
 // inside a `skills` folder, and never walks into `.claude`, so every skill gets a folder of
 // its own (`<skill>/.claude/skills/SKILL.md`) and plugins sit outside `.claude`:
@@ -20,6 +26,7 @@ import path from "node:path";
 export const REDACTED = "<redacted>";
 const MAX_FILE_BYTES = 512 * 1024;
 const MAX_FILES = 5000;
+const MAX_TOTAL_BYTES = 64 * 1024 * 1024;
 const TEXT_EXTENSIONS = new Set([
   ".md", ".markdown", ".json", ".jsonc", ".sh", ".bash", ".zsh", ".js", ".cjs", ".mjs", ".ts", ".cts", ".mts",
   ".py", ".rb", ".toml", ".yaml", ".yml", ".txt", ".mdc", ".cmd", ".ps1", "",
@@ -28,11 +35,11 @@ const TEXT_EXTENSIONS = new Set([
 const DENIED_NAME = /^(\.credentials\.json|credentials(\.json)?|auth\.json|\.secrets|\.env(\..*)?|\.npmrc|\.netrc|\.pgpass|.*\.dpapi|.*\.pem|.*\.key|.*\.p12|.*\.pfx|id_[a-z0-9]+)$/i;
 const DENIED_PATH = /[\\/](\.ssh|\.gnupg|\.aws|\.kube|\.docker|\.config|keyrings|sessions|session-env|file-history|shell-snapshots|\.claude[\\/]projects)[\\/]/i;
 
-// Credential shapes. Each is replaced by `<masked:name>`; checkCopy() looks for the same
-// shapes in the finished folder, and one that is still there stops the scan. Every pattern
-// reads a text in one pass: none has an open-ended part before its fixed start.
+// Credential shapes. Each is replaced by `<masked:name>`, after the part in its first
+// group when it has one (the flag or header that names the value stays readable). Every
+// pattern reads a text in one pass: no open-ended part stands before a fixed start.
 export const SECRET_PATTERNS = [
-  ["private-key", /-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]{0,40}PRIVATE KEY-----|$)/g],
+  ["private-key", /-----BEGIN [A-Z ]{0,40}PRIVATE KEY-----(?:\s{0,4}[A-Za-z0-9+/=]{16,}){0,400}(?:\s{0,4}-----END [A-Z ]{0,40}PRIVATE KEY-----)?/g],
   ["anthropic-key", /\bsk-ant-[A-Za-z0-9_-]{20,}/g],
   ["sk-key", /\bsk-(?:proj-|live-|test-)?[A-Za-z0-9_-]{24,}/g],
   ["github-token", /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})/g],
@@ -45,15 +52,18 @@ export const SECRET_PATTERNS = [
   ["sendgrid-key", /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}/g],
   ["npm-token", /\bnpm_[A-Za-z0-9]{36}\b/g],
   ["jwt", /\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g],
-  ["bearer", /\bBearer\s{1,4}[A-Za-z0-9._~+/-]{24,}=*/g],
+  ["authorization-header", /(\bAuthorization\s{0,3}[:=]\s{0,3}["']?(?:Basic|Bearer|Token|Digest|ApiKey)\s{1,4})[^\s"'<]{4,}/gi],
+  ["bearer", /(\bBearer\s{1,4})[A-Za-z0-9._~+/-]{8,}=*/g],
   ["url-credentials", /(?<![A-Za-z0-9+.-])[a-z][a-z0-9+.-]{0,20}:\/\/[^\s/:@"'<>]{1,200}:[^\s/@"'<>]{1,200}@/gi],
+  ["user-and-password", /((?<=\s)(?:-u|--user)[ \t]{1,4}["']?)[^\s"':<]{1,80}:[^\s"']{1,200}/g],
+  ["flag-value", /((?<![A-Za-z0-9])--?[A-Za-z0-9-]{0,40}(?:key|token|secret|passw(?:or)?d|auth|credential)[A-Za-z0-9-]{0,40}(?:=|[ \t]{1,3})["']?)[^\s"'<-][^\s"']{7,}/gi],
 ];
 // `name = value` where the name says it is a secret and the value is long and mixed.
 const ASSIGNED = /((?:api[_-]?key|secret|token|passw(?:or)?d|credential|[_-]key|\bkey|auth)[A-Za-z0-9_-]{0,40})(["']?\s{0,4}[:=]\s{0,4}["']?)([A-Za-z0-9+/_.=-]{16,})/gi;
 const mixed = (v) => /[0-9]/.test(v) && /[A-Za-z]/.test(v) && !/^[a-z]+(?:[._/-][a-z0-9]+)+$/.test(v);
 // Any other long run of key characters that looks random: digits with both cases of
 // letters, or a long hexadecimal number. Words joined by `-` or `_` are left alone.
-const LONG = /(?<![A-Za-z0-9_+-])[A-Za-z0-9_+-]{24,}(?![A-Za-z0-9_+-])/g;
+const LONG = /(?<![A-Za-z0-9_+-])[A-Za-z0-9_+-]{20,}(?![A-Za-z0-9_+-])/g;
 const random = (v) => {
   if (/^[a-f0-9]{32,}$/i.test(v)) return /[0-9]/.test(v) && /[a-f]/i.test(v);
   if (!(/[0-9]/.test(v) && /[a-z]/.test(v) && /[A-Z]/.test(v))) return false;
@@ -61,16 +71,22 @@ const random = (v) => {
 };
 const SECRET_KEY = /(token|secret|passw(or)?d|api[_-]?key|authorization|credential|cookie|private[_-]?key|(^|[_-])key$|(^|[_-])auth$)/i;
 const CAMEL_KEY = /[a-z](Key|Auth)$/;
-const secretName = (key) => SECRET_KEY.test(key) || CAMEL_KEY.test(key);
-const SECRET_FLAG = /^--?[A-Za-z0-9-]*(?:key|token|secret|passw(?:or)?d|auth|credential)[A-Za-z0-9-]*$/i;
-const SECRET_FLAG_VALUE = /^(--?[A-Za-z0-9-]*(?:key|token|secret|passw(?:or)?d|auth|credential)[A-Za-z0-9-]*=)./i;
+// A setting whose name mentions a secret but whose value is a command or a path
+// (`apiKeyHelper`, `awsCredentialExport`): the scanner must see it, so it is masked by
+// shape like any other text and not emptied.
+const COMMAND_KEY = /(helper|export|refresh|command|script|path|file|dir)$/i;
+const secretName = (key) => (SECRET_KEY.test(key) || CAMEL_KEY.test(key)) && !COMMAND_KEY.test(key);
+const secretFlag = (v) => v.length <= 64 && /^--?[A-Za-z0-9-]+$/.test(v) && /(key|token|secret|passw(or)?d|auth|credential)/i.test(v);
+const plainUrl = (v) => /^https?:\/\/[^\s]{1,400}$/i.test(v);
 
 // Text with every credential shape replaced. `counts` gets one entry per shape found.
 export function maskText(text, counts = {}) {
   const count = (name) => { counts[name] = (counts[name] ?? 0) + 1; return `<masked:${name}>`; };
   const once = (input) => {
     let out = input;
-    for (const [name, pattern] of SECRET_PATTERNS) out = out.replace(new RegExp(pattern.source, pattern.flags), () => count(name));
+    for (const [name, pattern] of SECRET_PATTERNS) {
+      out = out.replace(new RegExp(pattern.source, pattern.flags), (all, kept) => (typeof kept === "string" ? kept : "") + count(name));
+    }
     out = out.replace(ASSIGNED, (all, key, sep, value) => (mixed(value) ? `${key}${sep}${count("assigned-secret")}` : all));
     return out.replace(LONG, (value) => (random(value) ? count("long-random") : value));
   };
@@ -89,6 +105,14 @@ export function shapesIn(text) {
   return found;
 }
 
+// For what the scan writes out (findings, the baseline, the log). The copy is masked by
+// shape, and no list of shapes is complete, so here every run of 12 or more key characters
+// that mixes letters and digits goes as well: an output loses little by it.
+export function maskOutput(text) {
+  return maskText(String(text ?? "")).replace(/(?<![A-Za-z0-9+_=-])[A-Za-z0-9+_=-]{12,}(?![A-Za-z0-9+_=-])/g,
+    (run) => (/[0-9]/.test(run) && /[A-Za-z]/.test(run) ? "<masked:output>" : run));
+}
+
 // A URL without its user, password, query and fragment, and without a key in its path.
 const cleanUrl = (value, counts) => {
   try {
@@ -103,35 +127,44 @@ const cleanUrl = (value, counts) => {
   } catch { return value; }
 };
 
-// A parsed JSON value with the credential values taken out. Every `env` and `headers`
-// entry keeps its name and loses its value (a plain number or true/false stays); a key
-// whose name says it is a secret loses its value; an argument after a flag that names a
-// secret loses its value; every other string goes through maskText.
-export function redactJson(value, counts = {}, key = "") {
+// A parsed JSON value with the credential values taken out:
+// - directly under a name that says it is a secret, a string, a long number and every
+//   element of a list is emptied (`secret`); an object there is read entry by entry, each
+//   under its own name, so a plugin's description of a setting called `api_key` stays;
+// - an `env` or `headers` entry keeps its name and loses its value, unless the value is a
+//   plain number, true/false or a web address (cleaned): what a base-URL override points at
+//   is for the scanner to see;
+// - an argument after a flag that names a secret is emptied;
+// - every other string, and every key, goes through maskText.
+// Running it on its own result changes nothing: checkCopy relies on that.
+export function redactJson(value, counts = {}, key = "", secret = false) {
   const hit = (name) => { counts[name] = (counts[name] ?? 0) + 1; return REDACTED; };
   if (typeof value === "string") {
-    if (key && secretName(key)) return hit("secret-key-name");
-    const masked = key === "url" || /^https?:\/\//i.test(value) ? maskText(cleanUrl(value, counts), counts) : maskText(value, counts);
-    // The second look reads the file as text, where a name and its value stand together.
-    return key && shapesIn(JSON.stringify({ [key]: masked })).length ? hit("assigned-secret") : masked;
+    if (secret) return value === REDACTED ? value : hit("secret-key-name");
+    return key === "url" || plainUrl(value) ? maskText(cleanUrl(value, counts), counts) : maskText(value, counts);
   }
+  if (typeof value === "number") return secret && Math.abs(value) >= 1e7 ? hit("secret-key-name") : value;
   if (Array.isArray(value)) {
     return value.map((v, i) => {
-      if (typeof v !== "string") return redactJson(v, counts, "");
-      if (i > 0 && typeof value[i - 1] === "string" && SECRET_FLAG.test(value[i - 1])) return hit("secret-flag-value");
-      const flag = SECRET_FLAG_VALUE.exec(v);
-      if (flag) { hit("secret-flag-value"); return `${flag[1]}${REDACTED}`; }
+      if (typeof v !== "string" || secret) return redactJson(v, counts, key, secret);
+      if (i > 0 && typeof value[i - 1] === "string" && secretFlag(value[i - 1])) return v === REDACTED ? v : hit("secret-flag-value");
+      const eq = v.indexOf("=");
+      if (eq > 0 && secretFlag(v.slice(0, eq))) return v.slice(eq + 1) === REDACTED ? v : `${v.slice(0, eq + 1)}${hit("secret-flag-value")}`;
       return redactJson(v, counts, "");
     });
   }
   if (!value || typeof value !== "object") return value;
   const out = {};
   for (const [k, v] of Object.entries(value)) {
+    const name = maskText(k, counts);
     if ((k === "env" || k === "headers") && v && typeof v === "object" && !Array.isArray(v)) {
-      out[k] = Object.fromEntries(Object.entries(v).map(([name, held]) =>
-        [maskText(name, counts), typeof held === "string" && !/^(\d{1,12}|true|false)$/i.test(held) ? hit(`${k}-value`) : redactJson(held, counts, name)]));
+      out[name] = Object.fromEntries(Object.entries(v).map(([entry, held]) => {
+        if (typeof held !== "string") return [maskText(entry, counts), redactJson(held, counts, entry, true)];
+        if (held === REDACTED || /^(\d{1,12}|true|false)$/i.test(held)) return [maskText(entry, counts), held];
+        return [maskText(entry, counts), plainUrl(held) && !secretName(entry) ? maskText(cleanUrl(held, counts), counts) : hit(`${k}-value`)];
+      }));
     } else {
-      out[maskText(k, counts)] = redactJson(v, counts, k);
+      out[name] = redactJson(v, counts, k, secretName(k));
     }
   }
   return out;
@@ -157,10 +190,11 @@ const list = (p) => { try { return readdirSync(p).sort(); } catch { return []; }
 export function buildCopy({ home, projectRoots = [], dest }) {
   if (existsSync(dest)) throw new Error(`the copy folder already exists: ${dest}`);
   mkdirSync(dest, { recursive: true });
-  const result = { files: 0, masked: [], skipped: [] };
+  const result = { files: 0, bytes: 0, masked: [], skipped: [] };
 
   const write = (target, text, counts) => {
-    if (result.files >= MAX_FILES) throw new Error(`more than ${MAX_FILES} files to copy: the list of sources is wrong`);
+    result.bytes += Buffer.byteLength(text);
+    if (result.files >= MAX_FILES || result.bytes > MAX_TOTAL_BYTES) throw new Error(`more than ${MAX_FILES} files or 64 MB to copy: the list of sources is wrong`);
     const full = path.join(dest, target);
     mkdirSync(path.dirname(full), { recursive: true });
     writeFileSync(full, text);
@@ -279,8 +313,10 @@ export function buildCopy({ home, projectRoots = [], dest }) {
   return result;
 }
 
-// The second look: every file of the finished copy, read again. Returns the problems
-// ({ file, problem }); the scan runs only when there are none. No value is returned.
+// The second look: every file of the finished copy goes through the sanitizer once more,
+// and a file it would still change is a problem, as is a link, a credential file name or
+// a .json file that is not JSON. Returns the problems ({ file, problem }); the scan runs
+// only when there are none. No value is returned.
 export function checkCopy(dest) {
   const problems = [];
   const walk = (dir) => {
@@ -290,8 +326,12 @@ export function checkCopy(dest) {
       if (lstatSync(full).isSymbolicLink()) { problems.push({ file: rel, problem: "a link" }); continue; }
       if (entry.isDirectory()) { walk(full); continue; }
       if (DENIED_NAME.test(entry.name)) { problems.push({ file: rel, problem: "a credential file name" }); continue; }
-      if (statSync(full).size > MAX_FILE_BYTES) { problems.push({ file: rel, problem: "larger than 512 KB" }); continue; }
-      for (const name of shapesIn(readFileSync(full, "utf8"))) problems.push({ file: rel, problem: `credential-shaped content (${name})` });
+      if (statSync(full).size > MAX_FILE_BYTES * 2) { problems.push({ file: rel, problem: "larger than 1 MB" }); continue; }
+      const text = readFileSync(full, "utf8");
+      const counts = {};
+      const again = sanitizeText(entry.name, text, counts);
+      if (again === null) problems.push({ file: rel, problem: "not valid JSON" });
+      else if (again !== text) problems.push({ file: rel, problem: `credential-shaped content (${Object.keys(counts).sort().join(", ") || "the sanitizer would change it"})` });
     }
   };
   walk(dest);

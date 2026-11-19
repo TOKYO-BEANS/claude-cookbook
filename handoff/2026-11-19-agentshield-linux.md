@@ -15,16 +15,32 @@ desktop app's sidebar is dropped, and this scan is the third.
   `~/.local/share/stack-atlas/agentshield`, where the pin, the reports and a baseline live.
 - The guarantees of the old script, rebuilt: the installed copy is checked against a pin
   (version, lockfile, a hash over every installed file) before it starts; the scanner reads
-  only a copy made from a fixed list of files, with credential values taken out and the
-  whole copy read a second time; it runs under Node's permission model with no network, no
-  child process and one output folder, with a guard that counts the attempts it stops; the
-  output is `new-findings.md` with `NEW_FINDINGS`, `RESOLVED_FINDINGS` and `MODE` first.
+  only a copy made from a fixed list of files, with credential values taken out, and the
+  copy goes through the sanitizer a second time before the scan; it runs under Node's
+  permission model with no network, no child process and one output folder, with a guard
+  that counts the attempts it stops; the output is `new-findings.md` with `NEW_FINDINGS`,
+  `RESOLVED_FINDINGS` and `MODE` first.
 - Different from the old one: the copy also holds what loads from each installed plugin
   (hooks, MCP servers, agents, skills), since that is where hooks and most servers are now;
-  a baseline is written only by `scan.sh --rebaseline`, never by a first run
-  (`MODE: no-baseline` until then); `PREVIOUS_RUN` gives the totals of the run before; the
-  scan refuses to start on a Node older than 25, where the permission model does not cover
-  the network.
+  the copy is deleted when a run ends, and what the scanner quoted is masked again, more
+  strictly, in everything the scan writes; a baseline is written only by
+  `scan.sh --rebaseline`, never by a first run (`MODE: no-baseline` until then);
+  `PREVIOUS_RUN` gives the totals of the run before; no HTML report; the scan refuses to
+  start on a Node older than 25, where the permission model does not cover the network.
+- Two rounds by a reviewer that did not build it, before the first push and after it. The
+  first found values the sanitizer missed (an `env` name ending in `_KEY`, an argument after
+  `--api-key`, a key in a URL path, a base64 `auth` value, two token families), two slow
+  patterns, links followed out of their folder, the last report replaced before a late
+  failure and an earlier result left in place by a crash. The second found one more slow
+  pattern, more places for a value (a flag inside a command line, a list or a number under
+  a secret name, a short header value) and masking that could hide a hook's text from the
+  scanner. After the second the design changed, since a list of shapes is never complete:
+  the second look is the sanitizer run again on its own result, JSON is read by structure
+  in both passes, a `.json` file that is not JSON is left out, a link is followed only to a
+  file of the same name, every text the scan writes passes a stricter mask (any run of 12
+  or more letters and digits mixed), the outputs are replaced last, the copy is deleted,
+  `scan.sh` stops a run after ten minutes, and `new-findings.md` says "did not finish" from
+  a run's first moment to its end.
 - AgentShield is a pinned copy in `~/.local/share/agentshield`: `ecc-agentshield@1.6.0`
   (published 10 September 2026) with zod 4.6.6, glob 14.0.2 and minimatch 11.0.1 as
   overrides, every package older than 24 hours. The catalog's part is `pinned` now.
@@ -36,14 +52,6 @@ desktop app's sidebar is dropped, and this scan is the third.
 - Pages: `scheduled-runs.md` (no task runs in Claude Desktop any more; today's tasks),
   `scheduled-runs-desktop.md` deleted, the map's fallback for a scheduled agent run is "—",
   `options/keep-healthy.md`, `agent-audit.md`.
-- A reviewer that did not build it read the first version and found gaps, fixed before the
-  push: values the sanitizer missed (an `env` name ending in `_KEY`, an argument after
-  `--api-key`, a key in a URL path, a base64 `auth` value, two token families), two patterns
-  that a hostile file could make slow, links followed out of their folder, the last report
-  replaced before a late failure, and an earlier result left in place when a run crashed.
-  Every `env` and `headers` value is taken out now, a `.json` file that is not JSON is left
-  out, a link is followed only to a file of the same name, the outputs are replaced last,
-  and `new-findings.md` says "did not finish" from a run's first moment to its end.
 - `pinned-vet.sh` found its own folder after a `cd`: started by a relative path it ended
   with exit 127 at the sandbox step. It reads the folder first now; one test.
 
@@ -57,22 +65,27 @@ desktop app's sidebar is dropped, and this scan is the third.
   the project, no process left. In one sandbox both trees gave the same 49 findings and
   score on a fixture and the same exit from the corpus gate. The owner saw these numbers and
   chose the install with the fixed versions (question dialog, this chat, 19 November).
-- Tests: `scripts/agentshield.test.mjs`, 20 tests. `npm test` in a boat sandbox on Node 24
-  (Depot's version): 729 tests, 720 pass, 9 skip, 2 of them here (the command-line run and
-  the proof that the permission model alone refuses the network: both need Node 25). On
-  Node 26 in the same sandbox, this file and `vetting.test.mjs`: 46 pass, 1 skips by design
-  (the refusal on an older Node).
-- Runs on the laptop (19:22 to 19:47 UTC), the last with the final code: 169 files copied,
-  all 169 read by the scanner, nothing skipped, no value taken out, 0 blocked calls, 5
-  seconds; 462 findings (21 critical, 54 high, 318 medium, 60 low, 9 info), score 38/100.
+- Tests: `scripts/agentshield.test.mjs`, 22 tests. `npm test` in a boat sandbox on Node 24
+  (Depot's version): 731 tests, 722 pass, 9 skip, 0 fail. Two of the skips are here (the command-line run and the proof
+  that the permission model alone refuses the network: both need Node 25). On Node 26 in
+  the same sandbox, this file and `vetting.test.mjs`: 47 pass, 2 skip (the two that skip are the
+  refusals on an older Node).
+- Runs on the laptop (19:22 to 20:04 UTC), the last with the final code: 169 files copied,
+  all 169 read by the scanner, nothing skipped, a value taken out in 3 files (a package
+  folder name and two documentation examples, none a credential), 0 blocked calls, 3
+  seconds; 463 findings (21 critical, 54 high, 318 medium, 61 low, 9 info), score 38/100.
   The owner saw the first run: 460 findings from 165 files, before a linked personal skill
-  and three hook scripts without a known ending were read too (2 more medium). Gitleaks on
-  the sanitized copy, as a cross-check, both times: no leaks.
+  and three hook scripts without a known ending were read too. Gitleaks on the sanitized
+  copy, as a cross-check while the copy was still kept (two runs): no leaks.
 - The task was read back from T3 Code's task store: enabled, `fixed_time` 08:00 on
   weekday 1, `fresh_session`, a worktree from `origin/main`, the prompt equal to the saved
-  one, next run 23 November 07:00 UTC.
+  one (after its update for the final scan too), next run 23 November 07:00 UTC.
 
 **Outstanding.**
+- The copy's sanitizer is best effort by design: a short or unusual value in free text
+  (not after a flag, a name or a header) can reach the copy. The scanner is offline, the
+  copy is deleted and the outputs are masked more strictly, so it stops there. Owner:
+  Claude; nothing clears it, the recipe says so.
 - No baseline. The owner saw the first run's totals and its critical and high findings and
   answered (19 November 2026) that a baseline makes no sense while the laptop is still being
   set up. Owner: the owner. Cleared by `scan.sh --rebaseline` on the owner's yes once the
@@ -99,7 +112,13 @@ desktop app's sidebar is dropped, and this scan is the third.
 - A first-run baseline, as the old script made one: set aside, because a scheduled run
   would then decide a baseline by itself.
 - Gitleaks as the scan's own second look: set aside for a fixed list of shapes that the
-  tests can pin; Gitleaks was run once by hand on the copy instead.
+  tests can pin; Gitleaks was run by hand on the copy instead.
+- A second look that searched the finished copy's text for the same shapes: it disagreed
+  with the first pass on JSON (an escape in front of a run of characters made it longer),
+  which would have failed every run on a harmless file. Replaced by running the sanitizer
+  again and asking whether anything changes.
+- Closing each gap the reviews found with one more shape: two rounds each found new ones.
+  The outputs are masked by a rule that needs no list instead.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-19-agentshield-linux/`:
 `vetting/` (both lockfiles, the three scanners' reports with and without the overrides, the

@@ -7,4 +7,7 @@ set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 node="${AGENTSHIELD_NODE:-/usr/bin/node}"
 [ -x "$node" ] || node="$(command -v node)"
+# A run takes seconds. One that hangs is stopped after ten minutes; new-findings.md then
+# still says that the run did not finish.
+if command -v timeout > /dev/null; then exec timeout 600 "$node" "$here/scan.mjs" "$@"; fi
 exec "$node" "$here/scan.mjs" "$@"

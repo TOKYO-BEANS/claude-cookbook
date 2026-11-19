@@ -10,12 +10,14 @@
 // One run:
 //   1. checks the installed copy against the pin: the version this file names, the lockfile
 //      and every installed file. A copy that differs is not started.
-//   2. builds a sanitized copy of the configuration (sanitize.mjs) and reads it again for
-//      credential-shaped content. Anything left stops the run.
+//   2. builds a sanitized copy of the configuration (sanitize.mjs) and puts it through the
+//      sanitizer again. Anything it would still take out stops the run. The copy is
+//      deleted when the run ends.
 //   3. starts AgentShield on that copy under Node's permission model: it may read its own
 //      files and the copy, write one output folder, and nothing else: no network, no child
 //      process. net-guard.mjs is loaded first and counts the attempts it stops.
-//   4. compares the findings with the baseline and writes new-findings.md.
+//   4. compares the findings with the baseline and writes new-findings.md. What the
+//      scanner quoted from a file is masked again, more strictly, before it is written.
 // A run that fails writes `MODE: failed` with the reason and exits 1.
 //
 // Folders (the tests set the AGENTSHIELD_* variables):
@@ -31,7 +33,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { compare, renderFindings, slim, totals } from "./compare.mjs";
-import { buildCopy, checkCopy, maskText } from "./sanitize.mjs";
+import { buildCopy, checkCopy, maskOutput, maskText } from "./sanitize.mjs";
 
 // The version the scan runs. An update is a change to this line through a pull request,
 // after the vetting; `--pin` then records the new copy.
@@ -163,7 +165,6 @@ export function scan({ rebaseline = false, env = process.env, afterCopy, olderNo
     for (const name of ["copy", "home"]) rmSync(path.join(work, name), { recursive: true, force: true });
     for (const name of ["report.json", "evidence"]) rmSync(path.join(out, name), { recursive: true, force: true });
     mkdirSync(path.join(work, "home"), { recursive: true });
-    mkdirSync(path.join(out, "evidence"), { recursive: true });
     const copied = buildCopy({ home: f.home, projectRoots: f.projectRoots, dest: copy });
     log.push(`copy: ${copied.files} files, ${copied.masked.length} with a value taken out, ${copied.skipped.length} skipped`);
     for (const skipped of copied.skipped) log.push(`  skipped ${skipped.file}: ${skipped.why}`);
@@ -183,14 +184,12 @@ export function scan({ rebaseline = false, env = process.env, afterCopy, olderNo
     try { report = JSON.parse(readFileSync(reportPath, "utf8")); } catch { throw new Error("the scanner wrote no report that can be read"); }
     if (!Array.isArray(report.findings) || typeof report.score?.numericScore !== "number") throw new Error("the report has no findings list or no score");
 
-    // The HTML report is for reading only: a failure here is logged and changes nothing.
-    const html = startTool({ pkg: f.pkg, work, out, copy }, "html", path.join(out, "evidence", "report.html"));
-    log.push(`html report exit ${html.status}`);
+    rmSync(reportPath, { force: true });
 
     const findings = report.findings.map(slim);
     let run = {
       at, tool: `${pin.package}@${pin.version}`, score: report.score, findings, copy: copied,
-      filesScanned: report.summary?.filesScanned, blockedCalls: tool.blocked.length + html.blocked.length, logs,
+      filesScanned: report.summary?.filesScanned, blockedCalls: tool.blocked.length, logs,
     };
     // Everything that can fail is done before an output of an earlier run is replaced.
     const baselinePath = path.join(state, "baseline.json");
@@ -198,9 +197,13 @@ export function scan({ rebaseline = false, env = process.env, afterCopy, olderNo
     mkdirSync(state, { recursive: true });
     mkdirSync(archive, { recursive: true });
     let baseline = null;
+    let unreadable = false;
     if (existsSync(baselinePath)) {
-      try { baseline = JSON.parse(readFileSync(baselinePath, "utf8")); } catch { throw new Error("the baseline file cannot be read; it was left as it is"); }
-      if (!Array.isArray(baseline.findings)) throw new Error("the baseline file has no findings list; it was left as it is");
+      try { baseline = JSON.parse(readFileSync(baselinePath, "utf8")); } catch { baseline = null; }
+      unreadable = !Array.isArray(baseline?.findings);
+      // Only the owner's `--rebaseline` replaces a baseline, a broken one too (it is kept beside).
+      if (unreadable && !rebaseline) throw new Error("the baseline file cannot be read; it was left as it is (scan.sh --rebaseline, on the owner's yes, moves it aside and saves a new one)");
+      if (unreadable) baseline = null;
     }
     // The run before this one, for the change in totals. It is not a baseline: nothing is
     // called new or resolved against it.
@@ -211,13 +214,21 @@ export function scan({ rebaseline = false, env = process.env, afterCopy, olderNo
         run.previous = { at: old.timestamp, totals: totals(old.findings.map(slim)), score: old.score?.numericScore };
       } catch { log.push(`the report of the run before (${before}) cannot be read`); }
     }
-    const previousBaseline = rebaseline && baseline ? path.join(state, `baseline-${compact(String(baseline.savedAt ?? at)).replace(/[^0-9TZ]/g, "")}.json`) : null;
+    const previousBaseline = !rebaseline ? null
+      : unreadable ? path.join(state, `baseline-unreadable-${compact(at)}.json`)
+        : baseline ? path.join(state, `baseline-${compact(String(baseline.savedAt ?? at)).replace(/[^0-9TZ]/g, "")}.json`) : null;
     if (rebaseline) run = { ...run, mode: "baseline-created", previousBaseline };
     else if (!baseline) run = { ...run, mode: "no-baseline" };
     else run = { ...run, mode: "compare", baseline, ...compare(baseline.findings, findings) };
     renderFindings(run);
 
-    const reportText = maskText(JSON.stringify(report, null, 2)) + "\n";
+    // In the kept report every text of a finding is masked strictly, whatever field the
+    // scanner put it in (its title, its evidence, a suggested fix); only the names a finding
+    // is found by keep the copy's own mask.
+    const named = new Set(["id", "file", "severity", "category"]);
+    const quoted = (v, key = "") => (typeof v === "string" ? (named.has(key) ? maskText(v) : maskOutput(v))
+      : Array.isArray(v) ? v.map((x) => quoted(x)) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, quoted(x, k)])) : v);
+    const reportText = maskText(JSON.stringify({ ...report, findings: report.findings.map((f) => quoted(f)) }, null, 2)) + "\n";
     writeFileSync(path.join(f.dir, "latest-report.json"), reportText);
     writeFileSync(path.join(archive, `${compact(at)}-report.json`), reportText);
     keepNewest(archive, /-report\.json$/, 26);
@@ -232,6 +243,9 @@ export function scan({ rebaseline = false, env = process.env, afterCopy, olderNo
     log.push(`failed: ${error.stack ?? error}`);
     const failed = { mode: "failed", at, reason: error.message, logs };
     try { return finish(failed); } catch { return failed; }
+  } finally {
+    // The copy has done its work: nothing of the configuration stays behind in the work folder.
+    for (const name of ["copy", "home"]) { try { rmSync(path.join(work, name), { recursive: true, force: true }); } catch { /* the next run removes it */ } }
   }
 }
 

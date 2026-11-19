@@ -8,12 +8,14 @@
   08:00) runs `scan.sh` there and triages by the rules in its prompt. A run checks the
   installed copy against its pin (version, lockfile, every file); copies a fixed list of files
   (own settings and instructions, MCP servers, installed plugins, each Desktop project's
-  instruction and settings files) with credential values taken out; reads the copy again,
-  and anything credential-shaped stops the run; starts AgentShield under Node's permission
-  model (Node 25 or newer: no network, no child process, one output folder), with
-  `net-guard.mjs` counting the attempts it stops; and writes `new-findings.md`, which
-  starts with `NEW_FINDINGS`, `RESOLVED_FINDINGS` and `MODE` (`failed` from a run's start
-  until it ends).
+  instruction and settings files) with credential values taken out; puts the copy through
+  the sanitizer again, and anything it would still change stops the run; starts AgentShield
+  under Node's permission model (Node 25 or newer: no network, no child process, one output
+  folder), with `net-guard.mjs` counting the attempts it stops; deletes the copy; and writes
+  `new-findings.md`, which starts with `NEW_FINDINGS`, `RESOLVED_FINDINGS` and `MODE`
+  (`failed` from a run's start until it ends).
+- **No list of credential shapes is complete.** The copy is best effort; what the scanner
+  quotes is masked again, more strictly, before anything is written (`maskOutput`).
 - **AgentShield is a pinned copy** in `~/.local/share/agentshield`: `ecc-agentshield@1.6.0`
   with zod, glob and minimatch overridden to their fixed versions (owner, 19 November 2026).
   An update: `pinned-vet.sh`, `pinned-install.sh`, the version line in `scan.mjs` through a

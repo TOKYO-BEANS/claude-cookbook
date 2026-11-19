@@ -3,15 +3,19 @@
 // builds some ids from a position in the file, so an edit above a finding can make it
 // "new" and "resolved" at once: such a pair gets a changed-evidence hint.
 
+import { maskOutput, maskText } from "./sanitize.mjs";
+
 const SEVERITIES = ["critical", "high", "medium", "low", "info"];
 const text = (v, max = 400) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 export const findingKey = (f) => [f.file ?? "", f.id ?? "", f.title ?? ""].join("\u0000");
 
-// What a baseline keeps of a finding: enough to compare and to read, never a whole report.
+// What the scan keeps of a finding: enough to compare and to read, never a whole report.
+// The scanner quotes the files it read, so what it says is masked again here: the names a
+// finding is found by (id, file) with the copy's own mask, its texts with the stricter one.
 export const slim = (f) => ({
-  id: text(f.id, 200), severity: SEVERITIES.includes(f.severity) ? f.severity : "info", category: text(f.category, 60),
-  title: text(f.title, 200), file: text(f.file, 300), ...(Number.isInteger(f.line) ? { line: f.line } : {}),
-  description: text(f.description), evidence: text(f.evidence, 300),
+  id: maskText(text(f.id, 200)), severity: SEVERITIES.includes(f.severity) ? f.severity : "info", category: text(f.category, 60),
+  title: maskOutput(text(f.title, 200)), file: maskText(text(f.file, 300)), ...(Number.isInteger(f.line) ? { line: f.line } : {}),
+  description: maskOutput(text(f.description)), evidence: maskOutput(text(f.evidence, 300)),
 });
 
 export function totals(findings) {
