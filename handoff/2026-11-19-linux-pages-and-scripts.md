@@ -62,3 +62,12 @@ an installed version with a platform suffix bounding the release notes, so it st
 **The review.** The first head had one medium and one low finding, both fixed in the second
 commit: the measurement task set is renamed `2026-11-19` with a note on why (its answer key
 changed), and the Parallel CLI's updater names the release's linux-x64 zip, not windows-x64.
+
+**After the merge.** #176 merged as `1f99aa9` (`merge-when-green.sh`, 5 checks, the review
+allowed it with one low finding); the release check read **verified** (execution 1889). The
+plugin was updated to `1f99aa9` and `firecrawl-secure.mjs` and `parallel-secure.mjs` copied to
+`~/.local/bin` (both still start); `stack-updates-daily.mjs` was already the same. The first
+run ended "NOT MERGED: the head is 7a6b4b7": GitHub had not yet seen the push of the merge
+commit; the second run, after the review's medium finding was fixed, merged. The low finding
+(the set note still said the old rule sets agree on L1-new-key) is fixed in the follow-up
+pull request: the note says a pre-laptop side fails that task for the platform.
