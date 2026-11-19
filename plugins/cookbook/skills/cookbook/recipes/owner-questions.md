@@ -38,7 +38,7 @@ one short extra turn; a miss is what this hook is for.
 **The key** is the Cookbook's own `jev-compaction`. Reading it from the Windows store took 2 to
 27 seconds, so the hook starts a broker once (`owner-questions-broker.mjs`, through
 `with-key.mjs`) that holds the key in memory only and answers on a local socket, its
-random name kept in the profile (`pipe.json`), one pipe per question version. It exits after 3
+random name kept in the profile (`pipe.json`), one socket per question version. It exits after 3
 hours idle, 20 hours in all, or 10 minutes without a key. A warm check takes
 under a second; the hook's own limit is 12 seconds (20 in `hooks.json`).
 

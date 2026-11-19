@@ -28,6 +28,8 @@ the two `PROVENANCE.txt` files, the Firecrawl pin's `package.json`.
   `add-ons.md`: rules proven on Windows, not proven again on Linux.
 - `security.md` and `safe-chain.md` (the Windows CI job): they change with that job's
   retirement, its own pull request.
+- The boat-route hook's own message still names DPAPI and PowerShell as reasons for a local
+  run; `boat-setup.md` keeps the escape's scope (only a run that cannot run in boat).
 - The vetting pages (the "Windows binary" exemption from the sandbox run) and the update
   skill's install table: the next pull request of this job.
 
