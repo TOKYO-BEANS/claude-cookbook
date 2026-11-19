@@ -162,6 +162,7 @@ test("on Windows a value under the variable's name in another letter case goes t
   const run = async (name, platform, env, runPowerShell) => {
     const started = [];
     await main([name, "SOME_KEY", "prog"], { home: dir, platform, arch: "x64", loadFfi: noFfi, runPowerShell, env,
+      runSecretTool: () => { throw Object.assign(new Error("no such item"), { status: 1 }); },
       say: () => {}, start: (program, args, childEnv) => { started.push(childEnv); return 0; } });
     return started[0];
   };

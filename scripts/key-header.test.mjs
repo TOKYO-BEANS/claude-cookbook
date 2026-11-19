@@ -67,7 +67,7 @@ test("the helper prints one Authorization header, in the form agent-key.ps1 prin
 test("a key that cannot be read prints nothing, says why on stderr and ends with code 1", async () => {
   const dir = home();
   try {
-    const got = await run(["absent"], { home: dir, loadFfi: noFfi, runPowerShell: noPowerShell });
+    const got = await run(["absent"], { home: dir, platform: "win32", arch: "x64", loadFfi: noFfi, runPowerShell: noPowerShell });
     assert.deepEqual(got, { code: 1, out: "", err: "key-header: could not read key \"absent\" (no key is saved as \"absent\")\n" });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
