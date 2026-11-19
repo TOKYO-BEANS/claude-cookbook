@@ -774,10 +774,10 @@ test("hooks.json runs the note at session start and on a prompt, and after a too
   for (const event of ["SessionStart", "UserPromptSubmit", "PostToolUse"]) {
     const commands = hooks[event].flatMap((g) => g.hooks.map((h) => h.command));
     if (event === "PostToolUse") {
-      // Sourced in the hook's own bash, so the gate starts no process; no matcher, so every tool call reaches it.
+      // Run with bash (a hook command runs in /bin/sh on Linux, which cannot run the gate); no matcher, so every tool call reaches it.
       const group = hooks[event].find((g) => g.hooks.some((h) => h.command.includes("model-budget-gate.sh")));
       assert.equal(group.matcher, undefined);
-      assert.equal(group.hooks[0].command, '. "${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-gate.sh" "${CLAUDE_PLUGIN_ROOT}"');
+      assert.equal(group.hooks[0].command, 'bash "${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-gate.sh" "${CLAUDE_PLUGIN_ROOT}"');
       assert.ok(!commands.some((c) => c.includes("model-budget-note.mjs")), "no ungated note after a tool");
     } else assert.ok(commands.some((c) => c.includes("${CLAUDE_PLUGIN_ROOT}/hooks/model-budget-note.mjs")), event);
     for (const g of hooks[event]) for (const h of g.hooks) assert.ok(h.timeout <= 10, `${event} timeout`);
@@ -798,7 +798,8 @@ const stubRoot = (home) => {
 const runGate = (home, root, input) => {
   const text = typeof input === "string" ? input : JSON.stringify(input);
   const log = join(home, "runs.log");
-  const run = spawnSync(BASH, ["-c", `. "${GATE.replaceAll("\\", "/")}" "${root.replaceAll("\\", "/")}"`], { input: text, encoding: "utf8", env: { ...process.env, USERPROFILE: home, HOME: home, MB_TEST_LOG: log } });
+  // As hooks.json runs it: bash with the gate file and the plugin root as arguments.
+  const run = spawnSync(BASH, [GATE.replaceAll("\\", "/"), root.replaceAll("\\", "/")], { input: text, encoding: "utf8", env: { ...process.env, USERPROFILE: home, HOME: home, MB_TEST_LOG: log } });
   const runs = existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").map((l) => JSON.parse(l)) : [];
   return { ...run, runs };
 };

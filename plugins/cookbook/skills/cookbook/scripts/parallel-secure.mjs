@@ -12,6 +12,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { main } from "./with-key.mjs";
 
-const EXE = join(homedir(), ".local", "share", "parallel-cli", "node_modules", "parallel-web-cli", "vendor", "parallel-cli", "parallel-cli.exe");
+// The package's install script unpacks parallel-cli.exe on Windows and parallel-cli elsewhere.
+const EXE = join(homedir(), ".local", "share", "parallel-cli", "node_modules", "parallel-web-cli", "vendor", "parallel-cli", process.platform === "win32" ? "parallel-cli.exe" : "parallel-cli");
 
 process.exit(await main(["parallel", "PARALLEL_API_KEY", EXE, ...process.argv.slice(2)]));

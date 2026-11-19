@@ -51,7 +51,9 @@ jobs:
   ai-review:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: depot-ubuntu-24.04
-    # Two API attempts of at most 12 minutes each, plus checkout and install.
+    # The API path: two attempts of at most 12 minutes each. The plan path: one
+    # run of at most 20 minutes after installing Claude Code (about 371 MB).
+    # Either way, plus checkout and install.
     timeout-minutes: 30
     # Depot CI's GITHUB_TOKEN is a Depot Code Access app token; the app holds
     # pull_requests: write, so this job can post its one comment.
@@ -109,6 +111,9 @@ jobs:
           # on a .nvmrc naming a Node version that nvm does not hold.
           cd "$RUNNER_TEMP"
           sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
+          # Minimum package age 24 hours, as the standard's Safe Chain step sets it
+          # (owner, 18 November 2026; never lower), for the next step's npm ci.
+          echo "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24" >> "$GITHUB_ENV"
       - name: Install the reviewer's locked dependencies
         if: steps.reviewer.outputs.ready == 'true'
         run: |

@@ -39,6 +39,12 @@ jobs:
           # on a .nvmrc naming a Node version that nvm does not hold.
           cd "$RUNNER_TEMP"
           sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
+          # Minimum package age 24 hours, not Safe Chain's 48-hour default (owner,
+          # 18 November 2026; never lower). The hold covers the hours before a new
+          # malicious release reaches Aikido's malware feed. $GITHUB_ENV carries it to
+          # the job's later steps, where the installs run (a step's own env: would
+          # not), and it outranks the hours a repository's .aikido sets.
+          echo "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24" >> "$GITHUB_ENV"
       # Version and wheel hashes live in .depot/semgrep-requirements.txt; pip installs
       # only those wheels and refuses any file whose hash does not match.
       - name: Install Semgrep
@@ -155,5 +161,11 @@ jobs:
           # on a .nvmrc naming a Node version that nvm does not hold.
           cd "$RUNNER_TEMP"
           sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
+          # Minimum package age 24 hours, not Safe Chain's 48-hour default (owner,
+          # 18 November 2026; never lower). The hold covers the hours before a new
+          # malicious release reaches Aikido's malware feed. $GITHUB_ENV carries it to
+          # the job's later steps, where the installs run (a step's own env: would
+          # not), and it outranks the hours a repository's .aikido sets.
+          echo "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm test

@@ -393,6 +393,36 @@ export function handoffErrors({ closedText, entryNames, pinned = HANDOFF_CLOSED_
   return errors;
 }
 
+// An entry's content (the owner's rule in the global CLAUDE.md): what changed, the
+// verification, what is outstanding, the dead ends and the evidence, each as a bold label or a
+// heading ("None." is an answer), and evidence that points at a durable copy. The reason: 32 of
+// the 114 AI review findings on the 60 pull requests merged before 18 November 2026 were about
+// the entry itself. Entries named from HANDOFF_CONTENT_FROM on are read; older ones are not.
+export const HANDOFF_CONTENT_FROM = "2026-11-19";
+export const HANDOFF_PARTS = ["What changed", "Verification", "Outstanding", "Dead ends", "Evidence"];
+const isLabel = (line) => /^\s*(\*\*|#{1,6}\s)/.test(line);
+// The label's own text: the bold span that opens the line, or the heading's text. A word in the
+// text after a bold label names no part.
+const labelText = (line) => /^\s*\*\*(.+?)\*\*/.exec(line)?.[1] ?? /^\s*#{1,6}\s+(.*)/.exec(line)?.[1] ?? "";
+// Home-folder forms of .claude only: a .claude folder committed in a repository is durable.
+const NOT_DURABLE = /AppData[\\/]Local[\\/]Temp|[\\/]scratchpad[\\/]|(^|[\s`'"(])\/tmp\/|(~|\$\{?HOME\}?|%USERPROFILE%|\$env:USERPROFILE|[A-Za-z]:[\\/]Users[\\/][^\\/\s`]+|\/(?:home|Users)\/[^/\s`]+)[\\/]\.claude[\\/]/i;
+export function handoffEntryErrors({ name, text }) {
+  if (name.slice(0, 10) < HANDOFF_CONTENT_FROM) return [];
+  const lines = String(text).split(/\r?\n/);
+  const errors = [];
+  for (const part of HANDOFF_PARTS) {
+    const named = new RegExp(`\\b${part}\\b`, "i");
+    if (!lines.some((l) => named.test(labelText(l)))) errors.push(`handoff/${name}: no "${part}" part (a bold label or a heading; "None." is an answer)`);
+  }
+  const start = lines.findIndex((l) => /\bevidence\b/i.test(labelText(l)));
+  if (start >= 0) {
+    const next = lines.findIndex((l, i) => i > start && isLabel(l));
+    if (lines.slice(start, next < 0 ? undefined : next).some((l) => NOT_DURABLE.test(l)))
+      errors.push(`handoff/${name}: the evidence points at a temp folder or ~/.claude: copy it into the repository or ~/.local/share/<project>/evidence`);
+  }
+  return errors;
+}
+
 // The plugin has no version number (recipes/parallel-chats.md): with none in the manifest and
 // none in the marketplace entry, Claude Code installs by commit and takes every merge as an
 // update. A number would be one line that every pull request sets, and two that set the same
@@ -425,10 +455,10 @@ export function versionErrors({ manifestText, marketplaceText }) {
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const root = new URL("../", import.meta.url);
-  const handoff = handoffErrors({
-    closedText: readFileSync(new URL("HANDOFF.md", root), "utf8"),
-    entryNames: readdirSync(new URL("handoff/", root)),
-  });
+  const entryNames = readdirSync(new URL("handoff/", root));
+  const handoff = handoffErrors({ closedText: readFileSync(new URL("HANDOFF.md", root), "utf8"), entryNames });
+  for (const name of entryNames.filter((n) => HANDOFF_ENTRY_NAME.test(n)))
+    handoff.push(...handoffEntryErrors({ name, text: readFileSync(new URL(`handoff/${name}`, root), "utf8") }));
   const errors = checkCookbook({
     catalogText: readFileSync(new URL("plugins/cookbook/catalog.json", root), "utf8"),
     skillText: readFileSync(new URL("plugins/cookbook/skills/cookbook/SKILL.md", root), "utf8"),
