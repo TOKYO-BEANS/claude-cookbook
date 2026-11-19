@@ -5,13 +5,13 @@
 # sandbox-probe.sh to a new boat sandbox, where the package is installed WITH its install
 # scripts and started once. The sandbox gets none of the account's stored secrets
 # (--no-env) and is deleted when the command ends. The scanners read the code; this shows
-# what it does when it runs, on Linux. This PC installs with --ignore-scripts on Windows,
+# what it does when it runs. This PC installs with --ignore-scripts,
 # so the run is a signal about the package, not a rehearsal of the install here.
 # A run that did not start or did not finish is "no result", never a clean one.
 # VETTING_SHARE names another share folder than ~/.local/share (the tests use it).
 set -uo pipefail
 FOLDER="$1"; PKG="$2"; VER="$3"
-SHARE="${VETTING_SHARE:-${HOME:-/c/Users/bruger}/.local/share}"
+SHARE="${VETTING_SHARE:-$HOME/.local/share}"
 V="$SHARE/vetting/$FOLDER-$VER"
 TOOLS="$(cd "$(dirname "$0")" && pwd)"
 [ -f "$V/lock/package-lock.json" ] || { echo "SANDBOX: no result (no lockfile in $V/lock)"; exit 2; }

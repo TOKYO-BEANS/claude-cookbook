@@ -18,7 +18,7 @@
 //   date", never a guess.
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, readdirSync } from "node:fs";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, normalize } from "node:path";
@@ -70,8 +70,8 @@ export function normalizeVersion(text) {
 //   Without it the child's stdin is empty.
 // - Each of stdout and stderr is read up to `maxBytes` bytes. More output stops
 //   the process and sets `truncated: true` (not a timeout).
-// - A timeout stops the process (on Windows its whole tree) and returns
-//   `code: null, timedOut: true`.
+// - A timeout stops the process and everything it started (a keyed CLI runs below its
+//   launcher, with the key in its environment) and returns `code: null, timedOut: true`.
 export function runEnv(env = process.env, extra = {}) {
   extra = extra ?? {};
   for (const [k, v] of Object.entries(extra)) {
@@ -88,14 +88,43 @@ export function runEnv(env = process.env, extra = {}) {
   return out;
 }
 
+// Linux: every process below `pid`, read from /proc (`task/<id>/children`); the deepest
+// first. Empty where /proc cannot be read: the caller then stops the process alone.
+export function descendants(pid, { list = readdirSync, read = (path) => readFileSync(path, "utf8") } = {}) {
+  const found = [];
+  const walk = (parent, depth) => {
+    if (depth > 16) return;
+    const children = [];
+    try {
+      for (const task of list(`/proc/${parent}/task`)) {
+        for (const word of read(`/proc/${parent}/task/${task}/children`).trim().split(/\s+/)) if (/^\d+$/.test(word)) children.push(Number(word));
+      }
+    } catch { /* the process is gone, or this is not Linux */ }
+    for (const child of children) {
+      if (child <= 1 || child === pid || found.includes(child)) continue;
+      walk(child, depth + 1);
+      found.push(child);
+    }
+  };
+  walk(pid, 0);
+  return found;
+}
+
+// Stops a process and everything it started. A plain kill ends only the process itself and
+// would leave a launcher's CLI running: Windows has taskkill for the tree, Linux lists it
+// from /proc before the kill.
 function stopTree(child) {
+  let below = [];
   try {
     if (process.platform === "win32" && child.pid) {
       const k = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { shell: false, windowsHide: true, stdio: "ignore" });
       k.on("error", () => {});
+    } else if (process.platform === "linux" && child.pid) {
+      below = descendants(child.pid);
     }
   } catch { /* fall through to the plain kill */ }
   try { child.kill(); } catch { /* already gone */ }
+  for (const pid of below) { try { process.kill(pid, "SIGKILL"); } catch { /* already gone */ } }
 }
 
 export function defaultRun(argv, { timeoutMs = COMMAND_TIMEOUT_MS, maxBytes = OUTPUT_LIMIT, home = homedir(), input, env } = {}) {

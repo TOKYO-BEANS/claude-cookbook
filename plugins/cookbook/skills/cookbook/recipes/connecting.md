@@ -11,9 +11,9 @@
   run it once in a sandbox ([boat.md](boat.md), [vetting-sandbox.md](vetting-sandbox.md)) and get the
   owner's yes. Then add the tool here in the same pull request. These three scanners run
   only here, on outside code, never as part of a repository's CI. The sandbox run is a step, not
-  a choice. The exemptions are the two that [vetting-sandbox.md](vetting-sandbox.md) names (the Windows
-  binary installed here; a Claude Code plugin or skill copy): the vetting notes say which one
-  applied, and the owner hears it with the scan results.
+  a choice. The one exemption is in [vetting-sandbox-report.md](vetting-sandbox-report.md) (a Claude
+  Code plugin or skill copy): the vetting notes say when it applied, and the owner hears it
+  with the scan results.
 - An ad-hoc Gitleaks scan (a download, a copied folder, a deploy pre-flight) passes `--config` with a
   config you control and `--gitleaks-ignore-path` set to a folder with no `.gitleaksignore`, with
   `GITLEAKS_CONFIG` and `GITLEAKS_CONFIG_TOML` unset. Otherwise Gitleaks loads `.gitleaks.toml` and
