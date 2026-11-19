@@ -35,8 +35,8 @@ real closing messages, labels never sent: on 30 held out, Jev found 11 of 11 own
 false alarms (0.900); the fixed phrase list found 8 of 11 with 7 (0.667). A false alarm costs
 one short extra turn; a miss is what this hook is for.
 
-**The key** is the Cookbook's own `jev-compaction`. Reading it from the Windows store took 2 to
-27 seconds, so the hook starts a broker once (`owner-questions-broker.mjs`, through
+**The key** is the Cookbook's own `jev-compaction`. Reading it from the Windows PC's store took 2
+to 27 seconds, so the hook starts a broker once (`owner-questions-broker.mjs`, through
 `with-key.mjs`) that holds the key in memory only and answers on a local socket, its
 random name kept in the profile (`pipe.json`), one socket per question version. It exits after 3
 hours idle, 20 hours in all, or 10 minutes without a key. A warm check takes

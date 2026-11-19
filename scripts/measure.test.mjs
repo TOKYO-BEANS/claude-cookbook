@@ -7,7 +7,7 @@ const { tasks, suffix, set } = loadTasks();
 const task = (id) => tasks.find((t) => t.id === id);
 
 test("the task set is the fixed one: 12 tasks, 38 checks, every check on a field of its task", () => {
-  assert.equal(set, "2026-11-15");
+  assert.equal(set, "2026-11-19");
   assert.equal(tasks.length, 12);
   assert.equal(tasks.reduce((a, t) => a + t.checks.length, 0), 38);
   assert.equal(new Set(tasks.map((t) => t.id)).size, 12);

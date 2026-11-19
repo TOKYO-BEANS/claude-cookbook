@@ -128,8 +128,8 @@ Steps, in an interactive session only (an unattended session installs nothing):
    not been judged by the rules: stop, and the next run will list it.
 4. Stop that install, and leave the old copy in place, when a scan finds a high or critical
    advisory, when the sandbox run shows a surprise or "no result" ("Vetting outside code: reading the sandbox report" in
-   the Cookbook says what counts), when the recipe needs something this session cannot do (an
-   admin prompt, a sign-in) or a yes the owner has not given (site-login's Chromium revision
+   the Cookbook says what counts), when the recipe needs something this session cannot do (the
+   `sudo` password, a sign-in) or a yes the owner has not given (site-login's Chromium revision
    moved), or when the diff of a plugin adds a hook, an MCP server, a network host, a read of credentials,
    or code that hides what it does. A doubt can stop an install; it never starts one.
 5. After each install, and after each one that was stopped, run

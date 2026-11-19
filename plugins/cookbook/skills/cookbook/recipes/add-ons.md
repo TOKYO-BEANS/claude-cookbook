@@ -14,6 +14,7 @@ in every session, headless ones included, so a misbehaving one affects scheduled
   skill gets arguments: write `"${1}"` in shell code and `USD 30` for prices
   (`scripts/check.mjs` enforces it here). Fix a skill in its source repository, never in a
   plugin cache or a junctioned folder.
-- Do not install blast-radius (anthropics/claude-code-playground). On Windows it refuses every
-  risky Bash command at once, because `sleep` and `du` are not on the PATH and `bash` is the
-  WSL launcher. It also does not watch PowerShell; use permission deny rules for hard blocks.
+- Do not install blast-radius (anthropics/claude-code-playground): on the Windows PC it refused
+  every risky Bash command at once (no `sleep` or `du` on the PATH, `bash` was the WSL launcher).
+  Not tried on the laptop; a new look starts at [connecting](connecting.md). Use permission deny
+  rules for hard blocks.

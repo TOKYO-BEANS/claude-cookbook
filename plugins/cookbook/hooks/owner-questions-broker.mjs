@@ -1,14 +1,14 @@
-// The Jev broker of the owner-questions Stop hook. Reading a key from the DPAPI store takes
-// 2 to 27 seconds on this PC (PowerShell start), too slow for every turn's end. So the hook
+// The Jev broker of the owner-questions Stop hook. Reading a key from the store took 2 to 27
+// seconds on the Windows PC (PowerShell start), too slow for every turn's end. So the hook
 // starts this process once, through with-key.mjs; it holds the key in its own memory only and
-// answers "classify this closing text" on a local named pipe. It never returns the key.
+// answers "classify this closing text" on a local socket (a named pipe on Windows). It never returns the key.
 // The pipe's name is random and kept in the owner's profile, so another account cannot take
 // it first. The broker exits after IDLE_MS without a request, after MAX_LIFE_MS in all (so a
 // rotated key is picked up) and after NO_KEY_LIFE_MS without a key. Each question version has
 // its own pipe; a request of another version is answered "version" (a failure, not "nothing
 // open").
 import { createHash, randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { createConnection, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -90,13 +90,48 @@ export function startBroker({ pipe, ask, idleMs = IDLE_MS, maxLifeMs = MAX_LIFE_
       clearTimeout(idle);
       clearTimeout(life);
     });
-    server.once("error", reject);
-    server.listen(pipe, () => {
+    // Registered once: a failed listen keeps its callback, so a retry must not add a second.
+    server.once("listening", () => {
       idle = setTimeout(stop, idleMs);
       life = setTimeout(stop, maxLifeMs);
       resolve(server);
     });
+    const listen = (retry) => {
+      server.once("error", async (e) => {
+        if (retry && e?.code === "EADDRINUSE" && (await removeStaleSocket(pipe))) return listen(false);
+        reject(e);
+      });
+      server.listen(pipe);
+    };
+    listen(process.platform !== "win32");
   });
+}
+
+// A Unix socket file outlives a broker that was killed (a named pipe on Windows does not), and
+// then every new broker finds the path taken. The file is removed only when it is a socket of
+// this account that nobody answers on; a live broker is never displaced.
+async function removeStaleSocket(path) {
+  try {
+    const st = lstatSync(path);
+    if (!st.isSocket() || st.uid !== process.getuid()) return false;
+  } catch {
+    return false;
+  }
+  const refused = await new Promise((resolve) => {
+    const s = createConnection(path);
+    s.once("connect", () => {
+      s.destroy();
+      resolve(false);
+    });
+    s.once("error", (e) => resolve(e?.code === "ECONNREFUSED"));
+  });
+  if (!refused) return false;
+  try {
+    unlinkSync(path);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // One request. A missing broker, a timeout or a bad reply is { ok: false }, never "nothing open".

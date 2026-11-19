@@ -268,8 +268,8 @@ export function runPrompt(run, id, folder, events, io = {}) {
       // before it fetches anything.
       unconfirmed = !blocked && !interrupted;
       stopped = blocked ? why : `${why}; boat did not confirm the block`;
-      // On this PC boat runs under a launcher: killing it may leave boat.exe holding the
-      // pipes, so "close" may never come. The run ends anyway, and main deletes the sandbox.
+      // On this PC boat runs under a launcher (with-key.mjs starts it as a child): killing
+      // the launcher may leave boat holding the pipes, so "close" may never come. The run ends anyway, and main deletes the sandbox.
       setTimeout(() => {
         child.kill("SIGKILL");
         setTimeout(finish, killMs).unref();
