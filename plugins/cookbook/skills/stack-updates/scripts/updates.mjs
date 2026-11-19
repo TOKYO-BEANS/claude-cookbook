@@ -20,7 +20,7 @@
 // <state>/runs/<today>), --today YYYY-MM-DD (only with --state, never earlier than
 // the last run; default: this PC's local date), --no-read (no release notes are
 // fetched or read), --unattended (with run: nobody reads what it prints, so the report
-// stays unseen until a session prints it; the Windows task's launcher, daily.mjs,
+// stays unseen until a session prints it; the daily timer's launcher, daily.mjs,
 // passes it).
 //
 // The run folder holds inventory.json, latest.json, result.json, next-state.json
@@ -888,7 +888,7 @@ async function stageReport(ctx) {
     }
   }
   saveState(ctx.home, next, { folder: ctx.stateDir });
-  // Somebody reads what a run prints unless it is --unattended (the Windows task):
+  // Somebody reads what a run prints unless it is --unattended (the daily timer):
   // then the report waits, and the session-start notice announces it.
   if (!result.quiet && !ctx.unattended && pageable) {
     markSeen(ctx.stateDir, ctx.today);

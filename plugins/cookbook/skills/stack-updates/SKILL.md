@@ -7,33 +7,38 @@ description: Use when the owner asks to check the tool stack for updates ("check
 
 `scripts/updates.mjs` beside this file compares every part of every tool in the Cookbook's
 `catalog.json` with its newest release, makes one real call per service, warns about the dates the
-catalog records, and writes a report. It installs, updates and commits nothing. A Windows task runs
-it every morning with no model session; this skill is for the report that run leaves, for running
+catalog records, and writes a report. It installs, updates and commits nothing. A systemd user timer
+runs it every morning with no model session; this skill is for the report that run leaves, for running
 the check on demand and for acting on what it found.
 
 ## The daily run
 
-- The Windows task `stack-updates-daily` (07:00, or as soon as the PC is on) runs
-  `~/.local/bin/stack-updates-daily.mjs`, a copy of `scripts/daily.mjs`. It finds the Cookbook
+- The systemd user timer `stack-updates-daily.timer` (07:00, or at the next login after a
+  missed start) runs `~/.local/bin/stack-updates-daily.mjs`, a copy of `scripts/daily.mjs`. It finds the Cookbook
   plugin installed for this user, refuses a folder or a script that leads outside `~/.claude/plugins`, and runs that
   copy's `updates.mjs run --unattended`. No session, no prompt and no tools take part.
 - It writes `daily.json` (the day, the times, the exit code) and `daily.log` (the error lines of
   the last run) in the state folder. The report is in `runs/<date>/`, as for any run.
 - The plugin's SessionStart hook (`hooks/stack-updates-notice.mjs`) adds a short note to a new
-  session while a report from the last 7 days has not been shown, when the task's last run failed,
-  or when the task has not run for 2 days (measured from `daily.json`; a task that never ran once
+  session while a report from the last 7 days has not been shown, when the timer's last run failed,
+  or when the timer has not run for 2 days (measured from `daily.json`; a timer that never ran once
   says nothing, so check `daily.json` after setting it up). The note holds dates, counts and the
   command, and for a failed run its exit code and the path of `daily.log`: never report text.
 - When the note names a report: print it with the command it gives (`page 1 <date>`, then
   `page 2 <date>` up to N when the first line says `Page 1 of N`) and give the owner the text as it
   is, before other work. Printing marks that report seen. An unattended session ignores the note.
 - A report nobody has seen is never written over: until it is printed, a second run that day stops
-  and says to print it with `page 1` first (the task's own second run just ends without running).
-- To set it up or repair it (the owner's yes is needed to create the task): copy
-  `scripts/daily.mjs` to `~/.local/bin/stack-updates-daily.mjs`, then register a task that runs
-  `C:\Windows\System32\conhost.exe --headless "C:\Program Files\nodejs\node.exe" "C:\Users\<user>\.local\bin\stack-updates-daily.mjs"`
-  daily at 07:00 as the signed-in user, with "run as soon as possible after a missed start". The
-  headless console host keeps a window from opening. Copy `daily.mjs` again when it changes.
+  and says to print it with `page 1` first (the timer's own second run just ends without running).
+- To set it up or repair it (the owner's yes is needed to create the timer): copy
+  `scripts/daily.mjs` to `~/.local/bin/stack-updates-daily.mjs`, then write two units in
+  `~/.config/systemd/user/`. `stack-updates-daily.service`: `Type=oneshot`,
+  `ExecStart=/usr/bin/node %h/.local/bin/stack-updates-daily.mjs`, `TimeoutStartSec=100min`, and
+  `Environment=PATH=%h/.local/bin:%h/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin` (a
+  timer starts with a `PATH` that has neither folder, and the check starts `claude`, `gh` and
+  the scanners by name). `stack-updates-daily.timer`: `OnCalendar=*-*-* 07:00:00`,
+  `Persistent=true`, `WantedBy=timers.target`. Then `systemd-analyze --user verify` on both,
+  `systemctl --user enable --now stack-updates-daily.timer`, and read it back with
+  `systemctl --user list-timers`. Copy `daily.mjs` again when it changes.
 
 ## Run it on demand
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The launcher the Windows task "stack-updates-daily" runs. No model takes part.
+// The launcher the systemd user timer "stack-updates-daily" runs. No model takes part.
 //
 // A copy of this file lives at ~/.local/bin/stack-updates-daily.mjs, a path that does
 // not change when the plugin updates. It imports nothing from the plugin: it finds the

@@ -1,12 +1,15 @@
 # Scheduled runs
 
-Two owners, by what the run needs. Checked on 15 November 2026; T3 task binding on 16 November.
+Two owners, by what the run needs. Checked on 15 November 2026; T3 task binding on 16 November;
+the timer on the Ubuntu laptop on 19 November.
 
-- **A plain script, with no model: Windows Task Scheduler.** The task starts Node on a script
-  in `~/.local/bin`; no session, prompt or tool takes part. It sees Node, a signed-in `gh`,
-  `claude`, the DPAPI key store and no API key in its environment. Today:
-  `stack-updates-daily` (07:00; [update-check.md](update-check.md)). Creating a task needs the
-  owner's yes. A script that needs a model for one bounded read starts its own `claude -p`
+- **A plain script, with no model: a systemd user timer.** A timer and a service in
+  `~/.config/systemd/user/` start `/usr/bin/node` on a script in `~/.local/bin`; no session,
+  prompt or tool takes part. The service sets its own `PATH` (a unit's has neither
+  `~/.local/bin` nor the mise shims). It sees Node, a signed-in `gh`, `claude`, the OS key
+  store (a user unit read a key through `with-key.mjs`) and no API key in its environment.
+  `Persistent=true` starts a missed run at the next login. Today: `stack-updates-daily`
+  (07:00; [update-check.md](update-check.md)). Creating a timer needs the owner's yes. A script that needs a model for one bounded read starts its own `claude -p`
   request with every limit on the command line (`scripted-runs.md`).
 - **An agent run: a T3 Code scheduled task** (`schedule_task`: a fixed time, an interval, once,
   or a webhook). The run is a thread in the project's sidebar, where the owner works, with the
@@ -23,9 +26,10 @@ Two owners, by what the run needs. Checked on 15 November 2026; T3 task binding 
     (first check: the sweep on 17 November 2026).
   - A run loads everything a session loads. Keep the prompt to one job and name its stops.
 - **The fallback: a Claude Desktop scheduled task**, when a run needs its model set per task
-  before the bound-thread route is proven. Three run there today and move when next touched:
+  before the bound-thread route is proven. Three ran there on the Windows PC and are not
+  back on Linux yet (the handoff of 19 November 2026 says what each needs):
   `stack-atlas-standard-daily` (07:30), `agentshield-weekly` and `daily-sidebar-cleanup`
-  (which tidies the desktop app's own sidebar and stays). The desktop app runs them.
+  (which tidies the desktop app's own sidebar).
   Their quirks: [scheduled-runs-desktop.md](scheduled-runs-desktop.md).
 - **Not used for the setup:** cloud routines (they cannot reach this PC's key store or
   command lines) and a session's own cron tools (they end with the session).

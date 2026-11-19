@@ -1,5 +1,5 @@
 // The session-start notice (lib/notice.mjs and the plugin's SessionStart hook) and the
-// Windows task's launcher (daily.mjs).
+// daily timer's launcher (daily.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -112,13 +112,13 @@ test("notice: several unseen reports are listed oldest first, at most three; one
   assert.deepEqual(days, ["2026-11-10", "2026-11-11", "2026-11-12"]);
 });
 
-test("notice: a stopped or failed Windows task is said only where the task has run", (t) => {
+test("notice: a stopped or failed daily timer is said only where it has run", (t) => {
   const state = tmp(t);
   putRun(state, "2026-11-10", { quiet: true });
   assert.equal(note(state, "2026-11-14"), "", "runs by hand never raise the alarm");
   writeFileSync(join(state, "daily.json"), JSON.stringify({ day: "2026-11-10", exit: 0 }));
   assert.equal(note(state, "2026-11-11"), "");
-  const stopped = /^Daily update check: the Windows task "stack-updates-daily" has not run since 2026-11-10\. It may have stopped\./;
+  const stopped = /^Daily update check: the daily timer "stack-updates-daily" has not run since 2026-11-10\. It may have stopped\./;
   assert.match(note(state, "2026-11-14"), stopped);
   // Runs by hand do not hide a task that stopped: it is measured from the task's own record.
   for (const d of ["2026-11-11", "2026-11-12", "2026-11-13", "2026-11-14"]) putRun(state, d, { quiet: true });
