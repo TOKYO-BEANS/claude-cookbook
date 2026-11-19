@@ -30,8 +30,9 @@ masks, cut-out and colour job after vetting and a side-by-side test.
   accepted, and the condition stays as it was for everything after.
 - boat sandbox run of the Linux build under the probe: quiet (no DNS name, no connection, no
   file outside the folder, no process left).
-- Installed as the portable build in `~/.local/share/photocraft-0.23.1` (no admin). It stays
-  for the next test as a baseline; removing it is an uninstall, so it waits for the owner.
+- Installed as the portable build in `~/.local/share/photocraft-0.23.1` (no admin). Removing
+  it is an uninstall, so it waits for the owner. The baseline for the next test is this test's
+  saved results only: under the owner's condition PhotoCraft is not run again on outside photos.
 
 **The test** (evidence: `~/.local/share/claude-cookbook/evidence/2026-11-17-photocraft-test/`,
 `RESULTS-photocraft.md` first). Ten public-domain photos from Wikimedia Commons, five with

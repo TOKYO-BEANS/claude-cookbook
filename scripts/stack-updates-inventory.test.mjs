@@ -103,6 +103,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "gitleaks/cli": ["8.30.1\n", "8.30.1"],
     "trivy/cli": ["Version: 0.76.2\nVulnerability DB:\n  Version: 2\n", "0.76.2"],
     "osv-scanner/cli": ["osv-scanner version: 2.7.0\nosv-scalibr version: 0.5.3\n", "2.7.0"],
+    "lightcraft/cli": ["lightcraft-cli 0.21.1\n", "0.21.1"],
     "boat/cli": ["boat 1.0.97\n", "1.0.97"],
     "cliproxyapi/cli": ["CLIProxyAPI Version: 8.0.76, Commit: 7df56074, BuiltAt: 2026-11-17T02:10:49Z\nUsage of cli-proxy-api.exe\n", "8.0.76"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
@@ -462,6 +463,7 @@ test("the binaries under ~/.local/share are read where the Linux installs put th
     "cliproxyapi/cli": "{share}/cliproxyapi/bin/cli-proxy-api",
     "proton-pass-cli/cli": "{share}/proton-pass-cli/pass-cli",
     "google-workspace-cli/cli": "{share}/gws/gws",
+    "lightcraft/cli": "{share}/lightcraft/bin/lightcraft-cli",
   });
 });
 
