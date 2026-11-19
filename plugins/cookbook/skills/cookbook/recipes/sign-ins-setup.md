@@ -18,9 +18,9 @@
   Claude`, with the token saved straight into the key store and the owner's own session
   logged out again.
 - **The code** is `~/.local/share/site-login`, with `playwright-core` 1.65.1 and `postal-mime`
-  4.2.0 from a lockfile. Its source is the repository `TOKYO-BEANS/sign-in-tools`, where `npm
-  test` runs: `node install.mjs install` there copies the code here and writes the commands
-  `agent-browser` and `google` in `~/.local/bin`, and `check` compares both.
+  4.2.0 from a lockfile. Its source is `TOKYO-BEANS/sign-in-tools`, where `npm test` runs:
+  `node install.mjs install` there copies the code here and writes the commands `agent-browser`
+  and `google` in `~/.local/bin`, and `check` compares both.
 - **When a `playwright-core` update moves the Chromium revision** (its `browsers.json`; 1.65.1
   moved 1254 to 1255, Chrome for Testing 159.0.8154.6), the browser does not start until the new
   build is downloaded. That download is a program the vetting did not cover, so it needs the
@@ -33,9 +33,9 @@
   after it passes and `updates.mjs verify` exits 0, move the old `chromium-*` and
   `chromium_headless_shell-*` folders to `~/.local/share/backups/` (a rollback needs them).
 - Vetted on 19 November 2026: the Linux `pass-cli` matched the checksum in Proton's own version
-  list (Trivy and OSV-Scanner could not parse the PC's copy: no result, not a clean one). In the
-  lockfile with `playwright-core` 1.65.1 (2 packages) OSV-Scanner and Trivy found no issue.
-  Gitleaks marked two lines of it: the handoff of 19 November has them.
+  list; no signature check and no scan is recorded for it (a closed binary: Trivy and
+  OSV-Scanner could not parse the PC's copy). In the lockfile with `playwright-core` 1.65.1 (2
+  packages) they found no issue; Gitleaks marked two lines: see the handoff of 19 November.
 - Proven on the laptop on 19 November 2026: `agent-browser goto`, `status` and `stop`, and a
   vault login read through `pass-cli`. Not tried on Linux: `login` on a real site, `mail-link`
   and `access` (proven on the PC, 13 and 14 November). Never tried: a one-time code on a real

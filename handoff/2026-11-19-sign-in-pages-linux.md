@@ -45,8 +45,10 @@ November.
   them). Read again here in the installed copy: `lib/coreBundle.js` line 41033 holds the sample
   nonce of RFC 6455 after `Sec-WebSocket-Key:`, and line 5 of
   `lib/vite/traceViewer/assets/xtermModule-Cv6bi7od.js` holds xterm theme property names
-  (`selectionBackgroundTransparent` and the like). Only Claude has read them; a model's
-  reading clears no finding. Owner: the owner. Clears: the owner's word on the two marks.
+  (`selectionBackgroundTransparent` and the like). Only Claude had read them, and a model's
+  reading clears no finding. **Cleared:** the owner's yes of 19 November 2026 to the question
+  "Do you accept the two marks?": "Accept both". It covers these two lines of 1.65.1; a mark
+  in a later version is a new finding.
 - The "On this PC" label of the `pass-cli` bullet in `sign-ins-setup.md`, and "on the owner's
   PC" in the catalog's `agent-browser` entry, are left: the first is #157's line, the second
   goes with the catalog's Linux pass.
@@ -56,7 +58,20 @@ Gitleaks marks were listed under "Vetted" with no triage (now the item above), t
 packages" read as `playwright-core` alone (they are the lockfile's two), and "On the PC" for
 the unsigned gws binary left the Linux build unsaid.
 
+**After the merge.** #161 merged as `3ebf377` (`merge-when-green.sh claude-cookbook 161
+claude-cookbook 4 <head>`), every check passed and the review allowed it. The first run had
+ended "NOT MERGED: a check did not pass" while Graphify's review check was still running.
+The release check first read `unknown` (execution 1851): #160 merged a minute later and the
+collector read that commit, whose CI was still running. `after-merge.sh` for `3ebf377`
+itself read **verified** (execution 1852).
+
+**The second review, and the follow-up.** One low finding on the merged head: the "Vetted
+on 19 November" line of `sign-ins-setup.md` carried the scanners' attempt on the PC's
+`pass-cli` copy (12 and 13 November) and did not say that no signature check and no scan is
+recorded for the Linux one. The follow-up pull request says so and adds this section.
+
 **Dead ends.** None.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-19-sign-in-pages-linux/`:
-`npm-test.txt`.
+`npm-test.txt`, `npm-test-second-commit.txt`, `merge-when-green-161.txt`,
+`merge-when-green-161-second.txt`, `after-merge-161.txt`.
