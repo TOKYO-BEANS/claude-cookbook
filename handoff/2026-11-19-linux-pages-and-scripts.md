@@ -58,3 +58,7 @@ an installed version with a platform suffix bounding the release notes, so it st
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/linux-pages-2026-11-19/`
 (`scripted-runs-proof.md`).
+
+**The review.** The first head had one medium and one low finding, both fixed in the second
+commit: the measurement task set is renamed `2026-11-19` with a note on why (its answer key
+changed), and the Parallel CLI's updater names the release's linux-x64 zip, not windows-x64.
