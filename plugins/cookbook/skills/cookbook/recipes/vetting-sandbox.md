@@ -13,6 +13,7 @@ repository's `scripts/vetting.test.mjs`. The files of the same names in
   folder> <package> <version>` ends with the sandbox run (`pinned-sandbox.sh`, same arguments,
   runs it alone). It sends the new `package.json` and `package-lock.json` and a probe script,
   installs with the install scripts on, and starts the package's command once with `--version`.
+  A first copy, with no install folder yet: [pinned-copies.md](pinned-copies.md).
 - **Anything else, a pinned binary included:** copy `sandbox-probe.sh` from that folder into the code's
   folder, then `boat run --type small --no-env --timeout 900 --push <folder> -- bash
   sandbox-probe.sh --cmd "<install command>" "<start command>"`. `--no-env` keeps the account's
