@@ -12,7 +12,7 @@
   write into `~/.claude/skills` from an interactive terminal.
 - Queries without an MCP server: D1 through `wrangler d1 execute <database> --remote --command "<SQL>"`; Worker
   logs through `POST /accounts/<account>/workers/observability/telemetry/query` with the same
-  DPAPI token (`with-key.mjs cloudflare-wrangler CLOUDFLARE_API_TOKEN`), or the Cloudflare plugin's
+  key-store token (`with-key.mjs cloudflare-wrangler CLOUDFLARE_API_TOKEN`), or the Cloudflare plugin's
   `execute` once its login grants the observability and D1 scopes (the owner re-authorizes it in
   `/mcp`). `cloudflare-docs` stays for documentation search.
 - The plugin's `cloudflare-one` skill (1.0.4) reads an Access service token "from the project's

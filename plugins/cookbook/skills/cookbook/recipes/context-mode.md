@@ -10,7 +10,7 @@ Elastic-2.0) at user scope. No project turns it off; a new project gets it witho
   replaced by its best-matching lines and a search pointer (measured on 15 November 2026: a
   result of 4,105 bytes was cut). The Skill, Glob and Agent tools are not covered. This is why
   every page in `recipes/` and `options/` fits one read. The index is a local SQLite FTS5 store in `~/.context-mode`, outside
-  `~/.claude` and AppData. Its only network calls are a version check against the npm registry
+  `~/.claude`. Its only network calls are a version check against the npm registry
   and `ctx_index` fetching a URL it is given; no telemetry.
 - **Use it:** when a step counts, sums, filters or finds something in more than about 20 lines of
   data, run it through `ctx_execute` (or `ctx_batch` for several commands) and print only the

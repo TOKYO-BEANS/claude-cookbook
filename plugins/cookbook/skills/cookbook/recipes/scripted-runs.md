@@ -24,7 +24,7 @@ at least once in that test.
 - A Bash result can end with a line the harness adds ("Shell cwd was reset to …"). A run told to
   end with a command's output copied it and dropped the output's first line until the prompt named
   both: keep every line from the first, leave out the harness line.
-- The Claude API key (`anthropic-api` in the DPAPI store, the Ultra plan's monthly API credits) is for
+- The Claude API key (`anthropic-api` in the OS key store, the Ultra plan's monthly API credits) is for
   own scripts that call the Messages API only. Never Claude Code, `apiKeyHelper`, a global
   `ANTHROPIC_API_KEY` or a script that starts `claude`: Claude Code would bill the key, not the plan.
   It is a personal key not scoped to a workspace, so every request sends `anthropic-workspace-id`

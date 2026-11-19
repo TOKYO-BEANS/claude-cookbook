@@ -10,7 +10,7 @@ One compactor, checked on 15 November 2026 in
 - **The fallback is automatic.** When Jev's call fails (`error`, 6 of the 8) or would remove
   less than 25 % (`below-minimum`, 2 of the 8), the built-in compactor runs instead. Nothing
   has to be done by hand.
-- **It sends transcript content to TypeSafe**, on the `jev-compaction` DPAPI key. It runs in
+- **It sends transcript content to TypeSafe**, on the `jev-compaction` key of the OS key store. It runs in
   every project (owner decision, 2 October 2026); a project is left out through the plugin's
   `privateRoots` option. Never go back to version 0.3.0: it checked only the current folder.
 - **Updates:** the plugin is a pinned copy in the local `claude-local` marketplace

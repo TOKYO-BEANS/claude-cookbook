@@ -5,15 +5,16 @@
   --headed`. It keeps running between commands and stops after 30 minutes without one. It listens
   on a local port that needs a token only this Windows user can read, and it opens no debugging
   port. The profile holds live sessions: treat the folder like a credential and never copy it.
-- **On this PC:** `pass-cli` is a pinned copy (2.7.0) in `~/.local/share/proton-pass-cli`, with its
-  session folder beside it and update checks off; `PROVENANCE.txt` there has the source, the
-  checksum and how to update. Never run Proton's `install.ps1` or `pass-cli update`. The agent
-  token is the DPAPI key `proton-pass` and expires about 13 February 2027. To sign the CLI in
+- **On this PC:** `pass-cli` is a pinned copy (2.7.1 for Linux) in `~/.local/share/proton-pass-cli`,
+  with its session folder beside it and update checks off (the `#!/bin/sh` launcher sets both);
+  `PROVENANCE.txt` there has the source, the checksum and how to update. Never run Proton's
+  `install.sh` or `pass-cli update`. The agent is `claude-linux`; its token is the key-store key
+  `proton-pass` and expires about 19 February 2027. To sign the CLI in
   again: `PROTON_PASS_SESSION_DIR=<that session folder> node ~/.local/bin/with-key.mjs proton-pass
-  PROTON_PASS_PERSONAL_ACCESS_TOKEN <that folder>/pass-cli.exe login`. A new token needs the owner:
+  PROTON_PASS_PERSONAL_ACCESS_TOKEN <that folder>/pass-cli login`. A new token needs the owner:
   `pass-cli login` prints a Proton address the owner opens and confirms (being signed in to the
   Proton Pass web app is not enough), then `pass-cli agent create <name> --expiration 3m --vault
-  Claude`, with the token imported straight into the DPAPI store and the owner's own session
+  Claude`, with the token saved straight into the key store and the owner's own session
   logged out again.
 - **The code** is `~/.local/share/site-login` (`login.mjs`, `inbox.mjs`, `daemon.mjs`, `cli.mjs`
   and the Worker in `inbox/`, with `playwright-core` 1.65.1 and `postal-mime` 4.2.0 from a
