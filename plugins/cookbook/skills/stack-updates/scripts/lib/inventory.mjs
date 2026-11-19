@@ -57,9 +57,9 @@ export function normalizeVersion(text) {
 
 // The real `run`: `(argv, { timeoutMs, maxBytes, home, input?, env? }) -> { code, stdout, stderr,
 // timedOut?, truncated? }`.
-// - No shell: on Windows a command must be a real executable (a `.exe` found on
-//   PATH); a `.cmd` or `.bat` shim cannot be started this way and comes back as
-//   a spawn failure (code -1).
+// - No shell: a command is an executable file (a binary, or a script with a `#!`
+//   line and the execute bit). One that cannot be started comes back as a spawn
+//   failure (code -1).
 // - It always runs in `<home>/.local/share/stack-updates` (created if missing),
 //   never the caller's folder, and with the process environment minus every
 //   `GIT_*` variable and `NODE_OPTIONS`.
@@ -353,11 +353,12 @@ function named(catalog) {
     }
     sets.binWords.add(norm(stemOf(argv[0].split(/[\/]/).pop())));
   }
-  // So does every shim a connection check starts through `cmd.exe /d /c {bin}/<name>.cmd`
+  // So does every launcher a connection check starts as `{bin}/<name>`
   // (the `google` launcher of gws). A check's other argv[0] (gh, depot, node) is already
   // a version-table executable; a test keeps it that way.
   for (const { argv } of Object.values(CONNECTION_CHECKS)) {
-    if (argv[0] === "cmd.exe") sets.binWords.add(norm(stemOf(String(argv[3]).split(/[\/]/).pop())));
+    const launcher = /^\{bin\}\/([^\\/]+)$/.exec(String(argv[0]));
+    if (launcher) sets.binWords.add(norm(stemOf(launcher[1])));
   }
   return sets;
 }

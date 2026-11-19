@@ -233,7 +233,7 @@ test("findUnlisted: an ignored name clears it, and a failed `claude mcp list` is
 });
 
 test("command: {share} in the table argv becomes <home>/.local/share", async () => {
-  const boat = join(home, ".local", "share", "boat", "boat.exe");
+  const boat = join(home, ".local", "share", "boat", "boat");
   const run = fakeRun({ [boat]: { code: 0, stdout: "boat 1.0.97\n", stderr: "" } });
   const r = await readInstalled({ kind: "command" }, "boat/cli", deps({ run }));
   assert.deepEqual(r, { state: "read", version: "1.0.97" });
@@ -251,18 +251,18 @@ test("findUnlisted: a claude.ai connector is listed by the hosted part that name
   assert.deepEqual(mcp, ["firecrawl", "newserver", "plugin:superpowers:thing"]);
 });
 
-test("findUnlisted: a shim that a connection check starts through the cmd.exe shape is listed; cmd.exe itself names nothing", async () => {
-  const h = tempHome(["google.cmd", "parallel-cli.cmd", "cmd.cmd", "stray.cmd"]);
+test("findUnlisted: a launcher that a connection check starts as {bin}/<name> is listed, with or without an extension", async () => {
+  const h = tempHome(["google", "parallel-cli", "pass-cli.cmd", "cmd", "stray"]);
   const { items } = await findUnlisted({ version: 1, ignored: [], tools: [] }, { home: h, run: fakeRun({ claude: { code: 0, stdout: "", stderr: "" } }) });
   const bins = items.filter((i) => i.kind === "bin").map((i) => i.name).sort();
   assert.deepEqual(bins, ["cmd", "stray"]);
 });
 
-test("every connection check that is not the cmd.exe shape starts an executable the version table already runs", () => {
-  // So findUnlisted needs only the shims from the connection table; if this fails, a new
+test("every connection check is a {bin}/<name> launcher or starts an executable the version table already runs", () => {
+  // So findUnlisted needs only the launchers from the connection table; if this fails, a new
   // check starts a new executable and findUnlisted must count its argv[0] too.
   const versionExes = new Set(Object.values(VERSION_COMMANDS).map(({ argv }) => argv[0]));
-  for (const [id, { argv }] of Object.entries(CONNECTION_CHECKS)) if (argv[0] !== "cmd.exe") assert.ok(versionExes.has(argv[0]), `${id}: ${argv[0]}`);
+  for (const [id, { argv }] of Object.entries(CONNECTION_CHECKS)) if (!/^\{bin\}\/[A-Za-z0-9._-]+$/.test(argv[0])) assert.ok(versionExes.has(argv[0]), `${id}: ${argv[0]}`);
 });
 
 test("findUnlisted: a bin file equal to a pinned package or a table executable is listed", async () => {
@@ -435,4 +435,59 @@ test("defaultRun: the env option removes and adds variables for that child only"
 
 test("runEnv: an extra value that is neither null nor a string throws a TypeError", () => {
   for (const v of [undefined, 1, true, {}, ["x"]]) assert.throws(() => runEnv({ PATH: "p" }, { X: v }), TypeError);
+});
+
+// ---- the tables on Linux ------------------------------------------------------
+
+import { chmodSync } from "node:fs";
+import { expandTokens } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
+
+test("the tables name no Windows file: no .exe, .cmd or .bat, and no cmd.exe launcher", () => {
+  for (const [table, entries] of Object.entries({ VERSION_COMMANDS, CONNECTION_CHECKS })) {
+    for (const [key, { argv }] of Object.entries(entries)) {
+      assert.notEqual(argv[0], "cmd.exe", `${table} ${key}`);
+      for (const a of argv) assert.doesNotMatch(a, /\.(exe|cmd|bat)$/i, `${table} ${key}: ${a}`);
+    }
+  }
+});
+
+test("the binaries under ~/.local/share are read where the Linux installs put them", () => {
+  const share = Object.fromEntries(Object.entries(VERSION_COMMANDS).filter(([, { argv }]) => argv[0].startsWith("{share}/")).map(([key, { argv }]) => [key, argv[0]]));
+  assert.deepEqual(share, {
+    "boat/cli": "{share}/boat/boat",
+    "cliproxyapi/cli": "{share}/cliproxyapi/bin/cli-proxy-api",
+    "proton-pass-cli/cli": "{share}/proton-pass-cli/pass-cli",
+    "google-workspace-cli/cli": "{share}/gws/gws",
+  });
+});
+
+test("every keyed CLI's connection check starts its launcher in ~/.local/bin by full path", () => {
+  const launchers = Object.fromEntries(Object.entries(CONNECTION_CHECKS).filter(([, { argv }]) => argv[0].startsWith("{bin}/")).map(([id, { argv }]) => [id, argv[0]]));
+  assert.deepEqual(launchers, {
+    firecrawl: "{bin}/firecrawl",
+    boat: "{bin}/boat",
+    browserbase: "{bin}/browse",
+    "proton-pass-cli": "{bin}/pass-cli",
+    "google-workspace-cli": "{bin}/google",
+    parallel: "{bin}/parallel-cli",
+  });
+});
+
+test("defaultRun starts a #!/bin/sh launcher by its full path, with no shell and its arguments as they are", { skip: process.platform === "win32" && "a #!/bin/sh file is not an executable on Windows" }, async () => {
+  const h = tempHome();
+  const file = join(h, ".local", "bin", "tool");
+  writeFileSync(file, '#!/bin/sh\nprintf \'Credits: 1 / 2 [%s] [%s]\\n\' "$1" "$2"\n');
+  chmodSync(file, 0o755);
+  const argv = expandTokens(["{bin}/tool", "--status", "a b;c"], h);
+  assert.equal(argv[0], file);
+  const r = await defaultRun(argv, { home: h });
+  assert.equal(r.code, 0);
+  assert.equal(r.stdout, "Credits: 1 / 2 [--status] [a b;c]\n");
+});
+
+test("defaultRun: a launcher without the execute bit is a spawn failure, not a result", { skip: process.platform === "win32" && "Windows has no execute bit" }, async () => {
+  const h = tempHome(["tool"]);
+  const r = await defaultRun(expandTokens(["{bin}/tool", "--status"], h), { home: h });
+  assert.equal(r.code, -1);
+  assert.equal(r.stdout, "");
 });
