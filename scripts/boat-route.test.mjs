@@ -88,34 +88,34 @@ test("the command it names instead, rebuilt from the parsed words", () => {
     const [run] = find(text, { shell: shell === "powershell" ? "powershell" : "bash", cwd: "C:/w/r", windows: true }).runs;
     return instead(run, repo, { script: "s", shell });
   };
-  assert.equal(as("npm test"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
+  assert.equal(as("npm test"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
   assert.equal(as("npm test", { ...REPO, deps: true, prefix: "sub/" }),
-    `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'cd sub && npm ci --ignore-scripts && npm test'`);
+    `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'cd sub && npm ci --ignore-scripts && npm test'`);
   // The folder option is not passed on: the folder is the run's own (review of #108).
-  assert.equal(as("npm --prefix sub test", { ...REPO, prefix: "sub/" }), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'cd sub && npm test'`);
+  assert.equal(as("npm --prefix sub test", { ...REPO, prefix: "sub/" }), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'cd sub && npm test'`);
   assert.equal(as("pytest -q", { ...REPO, requirements: true }),
-    `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest --with-requirements requirements.txt pytest -q'`);
+    `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest --with-requirements requirements.txt pytest -q'`);
   // Variables stay in front; a timeout wrapper is dropped (boat-run has its own).
-  assert.equal(as("PYTHONPATH=. pytest -q"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'PYTHONPATH=. uv run --with pytest pytest -q'`);
+  assert.equal(as("PYTHONPATH=. pytest -q"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'PYTHONPATH=. uv run --with pytest pytest -q'`);
   assert.equal(as("SEMGREP_SEND_METRICS=off semgrep scan --config p/default", { ...REPO, semgrep: "1.140.0" }),
     `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'SEMGREP_SEND_METRICS=off uvx semgrep@1.140.0 scan --config p/default'`);
   assert.equal(as("timeout 600 semgrep scan ."), `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'uvx semgrep scan .'`);
-  assert.equal(as("python -m pytest"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest python3 -m pytest'`);
+  assert.equal(as("python -m pytest"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest python3 -m pytest'`);
   // Quoted words keep their quotes; PowerShell gets its own outer quoting.
   assert.equal(as(`semgrep scan --config "p/a b"`), `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'uvx semgrep scan --config "p/a b"'`);
-  assert.equal(as("npm test -- 'it''s'", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- "it''s"'`);
+  assert.equal(as("npm test -- 'it''s'", REPO, "powershell"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- "it''s"'`);
   assert.equal(sh("$x"), "'$x'");
   // Second review of #108: redirections are dropped; globs, $VAR and ~ keep their meaning.
-  assert.equal(as("npm test 2>&1 | tail -20"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
-  assert.equal(as("pytest tests/ > out.txt"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest pytest tests/'`);
-  assert.equal(as("pytest tests/test_*.py ~/x"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest pytest tests/test_*.py ~/x'`);
-  assert.equal(as(`npm test -- --grep "$PAT"`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- --grep "$PAT"'`);
-  assert.equal(as(`FOO="a b" npm test`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'FOO="a b" npm test'`);
-  assert.equal(as("npm test -- $env:FOO", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- ''$env:FOO'''`);
+  assert.equal(as("npm test 2>&1 | tail -20"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
+  assert.equal(as("pytest tests/ > out.txt"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest pytest tests/'`);
+  assert.equal(as("pytest tests/test_*.py ~/x"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest pytest tests/test_*.py ~/x'`);
+  assert.equal(as(`npm test -- --grep "$PAT"`), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- --grep "$PAT"'`);
+  assert.equal(as(`FOO="a b" npm test`), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'FOO="a b" npm test'`);
+  assert.equal(as("npm test -- $env:FOO", REPO, "powershell"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- ''$env:FOO'''`);
   assert.deepEqual(kinds("cat <<\\EOF\nnpm test\nEOF"), []);
   // Third review: a quoted argument that looks like a redirection stays; PowerShell's *> goes.
-  assert.equal(as(`npm test -- --grep "<x>" 2>&1`), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- --grep "<x>"'`);
-  assert.equal(as("npm test *> out.txt", REPO, "powershell"), `node "s" --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
+  assert.equal(as(`npm test -- --grep "<x>" 2>&1`), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'npm test -- --grep "<x>"'`);
+  assert.equal(as("npm test *> out.txt", REPO, "powershell"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'npm test'`);
 });
 
 test("fourth review of #108: the Semgrep pin is read from the hash-locked requirements file", () => {
@@ -157,7 +157,7 @@ test("decide: a listed repository is denied with the route; others run", () => {
   const out = decide({ input: ask("npm test"), deps: deps() });
   assert.equal(out.hookSpecificOutput.permissionDecision, "deny");
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /github\.com\/o\/r is on boat-run's upload list/);
-  assert.match(out.hookSpecificOutput.permissionDecisionReason, /node "C:\/p\/boat-run\.mjs" --timeout 1200 --push "C:\/w\/r" -- bash -c 'npm test'/);
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /node "C:\/p\/boat-run\.mjs" --type default --timeout 1200 --push "C:\/w\/r" -- bash -c 'npm test'/);
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /# local-run: <why>/);
   // The escape is a closed list of three cases, and names nothing of Windows.
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /only when it needs this PC itself: its key store, its display, or an app installed on it/);

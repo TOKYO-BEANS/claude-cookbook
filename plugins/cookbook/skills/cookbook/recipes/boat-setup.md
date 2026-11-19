@@ -34,7 +34,7 @@
   and what was left running. With the outside code running as `vet`, an install made of
   hostile commands was refused each one (`sudo`, the evidence folder, `pkill tcpdump`).
 - Proven on 16 November 2026, paid plan: this repository's `npm test` ran in a
-  `small` sandbox in 13 seconds with the upload (about 150 seconds on this PC) and found a
+  `small` sandbox in 13 seconds with the upload (150 on the Windows PC) and found a
   test that depended on the machine's sort order; five sandboxes ran at once; a `large` one
   reported 8 CPUs; `boat list --all` was empty afterwards. Under USD 0.01 in all.
   `boat-run.mjs` refused its first upload on three Gitleaks findings (made-up test values,
