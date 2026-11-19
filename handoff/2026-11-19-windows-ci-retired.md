@@ -15,9 +15,9 @@ and to the required checks; nothing else is loosened.
   Windows workflow.
 - `recipes/keys.md`: the old Windows key route is no longer tested in CI.
 
-**What it means.** A merge commit has 4 checks again (`Depot CI / test`, `Depot CI / semgrep`,
-`Analyze (javascript-typescript)`, `Analyze (actions)`): `merge-when-green.sh ... 4`. Tests
-that run only on `win32` now run nowhere.
+**What it means.** A merge commit has 3 checks (`Depot CI / test`, `Depot CI / semgrep`,
+`Analyze (javascript-typescript)`): `merge-when-green.sh ... 3`. Tests that run only on
+`win32` now run nowhere.
 
 **Verification.** `npm test` on boat: 724 pass, 0 fail, 10 skipped (the Windows-only
 tests). The ruleset read back after the change: `active`, `Depot CI / semgrep` and
@@ -27,7 +27,9 @@ tests). The ruleset read back after the change: `active`, `Depot CI / semgrep` a
 code written in GitHub Actions". CodeQL default setup still lists `actions`, and with the last
 workflow gone the pull request's scan finds nothing. GitHub updates default setup's languages
 by itself when a language leaves the default branch; dropping it by hand before the merge
-removes a check, so it went to the owner.
+removes a check, so it went to the owner: "Drop 'actions' now" (owner, 19 November 2026,
+question dialog). Default setup now lists `javascript-typescript` only; the enforced
+organisation configuration accepted the change.
 
 **Outstanding.** The standard's `windows-ci` item reads `blocked`
 (`owner-approval-required`) while the repository holds Windows files
@@ -37,4 +39,4 @@ Windows-specific pages and scripts" for those files; the Stack Atlas handoff rec
 owner's answer so the item is not put to the owner again.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-19-retire-windows-ci/`: the
-ruleset before and after, the merge log.
+ruleset and the CodeQL default setup before and after, the merge logs.
