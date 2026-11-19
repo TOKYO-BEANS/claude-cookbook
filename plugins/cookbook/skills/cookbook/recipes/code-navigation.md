@@ -10,7 +10,8 @@
   Graphify has not indexed. Proven on 19 November 2026 for TypeScript and JavaScript, Python
   (pyright) and Go (gopls). The TypeScript server needs a `typescript` with a `tsserver`:
   6.0.3 is installed, because 7.0.2 ships none. Rust gave no answer for a crate outside the
-  session's workspace: not proven from a session.
+  session's workspace: not proven from a session. The TypeScript server and pyright are
+  pinned copies: [pinned-copies.md](pinned-copies.md).
 - **A change of one code shape across many files: `ast-grep`.** `ast-grep run -p
   '<pattern>' -l <language> <folder>` finds it, `--rewrite '<new code>'` changes it; the
   pattern is code with `$HOLES`. Read the matches before a rewrite. A literal string stays
