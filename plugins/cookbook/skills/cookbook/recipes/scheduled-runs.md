@@ -27,7 +27,7 @@ the timer on the Ubuntu laptop on 19 November.
   - A run loads everything a session loads. Keep the prompt to one job and name its stops.
 - **The fallback: a Claude Desktop scheduled task**, when a run needs its model set per task
   before the bound-thread route is proven. Three ran there on the Windows PC and are not
-  back on Linux yet (the handoff of 19 November 2026 says what each needs):
+  back on Linux yet (`handoff/2026-11-19-linux-schedules.md` says what each needs):
   `stack-atlas-standard-daily` (07:30), `agentshield-weekly` and `daily-sidebar-cleanup`
   (which tidies the desktop app's own sidebar).
   Their quirks: [scheduled-runs-desktop.md](scheduled-runs-desktop.md).
