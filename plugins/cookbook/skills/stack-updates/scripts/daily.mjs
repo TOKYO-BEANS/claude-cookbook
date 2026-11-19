@@ -42,7 +42,8 @@ export function resolveScript(home) {
 }
 
 // Stops a process and everything it started. On Windows a plain kill ends only the
-// process itself and leaves its children (gh, claude -p) running.
+// process itself and leaves its children (gh, claude -p) running. Under the systemd
+// timer the service's control group ends whatever is left when this launcher exits.
 function stopTree(child) {
   if (process.platform === "win32") spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
   else child.kill("SIGKILL");

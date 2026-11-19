@@ -495,3 +495,35 @@ test("defaultRun: a launcher without the execute bit is a spawn failure, not a r
   assert.equal(r.code, -1);
   assert.equal(r.stdout, "");
 });
+
+// ---- a stopped command takes what it started with it ------------------------------
+
+import { existsSync, readFileSync as readText } from "node:fs";
+import { descendants } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
+
+test("descendants: every process below a pid from /proc, the deepest first, whatever a file holds", () => {
+  const tree = { 100: { 100: "200 201\n", 101: "202 \n" }, 200: { 200: "300\n" }, 201: { 201: "" }, 202: { 202: "x 100 1 0 -5 300\n" }, 300: { 300: "" } };
+  const list = (path) => { const m = /^\/proc\/(\d+)\/task$/.exec(path); if (!tree[m?.[1]]) throw new Error("gone"); return Object.keys(tree[m[1]]); };
+  const read = (path) => { const m = /^\/proc\/(\d+)\/task\/(\d+)\/children$/.exec(path); return tree[m[1]][m[2]]; };
+  assert.deepEqual(descendants(100, { list, read }), [300, 200, 201, 202]);
+  assert.deepEqual(descendants(999, { list, read }), [], "a process that is gone has none");
+  assert.deepEqual(descendants(100, { list: () => { throw new Error("no /proc"); }, read }), []);
+});
+
+test("defaultRun: a launcher that times out takes the program it started with it", { skip: process.platform !== "linux" && "the tree is read from /proc" }, async () => {
+  const h = tempHome();
+  const file = join(h, ".local", "bin", "tool");
+  const pidFile = join(h, "started.pid");
+  // The launcher starts a program of its own and waits for it, as a keyed CLI's launcher does.
+  writeFileSync(file, `#!/bin/sh\nsleep 60 &\necho $! > "${pidFile}"\nwait\n`);
+  chmodSync(file, 0o755);
+  const r = await defaultRun(expandTokens(["{bin}/tool"], h), { home: h, timeoutMs: 1500 });
+  assert.equal(r.timedOut, true);
+  assert.ok(existsSync(pidFile), "the launcher started its program before the timeout");
+  const pid = Number(readText(pidFile, "utf8").trim());
+  assert.ok(pid > 1);
+  const gone = async () => { for (let i = 0; i < 40; i += 1) { try { process.kill(pid, 0); } catch { return true; } await new Promise((done) => setTimeout(done, 50)); } return false; };
+  const stopped = await gone();
+  if (!stopped) process.kill(pid, "SIGKILL");
+  assert.ok(stopped, "the started program was stopped with its launcher");
+});

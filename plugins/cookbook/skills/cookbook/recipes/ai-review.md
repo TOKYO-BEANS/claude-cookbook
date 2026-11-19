@@ -29,7 +29,7 @@
   budget, another model or no review for some pull requests is the owner's decision.
 - **On the Claude plan** (owner, 17 November 2026: "Token in Depot CI"; standard v22): where the
   Depot secret `CLAUDE_CODE_OAUTH_TOKEN_REVIEW` is set for the repository, the job runs one
-  locked-down `claude -p` on the plan instead of the API. The token is the DPAPI entry
+  locked-down `claude -p` on the plan instead of the API. The token is the key-store entry
   `claude-plan-review`, made with `claude setup-token` signed in with the subscription account (a
   Console token bills the API credit). Live on the Cookbook since #139 (18 November 2026); the
   other repositories still use the API key, whose credit ran out on 16 November.

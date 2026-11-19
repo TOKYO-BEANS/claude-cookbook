@@ -31,7 +31,7 @@
   profiles and auto-memory (it reads the memory files, never writes them). There it takes
   the row's fallback and says so.
 - **Its tools follow the catalog.** An MCP server in `~/.codex/config.toml` gets its key at run
-  time (`with-key.mjs`, or the `agent-key.ps1` headers helper), never as a literal. Codex does
+  time (`with-key.mjs`, or the `key-header.mjs` headers helper), never as a literal. Codex does
   not use a connected server that is not in `catalog.json`; removing one is an uninstall: ask.
 - **Model route:** the ChatGPT sign-in, straight to OpenAI. No `model_provider` and no gateway
   in `config.toml`, and never `npx @context-mode/cli login`: a reply that asks for that login

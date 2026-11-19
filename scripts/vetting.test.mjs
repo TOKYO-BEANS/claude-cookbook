@@ -307,6 +307,50 @@ function runIn(root, script, args, env = {}) {
 
 const lock = (version) => `${JSON.stringify({ version })}\n`;
 
+test("a first install: no earlier version to keep, the vetted lockfile is installed, and --back has nothing to put back", { skip }, () => {
+  const root = shareWith({
+    "share/vetting/tool-1.0.0/lock/package.json": lock("1.0.0"),
+    "share/vetting/tool-1.0.0/lock/package-lock.json": lock("1.0.0"),
+    "share/vetting/tool-2.0.0/lock/package.json": lock("2.0.0"),
+    "share/vetting/tool-2.0.0/lock/package-lock.json": lock("2.0.0"),
+  });
+  stub(root, "npm", ['exit "${STUB_NPM_EXIT:-0}"']);
+  const at = (file) => readFileSync(path.join(root, "share", "tool", file), "utf8");
+  const has = (file) => existsSync(path.join(root, "share", "tool", file));
+
+  // The folder does not exist yet. A failed npm leaves the run pending and no backup.
+  const failed = runIn(root, "pinned-install.sh", ["tool", "1.0.0"], { STUB_NPM_EXIT: "1" });
+  assert.equal(failed.status, 1, failed.out);
+  assert.match(failed.out, /a first install: there is no earlier version to keep/);
+  assert.ok(has(".previous/pending"));
+  assert.ok(!has(".previous/package-lock.json"), "a first install made a backup of nothing");
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "--back"]).status, 2, "nothing to put back");
+
+  const first = runIn(root, "pinned-install.sh", ["tool", "1.0.0"]);
+  assert.equal(first.status, 0, first.out);
+  assert.equal(at("package-lock.json"), lock("1.0.0"));
+  assert.ok(!has(".previous/pending"));
+
+  // The next install is an ordinary one: 1.0.0 becomes the backup.
+  assert.equal(runIn(root, "pinned-install.sh", ["tool", "2.0.0"]).status, 0);
+  assert.equal(at("package-lock.json"), lock("2.0.0"));
+  assert.equal(at(".previous/package-lock.json"), lock("1.0.0"));
+});
+
+test("a folder that holds only one of the two files is not a first install: nothing is touched", { skip }, () => {
+  const root = shareWith({
+    "share/tool/package.json": lock("0.9.0"),
+    "share/vetting/tool-1.0.0/lock/package.json": lock("1.0.0"),
+    "share/vetting/tool-1.0.0/lock/package-lock.json": lock("1.0.0"),
+  });
+  stub(root, "npm", ["exit 0"]);
+  const r = runIn(root, "pinned-install.sh", ["tool", "1.0.0"]);
+  assert.equal(r.status, 1, r.out);
+  assert.doesNotMatch(r.out, /a first install/);
+  assert.equal(readFileSync(path.join(root, "share", "tool", "package.json"), "utf8"), lock("0.9.0"));
+  assert.ok(!existsSync(path.join(root, "share", "tool", "package-lock.json")));
+});
+
 test("a second install run never overwrites the backup of the last good version", { skip }, () => {
   const root = shareWith({
     "share/tool/package.json": lock("1.0.0"),

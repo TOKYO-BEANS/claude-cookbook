@@ -13,11 +13,10 @@
   plan or no time left, the sandbox step answers "no result" and every pinned npm update
   waits for the owner: if boat is cancelled, take the step out of the vetting scripts and
   these recipes in one change.
-- **On this PC:** the `boat` command is a shim that decrypts the DPAPI key `boat` into that one
-  process and turns the CLI's self-update off (`BOAT_NO_UPDATE=1`). The binary is a pinned copy
-  in `~/.local/share/boat`, checked against the checksum list boat publishes; it is not
-  code-signed. Never run boat's installer (`install.ps1`): it writes to AppData, the PowerShell
-  profile and the user PATH, which do not survive a reboot from Claude's container. To update:
+- **On this PC:** the `boat` command is a `#!/bin/sh` launcher: the key-store key `boat` in
+  that one process, the CLI's self-update off (`BOAT_NO_UPDATE=1`). The binary is a pinned
+  copy in `~/.local/share/boat` (`PROVENANCE.txt` beside it). Never run boat's installer: it signs in and edits the
+  shell's startup files. To update:
   download the new binary and checksum list to an empty folder, compare the SHA-256, replace the
   copy and run `boat --version`.
 - **The upload list** of `boat-run.mjs` is `~/.local/share/boat-run/upload-allowed.txt`, one
@@ -26,6 +25,7 @@
   hold no customer data, each a path or a folder ending in `/`
   (`... data: fixtures/prices.csv db/migrations/`). It is outside every repository on
   purpose. Its `slots` folder beside it holds one file per run under way.
+  Written again on Linux with the three repositories it held.
 - The API key (env writes and account.admin, 17 November 2026) ends 17 November 2027. A
   401: the owner makes a new one in the dashboard and saves it in the masked key window.
 - Proven on 12 November 2026: `small` ready in under a second (Ubuntu 24.04, Node 24).
