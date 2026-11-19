@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening (Adobe Firefly), photo masks and cut-outs (Adobe for creativity), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo sharpening, masks and cut-outs (no tool yet: say so), SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -25,19 +25,21 @@ fallback and say that you did.
 | --- | --- | --- | --- |
 | **Plan and build** | | | |
 | Plan, build or debug a change | **Superpowers** skills | the same steps inline | [building](recipes/building.md), [debugging](recipes/debugging.md) |
+| A long job a program can check: run until the check passes | **Claude Code** `/goal` | a Stop hook with a script check | [goal-runs](recipes/goal-runs.md) |
 | Several agents on one job | the named **`sa-*`** workflows, within their budgets | plain parallel subagents | [workflows](recipes/workflows.md) |
 | One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (`cookbook:mechanical`, `cookbook:research`, `cookbook:review`, `cookbook:reader`, `cookbook:reader-graph`) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
-| A second opinion (a consult) on our own work from a model that is not Claude: a design, a risky change, a cross-check | **Codex**, as a supervised T3 `delegate_task` run; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
+| A second opinion (a consult) on our own work from a model that is not Claude: a design, a risky change, a cross-check | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a Claude API call with a typed answer | [judgement](recipes/judgement.md) |
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
-| Sharpen a soft real photo | **Adobe Firefly** | none: say so | [photos](recipes/photos.md) |
-| Edit a real photo: masks, cut-out, straighten, colour by region | **Adobe for creativity**, in its own child session | the same connector in a Claude Desktop chat | [photos-adobe-connector](recipes/photos-adobe-connector.md) |
+| Sharpen a soft real photo | none: say so | — | [photos](recipes/photos.md) |
+| Edit a real photo: masks, cut-out, straighten, colour by region | none: say so | — | [photos](recipes/photos.md) |
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
 | The model for a session or a piece: Fable or Opus, and when a banked limit reset is used | the model budget script and its hook, which set the thread's model in **T3 Code**; a dispatch profile per piece | the thread's model as it is, said aloud | [model-budget](recipes/model-budget.md) |
+| Several Claude or Codex subscriptions behind one local address, only when the owner starts it | **CLIProxyAPI**, through `cliproxyapi` and `claude-pool` | one subscription as it is | [subscription-proxy](recipes/subscription-proxy.md) |
 | **Check** | | | |
 | Tests, builds and container images | **Depot** CI | GitHub Actions, only as a documented exception | [ci-releases](recipes/ci-releases.md) |
 | Review of every pull request | the `ai-review` Depot job, once, when the pull request is marked ready for review | a **fallback review** of the head by a reviewer that did not write it, when its reviewer's API could not serve the call | [ai-review](recipes/ai-review.md) |
@@ -69,13 +71,13 @@ fallback and say that you did.
 | Typed records: companies, people, jobs, filings, places | **Firecrawl** Alexandria | Parallel FindAll | [firecrawl](recipes/firecrawl.md) |
 | One question across 10 to 50 pages | the web batch script (**Parallel**, **Firecrawl**, **TypeSafe / Jev**) | Parallel Search excerpts | [web-batch](recipes/web-batch.md) |
 | A cited answer that needs several sources | **sa-research** | Parallel `web_research` | [workflows](recipes/workflows.md) |
-| Several steps on a public page inside a session: click, fill, screenshot | **Stagehand** | the `browse` CLI, a command per step | [stagehand](recipes/stagehand.md) |
+| Several steps on a public page: click, fill, screenshot | **Stagehand**, in a child session | the `browse` CLI, a command per step | [stagehand](recipes/stagehand.md) |
 | A public page from a script, or one step | **Browserbase**, the `browse` CLI | Firecrawl, when reading is enough | [cloud-browser](recipes/cloud-browser.md) |
 | A site that needs a sign-in | **agent-browser**, with a login from the vault | the built-in browser, where the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Web logins | the **Proton Pass CLI**, vault "Claude" | the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Keys and tokens | the DPAPI store (`agent-key.ps1`, `with-key.mjs`, `key-header.mjs`) | — | [keys](recipes/keys.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
-| Run code away from this PC: tests on Linux before a push, a Linux-only failure, a long or parallel job | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md) |
+| Run code away from this PC: tests on Linux before a push, a Linux-only failure, a long or parallel job, a long Claude job that stands alone | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md), [boat-claude](recipes/boat-claude.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
 | Connect a new app or service | the **Cookbook** first, then the lightest route | — | [connecting](recipes/connecting.md) |
 | Office files and PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |
@@ -83,7 +85,7 @@ fallback and say that you did.
 | Big output kept out of the conversation | **context-mode** | ranged `Read` and `rg` | [context-mode](recipes/context-mode.md) |
 | Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor, by itself | [compaction](recipes/compaction.md) |
 | Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev**; the display is T3 Code's sidebar (`❓ ` marker, pins) | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
-| Several chats at once: a question another chat already put to the owner, a job another chat has | the **Cookbook**'s `owner-answers` hooks, which point at the chat that asked; **T3 Code**'s thread list and thread read | the same two looks by hand, before asking | [parallel-chats](recipes/parallel-chats.md) |
+| Several chats at once: a question another chat already put to the owner, a job or a file another chat has | the **Cookbook**'s `owner-answers` hooks, which point at the chat that asked and stop a chat's first change until it has looked; **T3 Code**'s thread list and thread read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
 | Memory across sessions | the project's handoff for its state (`HANDOFF.md`, or a file per entry in `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md) |
 | A plain script on a schedule | Windows Task Scheduler | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | An agent run on a schedule | a **T3 Code** scheduled task | a Claude Desktop scheduled task | [scheduled-runs](recipes/scheduled-runs.md) |

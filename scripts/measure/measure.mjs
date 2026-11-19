@@ -40,6 +40,8 @@ export function parseAnswer(text, fieldNames) {
 
 export function scoreAnswer(task, text) {
   const answer = parseAnswer(text, Object.keys(task.fields));
+  // patterns are regexes by design from the repository's own tasks.json (owner's dismissal 18 Nov 2026)
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
   const checks = task.checks.map((c) => ({ label: c.label, field: c.field, pass: new RegExp(c.pattern, "i").test(answer[c.field] ?? "") }));
   return { passed: checks.filter((c) => c.pass).length, of: checks.length, checks, answer };
 }

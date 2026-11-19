@@ -1,5 +1,12 @@
 # Sign-ins: mailed links and Cloudflare Access
 
+- **Claude's own accounts:** an account only Claude uses signs up as `<service>@in.nofix.dev`
+  (owner, 17 November 2026): one address per service, made with `address <service>` below, and
+  the login in the vault "Claude" as [sign-ins](sign-ins.md) says. The inbox drops mail after
+  15 minutes, so the address serves sign-in links and codes, never mail that must be kept.
+  `mail-link` opens a link; no command reads a mailed code yet, so it is built for the first
+  site that needs one. No forward: a service whose mail must be kept (bills, security notices,
+  closing warnings) is not one only Claude uses, so it goes to the owner.
 - **A site that mails a sign-in link:** `agent-browser mail-link <name>@in.nofix.dev --host <site>`
   waits for the mail (`--timeout`, 120 seconds unless said otherwise), opens the sign-in link in
   the browser, deletes the mail and answers with `ok`, the sender and the page it landed on. The
@@ -11,8 +18,9 @@
   cloudflare-wrangler CLOUDFLARE_API_TOKEN node ~/.local/share/site-login/inbox/deploy.mjs address
   <name>` (`addresses` lists them, `remove <name>` deletes one); use one address per site. The
   mail gets there either because the account's own address is that inbox address, or through a
-  forwarding rule in the owner's mailbox limited to that site's sender. Setting either up is the
-  owner's decision: whoever receives a site's mail can also reset its password.
+  forwarding rule in the owner's mailbox limited to that site's sender. Either is the
+  owner's decision, but for the inbox address of Claude's own accounts above: whoever receives
+  a site's mail can reset its password.
 - **A site behind Cloudflare Access:** `agent-browser access <site>` signs in with an Access
   service token instead of a one-time mail code. A short child process reads the token's client ID
   and secret from the key store and sends them in one request to the site's exact login address;

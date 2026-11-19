@@ -2,7 +2,7 @@
   "name": "stack-atlas-ai-review",
   "version": "1.0.0",
   "private": true,
-  "description": "Advisory AI review of a pull request, run by the ai-review Depot CI job. Managed by the Stack Atlas standard.",
+  "description": "Advisory AI review of a pull request, run by the ai-review Depot CI job: Claude Code on the Claude plan when the token secret is set, the Claude API otherwise. Managed by the Stack Atlas standard.",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -10,5 +10,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.4.0"
+  },
+  "optionalDependencies": {
+    "@anthropic-ai/claude-code-linux-x64": "2.1.326"
   }
 }

@@ -123,6 +123,8 @@ export function defaultRun(argv, { timeoutMs = COMMAND_TIMEOUT_MS, maxBytes = OU
     let child;
     try {
       const stdin = typeof input === "string" ? "pipe" : "ignore";
+      // commands from the repository's own catalog.json, limited by check.mjs, no shell (owner's dismissal 18 Nov 2026)
+      // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
       child = spawn(argv[0], argv.slice(1), { shell: false, windowsHide: true, cwd, env: runEnv(process.env, env), stdio: [stdin, "pipe", "pipe"] });
     } catch (e) {
       return resolve({ code: -1, stdout: "", stderr: cause(e) });

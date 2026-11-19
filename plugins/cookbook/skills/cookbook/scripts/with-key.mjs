@@ -140,6 +140,8 @@ export function exitCode(code, signal) {
 export function startProgram(program, args, env) {
   const failed = (e) => { process.stderr.write(`with-key: could not start ${program} (${String(e?.code ?? "error")})\n`); return NOT_STARTED; };
   let child;
+  // a launcher: starts the program its local user names, no shell (owner's dismissal 18 Nov 2026)
+  // nosemgrep: javascript.lang.security.detect-child-process.detect-child-process
   try { child = spawn(program, args, { env, stdio: "inherit", windowsHide: true }); } catch (e) { return failed(e); }
   const stop = () => { if (child.exitCode === null) child.kill(); };
   process.on("exit", stop);

@@ -17,8 +17,11 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   `gh api "organizations/<org>/settings/billing/usage?year=<y>&month=<m>"` (per day,
   repository and SKU) and `.../settings/billing/budgets`. Depot's: `node ~/.local/bin/with-key.mjs
   depot-org DEPOT_TOKEN depot org invoices list` (then `line-items <id>`), finalized months only.
-- **GitHub's AI scanning was turned off** (owner, 17 November 2026): pushes since then have
-  started no AI scanning session; the next day's usage read is the last proof. Three switches, each billed as
+- **GitHub's AI scanning is off, proven** (owner turned it off on 17 November 2026; read on 19
+  November): "Code Security AI Credits" were USD 12.17 on 17 November, all of it before the
+  switch-off and unchanged since the read at 12:25 UTC that day, and none on 18 November; no
+  AI scanning session ran in any of the eight repositories after 12:05:45 UTC on 17 November.
+  Three switches, each billed as
   "Code Security AI Credits" (USD 0.01): `pr_scan` and `repository_scan` through `gh api -X
   PATCH orgs/<org>/code-scanning/ai-scan`, and "Scan for AI applications", which wrote the
   review threads, only on the organisation's Settings, Advanced Security, Global settings.
@@ -26,7 +29,7 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   again. Before: USD 136 in 17 days, a quarter of the minutes. Proof is behaviour, never a
   setting: no run of `dynamic/agents/github-advanced-security` after a push, no AI rows in
   the usage read. A USD 0 hard-stop budget on `code_security_ai_unit` is kept; whether it stops a scan is
-  unproven.
+  unproven: nothing was billed after the switch-off, so it was never tested.
 - **The `ai-review` job is paid in cash once the plan's monthly API credit is used.** It was
   used up on 16 November. From the token counts in the review comments, a floor: USD 17 to 27 for the
   40 reviews of 16 November. With no balance the job answers "credit balance too low" and
@@ -34,9 +37,11 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   reviewer in the session; the API job stays until that is built and measured
   ([ai-review](ai-review.md)).
 - **The purchase when the trial ends, about 28 November 2026.** Secret Protection is USD 19
-  and Code Security USD 30 for each active committer a month. The owner decides after
-  Semgrep's code rules are measured against the CodeQL alerts we have (due 24 November).
-  What was weighed: [security-platforms](../options/security-platforms.md).
+  and Code Security USD 30 for each active committer a month (one, 17 November). Semgrep's
+  free code rules found none of CodeQL's 78 alerts (5 not fully analysed), and it has no
+  free Secrets ([measured](../options/semgrep-code-vs-codeql.md)). The owner's call: "not now" on
+  18 November. Without Code Security the ruleset's CodeQL rule blocks every pull request in
+  the private repositories. Weighed: [security-platforms](../options/security-platforms.md).
 - A number of pull requests is the multiplier: every push runs the tests, CodeQL and Semgrep,
   and every pull request is reviewed. Fewer, larger pull requests cost less.
 - A budget change, a purchase and a plan change are the owner's, each time.

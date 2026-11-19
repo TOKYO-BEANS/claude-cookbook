@@ -9,10 +9,10 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 - **On every run:** its own start-up reading ([codex-setup](codex-setup.md)): the global rules
   file, the Cookbook's pages, the repository's instruction files and the memory files.
 - **For the question:** the brief, and the files the child reads to answer it.
-- **The sandbox is read-only, not fenced.** The child can read any file the owner's account
-  can. The first command of a supervised run waited for the owner's click (seen twice,
-  16 November 2026); that every later read waits is not proven. So the rules below are kept
-  by the session and the checks, not by a wall.
+- **Nothing fences reading.** The child can read any file the owner's account can: an
+  unattended run has full access, and a supervised run's sandbox is read-only, not fenced
+  (only its first command was seen to wait for a click, 16 November 2026). So the rules below
+  are kept by the session and the checks, not by a wall.
 
 ## Before the call: no check, no consult
 
@@ -24,20 +24,25 @@ Everything Codex reads goes to OpenAI, under the owner's ChatGPT sign-in.
 - **A narrow brief.** It names the paths the question is about and carries this line: "Read
   only what this question needs, and nothing outside the repository."
 
-## The owner's decision, 16 November 2026
+## The audit, before and after
 
-- **The standing yes.** With the checks above passed, a session may start a consult on its
-  own judgement, for code in the owner's own repositories, without a question in chat. The
-  report afterwards names the model and the repository. It is not the yes for an unattended
-  run: a consult still starts supervised.
+In either mode, before the call note, and afterwards compare: `git status --short`,
+`git rev-parse HEAD` and the branch on the remote. Start an unattended run only from a clean
+checkout (`git status --short` empty), or a further edit to a changed file shows nothing. It
+does not see Git's own folder (a hook or setting written there runs with the next Git
+command), files inside ignored folders such as `node_modules`, other branches, tags or pull
+requests pushed with the owner's sign-in, or anything outside the repository. The owner
+accepted these as known limits of the unattended mode ([codex-decisions](codex-decisions.md)).
+
+## The owner's decisions
+
+What the owner allowed, with dates and words: [codex-decisions](codex-decisions.md).
+
 - **Never pointed at.** Secrets, keys and tokens; customer data; personal data; files outside
   the repository, beyond Codex's own start-up reading.
 - **Ask first.** Anything else: a repository that is not the owner's, a client's private
   material, data exports, logs with real users in them. The question names the provider, the
   model and what would be sent, by path, and why. No yes, no consult.
-- The rule answers findings of GitHub's security review. The owner chose it twice that day
-  over a confirmation before every consult, the second time knowing that the sandbox does
-  not fence reading and that the session decides alone. Loosening it is the owner's decision.
 
 ## Models
 

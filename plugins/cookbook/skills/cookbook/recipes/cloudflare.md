@@ -15,9 +15,24 @@
   DPAPI token (`with-key.mjs cloudflare-wrangler CLOUDFLARE_API_TOKEN`), or the Cloudflare plugin's
   `execute` once its login grants the observability and D1 scopes (the owner re-authorizes it in
   `/mcp`). `cloudflare-docs` stays for documentation search.
+- The plugin's `cloudflare-one` skill (1.0.4) reads an Access service token "from the project's
+  configured secret store or environment variables". Here that store is the DPAPI store, and
+  the token (two keys) reaches a site only through `agent-browser access`
+  ([sign-ins](sign-ins-mail-and-access.md)), never an environment variable, a `.env` file or a
+  command line ([keys](keys.md)). Only for a site listed in `site-login/access.json`; a new site
+  is an access change and needs the owner's yes.
 - `wrangler dev` reads a Worker's required secrets from the environment, so start it without
   secret-looking variables set. For local dev, keep `compatibility_date` at or below the date of the
   bundled workerd.
 - An endpoint that starts paid work, or relies on a protecting setting, fails closed: it answers 503
   while that setting is unset, and a test covers the unset case. Template: release-verifier
   `src/auth.mjs`.
+- The owner's domain `nofix.dev`: the apex and `/privacy` (Worker `nofix-site`) keep Google's
+  sign-in screen in production, so nothing else goes there; `in.nofix.dev` is the mail inbox
+  ([sign-ins](sign-ins-mail-and-access.md)). It sends no mail, and its DMARC record says
+  `p=reject` (owner's yes, 18 November 2026): mail sent from it is refused until that changes.
+  Private pages on its subdomains behind Access were
+  weighed on 17 November 2026 and not built: an Artifact is already private, opens wherever the
+  owner uses claude.ai and can keep state, and T3's `html_render` shows a page in the chat. Each
+  Access page adds a Worker, an Access policy (an access change) and a sign-in for nothing more.
+  Built only for a page that must serve live data from this PC.

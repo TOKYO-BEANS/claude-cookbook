@@ -45,5 +45,8 @@ jobs:
           # Outside the checkout, as the Depot step runs it.
           Set-Location $env:RUNNER_TEMP
           & $installer -ci
+          # Minimum package age 24 hours, as the Depot step sets it (owner,
+          # 18 November 2026; never lower), for the job's later steps.
+          Add-Content -Path $env:GITHUB_ENV -Value "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24"
       - run: npm ci
       - run: npm test

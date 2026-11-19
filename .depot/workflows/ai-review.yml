@@ -32,6 +32,12 @@
 #   ANTHROPIC_WORKSPACE_ID_REVIEW (that workspace's id, sent as the
 #   anthropic-workspace-id header). Both are organisation-wide in Depot org
 #   bn9mw0t770; never paste a key into chat or a file.
+# - On the Claude plan instead (owner, question dialog of 17 November 2026:
+#   "Token in Depot CI (Recommended)"): where the Depot CI secret
+#   CLAUDE_CODE_OAUTH_TOKEN_REVIEW is set (a `claude setup-token` token, which
+#   can only make model requests), review.mjs runs one `claude -p` with no
+#   tools on the plan and does not use the API key. The same comment, the same
+#   check, the same merge gate.
 name: AI review
 on:
   pull_request:
@@ -45,7 +51,9 @@ jobs:
   ai-review:
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: depot-ubuntu-24.04
-    # Two API attempts of at most 12 minutes each, plus checkout and install.
+    # The API path: two attempts of at most 12 minutes each. The plan path: one
+    # run of at most 20 minutes after installing Claude Code (about 371 MB).
+    # Either way, plus checkout and install.
     timeout-minutes: 30
     # Depot CI's GITHUB_TOKEN is a Depot Code Access app token; the app holds
     # pull_requests: write, so this job can post its one comment.
@@ -103,6 +111,9 @@ jobs:
           # on a .nvmrc naming a Node version that nvm does not hold.
           cd "$RUNNER_TEMP"
           sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
+          # Minimum package age 24 hours, as the standard's Safe Chain step sets it
+          # (owner, 18 November 2026; never lower), for the next step's npm ci.
+          echo "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24" >> "$GITHUB_ENV"
       - name: Install the reviewer's locked dependencies
         if: steps.reviewer.outputs.ready == 'true'
         run: |
@@ -115,6 +126,8 @@ jobs:
       - name: AI review (advisory)
         if: steps.reviewer.outputs.ready == 'true'
         env:
+          # The Claude plan token (claude setup-token): when set, the review runs on the plan, not the API.
+          CLAUDE_CODE_OAUTH_TOKEN_REVIEW: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_REVIEW }}
           ANTHROPIC_API_KEY_REVIEW: ${{ secrets.ANTHROPIC_API_KEY_REVIEW }}
           ANTHROPIC_WORKSPACE_ID_REVIEW: ${{ vars.ANTHROPIC_WORKSPACE_ID_REVIEW }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

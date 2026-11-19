@@ -29,8 +29,8 @@ Built once per site, in the site's repository, as a script with tests. The patte
   with no error: capture in parts); live outside content such as a social feed (hide its
   pictures on both sides, keep its tiles).
 - **Not a cloud browser:** `browse` and Stagehand cannot reach a local build and have no
-  phone emulation; Stagehand and the built-in browser run inside a session, not from a
-  script.
+  phone emulation; Stagehand runs in a child Claude session and the built-in browser inside a
+  session, neither from the check's own script.
 - **The judge is paid:** the DPAPI key `anthropic-api` through `with-key.mjs`, with a
   workspace ID in the request. The script caps the spend of a run; try one page first.
 - **Prove it before asking the owner:** one pass (the live site against a build of the code

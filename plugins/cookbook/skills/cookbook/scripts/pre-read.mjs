@@ -218,16 +218,17 @@ export function privateNeedles(roots) {
 
 export const normalizeText = (text) => String(text).toLowerCase().replace(/%5c|%2f/g, "/").replace(/[\\/]+/g, "/");
 
+// A plain string search, no pattern built from folder names: a needle that starts with a letter
+// or digit counts only at the start of the text or after a character that is neither.
 export function privateMatcher(roots) {
   const needles = privateNeedles(roots);
   if (needles.length === 0) return null;
-  const esc = (t) => t.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-  const bounded = needles.filter((n) => /^[a-z0-9]/.test(n)).map(esc);
-  const open = needles.filter((n) => !/^[a-z0-9]/.test(n)).map(esc);
-  const parts = [];
-  if (bounded.length > 0) parts.push(`(?:^|[^a-z0-9])(?:${bounded.join("|")})`);
-  if (open.length > 0) parts.push(`(?:${open.join("|")})`);
-  return new RegExp(parts.join("|"));
+  const bounded = (text, needle) => {
+    for (let i = text.indexOf(needle); i !== -1; i = text.indexOf(needle, i + 1)) if (i === 0 || !/[a-z0-9]/.test(text[i - 1])) return true;
+    return false;
+  };
+  const found = (text, needle) => (/^[a-z0-9]/.test(needle) ? bounded(text, needle) : text.includes(needle));
+  return { test: (text) => needles.some((needle) => found(String(text), needle)) };
 }
 
 // In a root, or above one (a chat that ran in Desktop saw every project under it). Stricter
@@ -703,7 +704,9 @@ export async function judgeStage(manifest, providers, opts) {
     // Asked again on the text just read, with the list as `opts.privacy` holds it now.
     const why = notSent(opts.privacy, s, loaded);
     if (why) {
-      Object.assign(s, { status: "private", error: `not sent: ${why}`, parts: [] });
+      s.status = "private";
+      s.error = `not sent: ${why}`;
+      s.parts = [];
       continue;
     }
     if (!pending.length) continue; // a short or empty file: asked again above, nothing to send
@@ -766,7 +769,12 @@ export async function judgeStage(manifest, providers, opts) {
     part.jev = { exists: r.answers.exists, aimed: r.answers.aimed, ...pickLines(r.answers.where, items, last) };
   }
   for (const s of manifest.sources) {
-    for (const p of s.parts) Object.assign(p, route(p));
+    for (const p of s.parts) {
+      const { verdict, reason, open } = route(p);
+      p.verdict = verdict;
+      p.reason = reason;
+      p.open = open;
+    }
     const size = sizes.get(s.i);
     if (!size) continue;
     const open = [...openLines(s.parts)].filter((n) => size[n - 1] > 0);

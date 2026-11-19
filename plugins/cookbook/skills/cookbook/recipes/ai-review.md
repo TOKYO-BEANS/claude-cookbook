@@ -27,10 +27,12 @@
   review of every push took 2.9 calls a pull request and used a month's credit in 12 days; one
   review of the commit about to merge is about USD 0.40 to 0.60 a pull request. A smaller input
   budget, another model or no review for some pull requests is the owner's decision.
-- The month's credit was used up on 16 November 2026; after that each review is paid in cash: a
-  day like 16 November (40 reviews) costs at least USD 17 to 27 in cash. The owner chose (17 November 2026) one review
-  on the Claude plan, by a reviewer in the session, in the fallback review's form. Not built
-  yet: this job stays the review until it is, measured ([security-costs](security-costs.md)).
+- **On the Claude plan** (owner, 17 November 2026: "Token in Depot CI"; standard v22): where the
+  Depot secret `CLAUDE_CODE_OAUTH_TOKEN_REVIEW` is set for the repository, the job runs one
+  locked-down `claude -p` on the plan instead of the API. The token is the DPAPI entry
+  `claude-plan-review`, made with `claude setup-token` signed in with the subscription account (a
+  Console token bills the API credit). Live on the Cookbook since #139 (18 November 2026); the
+  other repositories still use the API key, whose credit ran out on 16 November.
 - Review every change to `.depot/**`: a branch can edit the job and read the secret.
 - Claude fixes its findings together with failed checks and CodeQL alerts; a finding blocks only with
   evidence (a failing test, a CI run, a code-scanning alert, a line of code).

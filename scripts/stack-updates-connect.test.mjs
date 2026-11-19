@@ -283,7 +283,8 @@ test("scrub: key names with a prefix, separators =, : and whitespace, known pref
   gone(`FIRECRAWL_API_KEY=fc-${hex32}`, hex32);
   gone(`BROWSERBASE_API_KEY=bb_live_aB1aB1aB1aB1aB1aB1aB1aB1aB1a`, "aB1aB1aB1aB1aB1aB1aB");
   gone(`Invalid API key fc-${hex32}`, hex32);
-  gone(`bad token: ghp_abcdefghijklmnopqrstuvwxyz0123456789`, "abcdefghijklmnop");
+  const fakeGh = ["ghp", "abcdefghijklmnopqrstuvwxyz0123456789"].join("_"); // built here: no token-shaped literal in the file
+  gone(`bad token: ${fakeGh}`, "abcdefghijklmnop");
   gone(`github_pat_11ABCDEFG0abcdefghijklmnopqrstuvwxyz`, "abcdefghijklmnop");
   gone(`key sk-proj1234567890abcdefghijkl failed`, "1234567890abcdef");
   gone(`secret ABCDEFGHIJKLMNOPQRST1234 expired`, "ABCDEFGHIJKLMNOPQRST");
@@ -296,7 +297,7 @@ test("scrub: key names with a prefix, separators =, : and whitespace, known pref
 });
 
 test("scrub: the cut at 4,000 characters cannot leave part of a secret", () => {
-  const secret = "aB1cD2aB1cD2aB1cD2aB1cD2aB1cD2aB1cD2aB1c"; // a repeated pattern, plainly not a key
+  const secret = "aB1cD2".repeat(7).slice(0, 40); // a repeated pattern, plainly not a key
   assert.equal(secret.length, 40);
   const out = scrub(`${" ".repeat(3_975)}token=${secret}`);
   for (let i = 0; i + 6 <= secret.length; i++) assert.ok(!out.includes(secret.slice(i, i + 6)), out);

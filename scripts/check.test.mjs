@@ -114,7 +114,7 @@ test("field rules", () => {
 
 const P = (name, extra = {}) => ({ name, installed: { kind: "command" }, feed: { kind: "none", reason: "test" }, ...extra });
 const broken = (patch, id = "git") =>
-  errors({ catalogText: withTools((t) => (Object.assign(t.find((x) => x.id === id), patch), t)) });
+  errors({ catalogText: withTools((t) => t.map((x) => (x.id === id ? { ...x, ...patch } : x))) });
 const part = (patch) =>
   errors({ catalogText: withTools((t) => ((t.find((x) => x.id === "git").parts[0] = { ...t.find((x) => x.id === "git").parts[0], ...patch }), t)) });
 const withTop = (patch) => JSON.stringify({ ...catalog, ...patch });
@@ -305,7 +305,7 @@ test("connection checks: no token after the cmd.exe shim", () => {
 
 // The Browserbase service part: hosted, with the one changelog feed left in the catalog.
 const hosted = (patch) =>
-  errors({ catalogText: withTools((t) => (Object.assign(t.find((x) => x.id === "browserbase").parts.find((p) => p.name === "service"), patch), t)) });
+  errors({ catalogText: withTools((t) => t.map((x) => (x.id === "browserbase" ? { ...x, parts: x.parts.map((p) => (p.name === "service" ? { ...p, ...patch } : p)) } : x))) });
 
 test("a changelog feed is allowed only on a hosted or none part, and the error names the part", () => {
   const page = { kind: "changelog", url: "https://www.browserbase.com/changelog" };
@@ -406,6 +406,56 @@ test("the handoff: HANDOFF.md is closed, and an entry is a dated file in handoff
     assert.equal(handoffErrors({ closedText, entryNames: [bad] }).length, 1, bad);
   }
   assert.ok(HANDOFF_ENTRY_NAME.test("2026-11-16-parallel-chats.md"));
+});
+
+test("a handoff entry names its five parts, and its evidence is durable", async () => {
+  const { HANDOFF_CONTENT_FROM, handoffEntryErrors } = await import("./check.mjs");
+  const { readdirSync } = await import("node:fs");
+  for (const name of readdirSync(new URL("../handoff/", import.meta.url)))
+    assert.deepEqual(handoffEntryErrors({ name, text: read(`handoff/${name}`) }), [], name);
+  const good = [
+    "# A job", "", "**What changed.** One page.", "## Verification", "npm test passed.",
+    "**Outstanding.** None.", "**Failures and dead ends.** None.",
+    "**Evidence.** `~/.local/share/claude-cookbook/evidence/x.json`", "and `handoff/` itself.",
+  ].join("\n");
+  const name = `${HANDOFF_CONTENT_FROM}-a-job.md`;
+  assert.deepEqual(handoffEntryErrors({ name, text: good }), []);
+  assert.deepEqual(handoffEntryErrors({ name, text: good.replace(/\n/g, "\r\n") }), []);
+  // An entry from before the check is not read.
+  assert.deepEqual(handoffEntryErrors({ name: "2026-11-01-old.md", text: "no labels" }), []);
+  // A part named only in running text, not as a label, is missing.
+  const noDeadEnds = good.replace("**Failures and dead ends.** None.", "No dead ends.");
+  assert.match(handoffEntryErrors({ name, text: noDeadEnds })[0], /"Dead ends"/);
+  assert.equal(handoffEntryErrors({ name, text: "# Only a title" }).length, 5);
+  // "Verification and evidence" names both parts.
+  const joined = good.replace("## Verification", "## Verification and evidence").replace(/\*\*Evidence\.\*\*/, "");
+  assert.deepEqual(handoffEntryErrors({ name, text: joined }), []);
+  for (const temp of [
+    "C:\\Users\\x\\AppData\\Local\\Temp\\claude\\run.log",
+    "C:/Users/x/AppData/Local/Temp/claude/abc/scratchpad/out.json",
+    "`/tmp/run.log`",
+    "`~/.claude/projects/x/transcript.jsonl`",
+  ]) {
+    const errors = handoffEntryErrors({ name, text: `${good}\n${temp}` });
+    assert.equal(errors.length, 1, temp);
+    assert.match(errors[0], /temp folder or ~\/\.claude/);
+  }
+  // The same path outside the evidence part is not the evidence.
+  assert.deepEqual(handoffEntryErrors({ name, text: good.replace("One page.", "Edited `~/.claude/settings.json`.") }), []);
+  // Only the label's own text names a part: a word in the text after the label does not.
+  const outstandingInText = good.replace("**Outstanding.** None.", "**Why.** Nothing is outstanding.");
+  assert.match(handoffEntryErrors({ name, text: outstandingInText })[0], /"Outstanding"/);
+  // An earlier label whose text mentions evidence does not move the evidence part.
+  const early = good.replace("**What changed.** One page.", "**What changed.** The evidence was saved.");
+  assert.equal(handoffEntryErrors({ name, text: `${early}\n\`/tmp/run.log\`` }).length, 1);
+  // A .claude folder inside the repository is durable; only the home folder's is not.
+  for (const inRepo of ["`.claude/agents/x.md`", "`plugins/cookbook/.claude-plugin/plugin.json`"])
+    assert.deepEqual(handoffEntryErrors({ name, text: `${good}\n${inRepo}` }), [], inRepo);
+  for (const home of [
+    "`C:\\Users\\x\\.claude\\projects\\y.jsonl`", "`$HOME/.claude/z`", "`%USERPROFILE%\\.claude\\z`",
+    "`${HOME}/.claude/z`", "`$env:USERPROFILE\\.claude\\z`", "`/home/x/.claude/z`", "`/Users/x/.claude/z`",
+  ])
+    assert.equal(handoffEntryErrors({ name, text: `${good}\n${home}` }).length, 1, home);
 });
 
 test("the plugin has no version number: none in the manifest, none in the marketplace entry", async () => {

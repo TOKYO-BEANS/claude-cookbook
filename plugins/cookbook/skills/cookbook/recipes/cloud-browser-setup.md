@@ -16,7 +16,10 @@
   fetches its program (its lockfile entry says `hasInstallScript`; the Parallel CLI is one) is not
   complete after `npm ci --ignore-scripts`: do by hand what that script does, with the checksum it
   uses, and start the tool once before `updates.mjs verify`, which reads the version from the
-  lockfile and cannot tell whether the tool starts.
+  lockfile and cannot tell whether the tool starts. A separate case with no install script:
+  site-login's `playwright-core`, whose browser build comes from its CLI (`cli.js install
+  chromium`) when its `browsers.json` moves the Chromium revision, only with the owner's yes
+  ([sign-ins-setup.md](sign-ins-setup.md)).
 - Vetted on 12 November 2026: OSV-Scanner 2.7.0 read 210 packages and found no critical or high
   advisory and 4 medium ones (`glob`, two `minimatch` versions and `deepmerge`); they are below
   the high-or-critical bar and stay open until `browse` updates. Gitleaks 8.30.1 read

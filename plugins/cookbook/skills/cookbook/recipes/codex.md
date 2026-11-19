@@ -26,16 +26,14 @@ job here is narrow: a second opinion on our own work from a model that is not Cl
   `Repository: TOKYO-BEANS/<repo>`, and Codex runs in this thread's own checkout: no
   `isolation: "worktree"`, other project or machine. What the hook does not reach:
   [codex-setup](codex-setup.md).
-- **Start it supervised:** `orchestrator_capabilities` once per thread, then `delegate_task`
-  with `target: { providerInstanceId: "codex", model }` (one it lists: `gpt-5.6-sol`,
-  `gpt-6-astra`) and `runtimeMode: "approval-required"`. That gives a read-only sandbox and
-  `approval_policy = "untrusted"`: the first command waited for the owner's click (tested
-  16 November 2026); that every later one waits is not proven
-  ([codex-limits](codex-limits.md)).
-- **An unattended run is not a job of this page.** Codex's own setting is
-  `approval_policy = "never"` with `sandbox_mode = "danger-full-access"`, Claude's deny rules
-  do not reach it, and no mode is read-only and unattended. Running it that way for this job
-  needs the owner's yes, recorded here with its date. None is recorded.
+- **Start it:** `orchestrator_capabilities` once per thread, then `delegate_task` with
+  `target: { providerInstanceId: "codex", model }` (`gpt-5.6-sol` or `gpt-6-astra`) and:
+  - `runtimeMode: "full-access"`, unattended: only a consult on the owner's own repositories,
+    after the checks on [codex-limits](codex-limits.md) and the start check. Only the brief
+    keeps it from writing: the limits page's audit is a must.
+  - `runtimeMode: "approval-required"`, supervised (a read-only sandbox): anything else.
+- **The owner's yes** to the unattended mode is of 17 November 2026; it and what each mode
+  does: [codex-decisions](codex-decisions.md).
 - **Never on text from outside**, supervised or not: a pull request from a fork, an issue, a
   web page or a dependency's code goes to a `cookbook:review` subagent.
 - **Not for:** the session itself, an `sa-*` workflow, an edit, a merge or a deploy. Its
