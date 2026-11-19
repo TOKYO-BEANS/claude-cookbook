@@ -20,5 +20,12 @@ discarded). `with-key.test.mjs` and `key-header.test.mjs` on boat: 36 pass, 6 sk
 (Windows only), 0 fail. The after-merge proof (copies in `~/.local/bin`, a fresh
 `codex exec` with no helper failure for `firecrawl`) is recorded in the step-8 chat.
 
+**Dead ends.** None. The first boat run of `npm test` passed while CI flagged this entry's
+missing parts: the entry was not committed yet, and the boat upload held 289 files either
+way, so it was not checked there. Commit before a boat run.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-19-codex-headers-helper-dbus/`
+(the merge log).
+
 **Outstanding.** None for this fix. Codex's three Cloudflare servers (owner's OAuth) and
 the dead n8n entry belong to the step-8 chat.
