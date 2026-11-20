@@ -49,6 +49,6 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
 
 ## Several subscriptions through one hub: always on
 
-CLIProxyAPI, always on since 20 November 2026, with the T3 instance "Claude (pool)":
+CLIProxyAPI, always on since 20 November 2026, with the T3 instances "Claude (pool)" and "Codex (pool)":
 [subscription-proxy](subscription-proxy.md). T3's hub view of the limits is not set up (the
 reason is on its setup page). With accounts signed in, the budget's rules stay.

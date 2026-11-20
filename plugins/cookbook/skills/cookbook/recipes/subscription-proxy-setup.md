@@ -7,7 +7,7 @@ always on since 20 November.
   `linux_amd64_no-plugin` build), the template `config.template.yaml` (edit that, not the copy;
   its `routing` block is Theo's), and `private` (0700, files 0600): `config.yaml` while it runs,
   sign-ins in `auths`, the console in `static`, `logs`. The launchers are this skill's
-  `scripts/cliproxyapi.mjs` and `scripts/claude-pool.mjs`, copied to `~/.local/bin` beside
+  `scripts/cliproxyapi.mjs`, `claude-pool.mjs` and `codex-pool.mjs`, copied to `~/.local/bin` beside
   `#!/bin/sh` files of the same names; the unit is `scripts/cliproxyapi.service`, copied to
   `~/.config/systemd/user` and enabled under `graphical-session.target` (no linger).
 - **Hardened** (read in the 8.0.76 source): it listens on 127.0.0.1:8317 only, which alone
@@ -25,9 +25,9 @@ always on since 20 November.
   either as a plain file in its own secret store (`~/.t3/userdata/secrets`) or as a 1Password
   reference; it has no GNOME Keyring or command source. That secret also reads the sign-in
   files through the management API. The console shows the same limits.
-- **Codex through the proxy, not set up:** Theo's `config.toml` holds the key as a literal;
-  Codex's `env_key` with a launcher like `claude-pool` would not. Build it when Codex accounts
-  are signed in.
+- **Codex:** Theo's `experimental_bearer_token` would put the key in `config.toml`; `env_key`
+  does not. Proven 20 November 2026: `codex-pool exec` and a T3 turn on "Codex (pool)" answered
+  through the proxy; websockets on and off both work; `auth.json`, `config.toml` unchanged.
 - **An update** is a full vetting ([connecting](connecting.md)); then `systemctl --user stop
   cliproxyapi`, unpack the new archive into `bin`, `systemctl --user start cliproxyapi`,
   `cliproxyapi status`. The console the same way when the proxy's notes ask for it.
