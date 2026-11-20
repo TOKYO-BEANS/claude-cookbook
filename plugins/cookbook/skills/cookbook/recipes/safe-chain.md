@@ -1,6 +1,6 @@
 # Malicious packages at install
 
-**Aikido Safe Chain** runs before every `npm ci` and `pip install` in CI, Windows jobs included. The
+**Aikido Safe Chain** runs before every `npm ci` and `pip install` in CI, Probiz's Windows job included. The
 Stack Atlas standard pins it by release and checksum (`templates/depot-security/safe-chain-step.yml`
 and `safe-chain-step-windows.yml`) and checks it in every installing job. The rest of the security
 setup: [security.md](security.md).

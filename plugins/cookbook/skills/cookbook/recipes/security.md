@@ -7,12 +7,12 @@ the end state.
 | Job | Owner |
 | --- | --- |
 | Baseline rules (pull request required, no force-push, no deletion) | organisation ruleset `TOKYO-BEANS baseline`, every repository, future ones included; no bypass on either ruleset |
-| Checks a repository must pass before merging | per-repository ruleset `Stack Atlas checks`, written by the standard: the Depot CI test checks (integration id 219785; the Windows exception checks from GitHub Actions, 15368), the Semgrep check, and the CodeQL code-scanning rule (errors, and security alerts high or higher, block) |
+| Checks a repository must pass before merging | per-repository ruleset `Stack Atlas checks`, written by the standard: the Depot CI test checks (integration id 219785; Probiz's Windows exception check from GitHub Actions, 15368), the Semgrep check, and the CodeQL code-scanning rule (errors, and security alerts high or higher, block) |
 | Scanning our code | **CodeQL** default setup, through the organisation security configuration `TOKYO-BEANS standard` (every repository, the default for new ones) |
 | Blocking leaked keys at push, validity checks | **GitHub Secret Protection**, same configuration |
 | Vulnerable dependencies | **Semgrep** Supply Chain only: the Depot `semgrep` job runs `semgrep ci --supply-chain` and fails on a high or critical one not classed unreachable |
 | Keeping dependencies current | **Dependabot** version updates from the standard's `.github/dependabot.yml` (weekly, grouped, never `.depot/`); Dependabot alerts and security updates stay off in the configuration |
-| Malicious packages at install | **Aikido Safe Chain** before every `npm ci` / `pip install`, Windows jobs included; 24-hour age hold; rules and limits: [safe-chain.md](safe-chain.md) |
+| Malicious packages at install | **Aikido Safe Chain** before every `npm ci` / `pip install`, Probiz's Windows job included; 24-hour age hold; rules and limits: [safe-chain.md](safe-chain.md) |
 | AI review of every pull request | the Depot `ai-review` job ([ai-review.md](ai-review.md)); advisory only |
 | Fixing findings, failed CI, conflicts, review comments | Claude (Auto-fix, `sa-*` workflows) |
 | Vetting outside code before install | local Gitleaks, OSV-Scanner and Trivy, then one run in a boat sandbox ([connecting.md](connecting.md) and [boat.md](boat.md)); never part of CI |
