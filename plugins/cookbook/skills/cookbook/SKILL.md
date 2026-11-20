@@ -44,7 +44,7 @@ fallback and say that you did.
 | Tests, builds and container images | **Depot** CI | GitHub Actions, only as a documented exception | [ci-releases](recipes/ci-releases.md) |
 | Review of every pull request | the `ai-review` Depot job, once, when the pull request is marked ready for review | a **fallback review** of the head by a reviewer that did not write it, when its reviewer's API could not serve the call | [ai-review](recipes/ai-review.md) |
 | Review of a commit range with no pull request | **sa-review** | a `cookbook:review` subagent | [workflows](recipes/workflows.md) |
-| Scan our code | **GitHub** CodeQL default setup | — | [security](recipes/security.md) |
+| Scan our code | the **Depot** `codeql` job, alerts in GitHub; default setup until onboarding | — | [codeql](recipes/codeql.md) |
 | Vulnerable dependencies | **Semgrep** Supply Chain | — | [security](recipes/security.md) |
 | Leaked keys at push | **GitHub** Secret Protection | — | [security](recipes/security.md) |
 | Malicious packages at install | **Aikido** Safe Chain | — | [security](recipes/security.md) |

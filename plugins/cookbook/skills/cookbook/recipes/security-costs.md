@@ -2,7 +2,8 @@
 
 Measured on 17 November 2026: one committer, seven private repositories and one public.
 
-- **CodeQL runs on Depot runners in the private repositories** (owner, 17 November 2026):
+- **Default setup runs CodeQL on Depot runners in the private repositories** (owner,
+  17 November 2026), until onboarding moves a repository to the Depot `codeql` job ([codeql](codeql.md)):
   `gh api -X PATCH repos/<owner>/<repo>/code-scanning/default-setup -f runner_type=labeled -f runner_label=depot-ubuntu-24.04`.
   The public repository stays on GitHub's runners: its minutes are free, and the Depot runner
   group does not serve a public repository. The Stack Atlas standard writes and checks it
