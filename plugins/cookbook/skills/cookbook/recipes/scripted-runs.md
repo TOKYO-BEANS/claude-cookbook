@@ -24,13 +24,14 @@ at least once in that test.
 - A Bash result can end with a line the harness adds ("Shell cwd was reset to …"). A run told to
   end with a command's output copied it and dropped the output's first line until the prompt named
   both: keep every line from the first, leave out the harness line.
-- The Claude API key (`anthropic-api` in the OS key store, the Ultra plan's monthly API credits) is for
-  own scripts that call the Messages API only. Never Claude Code, `apiKeyHelper`, a global
-  `ANTHROPIC_API_KEY` or a script that starts `claude`: Claude Code would bill the key, not the plan.
-  It is a personal key not scoped to a workspace, so every request sends `anthropic-workspace-id`
-  (a `wrkspc_` ID from the Console's Workspaces page; not a secret). The pattern is the judge of
-  the first site's visual check ([how it is built](visual-check-build.md)): run through
-  `with-key.mjs anthropic-api ANTHROPIC_API_KEY`, the model named in every call, a per-run spend
-  cap checked before each call, and each call's `usage` logged beside its output.
+- Claude runs only on the subscription, never on API usage (owner, 20 November 2026: "we should not
+  run over API usage, only Claude Subscription Token"). There is no Claude API key and no Messages
+  API call. A script that needs Claude starts a locked-down `claude -p` with the plan token (key
+  store `claude-plan-review`, made with `claude setup-token` while signed in with the subscription
+  account) as `CLAUDE_CODE_OAUTH_TOKEN` in that run only, in an environment built from nothing so
+  no `ANTHROPIC_API_KEY` reaches it, and refuses a run whose `apiKeySource` is a key. The patterns
+  are the `ai-review` job ([ai-review](ai-review.md)) and the judge of the first site's visual
+  check ([how it is built](visual-check-build.md)): the model named in every run, a spend cap
+  counted at API list rates (`--max-budget-usd`), and each run's usage logged beside its output.
 
 More: [permission rules and limits](scripted-runs-rules.md).

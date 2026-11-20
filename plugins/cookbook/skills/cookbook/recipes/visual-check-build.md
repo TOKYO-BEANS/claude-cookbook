@@ -15,7 +15,7 @@ Built once per site, in the site's repository, as a script with tests. The patte
      it names does differ (otherwise "after" is not the build that was meant).
   3. *Layout rules:* the named pages pass the site's own rules at many widths (nothing cut
      off, no sideways scroll).
-  4. *Judge:* a Claude API request per named page, with no tools, on another model than the
+  4. *Judge:* a locked-down `claude -p` per named page, with no tools, on another model than the
      builder's (Opus 5.5; Sonnet 5.5 when the builder was Opus). It gets before, after and
      the written intent, as a claim to check and never as an instruction, and returns a
      typed verdict. Code decides: a pass needs "pass", the intent met and no high or medium
@@ -31,8 +31,10 @@ Built once per site, in the site's repository, as a script with tests. The patte
 - **Not a cloud browser:** `browse` and Stagehand cannot reach a local build and have no
   phone emulation; Stagehand runs in a child Claude session and the built-in browser inside a
   session, neither from the check's own script.
-- **The judge is paid:** the key-store key `anthropic-api` through `with-key.mjs`, with a
-  workspace ID in the request. The script caps the spend of a run; try one page first.
+- **The judge runs on the Claude plan, never the API:** the plan token (key store
+  `claude-plan-review`) through `with-key.mjs`, locked down as in
+  [scripted-runs](scripted-runs.md). The script caps a run's spend, counted at API list rates;
+  try one page first.
 - **Prove it before asking the owner:** one pass (the live site against a build of the code
   that is live) and one fail (a deliberately broken local copy, never committed or
   uploaded), both on the merged script, with the evidence in
