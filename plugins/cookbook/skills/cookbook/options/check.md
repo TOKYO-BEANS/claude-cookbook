@@ -5,8 +5,8 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
 
 - **CI: Depot CI.** Fast cached runners, run diagnostics, and one place for tests and
   container builds. Weighed: GitHub Actions (kept only for Probiz's Windows job, on a
-  Depot runner, and CodeQL default setup); CircleCI and Buildkite (a second vendor for the
-  same job); Blacksmith (runners only: [measured](ci-depot-vs-blacksmith.md)).
+  Depot runner, and CodeQL default setup until a repository moves); CircleCI and Buildkite (a
+  second vendor); Blacksmith (runners only: [measured](ci-depot-vs-blacksmith.md)).
 - **Review of every pull request: the `ai-review` job.** It runs once on a same-repository pull
   request, when marked ready for review, with a fixed rubric and no tools, and its comment on the head commit is part of the
   merge condition. Weighed: CodeRabbit (ruled out by the owner: do not use it); Greptile and
@@ -15,11 +15,11 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   and removed on 16 November 2026); tstack's `sol-loop` and `council` (not in use, though
   Codex is now on: the reasons are in "ship"; a consult is advice, never the review);
   `sa-review` (the owner of a range with no pull request; the fallback is in the ai-review recipe).
-- **Our code: CodeQL.** Native to GitHub and required through the ruleset. Weighed: Semgrep
-  Code (its code rules were dropped so that one scanner owns the job); Snyk Code (a second vendor).
-- **Dependencies: Semgrep Supply Chain.** It blocks high or critical ones not
-  classed unreachable. Weighed: Dependabot alerts (off in the organisation configuration: one owner); OSV-Scanner
-  in CI (kept for outside code only); Snyk and Socket (a second vendor for the same job).
+- **Our code: CodeQL in the Depot `codeql` job.** Alerts in GitHub, required by the ruleset.
+  Weighed: default setup (GitHub Actions); Semgrep Code (one scanner owns the job); Snyk Code (a second vendor).
+- **Dependencies: Semgrep Supply Chain.** It blocks high or critical ones not classed
+  unreachable. Weighed: Dependabot alerts (off in the organisation configuration: one owner);
+  OSV-Scanner in CI (kept for outside code only); Snyk and Socket (a second vendor).
 - **Keys at push: GitHub Secret Protection.** It blocks before the key lands and checks
   validity. Weighed: Gitleaks in CI (finds a key after the push).
 - **Packages at install: Aikido Safe Chain.** It checks a package before its install script
