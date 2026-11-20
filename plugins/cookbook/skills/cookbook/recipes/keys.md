@@ -22,8 +22,8 @@ One store, and helpers that read it. Linux since 19 November 2026.
   key in its own process imports `readKey` from `with-key.mjs`.
 - **How it reads:** on Linux `secret-tool lookup` (package `libsecret-tools`), ended after
   15 seconds (a locked keyring waits on a prompt); with no D-Bus address
-  via `/run/user/<uid>/bus`. On Windows the old DPAPI store
-  (`~/.secrets`, `agent-key.ps1`) is still read, untested in CI.
+  via `/run/user/<uid>/bus`. Linux only: on another platform no key is read (the
+  Windows store and `agent-key.ps1` went on 20 November 2026).
 - **A key that cannot be read does not stop the program.** `with-key.mjs` says why on
   stderr (`with-key: could not read key "x" (...)`) and starts it without the variable, on
   purpose: a server must start to answer "no key" (the owner-questions broker does). A
@@ -39,9 +39,9 @@ One store, and helpers that read it. Linux since 19 November 2026.
   (GHSA-mrhx-c7xc-m3w5). Scrape, map, search and crawl answered with it; a scrape with a
   schema is not proven. Drop it once the CLI resolves to a fixed version.
 - **Where the helpers live.** This skill's `scripts/`: `with-key.mjs`, `key-header.mjs`,
-  `agent-key.ps1`, and the launchers `firecrawl-secure.mjs` and `parallel-secure.mjs`.
+  and the launchers `firecrawl-secure.mjs` and `parallel-secure.mjs`.
   Tests: `scripts/with-key.test.mjs`, `scripts/key-header.test.mjs`. Callers use the copies
   in `~/.local/bin`, which stay put when the plugin updates; the other three `.mjs` files
-  import `with-key.mjs` from their own folder. After a change: merge it, copy all five,
+  import `with-key.mjs` from their own folder. After a change: merge it, copy all four,
   then prove it with a real call through a copy: a program that needs the key answers,
   and stderr has no `with-key:` line.

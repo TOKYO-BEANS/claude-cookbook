@@ -318,7 +318,7 @@ const NPM = "https://registry.npmjs.org/firecrawl-cli/latest";
 const tool = (id, name, parts, extra = {}) => ({ id, name, lifecycle: "active", recipe: null, repository: "", uses: [], parts, ...extra });
 const CAT = {
   version: 1,
-  ignored: [{ name: "helper-key.ps1", reason: "fixture" }],
+  ignored: [{ name: "helper-key.sh", reason: "fixture" }],
   tools: [
     // The real catalog's shape: no tool repository, the part names where its notes are.
     tool("firecrawl", "Firecrawl", [{

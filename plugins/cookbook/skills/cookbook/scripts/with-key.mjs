@@ -1,7 +1,7 @@
-// Run a program with one API key from the key store placed in its environment only. On Linux
-// the store is the desktop's Secret Service (GNOME Keyring), read with `secret-tool` (package
-// libsecret-tools): the item with the attributes service=claude-keys and name=<key name>. On
-// Windows it is user-scoped encryption (the DPAPI store that agent-key.ps1 keeps in ~/.secrets).
+// Run a program with one API key from the key store placed in its environment only. The store
+// is the desktop's Secret Service (GNOME Keyring), read with `secret-tool` (package
+// libsecret-tools): the item with the attributes service=claude-keys and name=<key name>. It
+// is read on Linux only; the Windows store and its PowerShell helper went on 20 November 2026.
 // Stdio is inherited, so this works as an MCP stdio server launcher.
 //   node with-key.mjs <key-name> <ENV_VAR> <program> [args...]
 // It prints no key: the key goes to the program's environment and nowhere else. (The one
@@ -16,24 +16,12 @@
 // A copy of this file lives at ~/.local/bin/with-key.mjs, the path every caller uses, and
 // key-header.mjs, firecrawl-secure.mjs and parallel-secure.mjs beside it import it. Copy
 // them again when one changes (recipes/keys.md).
-//
-// The key is read in this process: Node calls Windows' CryptUnprotectData itself, through
-// node:ffi. No PowerShell starts. That matters on a PC whose security software scans every
-// PowerShell script block: while many processes start, each scan can wait 30 seconds, and a
-// read through agent-key.ps1 crosses several (measured 16 November 2026: 61 seconds against
-// 1). PowerShell is the fallback only (node:ffi is missing, the direct read failed, or this is
-// not 64-bit Windows), and it has a time limit.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
-import { constants, homedir } from "node:os";
-import { join } from "node:path";
+import { lstatSync, realpathSync } from "node:fs";
+import { constants } from "node:os";
 import { fileURLToPath } from "node:url";
 
-// A read through PowerShell takes about a second. One that has not answered after this
-// long is waiting on a script scan: it is ended, and the launcher says so.
-export const POWERSHELL_TIMEOUT_MS = 15000;
-
-// Linux: the Secret Service attribute every key item carries, and how long a read may take
+// The Secret Service attribute every key item carries, and how long a read may take
 // (an unlocked keyring answers in milliseconds; a locked one waits on a prompt).
 export const SECRET_SERVICE = "claude-keys";
 export const SECRET_TOOL_TIMEOUT_MS = 15000;
@@ -43,53 +31,9 @@ const USAGE = "usage: node with-key.mjs <key-name> <ENV_VAR> <program> [args...]
 // A failure whose message is ours: it never holds a key or a program's output.
 class KeyError extends Error {}
 
-export function keyPath(name, home = homedir()) {
+// A key name is lower-case letters, digits and hyphens; anything else is refused before a read.
+export function checkName(name) {
   if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(name))) throw new KeyError("a key name is lower-case letters, digits and hyphens");
-  return join(home, ".secrets", `${name}.dpapi`);
-}
-
-// node:ffi says on stderr, at each load, that it is experimental. That one line is dropped
-// while the module loads; the process's warning handling is as it was afterwards.
-export async function loadFfi() {
-  const emit = process.emitWarning;
-  process.emitWarning = function quiet(warning, ...rest) {
-    const type = typeof rest[0] === "string" ? rest[0] : rest[0]?.type;
-    if (type === "ExperimentalWarning" && /FFI/i.test(String(warning?.message ?? warning))) return;
-    return emit.call(this, warning, ...rest);
-  };
-  try {
-    return (await import("node:ffi")).default;
-  } finally {
-    process.emitWarning = emit;
-  }
-}
-
-export function runPowerShell(args, timeoutMs, { exe = "powershell.exe", env = process.env } = {}) {
-  return execFileSync(exe, args, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], windowsHide: true, timeout: timeoutMs, killSignal: "SIGKILL", env });
-}
-
-// The store's file is the hex of a DPAPI blob (ConvertFrom-SecureString); the plain text
-// inside is UTF-16. DATA_BLOB on 64-bit Windows: DWORD cbData at 0, BYTE* pbData at 8.
-function unprotect(ffi, hex) {
-  if (hex.length < 32 || hex.length % 2 || /[^0-9a-f]/i.test(hex)) throw new KeyError("the credential file is not a DPAPI blob");
-  const system = join(process.env.SystemRoot ?? "C:\\Windows", "System32");
-  const crypt = ffi.dlopen(join(system, "crypt32.dll"), { CryptUnprotectData: { return: "int32", arguments: ["pointer", "pointer", "pointer", "pointer", "pointer", "uint32", "pointer"] } });
-  const kernel = ffi.dlopen(join(system, "kernel32.dll"), { LocalFree: { return: "pointer", arguments: ["pointer"] }, GetLastError: { return: "uint32", arguments: [] } });
-  const blob = Buffer.alloc(hex.length / 2);
-  blob.write(hex, "hex");
-  const input = Buffer.alloc(16); const output = Buffer.alloc(16);
-  input.writeUInt32LE(blob.length, 0);
-  input.writeBigUInt64LE(ffi.getRawPointer(blob), 8);
-  const ok = crypt.functions.CryptUnprotectData(input, null, null, null, null, 1 /* CRYPTPROTECT_UI_FORBIDDEN */, output);
-  if (!ok) throw new KeyError(`CryptUnprotectData failed (Windows error ${kernel.functions.GetLastError()})`);
-  const length = output.readUInt32LE(0); const pointer = output.readBigUInt64LE(8);
-  try {
-    const plain = Buffer.from(ffi.toBuffer(pointer, length));
-    try { return plain.toString("utf16le"); } finally { plain.fill(0); }
-  } finally {
-    for (let i = 0; i < length; i += 1) ffi.setUint8(pointer, i, 0);
-    kernel.functions.LocalFree(pointer);
-  }
 }
 
 // Runs secret-tool (found on PATH) and returns what it printed. Its stderr is captured, never
@@ -112,7 +56,7 @@ export function sessionBusEnv(env, { uid = process.getuid?.(), stat = lstatSync 
   return { ...env, DBUS_SESSION_BUS_ADDRESS: `unix:path=${path}` };
 }
 
-// Linux: one key from the Secret Service. secret-tool ends with 1 and prints nothing when no
+// One key from the Secret Service. secret-tool ends with 1 and prints nothing when no
 // item matches; it also ends with 1 when it cannot reach a keyring (no D-Bus session, no
 // Secret Service, a refused unlock), and then says so on stderr.
 function readSecretService(name, run, env) {
@@ -132,41 +76,12 @@ function readSecretService(name, run, env) {
 // What may be said about a failure: our own message, or else only the error's code or name.
 export const reason = (e) => (e instanceof KeyError ? e.message : String(e?.code ?? e?.name ?? "error"));
 
-// Reads one key. Returns { key, route } and, after a fallback, a note saying why the
-// direct route was not used. Throws a KeyError that holds no key.
+// Reads one key. Returns { key, route }. Throws a KeyError that holds no key.
 export async function readKey(name, deps = {}) {
-  const { home = homedir(), platform = process.platform, arch = process.arch, loadFfi: load = loadFfi, runPowerShell: run = runPowerShell } = deps;
-  const path = keyPath(name, home);
-  if (platform === "linux") return readSecretService(name, deps.runSecretTool ?? runSecretTool, sessionBusEnv(process.env, deps.sessionBus));
-  let stat;
-  try { stat = lstatSync(path); } catch (e) {
-    throw new KeyError(e?.code === "ENOENT" ? `no key is saved as "${name}"` : `the credential file cannot be opened (${reason(e)})`);
-  }
-  if (stat.isSymbolicLink()) throw new KeyError("the credential file must not be a link");
-
-  let note;
-  if (platform === "win32" && (arch === "x64" || arch === "arm64")) {
-    try {
-      const ffi = await load();
-      return { key: unprotect(ffi, readFileSync(path, "ascii").trim()), route: "dpapi" };
-    } catch (e) { note = reason(e); }
-  } else note = "not 64-bit Windows";
-
-  const script = deps.script ?? join(home, ".local", "bin", "agent-key.ps1");
-  let out;
-  try {
-    out = run(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script, "-Mode", "headers", "-Name", name], POWERSHELL_TIMEOUT_MS);
-  } catch (e) {
-    const what = e?.code === "ETIMEDOUT"
-      ? `the PowerShell route did not answer in ${POWERSHELL_TIMEOUT_MS / 1000} seconds and was ended (a script scan by the security software stalls it while many processes start)`
-      : !existsSync(script) ? `the PowerShell route failed (no agent-key.ps1 at ${script})`
-      : `the PowerShell route failed (${String(e?.code ?? (typeof e?.status === "number" ? `exit ${e.status}` : "error"))})`;
-    throw new KeyError(`${what}; direct route: ${note}`);
-  }
-  let key;
-  try { key = JSON.parse(out).Authorization.replace(/^Bearer /, ""); } catch { key = ""; }
-  if (!key) throw new KeyError(`the PowerShell route failed (no key in its answer); direct route: ${note}`);
-  return { key, route: "powershell", note };
+  const { platform = process.platform } = deps;
+  checkName(name);
+  if (platform !== "linux") throw new KeyError(`the key store is read on Linux only (this is ${platform})`);
+  return readSecretService(name, deps.runSecretTool ?? runSecretTool, sessionBusEnv(process.env, deps.sessionBus));
 }
 
 // A program that cannot be started (not found, not allowed) ends the launcher with this

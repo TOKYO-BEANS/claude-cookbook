@@ -200,7 +200,7 @@ const catalog = {
     { id: "firecrawl", name: "Firecrawl", parts: [part("cli", { kind: "pinned", folder: "firecrawl-cli", package: "firecrawl-cli" }), part("mcp", { kind: "hosted", server: "firecrawl" })] },
     { id: "skillful", name: "Skillful", parts: [part("skill", { kind: "skill", folder: "x" })] },
   ],
-  ignored: [{ name: "helper-key.ps1", reason: "a helper" }],
+  ignored: [{ name: "helper-key.sh", reason: "a helper" }],
 };
 const mcpOut = [
   "Checking MCP server health…",
@@ -231,7 +231,7 @@ test("findUnlisted: reports only what no part and no ignored entry names", async
 });
 
 test("findUnlisted: an ignored name clears it, and a failed `claude mcp list` is noted, not guessed", async () => {
-  const cat = { ...catalog, ignored: [...catalog.ignored, { name: "odd-tool.exe", reason: "x" }, { name: "stray-market", reason: "x" }, { name: "stray@stray-market", reason: "x" }] };
+  const cat = { ...catalog, ignored: [...catalog.ignored, { name: "odd-tool.sh", reason: "x" }, { name: "stray-market", reason: "x" }, { name: "stray@stray-market", reason: "x" }] };
   const run = fakeRun({ claude: { code: 1, stdout: "", stderr: "failed" } });
   const { items: found, unreadable } = await findUnlisted(cat, { home, run });
   const keys = found.map((f) => `${f.kind}:${f.name}`).sort();

@@ -71,3 +71,4 @@ run ended "NOT MERGED: the head is 7a6b4b7": GitHub had not yet seen the push of
 commit; the second run, after the review's medium finding was fixed, merged. The low finding
 (the set note still said the old rule sets agree on L1-new-key) is fixed in the follow-up
 pull request: the note says a pre-laptop side fails that task for the platform.
+#179 (the follow-up) merged as `233264a`; its release check read **verified** (execution 1897).

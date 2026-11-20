@@ -1,4 +1,4 @@
-// Print one key from the key store (with-key.mjs: GNOME Keyring on Linux, DPAPI on Windows) as an HTTP header, for an MCP client's headers helper
+// Print one key from the key store (with-key.mjs: GNOME Keyring, on Linux) as an HTTP header, for an MCP client's headers helper
 // (Claude Code's `headersHelper`, Codex's `http_headers_helper`):
 //   node key-header.mjs <key-name>     prints  {"Authorization":"Bearer <key>"}
 //
@@ -10,9 +10,7 @@
 // It prints only the keys listed below. Everything else gets a key through with-key.mjs,
 // which prints none.
 //
-// The key is read as with-key.mjs reads it: in this process, with no PowerShell (a script
-// scan by the security software can hold a PowerShell read for 30 seconds and more, longer
-// than a client waits for its headers). A copy of this file lives at
+// The key is read as with-key.mjs reads it, in this process. A copy of this file lives at
 // ~/.local/bin/key-header.mjs, beside with-key.mjs, which it imports (recipes/keys.md).
 import { isMain, readKey as readStored, reason } from "./with-key.mjs";
 
