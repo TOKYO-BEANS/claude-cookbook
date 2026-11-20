@@ -104,6 +104,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "trivy/cli": ["Version: 0.76.2\nVulnerability DB:\n  Version: 2\n", "0.76.2"],
     "osv-scanner/cli": ["osv-scanner version: 2.7.0\nosv-scalibr version: 0.5.3\n", "2.7.0"],
     "lightcraft/cli": ["lightcraft-cli 0.21.1\n", "0.21.1"],
+    "photocraft/cli": ["photocraft-cli 0.23.1 (45066c482, 2026-11-12)\n", "0.23.1"],
     "boat/cli": ["boat 1.0.97\n", "1.0.97"],
     "cliproxyapi/cli": ["CLIProxyAPI Version: 8.0.76, Commit: 7df56074, BuiltAt: 2026-11-17T02:10:49Z\nUsage of cli-proxy-api.exe\n", "8.0.76"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
@@ -112,6 +113,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "uv/cli": ["uv 0.13.9 (x86_64-unknown-linux-gnu)\n", "0.13.9"],
     "rustup/cli": ["rustup 1.29.3 (edbc831ce 2026-11-02)\ninfo: This is the version for the rustup toolchain manager, not the rustc compiler.\n", "1.29.3"],
     "ast-grep/cli": ["ast-grep 0.51.3\n", "0.51.3"],
+    "yt-dlp/cli": ["2026.10.26\n", "2026.10.26"],
   };
   assert.deepEqual(Object.keys(VERSION_COMMANDS).sort(), Object.keys(samples).sort());
   for (const [key, { argv, pattern }] of Object.entries(VERSION_COMMANDS)) {
@@ -464,6 +466,7 @@ test("the binaries under ~/.local/share are read where the Linux installs put th
     "proton-pass-cli/cli": "{share}/proton-pass-cli/pass-cli",
     "google-workspace-cli/cli": "{share}/gws/gws",
     "lightcraft/cli": "{share}/lightcraft/bin/lightcraft-cli",
+    "photocraft/cli": "{share}/photocraft/bin/photocraft-cli",
   });
 });
 

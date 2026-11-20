@@ -295,19 +295,42 @@ export function parseT3(json, now) {
   return { usage: { week, fable, session, grants: [], resetsRead: false, credits: windows.some((w) => w.id === "monthly_spend") }, at, resets, resetsAt };
 }
 
+// Whether a group is this user's alone: the system's own files list it once, with no member but
+// the user, and name no other user who has it as their own group. Ubuntu gives every user such
+// a group and a umask of 002, so T3 Code's file is written 664 there: writable by the group,
+// and still by no one else. Anything that cannot be read as that (a group from a network
+// directory, a file that is missing or odd) is "not the user's alone".
+export const ACCOUNT_FILES = Object.freeze({ passwd: "/etc/passwd", group: "/etc/group" });
+const soleGroup = (gid, uid, files) => {
+  try {
+    const rows = (file) => readFileSync(file, "utf8").split("\n").filter((l) => l && !l.startsWith("#")).map((l) => l.split(":"));
+    const users = rows(files.passwd);
+    const mine = users.filter((u) => u[2] === String(uid));
+    const groups = rows(files.group).filter((g) => g[2] === String(gid));
+    if (mine.length !== 1 || groups.length !== 1) return false;
+    const me = mine[0][0];
+    return (groups[0][3] ?? "").split(",").every((m) => m === "" || m === me) && users.every((u) => u[3] !== String(gid) || u[0] === me);
+  } catch {
+    return false;
+  }
+};
+
 // The text of a plain file of this user's, or null: no link, and where the system can say so
-// (not on Windows), owned by the user and writable by no one else. The file is opened once, and
-// every check and the read are made on that one descriptor, so the file checked is the file
-// read. Where a link cannot be refused at the open (Windows), the opened file must be the one
-// lstat saw.
-const readOwnFile = (file) => {
+// (not on Windows), owned by the user and writable by no one else (by its group only when the
+// group is the user's alone). The file is opened once, and every check and the read are made on
+// that one descriptor, so the file checked is the file read. Where a link cannot be refused at
+// the open (Windows), the opened file must be the one lstat saw.
+const readOwnFile = (file, accountFiles) => {
   const seen = lstatSync(file, { throwIfNoEntry: false });
   if (!seen || !seen.isFile()) return null;
   const fd = openSync(file, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   try {
     const s = fstatSync(fd);
     if (!s.isFile() || s.size > T3_MAX_BYTES || s.ino !== seen.ino || s.dev !== seen.dev) return null;
-    if (typeof process.getuid === "function" && (s.uid !== process.getuid() || (s.mode & 0o022) !== 0)) return null;
+    if (typeof process.getuid === "function") {
+      const uid = process.getuid();
+      if (s.uid !== uid || (s.mode & 0o002) !== 0 || ((s.mode & 0o020) !== 0 && !soleGroup(s.gid, uid, accountFiles))) return null;
+    }
     const buf = Buffer.alloc(s.size);
     let got = 0;
     while (got < buf.length) {
@@ -321,11 +344,11 @@ const readOwnFile = (file) => {
   }
 };
 
-const readT3 = (file, now) => {
+const readT3 = (file, now, accountFiles) => {
   // Two tries: a read that lands in the middle of T3 Code's own write finds half a file.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const text = readOwnFile(file);
+      const text = readOwnFile(file, accountFiles);
       return text === null ? null : parseT3(JSON.parse(text), now);
     } catch (e) {
       if (!(e instanceof SyntaxError) || attempt) return null;
@@ -343,10 +366,10 @@ const readT3 = (file, now) => {
 // resets are "not read"; the hook keeps a session's advice through those minutes
 // (hooks/model-budget-note.mjs). A failure is { error }; it is never a made-up reading and never
 // the cause's text.
-export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), t3File = join(home, ".t3", "caches", "claudeAgent.json"), now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
+export async function readUsage({ home = homedir(), stateDir = join(home, ".local", "share", "model-budget"), t3File = join(home, ".t3", "caches", "claudeAgent.json"), accountFiles = ACCOUNT_FILES, now = Date.now(), fetchImpl = fetch, cacheOnly = false } = {}) {
   const token = readToken(home);
   if (!token) return { error: "no Claude sign-in found" };
-  const t3 = readT3(t3File, now);
+  const t3 = readT3(t3File, now, accountFiles);
   const r = await readFigures({ stateDir, token, t3, now, fetchImpl, cacheOnly });
   if (!r.usage || r.usage.resetsRead === true || !t3 || t3.resets === null || now - t3.resetsAt >= RULES.staleMs) return r;
   return { ...r, usage: { ...r.usage, grants: t3.resets, resetsRead: true }, resetsSeen: t3.resetsAt };

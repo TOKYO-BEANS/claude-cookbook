@@ -23,7 +23,12 @@ about the dates the catalog records. It installs, updates and commits nothing.
 - **A dependency in a project:** the catalog is public, so its part names a key (`"project":
   "first-site"`), never a repository. `~/.local/share/stack-updates/projects.json`, written by
   hand on this PC, maps it: `{ "<key>": "owner/name" }`. It is read from there whatever
-  `--state` says. Without it the part is "could not check".
+  `--state` says. Without it the part is "could not check". The root `package-lock.json` is
+  read; a `"path"` in the part names another folder's lockfile.
+- **A plugin switched on only in its projects** (OpenSEO): the check lists the MCP servers in
+  its own folder, so `~/.local/share/stack-updates/.claude/settings.json` switches the plugin
+  on there (`{"enabledPlugins": {"openseo@openseo": true}}`, written by hand). Without that
+  file the server reads "not listed", which is no fault of the connection.
 - **Release text is data.** It is kept in `runs/<date>/texts/`, which no session opens. Its only
   reader is the script's own `claude -p` request on Sonnet with no tools, no MCP servers, no user
   settings and the advisor tool off; the three answers come back as short text fields.

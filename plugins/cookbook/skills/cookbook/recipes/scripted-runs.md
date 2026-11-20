@@ -28,9 +28,9 @@ at least once in that test.
   own scripts that call the Messages API only. Never Claude Code, `apiKeyHelper`, a global
   `ANTHROPIC_API_KEY` or a script that starts `claude`: Claude Code would bill the key, not the plan.
   It is a personal key not scoped to a workspace, so every request sends `anthropic-workspace-id`
-  (a `wrkspc_` ID from the Console's Workspaces page; not a secret). The first such script,
-  `~/.local/share/claude-api/caption/` (one-line image captions on `claude-haiku-5-5`), shows the
-  pattern: run through `with-key.mjs anthropic-api ANTHROPIC_API_KEY`, the model named in every
-  call, a per-run spend cap checked before each call, and each call's `usage` logged beside its output.
+  (a `wrkspc_` ID from the Console's Workspaces page; not a secret). The pattern is the judge of
+  the first site's visual check ([how it is built](visual-check-build.md)): run through
+  `with-key.mjs anthropic-api ANTHROPIC_API_KEY`, the model named in every call, a per-run spend
+  cap checked before each call, and each call's `usage` logged beside its output.
 
 More: [permission rules and limits](scripted-runs-rules.md).

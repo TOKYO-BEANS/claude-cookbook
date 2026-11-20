@@ -20,7 +20,10 @@
   `skills/stack-updates/scripts/lib/tables.mjs`, and a `changelog` page's host must be on the allow
   list there. A `changelog` feed follows only a hosted (or not installed) part: a page hash cannot
   say an installed version is behind. Something on the PC that the catalog does not name shows under "Not in the Cookbook"
-  until it is added to the catalog or to `ignored`.
+  until it is added to the catalog or to `ignored`. That scan reads Claude Code's plugins,
+  marketplaces and skills, `~/.local/bin`, pinned folders in `~/.local/share` and the MCP server
+  list, never an apt or snap package: an app installed that way needs no `ignored` entry. The
+  laptop's apps and apt sources are kept in the `machine-setup` repository.
 - Proven on 13 and 14 November 2026 on a trial state: 79 parts checked in about 45 s, 48 with a
   readable version, none unreadable, 15 already behind; one real read (GitHub CLI 2.104.0: 3,488 input and 238 output tokens, no
   tools, on the plan). A systemd user unit on this PC sees Node, a signed-in `gh`, `claude`, the OS

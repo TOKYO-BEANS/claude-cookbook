@@ -6,7 +6,7 @@ boat (boat.dev): Ubuntu VMs from the `boat` CLI, on the owner's paid plan since
 - **Use it by default** ([a hook](boat-setup.md)) for what does not need this PC:
   - outside code before an install: a fixed step of every vetting, with its own fixed
     command ([vetting-sandbox.md](vetting-sandbox.md));
-  - a repository's tests before a push, on Linux, where CI runs them, in seconds;
+  - a repository's tests before a push ([why](../options/tests-on-boat.md));
   - a failure that shows only on Linux or only in CI, and a Linux-only tool;
   - a long build, test run or batch, and work that splits: one sandbox per part;
   - a long Claude job: [boat-claude.md](boat-claude.md).
@@ -19,7 +19,7 @@ boat (boat.dev): Ubuntu VMs from the `boat` CLI, on the owner's paid plan since
   around it with `boat run`; only "did not answer in time" is run again, once.
   `BOAT-RUN: the sandbox may still exist`: `boat list`; delete what that run left.
 - **An upload is a scanned copy of a listed repository.** `--push` sends the files git
-  tracks, with their uncommitted edits, and never an untracked file. Gitleaks reads the copy
+  tracks, with their uncommitted edits, never an untracked file or `.git`. Gitleaks reads the copy
   first: a finding, or a scan with no result, stops the run, and a finding goes to the owner.
   The repository must be on the upload list ([where and how](boat-setup.md)). Add one once,
   after checking that it is public or the owner's own and tracks no customer data; one that

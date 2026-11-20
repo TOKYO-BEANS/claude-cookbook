@@ -135,6 +135,11 @@ test("installed: only known kinds and each kind's own fields", () => {
   for (const project of ["a/b", "Site-One", "", 7])
     assert.ok(part({ installed: { kind: "project", project, package: "p" } }).some((e) => /installed project must be a key/.test(e)), String(project));
   assert.deepEqual(part({ installed: { kind: "project", project: "site-one", package: "p" } }).filter((e) => /installed (field|project|package)/.test(e)), []);
+  // A project part may name the folder whose lockfile holds the package.
+  assert.deepEqual(part({ installed: { kind: "project", project: "site-one", package: "p", path: "checks/p-trial" } }).filter((e) => /installed (field|project|package|path)/.test(e)), []);
+  for (const path of ["../x", "/abs", "a//b", "x/", "", 7])
+    assert.ok(part({ installed: { kind: "project", project: "site-one", package: "p", path } }).some((e) => /installed path must be a plain relative folder/.test(e)), String(path));
+  assert.ok(part({ installed: { kind: "pinned", folder: "f", package: "p", path: "a" } }).some((e) => /installed field path is not allowed for pinned/.test(e)));
 });
 test("feed: known kinds, own fields, changelog host on the allow list", () => {
   assert.ok(part({ feed: { kind: "pypi" } }).some((e) => /feed kind/.test(e)));

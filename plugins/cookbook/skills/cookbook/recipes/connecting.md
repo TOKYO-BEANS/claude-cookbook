@@ -23,7 +23,9 @@
   `mise` (`mise use -g <tool>@<version>`, never `mise upgrade`), a Python tool through `uv tool` with
   `--exclude-newer`, Rust through `rustup`, an npm CLI as a pinned copy from a vetted
   lockfile, never `npm install -g`. A release is installed once it is 24 hours old. An apt
-  package needs the owner's password.
+  package needs the owner's password. Standing exception (owner, 20 November 2026): Ubuntu's
+  own updates, snap apps, the apt apps from the added sources and the apps that update
+  themselves (T3 Code, Claude Code) update with no wait; npm, uv, mise and GitHub releases wait.
 - A scan proves only what it parsed. An ad-hoc OSV-Scanner run passes `--no-ignore` and `--config` with
   a file you control (otherwise it skips git-ignored files and reads a planted `osv-scanner.toml`); 0
   packages parsed or exit code 128 ("No package sources found") is no result, not a clean one.
