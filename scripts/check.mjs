@@ -407,7 +407,7 @@ const isLabel = (line) => /^\s*(\*\*|#{1,6}\s)/.test(line);
 // text after a bold label names no part.
 const labelText = (line) => /^\s*\*\*(.+?)\*\*/.exec(line)?.[1] ?? /^\s*#{1,6}\s+(.*)/.exec(line)?.[1] ?? "";
 // Home-folder forms of .claude only: a .claude folder committed in a repository is durable.
-const NOT_DURABLE = /AppData[\\/]Local[\\/]Temp|[\\/]scratchpad[\\/]|(^|[\s`'"(])\/tmp\/|(~|\$\{?HOME\}?|%USERPROFILE%|\$env:USERPROFILE|[A-Za-z]:[\\/]Users[\\/][^\\/\s`]+|\/(?:home|Users)\/[^/\s`]+)[\\/]\.claude[\\/]/i;
+const NOT_DURABLE = /AppData[\\/]Local[\\/]Temp|[\\/]scratchpad[\\/]|(^|[\s`'"(])\/tmp\/|(~[\w.-]*|\$\{?(?:HOME|USERPROFILE)\}?|%USERPROFILE%|\$env:(?:USERPROFILE|HOME)|[A-Za-z]:[\\/]Users[\\/][^\\/\s`]+|(?<![\w.])\/root|\/(?:home|Users)\/[^/\s`]+)[\\/]\.claude[\\/]/i;
 export function handoffEntryErrors({ name, text }) {
   if (name.slice(0, 10) < HANDOFF_CONTENT_FROM) return [];
   const lines = String(text).split(/\r?\n/);

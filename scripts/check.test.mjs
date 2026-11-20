@@ -459,6 +459,7 @@ test("a handoff entry names its five parts, and its evidence is durable", async 
   for (const home of [
     "`C:\\Users\\x\\.claude\\projects\\y.jsonl`", "`$HOME/.claude/z`", "`%USERPROFILE%\\.claude\\z`",
     "`${HOME}/.claude/z`", "`$env:USERPROFILE\\.claude\\z`", "`/home/x/.claude/z`", "`/Users/x/.claude/z`",
+    "`/root/.claude/z`", "`$USERPROFILE/.claude/z`", "`~mk/.claude/z`", "`$env:HOME\\.claude\\z`",
   ])
     assert.equal(handoffEntryErrors({ name, text: `${good}\n${home}` }).length, 1, home);
 });
