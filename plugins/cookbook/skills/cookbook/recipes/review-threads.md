@@ -19,6 +19,9 @@ thread means it is back on: say so.
   (7 to 40 characters of a commit of the pull request, later than the thread's). The review of
   that push is the check on the fix: a finding that is still there comes back as a new thread.
   A thread on the head has no later commit, so a fix is a new push and a new round.
+- **Before a dispute,** start one Codex consult on the finding ([codex-consult](codex-consult.md)):
+  the finding, the code and why it looks wrong. If it agrees with the finding, fix it; if not,
+  the consult's verdict goes into the owner's question. A consult never answers a thread.
 - **Not fixing it** (a dispute, an accepted risk, a follow-up) is the owner's decision: ask
   with the question dialog, one question per thread or one for a group with a recommendation,
   and write `Owner's yes (<date>): <the owner's words>` in each thread only after the yes,
