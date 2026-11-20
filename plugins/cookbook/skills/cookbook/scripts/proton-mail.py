@@ -26,7 +26,7 @@ import smtplib
 import ssl
 import sys
 from email.message import EmailMessage
-from email.utils import make_msgid, parseaddr
+from email.utils import getaddresses, make_msgid, parseaddr
 
 CONFIG = os.path.expanduser(os.environ.get("PROTON_MAIL_CONFIG", "~/.config/proton-mail/config.json"))
 DEFAULTS = {
@@ -36,6 +36,7 @@ DEFAULTS = {
     "cert": "~/.config/proton-mail/cert.pem",
 }
 BODY_MAX = 8000
+BODY_FILE_MAX = 200_000
 
 
 class Fail(Exception):
@@ -98,13 +99,22 @@ def html_to_text(raw):
     return re.sub(r"[ \t]+", " ", html.unescape(raw))
 
 
+def part_text(part):
+    """A text part's content; an unknown or wrong charset is read as UTF-8 with replacements."""
+    try:
+        return part.get_content()
+    except (LookupError, UnicodeError, AssertionError):
+        raw = part.get_payload(decode=True) or b""
+        return raw.decode("utf-8", errors="replace")
+
+
 def body_text(msg):
     plain = msg.get_body(preferencelist=("plain",))
     if plain is not None:
-        return plain.get_content()
+        return part_text(plain)
     rich = msg.get_body(preferencelist=("html",))
     if rich is not None:
-        return html_to_text(rich.get_content())
+        return html_to_text(part_text(rich))
     return ""
 
 
@@ -113,8 +123,8 @@ def attachments(msg):
 
 
 def mailbox_name(name):
-    if not re.fullmatch(r"[^\x00-\x1f\x7f\"\\]{1,200}", name or ""):
-        raise Fail("bad folder name")
+    if not re.fullmatch(r"[\x20-\x7e]{1,200}", name or "") or re.search(r'["\\]', name):
+        raise Fail("bad folder name: give it as `folders` prints it")
     return '"' + name + '"'
 
 
@@ -192,7 +202,7 @@ def cmd_list(conn, args):
 
 def search_words(words):
     words = " ".join(words)
-    if not words or len(words) > 200 or re.search(r'[\x00-\x1f\x7f"\\]', words):
+    if not words or len(words) > 200 or re.search(r'[\x00-\x1f\x7f-\x9f"\\\u2028\u2029]', words):
         raise Fail("search words: 1 to 200 characters, no quotes or control characters")
     return words
 
@@ -200,7 +210,9 @@ def search_words(words):
 def cmd_search(conn, args):
     words = search_words(args.words)
     select(conn, args.folder)
-    uids = ok(conn.uid("SEARCH", "CHARSET", "UTF-8", "TEXT", '"' + words + '"'), "search")[0].split()
+    # The words go as a UTF-8 literal: imaplib sends a plain argument as ASCII only.
+    conn.literal = words.encode("utf-8")
+    uids = ok(conn.uid("SEARCH", "CHARSET", "UTF-8", "TEXT"), "search")[0].split()
     print_rows(fetch_headers(conn, [u.decode() for u in uids[-args.limit:]]))
 
 
@@ -229,14 +241,34 @@ def cmd_read(conn, args):
 ADDRESS = re.compile(r"[^@\s<>\",;]+@[^@\s<>\",;]+\.[^@\s<>\",;]+")
 
 
+def one_address(addr):
+    """Exactly one address per value: a comma or semicolon could carry a second recipient."""
+    if re.search(r"[\r\n,;]", addr or "") or len(getaddresses([addr])) != 1:
+        raise Fail(f"one address per value: {one_line(addr, 80)}")
+    if not ADDRESS.fullmatch(parseaddr(addr)[1] or ""):
+        raise Fail(f"not an address: {one_line(addr, 80)}")
+
+
+def read_body_file(path):
+    try:
+        with open(path, "rb") as f:
+            raw = f.read(BODY_FILE_MAX + 1)
+    except OSError as e:
+        raise Fail(f"cannot read --body-file: {one_line(e, 200)}")
+    if len(raw) > BODY_FILE_MAX:
+        raise Fail(f"--body-file is over {BODY_FILE_MAX} bytes")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        raise Fail("--body-file is not UTF-8 text")
+
+
 def build_message(cfg, args):
     sender = args.sender or cfg.get("from") or cfg["user"]
     for addr in [sender, *args.to]:
-        if re.search(r"[\r\n]", addr) or not ADDRESS.fullmatch(parseaddr(addr)[1] or ""):
-            raise Fail(f"not an address: {one_line(addr, 80)}")
+        one_address(addr)
     if args.body_file:
-        with open(args.body_file, encoding="utf-8") as f:
-            body = f.read()
+        body = read_body_file(args.body_file)
     else:
         body = args.body or ""
     if not body.strip():
@@ -294,6 +326,8 @@ def main(argv=None):
     try:
         if not 1 <= getattr(args, "limit", 1) <= 500:
             raise Fail("--limit is 1 to 500")
+        if not 1 <= getattr(args, "max", 1) <= 100_000:
+            raise Fail("--max is 1 to 100000")
         cfg = load_config()
         if args.cmd == "send":
             cmd_send(cfg, args)
@@ -309,6 +343,9 @@ def main(argv=None):
         return 0
     except Fail as e:
         print(f"proton-mail: {e}", file=sys.stderr)
+        return 2
+    except UnicodeError as e:
+        print(f"proton-mail: {type(e).__name__}: {one_line(e, 300)}", file=sys.stderr)
         return 2
     except (OSError, imaplib.IMAP4.error, smtplib.SMTPException, ssl.SSLError) as e:
         print(f"proton-mail: {type(e).__name__}: {one_line(e, 300)} (is Bridge running? systemctl --user status proton-bridge)", file=sys.stderr)

@@ -59,6 +59,20 @@ out["empty"] = fails(pm.build_message, good, args(body="  "))
 m = pm.build_message(good, args(subject="Line\r\nBcc: x@y.z", sender="Claude <claude@nofix.dev>"))
 out["subject"] = m["Subject"]; out["from"] = m["From"]; out["bcc"] = m["Bcc"]
 out["msgid"] = m["Message-ID"]
+out["two_to"] = fails(pm.build_message, good, args(to=["owner@example.com, other@example.org"]))
+out["two_to_semi"] = fails(pm.build_message, good, args(to=["owner@example.com; other@example.org"]))
+out["file_missing"] = fails(pm.build_message, good, args(body=None, body_file=os.path.join(d, "none.txt")))
+with open(os.path.join(d, "latin1.txt"), "wb") as f: f.write(b"caf\xe9")
+out["file_latin1"] = fails(pm.build_message, good, args(body=None, body_file=os.path.join(d, "latin1.txt")))
+with open(os.path.join(d, "big.txt"), "w") as f: f.write("x" * (pm.BODY_FILE_MAX + 1))
+out["file_big"] = fails(pm.build_message, good, args(body=None, body_file=os.path.join(d, "big.txt")))
+with open(os.path.join(d, "ok.txt"), "w", encoding="utf-8") as f: f.write("Grüße")
+out["file_ok"] = pm.build_message(good, args(body=None, body_file=os.path.join(d, "ok.txt"))).get_content().strip()
+out["search_utf8"] = pm.search_words(["Rechnung", "März"])
+out["folder_utf8"] = fails(pm.mailbox_name, "Folders/Bücher")
+import email, email.policy
+raw = b"From: a@b.c\r\nSubject: s\r\nContent-Type: text/plain; charset=x-no-such-charset\r\n\r\nhello\r\n"
+out["bad_charset"] = pm.body_text(email.message_from_bytes(raw, policy=email.policy.default)).strip()
 print(json.dumps(out))
 `;
 
@@ -108,8 +122,10 @@ test("config: a user is required, the host stays local, defaults are Bridge's", 
 
 test("send: header injection and bad addresses are refused", opts, () => {
   const o = run();
-  assert.match(o.inject_to, /not an address/);
-  assert.match(o.inject_from, /not an address/);
+  assert.match(o.inject_to, /one address per value/);
+  assert.match(o.inject_from, /one address per value/);
+  assert.match(o.two_to, /one address per value/);
+  assert.match(o.two_to_semi, /one address per value/);
   assert.match(o.bad_addr, /not an address/);
   assert.match(o.empty, /empty body/);
   assert.equal(o.subject, "Line Bcc: x@y.z");
@@ -133,4 +149,25 @@ test("a run without the key says how to start it and exits 2, printing no secret
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("--body-file: a missing, non-UTF-8 or oversized file is a clean error", opts, () => {
+  const o = run();
+  assert.match(o.file_missing, /cannot read --body-file/);
+  assert.match(o.file_latin1, /not UTF-8/);
+  assert.match(o.file_big, /--body-file is over/);
+  assert.equal(o.file_ok, "Grüße");
+});
+
+test("non-ASCII search words pass, non-ASCII folder names are refused, an unknown charset still reads", opts, () => {
+  const o = run();
+  assert.equal(o.search_utf8, "Rechnung März");
+  assert.match(o.folder_utf8, /as `folders` prints it/);
+  assert.equal(o.bad_charset, "hello");
+});
+
+test("--max below 1 is refused before any connection", opts, () => {
+  const r = spawnSync("python3", ["-I", "-B", script, "read", "1", "--max", "-1"], { encoding: "utf8", env: { PATH: process.env.PATH } });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--max is 1 to 100000/);
 });
