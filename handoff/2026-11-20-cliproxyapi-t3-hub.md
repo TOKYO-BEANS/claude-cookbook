@@ -23,3 +23,5 @@ before: `~/.local/share/backups/t3-settings.json.before-hub-2026-11-20`. Pages
   kind is signed in (the owner's step).
 
 **Dead ends.** None.
+
+**Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-20-cliproxyapi-t3-hub/` (T3 server trace spans, proxy journal lines).
