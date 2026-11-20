@@ -116,7 +116,7 @@ const mode = (path) => statSync(path).mode & 0o777;
 
 test("the proxy binary is the Linux one, and the launchers name nothing of Windows", () => {
   assert.ok(PATHS.exe.replaceAll("\\", "/").endsWith("/.local/share/cliproxyapi/bin/cli-proxy-api"));
-  for (const file of ["cliproxyapi.mjs", "claude-pool.mjs"]) {
+  for (const file of ["cliproxyapi.mjs", "claude-pool.mjs", "codex-pool.mjs"]) {
     // `PATHS.exe` is the launcher's own name for the binary's path, not a file name.
     assert.doesNotMatch(readFileSync(join(SCRIPTS, file), "utf8").replaceAll("PATHS.exe", ""), /powershell|agent-key|\.exe\b|DPAPI|SIGBREAK/i, file);
   }
