@@ -1,4 +1,4 @@
-# 20 November 2026: the model budget's group check asks whether a directory answers; the update check's first timed run
+# 20 November 2026: the model budget's group check asks whether a directory answers; #182's two lows; the update check's first timed run
 
 **Why.** The AI review of #181 left one low finding: `soleGroup` reads only `/etc/passwd` and
 `/etc/group`, but user and group lookups go through NSS, which may also ask a directory
@@ -14,6 +14,11 @@ default) and inactive, with no domain.
 - `scripts/model-budget.test.mjs`: the account helper writes its own `nsswitch.conf` and socket
   path; eight new cases (Ubuntu's default with sssd off, sssd running, LDAP, winbind behind an
   action, a commented source, no group line, `files` missing, no file).
+- #182's two low review findings: `recipes/photos.md` now carries PhotoCraft's line (installed
+  for the owner's editing, its update check off, the owner's condition); the duplicate "a new
+  high finding goes to the owner" in the LightCraft lines is kept once. `recipes/connecting-load.md`
+  names OpenSEO and Wix only, and the register's Aikido row says it is on in no project on the
+  laptop (the Windows `settings.local.json` files did not move).
 
 **Verification.**
 - `node --test scripts/model-budget.test.mjs`: 70 of 70. The real script on the laptop still
