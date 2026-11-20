@@ -58,6 +58,15 @@ export const VERSION_COMMANDS = Object.freeze({
   // Proton Mail Bridge is an apt package; its own --version starts the window. Written against
   // the real output on the Ubuntu laptop on 20 November 2026.
   "proton-mail-bridge/app": { argv: ["dpkg-query", "--show", "protonmail-bridge"], pattern: /^protonmail-bridge\s+(\d+\.\d+\.\d+)/m },
+  // The creative kit and the documents kit. Written against the real output on the Ubuntu
+  // laptop on 20 November 2026. Blender is read from snapd: its own --version starts the app.
+  "imagemagick/cli": { argv: ["magick", "-version"], pattern: /^Version: ImageMagick (\d+\.\d+\.\d+-\d+)/m },
+  "libvips/cli": { argv: ["vips", "--version"], pattern: /^vips-(\d+\.\d+\.\d+)/m },
+  "inkscape/cli": { argv: ["inkscape", "--version"], pattern: /^Inkscape (\d+\.\d+(?:\.\d+)?) /m },
+  "blender/cli": { argv: ["snap", "list", "blender"], pattern: /^blender\s+(\d+\.\d+\.\d+)\s/m },
+  "typst/cli": { argv: ["typst", "--version"], pattern: /^typst (\d+\.\d+\.\d+)/m },
+  "pandoc/cli": { argv: ["pandoc", "--version"], pattern: /^pandoc (\d+(?:\.\d+)+)/m },
+  "jupyter/cli": { argv: ["jupyter-lab", "--version"], pattern: /^(\d+\.\d+\.\d+)\s*$/m },
 });
 
 // The only commands the daily update check runs to prove a service answers,
