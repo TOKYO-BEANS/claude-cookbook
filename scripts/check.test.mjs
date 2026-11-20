@@ -478,3 +478,18 @@ test("the plugin has no version number: none in the manifest, none in the market
   assert.deepEqual(versionErrors({ manifestText: "[]", marketplaceText: "{" }), [`${PLUGIN_MANIFEST} is not a JSON object`, `${MARKETPLACE} is not a JSON object`]);
   assert.deepEqual(versionErrors({ manifestText, marketplaceText: "{}" }), [`${MARKETPLACE} lists no plugins`]);
 });
+
+test("hooks.json: a command starts node or bash by name and a script under the plugin root, never a machine path", () => {
+  // The plugin's hooks file goes to every machine that installs the plugin, so the interpreter
+  // is found through PATH: Claude Code runs a hook command in `sh -c` with its own environment.
+  // A machine path failed once: five commands named C:/Program Files/nodejs/node.exe, and none
+  // of them ran on Linux (#154). A full path is for a file written on one machine, such as a
+  // header helper in an MCP configuration (recipes/keys.md). The owner's answer, 20 November
+  // 2026: the absolute-path rule does not cover this file (handoff/2026-11-20-hook-commands-by-name.md).
+  const shape = /^(node|bash) "\$\{CLAUDE_PLUGIN_ROOT\}\/hooks\/[a-z0-9-]+\.(mjs|sh)"( "\$\{CLAUDE_PLUGIN_ROOT\}")?$/;
+  const { hooks } = JSON.parse(read("plugins/cookbook/hooks/hooks.json"));
+  const commands = Object.values(hooks).flatMap((groups) => groups.flatMap((g) => g.hooks.map((h) => h.command)));
+  assert.ok(commands.length > 0);
+  for (const c of commands) assert.match(c, shape);
+  for (const c of ['/usr/bin/node "${CLAUDE_PLUGIN_ROOT}/hooks/x.mjs"', '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/x.mjs"', 'node "/home/x/hooks/x.mjs"']) assert.doesNotMatch(c, shape);
+});
