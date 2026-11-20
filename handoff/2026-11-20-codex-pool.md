@@ -27,7 +27,7 @@ session affinity miss then hit); websockets on and off both work; a delegated T3
 - T3 shows Codex's own model list for "Codex (pool)", not the proxy's: pick a listed one.
 - One Codex account: a limit hit has nowhere else to go (more accounts are the owner's step).
 
-**Failures.** GNOME Keyring aborted at 10:58:56 (assertion in
+**Dead ends and failures.** No approach was dropped. GNOME Keyring aborted at 10:58:56 (assertion in
 `gkd_secret_service_get_pkcs11_session`) and came back locked, so every chat's key reads hung
 until the owner unlocked it (11:14:42). It coincided with the first `codex-pool` start (Codex
 reads its MCP OAuth tokens from the keyring) and a `gh` call from another chat; the cause is
