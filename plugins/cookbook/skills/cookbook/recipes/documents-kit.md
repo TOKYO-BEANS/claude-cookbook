@@ -14,8 +14,8 @@ file or PDF: the bundled `docx`, `pdf`, `pptx` and `xlsx` skills.
 - **Typst** is the PDF engine: no LaTeX is installed. Write the `.typ` file from code (data in
   a JSON or CSV beside it, read with `json()` or `csv()`), compile, then check the page count
   or render a page to PNG (`typst compile in.typ page-{p}.png`) when the look is the check.
-  `typst watch` serves a live preview; `@preview/...` packages are fetched from Typst's
-  package host on first use.
+  `typst watch` serves a live preview. An `@preview/...` package is outside code fetched
+  on first use: none until it is vetted like any install, then pinned to its version.
 - **pandoc 3.7 with Typst 0.15:** pandoc's Typst template passes an empty font list, which
   Typst 0.15 rejects ("font fallback list must not be empty"). Always pass `-V mainfont=...`
   (a font Typst embeds: Libertinus Serif, New Computer Modern, DejaVu Sans Mono), or convert
@@ -32,8 +32,9 @@ file or PDF: the bundled `docx`, `pdf`, `pptx` and `xlsx` skills.
   vetted one. Never `typst update` (its self-update): mise moves it.
 - **Accepted findings (owner, 20 November 2026):** the Typst 0.15.1 binary bundles zip 8.0.0
   (one critical and three high advisories, in the self-update code only), quick-xml 0.38.3
-  (two high: slow parsing of citation XML) and time 0.3.37 (medium). Own documents only. A
-  new critical finding goes to the owner.
+  (two high: slow parsing of citation XML) and time 0.3.37 (medium). Own documents only,
+  pandoc's Typst PDF path included: no bibliography or CSL file from elsewhere. A new
+  critical finding goes to the owner.
 - pandoc: Ubuntu's own apt package, updated with Ubuntu (3.7 does every job here).
 - Jupyter: `uv tool install --force --exclude-newer <now minus 24 h> --python 3.12
   "jupyterlab==<version>" --with nbconvert --with ipykernel --with-executables-from
