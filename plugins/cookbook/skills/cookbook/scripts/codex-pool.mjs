@@ -27,7 +27,7 @@ export const OVERRIDES = [
 // Variables that would send Codex elsewhere or carry another key.
 const DROPPED = ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL", KEY_VARIABLE];
 
-// Codex's global options that take a value (`codex --help`, 0.170.0); `--opt=value` is one word.
+// Codex's global options that take a value (`codex --help`, 0.170.0 and 0.171.0); `--opt=value` is one word.
 const VALUE_OPTIONS = new Set(["-c", "--config", "--enable", "--disable", "--remote", "--remote-auth-token-env", "-i", "--image", "-m", "--model", "--local-provider", "-p", "--profile", "-s", "--sandbox", "-C", "--cd", "--add-dir", "-a", "--ask-for-approval"]);
 
 // The subcommand: the first word that is neither an option nor an option's value.
