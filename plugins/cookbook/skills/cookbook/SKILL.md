@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo masks, sharpening, cut-outs and straightening, SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, images, 3D, PDFs, photo masks, sharpening, cut-outs and straightening, SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -12,7 +12,7 @@ it. Read a page only when its job comes up. When the owner is missing or fails, 
 fallback and say that you did.
 
 - Recipe pages are in `recipes/` beside this file; every page fits one `Read`.
-- Why each owner was chosen, and what else was weighed (tools outside the stack included):
+- Why each owner was chosen, and what else was weighed:
   [build](options/plan-and-build.md), [check](options/check.md), [ship](options/ship.md),
   [reach outside](options/reach-outside.md), [keep healthy](options/keep-healthy.md).
 - `catalog.json` beside this skill lists every tool in the stack. Add, change or retire a tool
@@ -27,7 +27,7 @@ fallback and say that you did.
 | Plan, build or debug a change | **Superpowers** skills | the same steps inline | [building](recipes/building.md), [debugging](recipes/debugging.md) |
 | A long job a program can check: run until the check passes | **Claude Code** `/goal` | a Stop hook with a script check | [goal-runs](recipes/goal-runs.md) |
 | Several agents on one job | the named **`sa-*`** workflows, within their budgets | plain parallel subagents | [workflows](recipes/workflows.md) |
-| One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (`cookbook:mechanical`, `cookbook:research`, `cookbook:review`, `cookbook:reader`, `cookbook:reader-graph`) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
+| One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (the `cookbook:*` agent types) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
 | A second opinion (a consult) on our own work from a model that is not Claude: a design, a risky change, a cross-check | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
@@ -35,6 +35,7 @@ fallback and say that you did.
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
 | Sharpen, cut out or straighten a photo | none: say so | — | [photos](recipes/photos.md) |
 | Photo masks by a word, colour by region | **LightCraft**, own photos | none: say so | [photos](recipes/photos.md) |
+| Images, 3D, PDFs, notebooks | **ImageMagick** and the kit | — | [creative-kit](recipes/creative-kit.md) |
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
@@ -87,7 +88,7 @@ fallback and say that you did.
 | Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor, by itself | [compaction](recipes/compaction.md) |
 | Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev**; the display is T3 Code's sidebar (`❓ ` marker, pins) | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
 | Several chats at once: a question another chat put to the owner, a job or file another chat has | the **Cookbook**'s `owner-answers` hooks; **T3 Code**'s thread list and read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
-| Memory across sessions | the project's handoff for its state (`HANDOFF.md`, or a file per entry in `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md) |
+| Memory across sessions | the project's handoff for its state (a file per entry in `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md) |
 | A plain script on a schedule | a systemd user timer | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | An agent run on a schedule | a **T3 Code** scheduled task | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | Claude Code from a script (`claude -p`) | the scripted-runs rules | — | [scripted-runs](recipes/scripted-runs.md) |

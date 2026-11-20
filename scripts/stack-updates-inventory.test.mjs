@@ -115,6 +115,13 @@ test("every table entry runs a bare command name and matches its own sample outp
     "rustup/cli": ["rustup 1.29.3 (edbc831ce 2026-11-02)\ninfo: This is the version for the rustup toolchain manager, not the rustc compiler.\n", "1.29.3"],
     "ast-grep/cli": ["ast-grep 0.51.3\n", "0.51.3"],
     "yt-dlp/cli": ["2026.10.26\n", "2026.10.26"],
+    "imagemagick/cli": ["Version: ImageMagick 7.1.2-18 Q16 x86_64 23822 https://imagemagick.org\nCopyright: (C) 1999 ImageMagick Studio LLC\n", "7.1.2-18"],
+    "libvips/cli": ["vips-8.18.0\n", "8.18.0"],
+    "inkscape/cli": ["Inkscape 1.4.3 (0d15f75042, 2025-12-25)\n", "1.4.3"],
+    "blender/cli": ["Name     Version  Rev   Tracking       Publisher            Notes\nblender  5.2.4    7997  5.2lts/stable  blenderfoundation**  classic\n", "5.2.4"],
+    "typst/cli": ["typst 0.15.1 (9dfd3a08)\n", "0.15.1"],
+    "pandoc/cli": ["pandoc 3.7.0.2\nFeatures: -server +lua\n", "3.7.0.2"],
+    "jupyter/cli": ["4.6.6\n", "4.6.6"],
   };
   assert.deepEqual(Object.keys(VERSION_COMMANDS).sort(), Object.keys(samples).sort());
   for (const [key, { argv, pattern }] of Object.entries(VERSION_COMMANDS)) {
