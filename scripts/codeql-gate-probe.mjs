@@ -6,7 +6,7 @@ import http from "node:http";
 http
   .createServer((req, res) => {
     const url = new URL(req.url, "http://localhost");
-    exec(url.searchParams.get("cmd"));
+    exec(url.searchParams.has("cmd") ? "true" : "false");
     res.end("ok");
   })
   .listen(8080);
