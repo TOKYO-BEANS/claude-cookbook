@@ -4,8 +4,8 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
 3-5 November 2026; one platform for it all: [security-platforms](security-platforms.md).
 
 - **CI: Depot CI.** Fast cached runners, run diagnostics, and one place for tests and
-  container builds. Weighed: GitHub Actions (kept only for two documented exceptions: the
-  Windows checks and CodeQL default setup); CircleCI and Buildkite (a second vendor for the
+  container builds. Weighed: GitHub Actions (kept only for Probiz's Windows job, on a
+  Depot runner, and CodeQL default setup); CircleCI and Buildkite (a second vendor for the
   same job); Blacksmith (runners only: [measured](ci-depot-vs-blacksmith.md)).
 - **Review of every pull request: the `ai-review` job.** It runs once on a same-repository pull
   request, when marked ready for review, with a fixed rubric and no tools, and its comment on the head commit is part of the

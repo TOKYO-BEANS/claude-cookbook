@@ -30,14 +30,14 @@ Browne's published setup (owner's choice; no Tailscale: the iPhone's T3 Connect 
   provider as `-c` overrides: no key and no change in `config.toml`, so the plain `codex` keeps
   its own sign-in. It refuses `login` and `logout`. T3 shows Codex's own model list; a
   model the proxy does not list (`cliproxyapi status`) fails: "unknown provider for model".
-- **The keys, and the one exception** (owner, 18 November 2026): the proxy reads its client key
-  only from `config.yaml` and keeps sign-ins as JSON files, so both may be plain files in the
-  private folder (0700) and nowhere else. Each start makes a new client key, saved in the key
+- **The keys, and the two exceptions** (owner, 18 and 20 November 2026; the second is T3's
+  hub, below): the proxy reads its client key only from `config.yaml` and keeps sign-ins as
+  JSON files, so both may be plain files in the private folder (0700) and nowhere else. Each start makes a new client key, saved in the key
   store as `cliproxyapi-client`; `config.yaml` is deleted when the proxy stops. A restart makes
   open pooled threads (Claude or Codex) fail with 401 until their session starts again.
-- **Not set up:** T3's pooled-limits view (Usage providers, Add hub; the owner chose the
-  console, 20 November 2026). Several machines, Tailscale or linger are access
-  changes and go to the owner first.
+- **T3's pooled limits** (Usage providers, hub `cliproxy-127.0.0.1-8317`): set up 20 November
+  2026 on the owner's yes, a second exception: T3 keeps the management secret in its own
+  secret store (0600). Several machines, Tailscale or linger: access changes, owner first.
 
 Where its files are, how it is hardened, an update and the open findings:
 [setup and evidence](subscription-proxy-setup.md).

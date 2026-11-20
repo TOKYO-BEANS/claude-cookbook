@@ -34,5 +34,7 @@ hook simple, and a run is a few seconds out of 2,000,000 a month.
   the sandbox before the command, so a test that calls git (Stack-Atlas's "own tree holds no
   scanner ignore file") runs there as in CI. CI decides either way.
 - **Cost:** both near zero; boat's plan is 2,000,000 seconds a month.
+- **A Depot sandbox instead of boat** (20 November 2026): slower and 20 to 40 times dearer a
+  run, with no upload scan, spend guard or Claude proxy ([measured](sandboxes-depot-vs-boat.md)).
 
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-20-boat-vs-local/`.

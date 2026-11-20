@@ -21,21 +21,22 @@ always on since 20 November.
   body to `private/logs` (the newest 10 kept). The journal gets one line per request (status,
   path), no key. **A sign-in listens on every interface** while it waits (54545 Claude, 1455
   Codex).
-- **T3's pooled limits, not set up:** T3 needs the management secret for a hub, and keeps it
-  either as a plain file in its own secret store (`~/.t3/userdata/secrets`) or as a 1Password
-  reference; it has no GNOME Keyring or command source. That secret also reads the sign-in
-  files through the management API. The console shows the same limits.
+- **T3's pooled limits:** T3 keeps a hub's management secret as a plain file in its secret
+  store or as a 1Password reference; no GNOME Keyring or command source. The owner allowed the
+  file (20 November 2026): `secrets/usage-limit-source-<base64url id>.bin` (0600), written from
+  the key store, never shown; `settings.json` holds `"••••••"`. The secret also reads the
+  sign-in files. A new management secret means writing that file again.
 - **Codex:** Theo's `experimental_bearer_token` would put the key in `config.toml`; `env_key`
   does not. Proven 20 November 2026: `codex-pool exec` and a T3 turn on "Codex (pool)" answered
   through the proxy; websockets on and off both work; `auth.json`, `config.toml` unchanged.
 - **An update** is a full vetting ([connecting](connecting.md)); then `systemctl --user stop
   cliproxyapi`, unpack the new archive into `bin`, `systemctl --user start cliproxyapi`,
   `cliproxyapi status`. The console the same way when the proxy's notes ask for it.
-- **Open findings**, accepted by the owner for 8.0.76 (19 November 2026): six dependency
-  advisories, two high (`klauspost/compress` GHSA-259r-337f-4rfw, `golang.org/x/net`
-  CVE-2026-78661). No release up to 8.0.79 fixes them; one that does is the time to update.
-- **On this PC:** 8.0.76 and the console v1.28.3; `PROVENANCE.txt` beside `bin`; vetting record
-  `~/.local/share/vetting/cliproxyapi-8.0.76/VETTING.md`. Proven 20 November 2026 as a service:
+- **Open findings**, accepted by the owner for 8.0.76 (19 November 2026) and 8.0.80 (20
+  November): six dependency advisories, two high (`klauspost/compress` GHSA-259r-337f-4rfw,
+  `golang.org/x/net` CVE-2026-78661). No release up to 8.0.80 fixes them.
+- **On this PC:** 8.0.80 (20 November 2026) and the console v1.28.3; `PROVENANCE.txt` beside
+  `bin`; vetting record `~/.local/share/vetting/cliproxyapi-8.0.80/VETTING.md`. Proven 20 November 2026 as a service:
   127.0.0.1:8317 only; 401 without or with a wrong key, 200 with it; the routing read back from
   the management API; a manual start refused, and the service refused beside a manual start with its config kept;
   a new key per start; `config.yaml` gone after a stop and after the launcher was killed; T3 listed "Claude (pool)" with its models.
