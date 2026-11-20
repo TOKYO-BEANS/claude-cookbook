@@ -170,7 +170,7 @@ test("panel's note names where the secret is and no clipboard", () => {
   assert.match(PANEL_NOTE, /Proton Pass \(vault "Claude", item key\/cliproxyapi-management\)/);
 });
 
-test("claude-pool as a process: Claude Code gets the proxy's address, the stored client key and a home of its own", { skip: notLinux }, (t) => {
+test("claude-pool as a process: Claude Code gets the proxy's address, the stored client key and the caller's own home", { skip: notLinux }, (t) => {
   const home = mkdtempSync(join(tmpdir(), "cpa-pool-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const bin = join(home, ".local", "bin");
@@ -179,12 +179,17 @@ test("claude-pool as a process: Claude Code gets the proxy's address, the stored
   mkdirSync(tools);
   // A stand-in keyring that holds only the client key, and a stand-in Claude Code that prints what it got.
   writeFileSync(join(tools, "secret-tool"), '#!/bin/sh\n[ "$*" = "lookup service claude-keys name cliproxyapi-client" ] && printf %s synthetic-client-key && exit 0\nexit 1\n', { mode: 0o755 });
-  writeFileSync(join(bin, "claude"), '#!/bin/sh\necho "url=$ANTHROPIC_BASE_URL token=$ANTHROPIC_AUTH_TOKEN home=$CLAUDE_CONFIG_DIR api=${ANTHROPIC_API_KEY:-none} oauth=${CLAUDE_CODE_OAUTH_TOKEN:-none} args=$* umask=$(umask)"\nexit 7\n', { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), '#!/bin/sh\necho "url=$ANTHROPIC_BASE_URL token=$ANTHROPIC_AUTH_TOKEN home=$CLAUDE_CONFIG_DIR api=${ANTHROPIC_API_KEY:-none} oauth=${CLAUDE_CODE_OAUTH_TOKEN:-none} args=$*"\nexit 7\n', { mode: 0o755 });
   const env = { PATH: `${tools}:${process.env.PATH}`, HOME: home, ANTHROPIC_API_KEY: "must-not-pass", CLAUDE_CODE_OAUTH_TOKEN: "must-not-pass", ANTHROPIC_BASE_URL: "https://elsewhere.example", CLAUDE_CONFIG_DIR: "/elsewhere" };
   const r = spawnSync(process.execPath, [join(SCRIPTS, "claude-pool.mjs"), "-p", "hi"], { env, encoding: "utf8", timeout: 30_000 });
   assert.equal(r.stderr, "");
-  assert.equal(r.stdout, `url=http://127.0.0.1:8317 token=synthetic-client-key home=${join(home, ".local", "share", "cliproxyapi", "private", "claude-home")} api=none oauth=none args=-p hi umask=0077\n`);
+  // The home T3 Code set for the instance passes through: T3 reads the thread's history there.
+  assert.equal(r.stdout, `url=http://127.0.0.1:8317 token=synthetic-client-key home=/elsewhere api=none oauth=none args=-p hi\n`);
   assert.equal(r.status, 7, "Claude Code's own exit code");
+  // No home given: none is set, so Claude Code uses ~/.claude.
+  const { CLAUDE_CONFIG_DIR: _, ...withoutHome } = env;
+  const r2 = spawnSync(process.execPath, [join(SCRIPTS, "claude-pool.mjs")], { env: withoutHome, encoding: "utf8", timeout: 30_000 });
+  assert.match(r2.stdout, / home= api=none /);
 });
 
 test("claude-pool as a process: without a stored client key it says so and starts nothing", { skip: notLinux }, (t) => {
@@ -198,7 +203,7 @@ test("claude-pool as a process: without a stored client key it says so and start
   const r = spawnSync(process.execPath, [join(SCRIPTS, "claude-pool.mjs")], { env: { PATH: `${tools}:${process.env.PATH}`, HOME: home }, encoding: "utf8", timeout: 30_000 });
   assert.equal(r.status, 1);
   assert.equal(r.stdout, "");
-  assert.match(r.stderr, /^claude-pool: no client key \(no key is saved as "cliproxyapi-client"\); run `cliproxyapi start` first\n$/);
+  assert.match(r.stderr, /^claude-pool: no client key \(no key is saved as "cliproxyapi-client"\); is the proxy running\? `systemctl --user status cliproxyapi`\n$/);
 });
 
 test("startProblem: no start without the pinned console, or with a .env the proxy would load", (t) => {
@@ -213,4 +218,51 @@ test("startProblem: no start without the pinned console, or with a .env the prox
   writeFileSync(paths.dotenv, "MANAGEMENT_PASSWORD=x\n");
   assert.match(startProblem(paths), /\.env exists: the proxy would load it/);
   assert.match(startProblem(paths, { console: false }), /\.env exists/, "a sign-in loads it too");
+});
+
+// ---- The always-on user service --------------------------------------------------
+
+import { homedir } from "node:os";
+import { cleanupAfterStop, loginRoute } from "../plugins/cookbook/skills/cookbook/scripts/cliproxyapi.mjs";
+
+test("cleanupAfterStop: deletes the config a stopped launcher left, but not one a live launcher holds the lock for", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cpa-cleanup-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const paths = { config: join(dir, "config.yaml"), lock: join(dir, "launcher.lock") };
+  // A live manual start or login holds the lock: its config stays.
+  writeFileSync(paths.config, "x");
+  writeFileSync(paths.lock, "4242");
+  assert.equal(cleanupAfterStop(paths, (pid) => pid === 4242), false);
+  assert.equal(existsSync(paths.config), true);
+  // The lock's launcher is gone (the service's own, killed): the config goes; the stale lock stays for takeLock.
+  assert.equal(cleanupAfterStop(paths, () => false), true);
+  assert.equal(existsSync(paths.config), false);
+  assert.equal(existsSync(paths.lock), true);
+  // No lock, or one that holds no pid: the config goes.
+  for (const lock of [null, "not a pid"]) {
+    writeFileSync(paths.config, "x");
+    if (lock === null) rmSync(paths.lock, { force: true }); else writeFileSync(paths.lock, lock);
+    assert.equal(cleanupAfterStop(paths, () => true), true);
+    assert.equal(existsSync(paths.config), false);
+  }
+});
+
+test("loginRoute: a login beside the running service uses its proxy's config; alone it holds the lock itself", () => {
+  assert.equal(loginRoute(null, false, false), "own");
+  assert.equal(loginRoute(4242, true, true), "running", "the service holds the lock and its proxy is up");
+  assert.equal(loginRoute(4242, false, true), "refuse", "no config: the holder is still starting");
+  assert.equal(loginRoute(4242, true, false), "refuse", "nothing answers yet");
+});
+
+test("the user unit runs the installed launcher, cleans up through it, and keeps the hardening", () => {
+  const unit = readFileSync(join(SCRIPTS, "cliproxyapi.service"), "utf8");
+  const line = (key) => unit.split("\n").filter((l) => l.startsWith(`${key}=`)).map((l) => l.slice(key.length + 1));
+  const launcher = "/usr/bin/node %h/.local/bin/cliproxyapi.mjs";
+  assert.deepEqual(line("ExecStart"), [`${launcher} start`]);
+  assert.deepEqual(line("ExecStopPost"), [`${launcher} cleanup`]);
+  assert.deepEqual(line("UMask"), ["0077"]);
+  assert.deepEqual(line("Restart"), ["always"]);
+  assert.deepEqual(line("WantedBy"), ["graphical-session.target"]);
+  // The launcher the unit names is the one whose PATHS point at the private folder in this home.
+  assert.equal(PATHS.config, join(homedir(), ".local", "share", "cliproxyapi", "private", "config.yaml"));
 });
