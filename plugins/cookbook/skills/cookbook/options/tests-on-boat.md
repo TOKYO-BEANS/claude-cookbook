@@ -30,9 +30,9 @@ hook simple, and a run is a few seconds out of 2,000,000 a month.
   beside the unlocked key store, which any process of the owner can read, and the laptop has
   no Safe Chain. A sandbox holds no secret.
 - **Parity with CI:** boat has CI's Ubuntu 24.04 and Node 24; the laptop has Node 26. boat's
-  upload holds no `.git`, so a test that calls git fails there and passes in CI: Stack-Atlas's
-  "own tree holds no scanner ignore file" fails on every boat run. Read such a failure before
-  calling a change broken. CI decides either way.
+  upload holds no `.git`; since 20 November 2026 boat-run makes the copy a git checkout in
+  the sandbox before the command, so a test that calls git (Stack-Atlas's "own tree holds no
+  scanner ignore file") runs there as in CI. CI decides either way.
 - **Cost:** both near zero; boat's plan is 2,000,000 seconds a month.
 
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-20-boat-vs-local/`.

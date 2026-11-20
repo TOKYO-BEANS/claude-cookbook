@@ -8,7 +8,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { CALL_SECONDS, DATA_SHAPED, LIMITS, NOT_STARTED, boatArgv, call, dataFiles, gate, readLimits, removeSandbox, listEntry, main, normalKey, onList, parseArgs, repoKey, runEnd, scan, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
+import { AS_CHECKOUT, CALL_SECONDS, DATA_SHAPED, LIMITS, NOT_STARTED, boatArgv, call, dataFiles, gate, readLimits, removeSandbox, listEntry, main, normalKey, onList, parseArgs, repoKey, runEnd, scan, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs";
 
 // The plan as `boat limits --json` printed it on 16 November 2026, without the unused keys.
 const plan = (over = {}) => ({
@@ -100,7 +100,7 @@ test("no run while something could bill past the plan, or while the plan cannot 
 test("the boat command always has the size, --no-env and the timeout, and never more options", async () => {
   assert.deepEqual(boatArgv(args("--timeout", "300", "--", "npm", "test"), null), ["run", "--type", "small", "--no-env", "--timeout", "300", "--", "npm", "test"]);
   const sent = boatArgv(args("--type", "large", "--timeout", "60", "--push", ".", "--", "make", "-j8"), "/tmp/s/repo");
-  assert.deepEqual(sent, ["run", "--type", "large", "--no-env", "--timeout", "60", "--push", "/tmp/s/repo", "--", "make", "-j8"]);
+  assert.deepEqual(sent, ["run", "--type", "large", "--no-env", "--timeout", "60", "--push", "/tmp/s/repo", "--", "sh", "-c", AS_CHECKOUT, "boat-run", "make", "-j8"]);
   assert.ok(!sent.slice(0, sent.indexOf("--")).includes("--keep"));
 });
 
@@ -142,6 +142,40 @@ test("an upload holds the tracked files with their uncommitted edits, never an u
       staged.remove();
     }
     assert.ok(!existsSync(staged.dir));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// The sandbox is Linux, so the step runs under a POSIX sh: Depot's Linux job runs it, the
+// Windows job has no such sh.
+test("a pushed copy is a git checkout before the command runs, and the command's arguments arrive as they were", { skip: process.platform === "win32" && "the sandbox's sh is Linux's" }, () => {
+  const { root, dir } = repo();
+  try {
+    writeFileSync(join(dir, "ignored.txt"), "x\n");
+    spawnSync("git", ["add", "--force", "ignored.txt"], { cwd: dir }); // tracked although ignored
+    const staged = stage(dir);
+    try {
+      assert.ok(!existsSync(join(staged.dir, ".git")));
+      const argv = boatArgv(args("--timeout", "60", "--push", ".", "--", "node", "-e", "console.log(process.argv.slice(1).join('|'))", "a b", "$HOME", "'q'"), staged.dir);
+      const command = argv.slice(argv.indexOf("--") + 1);
+      // A machine's own git settings stay out: the sandbox has none of this PC's.
+      const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+      const ran = spawnSync(command[0], command.slice(1), { cwd: staged.dir, encoding: "utf8", env });
+      assert.equal(ran.status, 0, ran.stderr);
+      assert.equal(ran.stdout, "a b|$HOME|'q'\n");
+      const git = (...a) => spawnSync("git", a, { cwd: staged.dir, encoding: "utf8", env }).stdout.trim();
+      assert.deepEqual(git("ls-files").split("\n"), [".gitignore", "app.js", "ignored.txt"]);
+      assert.equal(git("status", "--porcelain"), "");
+      assert.match(git("rev-parse", "HEAD"), /^[0-9a-f]{40}$/);
+      // A command that fails keeps its own exit code.
+      const failing = boatArgv(args("--timeout", "60", "--push", ".", "--", "node", "-e", "process.exit(7)"), staged.dir);
+      rmSync(join(staged.dir, ".git"), { recursive: true, force: true });
+      const r = spawnSync("sh", failing.slice(failing.indexOf("--") + 2), { cwd: staged.dir, encoding: "utf8", env });
+      assert.equal(r.status, 7, r.stderr);
+    } finally {
+      staged.remove();
+    }
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -469,7 +503,7 @@ test("a run with an upload: staged, scanned, pushed from the staged copy, and th
   const w = world();
   assert.equal(await main(["--timeout", "120", "--push", ".", "--", "npm", "test"], w.deps), 0);
   assert.deepEqual(w.calls.map((c) => c[0]), ["permit", "stage", "data", "scan", "boat"]);
-  assert.deepEqual(w.calls[4].slice(1), ["run", "--type", "small", "--no-env", "--timeout", "120", "--push", "/tmp/s/shop", "--", "npm", "test"]);
+  assert.deepEqual(w.calls[4].slice(1), ["run", "--type", "small", "--no-env", "--timeout", "120", "--push", "/tmp/s/shop", "--", "sh", "-c", AS_CHECKOUT, "boat-run", "npm", "test"]);
   assert.deepEqual(w.removed, ["/tmp/s/shop"]);
 });
 
