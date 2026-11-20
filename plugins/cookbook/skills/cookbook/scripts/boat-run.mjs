@@ -119,14 +119,15 @@ export function gate(run, plan, waiting = 0) {
 // boat's --push sends the files of a folder, never its .git, so a pushed copy is no git
 // checkout and a test that calls git fails there while it passes in CI. In the sandbox, before
 // the command, the copy becomes one: every file of it in one commit, as a CI checkout has its
-// files at HEAD. --force adds a tracked file that a .gitignore names. The command follows as
-// its own arguments ("$@"), never pasted into the script.
-export const AS_CHECKOUT = [
+// files at HEAD. --force adds a tracked file that a .gitignore names; --allow-empty gives an
+// empty copy a HEAD too. The command follows as its own arguments ("$@"), never pasted into
+// the script. A step that fails means the command never ran: exit 75, as for a run that did
+// not start, never an exit code the command could have given.
+export const AS_CHECKOUT = `{ ${[
   "git -c init.defaultBranch=main init -q",
   "git add --all --force .",
-  "git -c user.name=boat-run -c user.email=boat-run@localhost -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q --no-verify -m 'boat-run: the uploaded copy'",
-  'exec "$@"',
-].join(" && ");
+  "git -c user.name=boat-run -c user.email=boat-run@localhost -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -q --no-verify --allow-empty -m 'boat-run: the uploaded copy'",
+].join(" && ")}; } || { echo 'BOAT-RUN: not started: the upload could not be made a git checkout' >&2; exit ${NOT_STARTED}; }; exec "$@"`;
 
 export function boatArgv(run, stagedDir) {
   const command = stagedDir ? ["sh", "-c", AS_CHECKOUT, "boat-run", ...run.command] : run.command;
