@@ -170,7 +170,7 @@ test("panel's note names where the secret is and no clipboard", () => {
   assert.match(PANEL_NOTE, /Proton Pass \(vault "Claude", item key\/cliproxyapi-management\)/);
 });
 
-test("claude-pool as a process: Claude Code gets the proxy's address, the stored client key and a home of its own", { skip: notLinux }, (t) => {
+test("claude-pool as a process: Claude Code gets the proxy's address, the stored client key and the caller's own home", { skip: notLinux }, (t) => {
   const home = mkdtempSync(join(tmpdir(), "cpa-pool-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const bin = join(home, ".local", "bin");
@@ -179,12 +179,17 @@ test("claude-pool as a process: Claude Code gets the proxy's address, the stored
   mkdirSync(tools);
   // A stand-in keyring that holds only the client key, and a stand-in Claude Code that prints what it got.
   writeFileSync(join(tools, "secret-tool"), '#!/bin/sh\n[ "$*" = "lookup service claude-keys name cliproxyapi-client" ] && printf %s synthetic-client-key && exit 0\nexit 1\n', { mode: 0o755 });
-  writeFileSync(join(bin, "claude"), '#!/bin/sh\necho "url=$ANTHROPIC_BASE_URL token=$ANTHROPIC_AUTH_TOKEN home=$CLAUDE_CONFIG_DIR api=${ANTHROPIC_API_KEY:-none} oauth=${CLAUDE_CODE_OAUTH_TOKEN:-none} args=$* umask=$(umask)"\nexit 7\n', { mode: 0o755 });
+  writeFileSync(join(bin, "claude"), '#!/bin/sh\necho "url=$ANTHROPIC_BASE_URL token=$ANTHROPIC_AUTH_TOKEN home=$CLAUDE_CONFIG_DIR api=${ANTHROPIC_API_KEY:-none} oauth=${CLAUDE_CODE_OAUTH_TOKEN:-none} args=$*"\nexit 7\n', { mode: 0o755 });
   const env = { PATH: `${tools}:${process.env.PATH}`, HOME: home, ANTHROPIC_API_KEY: "must-not-pass", CLAUDE_CODE_OAUTH_TOKEN: "must-not-pass", ANTHROPIC_BASE_URL: "https://elsewhere.example", CLAUDE_CONFIG_DIR: "/elsewhere" };
   const r = spawnSync(process.execPath, [join(SCRIPTS, "claude-pool.mjs"), "-p", "hi"], { env, encoding: "utf8", timeout: 30_000 });
   assert.equal(r.stderr, "");
-  assert.equal(r.stdout, `url=http://127.0.0.1:8317 token=synthetic-client-key home=${join(home, ".local", "share", "cliproxyapi", "private", "claude-home")} api=none oauth=none args=-p hi umask=0077\n`);
+  // The home T3 Code set for the instance passes through: T3 reads the thread's history there.
+  assert.equal(r.stdout, `url=http://127.0.0.1:8317 token=synthetic-client-key home=/elsewhere api=none oauth=none args=-p hi\n`);
   assert.equal(r.status, 7, "Claude Code's own exit code");
+  // No home given: none is set, so Claude Code uses ~/.claude.
+  const { CLAUDE_CONFIG_DIR: _, ...withoutHome } = env;
+  const r2 = spawnSync(process.execPath, [join(SCRIPTS, "claude-pool.mjs")], { env: withoutHome, encoding: "utf8", timeout: 30_000 });
+  assert.match(r2.stdout, / home= api=none /);
 });
 
 test("claude-pool as a process: without a stored client key it says so and starts nothing", { skip: notLinux }, (t) => {
@@ -198,7 +203,7 @@ test("claude-pool as a process: without a stored client key it says so and start
   const r = spawnSync(process.execPath, [join(SCRIPTS, "claude-pool.mjs")], { env: { PATH: `${tools}:${process.env.PATH}`, HOME: home }, encoding: "utf8", timeout: 30_000 });
   assert.equal(r.status, 1);
   assert.equal(r.stdout, "");
-  assert.match(r.stderr, /^claude-pool: no client key \(no key is saved as "cliproxyapi-client"\); run `cliproxyapi start` first\n$/);
+  assert.match(r.stderr, /^claude-pool: no client key \(no key is saved as "cliproxyapi-client"\); is the proxy running\? `systemctl --user status cliproxyapi`\n$/);
 });
 
 test("startProblem: no start without the pinned console, or with a .env the proxy would load", (t) => {

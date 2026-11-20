@@ -47,8 +47,8 @@ In `~/.t3/userdata/settings.json` (Settings, Threads), set on 16 November 2026:
 - **A lock around the read.** Its takeover after a crash was not race-free. A failed read
   now writes only its own mark file, so it cannot replace a reading.
 
-## Several subscriptions through one hub: installed, idle
+## Several subscriptions through one hub: always on
 
-CLIProxyAPI, installed 18 November 2026 with no account signed in:
-[subscription-proxy](subscription-proxy.md). T3 Code can read a hub's limits (Settings,
-Providers, Usage providers, Add hub). With accounts signed in, the budget's rules stay.
+CLIProxyAPI, always on since 20 November 2026, with the T3 instance "Claude (pool)":
+[subscription-proxy](subscription-proxy.md). T3's hub view of the limits is not set up (the
+reason is on its setup page). With accounts signed in, the budget's rules stay.

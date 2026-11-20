@@ -1,0 +1,26 @@
+# CLIProxyAPI, always on while the owner is signed in to the desktop (Cookbook
+# recipes/subscription-proxy.md). Owner's choice of 20 November 2026: this laptop only, on
+# 127.0.0.1:8317, no Tailscale. Installed as ~/.config/systemd/user/cliproxyapi.service.
+#
+# The launcher keeps its hardening: it reads the management secret from the key store, makes a
+# new client key at each start (saved in the key store for claude-pool), writes config.yaml 0600
+# in the 0700 private folder and deletes it when the proxy stops. ExecStopPost deletes it as well,
+# for a launcher that was killed. It runs with the graphical session, not with linger: the key
+# store is unlocked only while the owner is signed in.
+[Unit]
+Description=CLIProxyAPI on 127.0.0.1:8317 (Cookbook subscription proxy)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/node %h/.local/bin/cliproxyapi.mjs start
+ExecStopPost=/bin/rm -f %h/.local/share/cliproxyapi/private/config.yaml
+Restart=always
+RestartSec=10
+UMask=0077
+KillMode=mixed
+TimeoutStopSec=15
+
+[Install]
+WantedBy=graphical-session.target
