@@ -7,7 +7,7 @@ the end state.
 | Job | Owner |
 | --- | --- |
 | Baseline rules (pull request required, no force-push, no deletion) | organisation ruleset `TOKYO-BEANS baseline`, every repository, future ones included; no bypass on either ruleset |
-| Checks a repository must pass before merging | per-repository ruleset `Stack Atlas checks`, written by the standard: the Depot CI test checks (integration id 219785; Probiz's Windows exception check from GitHub Actions, 15368), the Semgrep check, and the CodeQL code-scanning rule (errors, and security alerts high or higher, block) |
+| Checks a repository must pass before merging | per-repository ruleset `Stack Atlas checks`, written by the standard: the Depot CI test checks (integration id 219785; Probiz's Windows exception check from GitHub Actions on a Depot Windows runner, 15368), the Semgrep check, and the CodeQL code-scanning rule (errors, and security alerts high or higher, block) |
 | Scanning our code | **CodeQL** default setup, through the organisation security configuration `TOKYO-BEANS standard` (every repository, the default for new ones) |
 | Blocking leaked keys at push, validity checks | **GitHub Secret Protection**, same configuration |
 | Vulnerable dependencies | **Semgrep** Supply Chain only: the Depot `semgrep` job runs `semgrep ci --supply-chain` and fails on a high or critical one not classed unreachable |

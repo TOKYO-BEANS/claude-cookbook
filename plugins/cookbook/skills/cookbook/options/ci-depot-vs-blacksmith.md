@@ -35,6 +35,13 @@ No sign-up, no trial. USD, before VAT.
   and November). GitHub's 0.002 a minute charge on runners it does not host, postponed on 17
   December 2025 with no new date, would add about 14 a month to Blacksmith, nothing to Depot
   CI.
+- **Probiz's Windows job, measured 20 November 2026** (`depot jobs`, key `depot-org`):
+  GitHub's `windows-latest` (2 vCPU, 7 to 22 September, 34 passing jobs): median 713 seconds,
+  about 0.12 a job at 0.010 a minute. Depot's `depot-windows-2025-4` (4 vCPU, since 23
+  September, 416 passing jobs): median 268 seconds, no queue, about 0.07 a job. Depot CI has
+  no Windows sandboxes. November to the 20th, in runner minutes: Probiz 2,571 (about 15 a
+  month), Stack-Atlas 3,519 and release-maintenance 2,030, the last two retired on 20
+  November; the "about 42" below is all three.
 - **Recommendation: stay on Depot.** Without the Windows jobs the saving is 13 to 29 a month
   (about 0 to 15 if GitHub's charge returns), against moving every repository's CI and the
   standard. Cheaper on Depot first: retiring the Windows jobs (about 42 of November's 90)
