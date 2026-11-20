@@ -44,6 +44,7 @@ export const VERSION_COMMANDS = Object.freeze({
   "trivy/cli": { argv: ["trivy", "--version"], pattern: /^Version: (\d+\.\d+\.\d+)/m },
   "osv-scanner/cli": { argv: ["osv-scanner", "--version"], pattern: /^osv-scanner version: (\d+\.\d+\.\d+)/m },
   "lightcraft/cli": { argv: ["{share}/lightcraft/bin/lightcraft-cli", "--version"], pattern: /^lightcraft-cli (\d+\.\d+\.\d+)/m },
+  "photocraft/cli": { argv: ["{share}/photocraft/bin/photocraft-cli", "--version"], pattern: /^photocraft-cli (\d+\.\d+\.\d+)/m },
   "boat/cli": { argv: ["{share}/boat/boat", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
   "cliproxyapi/cli": { argv: ["{share}/cliproxyapi/bin/cli-proxy-api", "-h"], pattern: /^CLIProxyAPI Version: (\d+\.\d+\.\d+),/m },
   "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
@@ -53,6 +54,7 @@ export const VERSION_COMMANDS = Object.freeze({
   "uv/cli": { argv: ["uv", "--version"], pattern: /^uv (\d+\.\d+\.\d+)/m },
   "rustup/cli": { argv: ["rustup", "--version"], pattern: /^rustup (\d+\.\d+\.\d+)/m },
   "ast-grep/cli": { argv: ["ast-grep", "--version"], pattern: /^ast-grep (\d+\.\d+\.\d+)/m },
+  "yt-dlp/cli": { argv: ["yt-dlp", "--version"], pattern: /^(\d{4}\.\d{2}\.\d{2})\s*$/m },
 });
 
 // The only commands the daily update check runs to prove a service answers,

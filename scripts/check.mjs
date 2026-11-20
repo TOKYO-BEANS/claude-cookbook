@@ -118,7 +118,7 @@ const OPTIONAL = ["dates"];
 // names kinds and constants only: never a command line or a pattern.
 const INSTALLED_FIELDS = Object.freeze({
   plugin: ["id"], pinned: ["folder", "package"], command: [], skill: ["folder"],
-  project: ["project", "package"], hosted: ["server"], none: [],
+  project: ["project", "package", "path"], hosted: ["server"], none: [],
 });
 const INSTALLED_REQUIRED = Object.freeze({
   plugin: ["id"], pinned: ["folder", "package"], skill: ["folder"], project: ["project", "package"],
@@ -136,6 +136,7 @@ const FOLDER = /^[a-zA-Z0-9._-]{1,80}$/;
 const PLUGIN_ID = /^[a-zA-Z0-9._-]{1,80}@[a-zA-Z0-9._-]{1,80}$/;
 const SERVER = /^[a-zA-Z0-9_.-]{1,80}$/;
 const SUBPATH = /^(?!.*\.\.)[A-Za-z0-9._\/-]{1,200}$/;
+const PROJECT_PATH = /^(?!.*\.\.)[A-Za-z0-9._-]{1,80}(?:\/[A-Za-z0-9._-]{1,80}){0,5}$/;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const NPM = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -166,6 +167,7 @@ function installedErrors(inst, at) {
   if ("package" in inst && !NPM.test(String(inst.package))) errors.push(`${at}: installed package`);
   if ("project" in inst && !(typeof inst.project === "string" && PROJECT_KEY.test(inst.project))) errors.push(`${at}: installed project must be a key (lower-case letters, digits, hyphens), not a repository`);
   if ("server" in inst && !SERVER.test(String(inst.server))) errors.push(`${at}: installed server`);
+  if ("path" in inst && (typeof inst.path !== "string" || !PROJECT_PATH.test(inst.path))) errors.push(`${at}: installed path must be a plain relative folder`);
   return errors;
 }
 
