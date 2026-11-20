@@ -23,7 +23,7 @@
   `mise` (`mise use -g <tool>@<version>`, never `mise upgrade`), a Python tool through `uv tool` with
   `--exclude-newer`, Rust through `rustup`, an npm CLI as a pinned copy from a vetted
   lockfile, never `npm install -g`. The 24-hour rule picks the version, never the day: install at once
-  the newest release that is over 24 hours old (the one before a release from today). An apt
+  the newest release that is over 24 hours old, by publish time, not by calendar day. An apt
   package needs the owner's password. Standing exception (owner, 20 November 2026): Ubuntu's
   own updates, snap apps, the apt apps from the added sources and the apps that update
   themselves (T3 Code, Claude Code) update with no age rule; npm, uv, mise and GitHub releases take the newest one over 24 hours old.

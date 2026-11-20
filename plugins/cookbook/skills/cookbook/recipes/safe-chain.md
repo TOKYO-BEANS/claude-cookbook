@@ -20,7 +20,7 @@ setup: [security.md](security.md).
   that Aikido has confirmed as a malware-free patch for an urgent CVE: an exact name and version
   from Aikido's safe-patches list, for npm and pip. If that list cannot be loaded, the full hold
   applies.
-- A lock that pins a release younger than the hold fails the install: pin the release before it.
+- A lock that pins a release younger than the hold fails the install: pin the newest release over 24 hours old.
   Wait for it to age only when no older release does the job (a fix only that one has).
 - Safe Chain checks an install only when the command resolves to its wrapper on `PATH`.
   Not checked, in a step or a script: one inside `npm run`, `npm test` or `python`, or by a
