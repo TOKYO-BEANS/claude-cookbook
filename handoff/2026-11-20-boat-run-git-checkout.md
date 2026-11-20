@@ -23,6 +23,12 @@ upload) still holds.
 741 tests, 731 passed, 0 failed, 10 skipped (the new test passed); Stack-Atlas `3008589`
 782 tests, 780 passed, 0 failed, 2 skipped, the git test among the passes.
 
+**Merge.** #185 merged as `2d6c3fc` through `merge-when-green.sh` (AI review: 0 high, 0
+medium, 2 low; Graphify Formal Verification neutral, set aside); release check `verified`.
+The two lows are fixed in the follow-up: an empty upload gets a HEAD (`--allow-empty`), and a
+git step that fails exits 75 with `BOAT-RUN: not started: ...`, the command never run. On
+boat after that fix: the Cookbook 742 tests, 0 failed; Stack-Atlas 782, 0 failed.
+
 **Outstanding.** None.
 
 **Dead ends.** The first boat run failed two tests: the old argv test, and the page-size
@@ -30,4 +36,4 @@ test, because a sentence added to `recipes/boat.md` left it no room for that tes
 link. Fixed by updating the argv test and leaving `boat.md` as it was.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-20-boat-git-checkout/`:
-`boat-cookbook-suite.log`, `boat-cookbook-suite-after-main.log` (the same counts after merging #174), `boat-stack-atlas-suite.log`.
+`boat-cookbook-suite.log`, `boat-cookbook-suite-after-main.log` (the same counts after merging #174), `boat-stack-atlas-suite.log`, the two `*-lows.log` runs and `release-cookbook-185-merge.log`.

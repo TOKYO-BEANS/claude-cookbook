@@ -180,6 +180,36 @@ test("a pushed copy is a git checkout before the command runs, and the command's
   }
 });
 
+test("an empty upload still gets a HEAD, and a git step that fails is exit 75 with the command never run", { skip: process.platform === "win32" && "the sandbox's sh is Linux's" }, () => {
+  const root = mkdtempSync(join(tmpdir(), "boat-run-test-"));
+  try {
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+    const wrapped = (command) => {
+      const argv = boatArgv(args("--timeout", "60", "--push", ".", "--", ...command), "/tmp/s/copy");
+      return argv.slice(argv.indexOf("--") + 2); // after "--" and "sh"
+    };
+    // A folder with no file: the commit is empty, the command runs and HEAD exists.
+    const empty = join(root, "empty");
+    mkdirSync(empty);
+    const ran = spawnSync("sh", wrapped(["git", "rev-parse", "HEAD"]), { cwd: empty, encoding: "utf8", env });
+    assert.equal(ran.status, 0, ran.stderr);
+    assert.match(ran.stdout.trim(), /^[0-9a-f]{40}$/);
+    // A git that fails: the command never runs and the exit is NOT_STARTED, with the reason.
+    const bin = join(root, "bin");
+    mkdirSync(bin);
+    writeFileSync(join(bin, "git"), "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    const copy = join(root, "copy");
+    mkdirSync(copy);
+    const marker = join(root, "ran");
+    const r = spawnSync("sh", wrapped(["node", "-e", `require("node:fs").writeFileSync(${JSON.stringify(marker)}, "")`]), { cwd: copy, encoding: "utf8", env: { ...env, PATH: `${bin}:${process.env.PATH}` } });
+    assert.equal(r.status, NOT_STARTED);
+    assert.match(r.stderr, /BOAT-RUN: not started: the upload could not be made a git checkout/);
+    assert.ok(!existsSync(marker), "the command did not run");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 // Git's settings for one call, as a machine's own configuration would give them: the
 // environment form, which every git that `stage` starts reads.
 function withGitConfig(pairs, run) {
