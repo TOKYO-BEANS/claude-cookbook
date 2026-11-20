@@ -17,10 +17,9 @@ address). Mail-link sign-ins stay on `in.nofix.dev` ([sign-ins](sign-ins-mail-an
   test to an own address, needs no ask.
 - **The parts:** Bridge 3.27.2 (apt package `protonmail-bridge`) runs as the user service
   `proton-bridge` (`scripts/proton-bridge.service`), IMAP on 127.0.0.1:1143 and SMTP on
-  127.0.0.1:1025, STARTTLS. The script trusts only Bridge's own certificate, which names
-  127.0.0.1 (`~/.config/proton-mail/cert.pem`, from the CLI's `cert export`; the exported
-  `key.pem` is shredded) and reads the account address from
-  `~/.config/proton-mail/config.json` (`{"user": "..."}`, not secret). The Bridge password is
+  127.0.0.1:1025, STARTTLS. The script trusts only Bridge's certificate
+  (`~/.config/proton-mail/cert.pem`, from `cert export`; its `key.pem` shredded) and reads the
+  address from `~/.config/proton-mail/config.json` (`{"user": "..."}`). The Bridge password is
   the key `proton-bridge` (vault note `key/proton-bridge`, [keys](keys.md)). Copies of the
   script live in `~/.local/bin`; after a change, merge, copy, then prove it with `list`.
 - **Bridge's sign-in is the owner's step:** the window (`protonmail-bridge`) once, with the
@@ -30,16 +29,16 @@ address). Mail-link sign-ins stay on `in.nofix.dev` ([sign-ins](sign-ins-mail-an
 - **Updates:** automatic updates are off in Bridge. A new release gets the full vetting
   ([connecting](connecting.md)): the `.deb` from the GitHub release, its signature (key ID
   `E6234B07`, checked against Proton's page), the three scanners, a sandbox run, then the
-  owner's `sudo` password through `request_secret`. 3.27.2 carries known findings (Trivy 58
-  high, mostly its Go 1.26.1 standard library); the owner accepted those on 20 November 2026,
-  and a newer build's own findings go to the owner again. Evidence:
-  `~/.local/share/vetting/proton-bridge-3.27.2`.
+  owner's `sudo` password through `request_secret`. The owner accepted 3.27.2's known
+  findings (Trivy 58 high) on 20 November 2026; a newer build's go to the owner again.
 - **DNS for `nofix.dev`** (Cloudflare, key `cloudflare-wrangler`): Proton's verification TXT,
   MX `mail.protonmail.ch` 10 and `mailsec.protonmail.ch` 20, SPF `v=spf1
   include:_spf.protonmail.ch include:_spf.mx.cloudflare.net ~all` (Email Routing's include
-  kept), the three DKIM CNAMEs. Email Routing keeps `in.nofix.dev`
-  (MX on the subdomain); its zone status "misconfigured" for the apex is expected. DMARC
+  kept), the three DKIM CNAMEs. Email Routing keeps `in.nofix.dev`; its "misconfigured" for
+  the apex is expected. DMARC
   `p=reject` stays: Proton signs with DKIM.
-- **Not used:** Himalaya (a mail CLI) brought 15 known advisories (rustls among them), and a
-  community MCP server adds tools to every session; a script on the standard library has
-  neither.
+- **A folder per address** (owner's choice, 20 November 2026): a Proton filter (Sieve,
+  recipient in To, Cc or Bcc) files each address's mail, sent copies too, into
+  `Folders/<address>`; the Inbox stays empty. Claude's own mail: `list --folder
+  "Folders/claude@nofix.dev"`. A new address gets a folder and a filter like the others.
+- **Not used:** Himalaya (15 advisories) and a community MCP server (tools in every session).
