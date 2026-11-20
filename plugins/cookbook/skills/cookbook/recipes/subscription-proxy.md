@@ -31,8 +31,8 @@ Browne's published setup (owner's choice; no Tailscale: the iPhone's T3 Connect 
   its own sign-in. It refuses `login` and `logout`. T3 shows Codex's own model list; a
   model the proxy does not list (`cliproxyapi status`) fails: "unknown provider for model".
 - **The keys, and the two exceptions** (owner, 18 and 20 November 2026; the second is T3's
-  hub, below): the proxy reads its client key only from `config.yaml` and keeps sign-ins as JSON files, so both may be plain files in the
-  private folder (0700) and nowhere else. Each start makes a new client key, saved in the key
+  hub, below): the proxy reads its client key only from `config.yaml` and keeps sign-ins as
+  JSON files, so both may be plain files in the private folder (0700) and nowhere else. Each start makes a new client key, saved in the key
   store as `cliproxyapi-client`; `config.yaml` is deleted when the proxy stops. A restart makes
   open pooled threads (Claude or Codex) fail with 401 until their session starts again.
 - **T3's pooled limits** (Usage providers, hub `cliproxy-127.0.0.1-8317`): set up 20 November
