@@ -1,0 +1,24 @@
+# Proton Mail Bridge without its window, always on while the owner is signed in to the desktop
+# (Cookbook recipes/proton-mail.md). Owner's yes of 20 November 2026. Installed as
+# ~/.config/systemd/user/proton-bridge.service. IMAP on 127.0.0.1:1143 and SMTP on
+# 127.0.0.1:1025, both STARTTLS with Bridge's own certificate.
+#
+# Bridge keeps its sign-in in the key store (GNOME Keyring), which is unlocked only while the
+# owner is signed in, so it runs with the graphical session, not with linger. The window
+# (bridge-gui) and this service cannot run at once: quit the window before starting it.
+[Unit]
+Description=Proton Mail Bridge on 127.0.0.1 (Cookbook proton-mail)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/protonmail-bridge --noninteractive
+Restart=always
+RestartSec=10
+UMask=0077
+KillMode=mixed
+TimeoutStopSec=20
+
+[Install]
+WantedBy=graphical-session.target

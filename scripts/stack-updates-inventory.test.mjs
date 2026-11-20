@@ -108,6 +108,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "boat/cli": ["boat 1.0.97\n", "1.0.97"],
     "cliproxyapi/cli": ["CLIProxyAPI Version: 8.0.76, Commit: 7df56074, BuiltAt: 2026-11-17T02:10:49Z\nUsage of cli-proxy-api.exe\n", "8.0.76"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
+    "proton-mail-bridge/app": ["protonmail-bridge\t3.27.2-1\n", "3.27.2"],
     "google-workspace-cli/cli": ["gws 0.22.5\nThis is not an officially supported Google product.\n", "0.22.5"],
     "mise/cli": ["2026.11.10 linux-x64 (2026-11-18)\n", "2026.11.10"],
     "uv/cli": ["uv 0.13.9 (x86_64-unknown-linux-gnu)\n", "0.13.9"],
