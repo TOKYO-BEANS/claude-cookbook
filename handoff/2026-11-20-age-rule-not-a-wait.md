@@ -25,3 +25,7 @@ sentence that tells a chat to wait for a release to age.
 **Dead ends.** None.
 
 **Evidence.** The diff of this pull request; the boat test run in its description.
+
+**Follow-up (the review's two lows on #207).** "The one before a release from today" could
+still be under 24 hours old (a release from yesterday evening, or two quick patches). Both pages
+and the global `CLAUDE.md` now say "the newest release over 24 hours old, by publish time".
