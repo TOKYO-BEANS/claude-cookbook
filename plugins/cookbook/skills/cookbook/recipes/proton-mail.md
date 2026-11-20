@@ -35,7 +35,8 @@ address). Mail-link sign-ins stay on `in.nofix.dev` ([sign-ins](sign-ins-mail-an
   `~/.local/share/vetting/proton-bridge-3.27.2`.
 - **DNS for `nofix.dev`** (Cloudflare, key `cloudflare-wrangler`): Proton's verification TXT,
   MX `mail.protonmail.ch` 10 and `mailsec.protonmail.ch` 20, SPF `v=spf1
-  include:_spf.protonmail.ch ~all`, the three DKIM CNAMEs. Email Routing keeps `in.nofix.dev`
+  include:_spf.protonmail.ch include:_spf.mx.cloudflare.net ~all` (Email Routing's include
+  kept), the three DKIM CNAMEs. Email Routing keeps `in.nofix.dev`
   (MX on the subdomain); its zone status "misconfigured" for the apex is expected. DMARC
   `p=reject` stays: Proton signs with DKIM.
 - **Not used:** Himalaya (a mail CLI) brought 15 known advisories (rustls among them), and a
