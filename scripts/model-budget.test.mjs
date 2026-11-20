@@ -1096,11 +1096,14 @@ test("readUsage: T3 Code's file may be writable by its group only when that grou
   writeFileSync(file, JSON.stringify(t3()));
   const uid = process.getuid();
   const { gid } = statSync(file);
-  const accounts = (passwd, group) => {
+  const LOCAL = "passwd: files systemd\ngroup: files systemd\n";
+  const accounts = (passwd, group, { nsswitch = LOCAL, sssRunning = false } = {}) => {
     const dir = mkdtempSync(join(home, "etc-"));
     if (passwd !== null) writeFileSync(join(dir, "passwd"), passwd);
     if (group !== null) writeFileSync(join(dir, "group"), group);
-    return { passwd: join(dir, "passwd"), group: join(dir, "group") };
+    if (nsswitch !== null) writeFileSync(join(dir, "nsswitch.conf"), nsswitch);
+    if (sssRunning) writeFileSync(join(dir, "nss.sock"), "");
+    return { passwd: join(dir, "passwd"), group: join(dir, "group"), nsswitch: join(dir, "nsswitch.conf"), sssSocket: join(dir, "nss.sock") };
   };
   const source = async (mode, accountFiles) => {
     chmodSync(file, mode);
@@ -1124,4 +1127,15 @@ test("readUsage: T3 Code's file may be writable by its group only when that grou
   assert.equal(await source(0o666, alone), undefined, "writable by everyone, whatever the group");
   assert.equal(await source(0o646, alone), undefined, "writable by everyone and not by the group");
   assert.equal(await source(0o644, accounts(null, null)), "t3", "not writable by the group: nothing is asked");
+
+  // The files are the whole answer only when no directory service answers lookups.
+  const ubuntu = "passwd:         files systemd sss\ngroup:          files systemd sss\nshadow: files\n";
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: ubuntu })), "t3", "sss listed while sssd is off (Ubuntu's default)");
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: ubuntu, sssRunning: true })), undefined, "sssd answering lookups");
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: "passwd: files ldap\ngroup: files ldap\n" })), undefined, "an LDAP directory");
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: "passwd: files\ngroup: files [NOTFOUND=return] winbind\n" })), undefined, "winbind behind an action");
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: "passwd: files # ldap\ngroup: files\n" })), "t3", "a comment names nothing");
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: "passwd: files\n" })), undefined, "no group line");
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: "passwd: systemd\ngroup: systemd\n" })), undefined, "the files not asked at all");
+  assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: null })), undefined, "no nsswitch.conf to read");
 });
