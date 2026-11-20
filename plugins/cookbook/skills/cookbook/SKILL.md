@@ -31,7 +31,7 @@ fallback and say that you did.
 | A second opinion (a consult) on our own work from a model that is not Claude: a design, a risky change, a cross-check | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
-| A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a locked-down `claude -p` on the plan token with a typed answer, never the API ([scripted-runs](recipes/scripted-runs.md)) | [judgement](recipes/judgement.md) |
+| A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a locked-down `claude -p` on the plan token, with a typed answer | [judgement](recipes/judgement.md) |
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
 | Sharpen, cut out or straighten a photo | none: say so | — | [photos](recipes/photos.md) |
 | Photo masks by a word, colour by region | **LightCraft**, own photos | none: say so | [photos](recipes/photos.md) |
