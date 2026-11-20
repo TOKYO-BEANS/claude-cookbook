@@ -8,7 +8,7 @@
 // script decides, not a model. It only reads. It never prints or stores the sign-in, calls
 // the one address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -298,11 +298,46 @@ export function parseT3(json, now) {
 // Whether a group is this user's alone: the system's own files list it once, with no member but
 // the user, and name no other user who has it as their own group. Ubuntu gives every user such
 // a group and a umask of 002, so T3 Code's file is written 664 there: writable by the group,
-// and still by no one else. Anything that cannot be read as that (a group from a network
-// directory, a file that is missing or odd) is "not the user's alone".
-export const ACCOUNT_FILES = Object.freeze({ passwd: "/etc/passwd", group: "/etc/group" });
+// and still by no one else. Anything that cannot be read as that (a file that is missing or
+// odd) is "not the user's alone". The files are the whole answer only when no directory
+// service answers user and group lookups: nsswitch.conf may name `files` and `systemd`, and
+// `sss` only while sssd's lookup socket is absent (Ubuntu lists `sss` with sssd installed and
+// off). Any other source (ldap, nis, winbind, sssd running) means "not the user's alone".
+// `systemd` is local too, unless its user database can add members: a record or `.membership`
+// file in a userdb folder, or systemd-homed answering (its socket present).
+export const ACCOUNT_FILES = Object.freeze({
+  passwd: "/etc/passwd", group: "/etc/group", nsswitch: "/etc/nsswitch.conf", sssSocket: "/var/lib/sss/pipes/nss",
+  userdbDirs: ["/etc/userdb", "/run/userdb", "/usr/lib/userdb"], homedSocket: "/run/systemd/userdb/io.systemd.Home",
+});
+const userdbAdds = (files) =>
+  lstatSync(files.homedSocket, { throwIfNoEntry: false }) !== undefined ||
+  files.userdbDirs.some((d) => {
+    try {
+      return readdirSync(d).length > 0;
+    } catch (e) {
+      return e?.code !== "ENOENT"; // a folder that cannot be read is not "empty"
+    }
+  });
+const LOCAL_SOURCES = new Set(["files", "systemd"]);
+const filesAnswer = (files) => {
+  const lines = readFileSync(files.nsswitch, "utf8").split("\n").map((l) => l.replace(/#.*/, "").trim());
+  for (const db of ["passwd", "group"]) {
+    const found = lines.filter((l) => l.startsWith(`${db}:`));
+    if (found.length !== 1) return false;
+    const sources = found[0].slice(db.length + 1).replace(/\[[^\]]*\]/g, " ").split(/\s+/).filter(Boolean);
+    if (!sources.includes("files")) return false;
+    for (const src of sources) {
+      if (src === "systemd" && userdbAdds(files)) return false;
+      if (LOCAL_SOURCES.has(src)) continue;
+      if (src === "sss" && lstatSync(files.sssSocket, { throwIfNoEntry: false }) === undefined) continue;
+      return false;
+    }
+  }
+  return true;
+};
 const soleGroup = (gid, uid, files) => {
   try {
+    if (!filesAnswer(files)) return false;
     const rows = (file) => readFileSync(file, "utf8").split("\n").filter((l) => l && !l.startsWith("#")).map((l) => l.split(":"));
     const users = rows(files.passwd);
     const mine = users.filter((u) => u[2] === String(uid));

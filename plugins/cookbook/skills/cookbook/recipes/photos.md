@@ -8,7 +8,7 @@
   person, face and named window right, colour by region clean.
 - **Own photos only**, never a file from outside: two bundled crates (zip 7.4.0,
   rustls-webpki 0.102.8) have advisories the owner accepted on that condition (18 November
-  2026). A new high finding at an update goes to the owner.
+  2026).
 - One mask takes 84 to 160 s and 3.3 to 4.3 GB on this laptop's CPU, the model loaded each
   run (several masks in one process: not measured yet). A word that finds nothing is an error
   and the export is the unchanged photo: read the log line, never the picture alone.
@@ -21,10 +21,10 @@
   stand in a generative tool that redraws the photo. Straightening is not tested against the
   bar: LightCraft's `crop.autoStraighten` changed 5 of 10 photos on 18 November, one crop over
   10 %; check every crop by the rule below.
-- Adobe was retired on 17 November 2026; PhotoCraft 0.23.1 failed the masks test
-  ([plan-and-build options](../options/plan-and-build.md)). Wherever PhotoCraft is installed,
-  it never opens a PDF or a file from outside, only our own JPEG, PNG or TIFF: its PDF reader
-  has a high advisory the owner accepted on that condition (17 November 2026).
+- PhotoCraft 0.23.1 failed the masks test ([options](../options/plan-and-build.md)); the
+  owner edits with it (`~/.local/share/photocraft`, 20 November 2026). Its update check stays
+  off: an update is vetted like LightCraft's. Only our own JPEG, PNG or TIFF, never a PDF or a
+  file from outside (an advisory accepted on that condition, 17 November 2026).
 - Photos of people are personal data. An upload never happens on Claude's own judgment: before
   any photo goes to an outside service, ask the owner in the current chat and get a clear yes that
   names the files, the account they go to, the operation and what it costs. A yes from an
