@@ -14,7 +14,7 @@ copy's program. The rule and the scanners: [connecting.md](connecting.md).
   the link. `npm uninstall -g <package>` deletes the command of that name, a launcher too:
   write it again afterwards.
 - **On this PC since 19 November 2026** (npm globals without a vetting before that):
-  - Codex CLI, `@openai/codex` 0.170.0, folder `codex-cli`, command `codex`: what T3 Code
+  - Codex CLI, `@openai/codex` 0.171.0 (20 November 2026), folder `codex-cli`, command `codex`: what T3 Code
     starts. There is no Codex desktop app on Linux.
   - TypeScript server: `typescript-language-server` 6.1.0 and `typescript` 6.0.3 in the
     folder `typescript-language-server`. The server starts the `tsserver` beside it;

@@ -3,7 +3,7 @@
 - **On this PC:** the `browse` command is a `#!/bin/sh` launcher that hands the key-store key
   `browserbase` to that one process (`with-key.mjs`) and turns the CLI's usage telemetry off
   (`BROWSERBASE_TELEMETRY_DISABLED=1`; it would send command names and exit codes to PostHog).
-  The CLI is a pinned copy, `browse@0.11.4`, in `~/.local/share/browserbase-cli`, installed from
+  The CLI is a pinned copy, `browse@0.12.0`, in `~/.local/share/browserbase-cli`, installed from
   a lockfile with `npm ci --ignore-scripts`: never `npm install -g browse` or
   `browse skills install` from a session. The lockfile overrides `zod` to 4.6.7, because the
   version `browse` resolves to has a high-severity advisory (GHSA-mrhx-c7xc-m3w5, fixed in 4.6.6).
@@ -26,8 +26,9 @@
   38.8 MB and flagged 11 strings: documentation examples, test fixtures, public-key pins and the
   CLI's public PostHog project token, none a credential. Trivy 0.76.2 found no configuration
   files to scan, which is no result, not a clean one.
-- Updated to 0.11.4 on 14 November 2026: OSV-Scanner read 186 packages and found one medium
-  advisory, none high or critical; Gitleaks flagged 11 strings of the same kinds as before; Trivy
-  found one medium advisory and no secret. The `zod` override stays.
+- Updated to 0.12.0 on 20 November 2026, on the owner's yes (a 0.x step counts as major):
+  OSV-Scanner read 186 packages, one medium advisory (`minimatch` GHSA-g3hv-75wg-m249, as in
+  0.11.4), none high or critical; Gitleaks flagged the same 11 strings as 0.11.4; Trivy one
+  medium, no secret. The sandbox start asked only `registry.npmjs.org`. The `zod` override stays.
 - Tested on 12 November 2026: one cloud session (open, title, snapshot, stop) billed 1 browser
   minute; one fetch and one search answered.

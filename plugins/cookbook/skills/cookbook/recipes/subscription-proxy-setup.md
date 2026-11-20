@@ -32,11 +32,11 @@ always on since 20 November.
 - **An update** is a full vetting ([connecting](connecting.md)); then `systemctl --user stop
   cliproxyapi`, unpack the new archive into `bin`, `systemctl --user start cliproxyapi`,
   `cliproxyapi status`. The console the same way when the proxy's notes ask for it.
-- **Open findings**, accepted by the owner for 8.0.76 (19 November 2026): six dependency
-  advisories, two high (`klauspost/compress` GHSA-259r-337f-4rfw, `golang.org/x/net`
-  CVE-2026-78661). No release up to 8.0.79 fixes them; one that does is the time to update.
-- **On this PC:** 8.0.76 and the console v1.28.3; `PROVENANCE.txt` beside `bin`; vetting record
-  `~/.local/share/vetting/cliproxyapi-8.0.76/VETTING.md`. Proven 20 November 2026 as a service:
+- **Open findings**, accepted by the owner for 8.0.76 (19 November 2026) and 8.0.80 (20
+  November): six dependency advisories, two high (`klauspost/compress` GHSA-259r-337f-4rfw,
+  `golang.org/x/net` CVE-2026-78661). No release up to 8.0.80 fixes them.
+- **On this PC:** 8.0.80 (20 November 2026) and the console v1.28.3; `PROVENANCE.txt` beside
+  `bin`; vetting record `~/.local/share/vetting/cliproxyapi-8.0.80/VETTING.md`. Proven 20 November 2026 as a service:
   127.0.0.1:8317 only; 401 without or with a wrong key, 200 with it; the routing read back from
   the management API; a manual start refused, and the service refused beside a manual start with its config kept;
   a new key per start; `config.yaml` gone after a stop and after the launcher was killed; T3 listed "Claude (pool)" with its models.
