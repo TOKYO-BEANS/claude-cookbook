@@ -12,9 +12,9 @@
 // - One comment per pull request, found again by MARKER and updated in place.
 //   The same text goes to the job summary.
 // - A failed call posts "review unavailable: <reason>", never "no findings".
-// - Usage (tokens and request id) is logged for every call.
-// - With the CLAUDE_CODE_OAUTH_TOKEN_REVIEW secret the request goes to one
-//   `claude -p` on the Claude plan, with no tools, instead of the API (below).
+// - Usage (tokens and stop reason) is logged for every run.
+// - The request goes to one `claude -p` on the Claude plan, with no tools
+//   (below); the job needs the secret CLAUDE_CODE_OAUTH_TOKEN_REVIEW.
 // - The process always exits 0: the review is advisory.
 import { execFileSync, spawn } from "node:child_process";
 import { appendFileSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -30,10 +30,6 @@ export const MODEL = "claude-opus-5-5";
 export const EFFORT = "high";
 export const INPUT_BUDGET_TOKENS = 120_000;
 export const MARKER = "<!-- stack-atlas-ai-review -->";
-// Thinking counts toward max_tokens, so at effort "high" the answer needs room:
-// 64,000 is the streaming default the claude-api skill recommends. Above about
-// 21,000 the SDK refuses a non-streaming request, so the call streams.
-export const MAX_OUTPUT_TOKENS = 64_000;
 const RULES_BUDGET_TOKENS = 20_000;
 const COMMENT_LIMIT = 60_000; // GitHub's comment limit is 65,536 characters
 const SEVERITIES = ["high", "medium", "low"];
@@ -241,15 +237,6 @@ export function planInput({ diff = "", files = [], rules = "", pr = {} }) {
 function requestFromPlan(plan) {
   const { data, ask } = render(plan);
   return {
-    model: MODEL,
-    max_tokens: MAX_OUTPUT_TOKENS,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
-    thinking: { type: "adaptive" },
-    output_config: {
-      effort: EFFORT,
-      format: { type: "json_schema", schema: FINDINGS_SCHEMA },
-    },
     system: plan.system,
     messages: [
       {
@@ -267,32 +254,6 @@ export function buildRequest({ diff, files, rules, pr }) {
   return requestFromPlan(planInput({ diff, files, rules, pr }));
 }
 
-function describeError(error, Anthropic) {
-  const detail = String(error?.message ?? error).slice(0, 300);
-  if (Anthropic?.AuthenticationError && error instanceof Anthropic.AuthenticationError)
-    return "authentication failed (401)";
-  if (Anthropic?.PermissionDeniedError && error instanceof Anthropic.PermissionDeniedError)
-    return "permission denied (403)";
-  if (Anthropic?.NotFoundError && error instanceof Anthropic.NotFoundError)
-    return "not found (404)";
-  if (Anthropic?.RateLimitError && error instanceof Anthropic.RateLimitError)
-    return "rate limited or over the spend limit (429)";
-  if (Anthropic?.BadRequestError && error instanceof Anthropic.BadRequestError)
-    return `bad request (400): ${detail}`;
-  if (Anthropic?.InternalServerError && error instanceof Anthropic.InternalServerError)
-    return `Claude API error (${error.status})`;
-  if (
-    Anthropic?.APIConnectionTimeoutError &&
-    error instanceof Anthropic.APIConnectionTimeoutError
-  )
-    return "the Claude API timed out";
-  if (Anthropic?.APIConnectionError && error instanceof Anthropic.APIConnectionError)
-    return "could not reach the Claude API";
-  if (Anthropic?.APIError && error instanceof Anthropic.APIError)
-    return `Claude API error (${error.status ?? "no status"}): ${detail}`;
-  return `unexpected error: ${detail}`;
-}
-
 function validFinding(f) {
   return (
     f &&
@@ -302,30 +263,6 @@ function validFinding(f) {
     typeof f.evidence === "string" &&
     typeof f.fix === "string"
   );
-}
-
-function interpret(response) {
-  if (response.stop_reason === "refusal") {
-    const category = response.stop_details?.category;
-    return {
-      unavailable: `the model declined to review (refusal${category ? `: ${category}` : ""})`,
-    };
-  }
-  if (response.stop_reason === "max_tokens")
-    return { unavailable: "the answer was cut off at max_tokens" };
-  const text = (response.content ?? [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  let parsed;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    return { unavailable: "the answer was not valid JSON" };
-  }
-  if (!Array.isArray(parsed?.findings) || !parsed.findings.every(validFinding))
-    return { unavailable: "the answer did not match the findings schema" };
-  return { findings: parsed.findings };
 }
 
 // The comment's input figure: every input token of the request, cached or not.
@@ -358,13 +295,13 @@ function usageLine({ requestId, model, usage, stopReason }) {
 //
 // Owner, question dialog of 17 November 2026: "Token in Depot CI (Recommended)".
 // With the CLAUDE_CODE_OAUTH_TOKEN_REVIEW secret set (a token from `claude
-// setup-token`, which can only make model requests), the same request goes to
-// one `claude -p` on the Claude plan instead of the Claude API: the same
-// model, effort, rubric, input and findings schema, and no tools, settings,
-// MCP servers, plugins or saved session. Without the secret the API key is
-// used, as before. The binary comes from the locked optional dependency
-// CLAUDE_CODE_PACKAGE (installed by `npm ci --ignore-scripts` on the Linux
-// runner; no install script runs).
+// setup-token`, which can only make model requests), the request goes to
+// one `claude -p` on the Claude plan: the model, effort, rubric, input and
+// findings schema, and no tools, settings, MCP servers, plugins or saved
+// session. Without the secret the review is unavailable for a missing secret,
+// and no fallback review stands in (lib/ai-review.mjs). The binary comes from
+// the locked optional dependency CLAUDE_CODE_PACKAGE (installed by `npm ci
+// --ignore-scripts` on the Linux runner; no install script runs).
 export const CLAUDE_CODE_PACKAGE = "@anthropic-ai/claude-code-linux-x64";
 const PLAN_TIMEOUT_MS = 20 * 60 * 1000;
 
@@ -422,8 +359,8 @@ export function planEnvironment(env, home) {
 // usage, stopReason } or { unavailable } in fixed words: no text of the stream
 // reaches a reason. A run that was not on the plan's token, was offered or
 // called a tool, or was not served by MODEL is refused, never read around.
-// The reasons for the plan's limit and a timeout are the API path's own words
-// for a limit and a timeout, so the merge gate treats them alike.
+// The reasons for the plan's limit, a server error and a timeout are the words
+// the merge gate knows (lib/ai-review.mjs OUTSIDE_REASONS); change them there too.
 export function readPlanStream(text) {
   const events = [];
   for (const line of String(text ?? "").split("\n")) {
@@ -451,8 +388,7 @@ export function readPlanStream(text) {
   const result = events.findLast((e) => e?.type === "result");
   if (!result) return { unavailable: spent ? LIMIT : "the reviewer gave no result" };
   // From here on every answer carries the usage and stop reason, so the usage
-  // line is logged for a refused run too; the four token fields stay apart, as
-  // the API path logs them.
+  // line is logged for a refused run too; the four token fields stay apart.
   const u = result.usage ?? {};
   const usage = {};
   for (const name of ["input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"])
@@ -510,6 +446,8 @@ function runClaude({ args, input, env, cwd }) {
 
 // `binary` (tests only) stands in for CLAUDE_BINARY in the install check.
 async function callPlan({ env, params, log, run = runClaude, binary = CLAUDE_BINARY }) {
+  if (!env.CLAUDE_CODE_OAUTH_TOKEN_REVIEW)
+    return { unavailable: "the CLAUDE_CODE_OAUTH_TOKEN_REVIEW secret is not set" };
   if (!existsSync(binary))
     return { unavailable: "Claude Code is not installed (npm ci next to review.mjs)" };
   const home = mkdtempSync(path.join(os.tmpdir(), "ai-review-plan-"));
@@ -534,57 +472,6 @@ async function callPlan({ env, params, log, run = runClaude, binary = CLAUDE_BIN
   // bills the API credit, so a token is proven by a real call before it is set
   // as the secret (docs/claude-code.md).
   return { findings: read.findings, model: `${MODEL} with the plan token`, usage: read.usage };
-}
-
-async function callModel({ env, Anthropic, params, log }) {
-  if (!Anthropic)
-    return { unavailable: "the Anthropic SDK is not installed (npm ci next to review.mjs)" };
-  const apiKey = env.ANTHROPIC_API_KEY_REVIEW;
-  if (!apiKey)
-    return { unavailable: "the ANTHROPIC_API_KEY_REVIEW secret is not set" };
-  const workspace = env.ANTHROPIC_WORKSPACE_ID_REVIEW;
-  if (!workspace)
-    return { unavailable: "the ANTHROPIC_WORKSPACE_ID_REVIEW variable is not set" };
-  const client = new Anthropic({
-    apiKey,
-    // Pinned, so no ANTHROPIC_BASE_URL in the job's environment can send the key elsewhere.
-    baseURL: "https://api.anthropic.com",
-    defaultHeaders: { "anthropic-workspace-id": workspace },
-    // At most two attempts of up to 12 minutes each, inside the job's 30 minutes.
-    maxRetries: 1,
-    timeout: 12 * 60 * 1000,
-  });
-  let response;
-  let stream;
-  try {
-    // Streaming, because MAX_OUTPUT_TOKENS is above what the SDK allows for a
-    // non-streaming request; finalMessage() collects the whole answer.
-    stream = client.beta.messages.stream(params);
-    response = await stream.finalMessage();
-  } catch (error) {
-    log(
-      usageLine({
-        requestId: error?.requestID ?? stream?.request_id,
-        model: params.model,
-      }),
-    );
-    return { unavailable: describeError(error, Anthropic) };
-  }
-  const requestId = stream.request_id ?? response._request_id;
-  log(
-    usageLine({
-      requestId,
-      model: response.model,
-      usage: response.usage,
-      stopReason: response.stop_reason,
-    }),
-  );
-  return {
-    ...interpret(response),
-    model: response.model,
-    usage: response.usage,
-    requestId,
-  };
 }
 
 // Comment bounds: the model's output is untrusted, so the comment is capped
@@ -704,7 +591,6 @@ export function findingsLogLine(findings) {
 export async function review({
   env,
   input,
-  sdk,
   github,
   log = console.log,
   writeSummary = () => {},
@@ -727,15 +613,7 @@ export async function review({
       ...data,
       pr: { title: env.PR_TITLE ?? "", body: env.PR_BODY ?? "" },
     });
-    // The plan's token when the repository has the secret, the API key otherwise.
-    result = env.CLAUDE_CODE_OAUTH_TOKEN_REVIEW
-      ? await callPlan({ env, params: requestFromPlan(plan), log, ...(claude ?? {}) })
-      : await callModel({
-          env,
-          Anthropic: sdk,
-          params: requestFromPlan(plan),
-          log,
-        });
+    result = await callPlan({ env, params: requestFromPlan(plan), log, ...(claude ?? {}) });
   } catch (error) {
     result = {
       unavailable: `could not prepare the review: ${String(error?.message ?? error).slice(0, 300)}`,
@@ -786,7 +664,7 @@ export async function review({
 
 // ---- Running in CI -------------------------------------------------------
 
-// Credential-shaped paths: their content and their diff hunks never reach the API.
+// Credential-shaped paths: their content and their diff hunks never reach the model.
 // Case-insensitive, in any directory.
 const SENSITIVE_BASENAME = [
   /^\.env/i,
@@ -939,22 +817,14 @@ export function githubClient(env) {
   };
 }
 
-// `deps` replaces the git, SDK, GitHub and output wiring in tests.
+// `deps` replaces the git, `claude -p`, GitHub and output wiring in tests.
 export async function main(env = process.env, deps = {}) {
   const log = deps.log ?? ((line) => console.log(line));
   try {
-    let Anthropic = deps.sdk;
-    if (!("sdk" in deps)) {
-      try {
-        ({ default: Anthropic } = await import("@anthropic-ai/sdk"));
-      } catch {
-        Anthropic = undefined;
-      }
-    }
     await review({
       env,
       input: deps.input ?? (() => gitInput(env)),
-      sdk: Anthropic,
+      claude: deps.claude,
       github: deps.github ?? githubClient(env),
       log,
       writeSummary:
