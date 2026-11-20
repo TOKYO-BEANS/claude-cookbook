@@ -36,6 +36,15 @@ test("refused: login and logout belong to the plain codex; login status only rea
   for (const args of [[], ["login", "status"], ["exec", "login"], ["app-server"], ["--version"]]) assert.equal(refused(args), false, args.join(" "));
 });
 
+test("refused: global options and their values before the subcommand are skipped", () => {
+  for (const args of [["-c", "foo=1", "logout"], ["--profile", "x", "login"], ["-m", "gpt", "--oss", "logout"], ["--config=foo=1", "login", "--device-auth"], ["-C", "/tmp", "-s", "read-only", "logout"]]) {
+    assert.equal(refused(args), true, args.join(" "));
+  }
+  for (const args of [["-c", "foo=1", "login", "status"], ["-m", "logout", "exec", "hi"], ["--", "logout"], ["-c", "logout"]]) {
+    assert.equal(refused(args), false, args.join(" "));
+  }
+});
+
 function fakeHome(t, secretTool) {
   const home = mkdtempSync(join(tmpdir(), "codex-pool-"));
   t.after(() => rmSync(home, { recursive: true, force: true }));

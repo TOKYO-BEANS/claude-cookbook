@@ -17,6 +17,8 @@ nothing used it. Theo Browne's setup puts the client key in `~/.codex/config.tom
 - T3: provider instance `codexPool` ("Codex (pool)", driver `codex`, `setupMode: existing`,
   binary `~/.local/bin/codex-pool`) in `~/.t3/userdata/settings.json`. No key in T3.
 - Tests `scripts/codex-pool.test.mjs` (7); recipe, setup page, map row, catalog, model-budget page.
+- Follow-up to the AI review's low on #193: the `login`/`logout` guard finds the subcommand
+  after Codex's global options and their values (`codex-pool -c x=1 logout` is refused).
 
 **Verification.** `codex-pool exec` answered through the proxy (POST `/v1/responses` 200,
 session affinity miss then hit); websockets on and off both work; a delegated T3 turn on

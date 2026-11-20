@@ -27,11 +27,26 @@ export const OVERRIDES = [
 // Variables that would send Codex elsewhere or carry another key.
 const DROPPED = ["OPENAI_API_KEY", "CODEX_API_KEY", "OPENAI_BASE_URL", KEY_VARIABLE];
 
+// Codex's global options that take a value (`codex --help`, 0.170.0); `--opt=value` is one word.
+const VALUE_OPTIONS = new Set(["-c", "--config", "--enable", "--disable", "--remote", "--remote-auth-token-env", "-i", "--image", "-m", "--model", "--local-provider", "-p", "--profile", "-s", "--sandbox", "-C", "--cd", "--add-dir", "-a", "--ask-for-approval"]);
+
+// The subcommand: the first word that is neither an option nor an option's value.
+export function subcommand(args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === "--") break; // what follows is the prompt
+    if (!a.startsWith("-")) return { name: a, rest: args.slice(i + 1) };
+    if (VALUE_OPTIONS.has(a)) i++;
+  }
+  return { name: undefined, rest: [] };
+}
+
 // `login` and `logout` act on the owner's own sign-in in the shared home: the plain `codex`
 // does that, never the pooled one. `login status` only reads it.
 export function refused(args) {
-  if (args[0] === "logout") return true;
-  return args[0] === "login" && args[1] !== "status";
+  const { name, rest } = subcommand(args);
+  if (name === "logout") return true;
+  return name === "login" && rest[0] !== "status";
 }
 
 export function codexArgs(args) {
