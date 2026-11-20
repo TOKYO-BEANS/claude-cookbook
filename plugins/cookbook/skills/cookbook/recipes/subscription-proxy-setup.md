@@ -21,10 +21,11 @@ always on since 20 November.
   body to `private/logs` (the newest 10 kept). The journal gets one line per request (status,
   path), no key. **A sign-in listens on every interface** while it waits (54545 Claude, 1455
   Codex).
-- **T3's pooled limits, not set up:** T3 needs the management secret for a hub, and keeps it
-  either as a plain file in its own secret store (`~/.t3/userdata/secrets`) or as a 1Password
-  reference; it has no GNOME Keyring or command source. That secret also reads the sign-in
-  files through the management API. The console shows the same limits.
+- **T3's pooled limits:** T3 keeps a hub's management secret as a plain file in its secret
+  store or as a 1Password reference; no GNOME Keyring or command source. The owner allowed the
+  file (20 November 2026): `secrets/usage-limit-source-<base64url id>.bin` (0600), written from
+  the key store, never shown; `settings.json` holds `"••••••"`. The secret also reads the
+  sign-in files. A new management secret means writing that file again.
 - **Codex:** Theo's `experimental_bearer_token` would put the key in `config.toml`; `env_key`
   does not. Proven 20 November 2026: `codex-pool exec` and a T3 turn on "Codex (pool)" answered
   through the proxy; websockets on and off both work; `auth.json`, `config.toml` unchanged.
