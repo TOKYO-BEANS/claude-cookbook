@@ -16,8 +16,9 @@ address). Mail-link sign-ins stay on `in.nofix.dev` ([sign-ins](sign-ins-mail-an
   test to an own address, needs no ask.
 - **The parts:** Bridge 3.27.2 (apt package `protonmail-bridge`) runs as the user service
   `proton-bridge` (`scripts/proton-bridge.service`), IMAP on 127.0.0.1:1143 and SMTP on
-  127.0.0.1:1025, STARTTLS. The script trusts only Bridge's own certificate
-  (`~/.config/protonmail/bridge-v3/cert.pem`) and reads the account address from
+  127.0.0.1:1025, STARTTLS. The script trusts only Bridge's own certificate, which names
+  127.0.0.1 (`~/.config/proton-mail/cert.pem`, from the CLI's `cert export`; the exported
+  `key.pem` is shredded) and reads the account address from
   `~/.config/proton-mail/config.json` (`{"user": "..."}`, not secret). The Bridge password is
   the key `proton-bridge` (vault note `key/proton-bridge`, [keys](keys.md)). Copies of the
   script live in `~/.local/bin`; after a change, merge, copy, then prove it with `list`.

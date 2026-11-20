@@ -33,7 +33,7 @@ DEFAULTS = {
     "host": "127.0.0.1",
     "imap_port": 1143,
     "smtp_port": 1025,
-    "cert": "~/.config/protonmail/bridge-v3/cert.pem",
+    "cert": "~/.config/proton-mail/cert.pem",
 }
 BODY_MAX = 8000
 
@@ -56,7 +56,7 @@ def load_config(path=None):
     out = {**DEFAULTS, **cfg}
     if not isinstance(out.get("user"), str) or "@" not in out["user"]:
         raise Fail(f"config {path} needs \"user\": the Bridge account address")
-    if out["host"] not in ("127.0.0.1", "localhost", "::1"):
+    if out["host"] != "127.0.0.1":
         raise Fail("host must be this machine: Bridge serves only 127.0.0.1")
     out["cert"] = os.path.expanduser(out["cert"])
     return out
@@ -72,11 +72,8 @@ def password():
 def tls_context(cfg):
     if not os.path.isfile(cfg["cert"]):
         raise Fail(f"Bridge certificate not found at {cfg['cert']}")
-    ctx = ssl.create_default_context(cafile=cfg["cert"])
-    # Only Bridge's own certificate is trusted; the chain check holds, the name check is off
-    # because the connection is to 127.0.0.1.
-    ctx.check_hostname = False
-    return ctx
+    # Only Bridge's own certificate is trusted, with the name check on: it names 127.0.0.1.
+    return ssl.create_default_context(cafile=cfg["cert"])
 
 
 def one_line(value, limit=200):

@@ -67,7 +67,7 @@ function run() {
   try {
     const file = join(dir, "t.py");
     writeFileSync(file, PY);
-    const r = spawnSync("python3", ["-I", file, script], { encoding: "utf8" });
+    const r = spawnSync("python3", ["-I", "-B", file, script], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
     return JSON.parse(r.stdout);
   } finally {
@@ -124,10 +124,10 @@ test("a run without the key says how to start it and exits 2, printing no secret
     const cfg = join(dir, "c.json");
     writeFileSync(cfg, JSON.stringify({ user: "a@b.c", cert: join(dir, "none.pem") }));
     const env = { PATH: process.env.PATH, PROTON_MAIL_CONFIG: cfg };
-    const r = spawnSync("python3", ["-I", script, "send", "--to", "owner@example.com", "--subject", "s", "--body", "b"], { encoding: "utf8", env });
+    const r = spawnSync("python3", ["-I", "-B", script, "send", "--to", "owner@example.com", "--subject", "s", "--body", "b"], { encoding: "utf8", env });
     assert.equal(r.status, 2);
     assert.match(r.stderr, /Bridge certificate not found|PROTON_BRIDGE_PASSWORD/);
-    const d = spawnSync("python3", ["-I", script, "send", "--dry-run", "--to", "owner@example.com", "--subject", "s", "--body", "b"], { encoding: "utf8", env });
+    const d = spawnSync("python3", ["-I", "-B", script, "send", "--dry-run", "--to", "owner@example.com", "--subject", "s", "--body", "b"], { encoding: "utf8", env });
     assert.equal(d.status, 0, d.stderr);
     assert.match(d.stdout, /^dry run: from a@b\.c to owner@example\.com/);
   } finally {
