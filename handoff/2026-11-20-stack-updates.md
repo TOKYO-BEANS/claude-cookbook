@@ -21,8 +21,10 @@ each, which overrides the 24-hour wait for these four only:
 **Verification.** `findUnlisted` with this catalog lists only those seven globals. `npm test`
 on boat: 749 tests, 745 pass, 0 fail, 4 skipped.
 
-**Outstanding.** mise 2026.11.11: the owner chose to wait for the 24 hours, which end on
-21 November at 15:20 UTC. A once-task in the update chat installs it after that. The Cookbook
+**Outstanding.** mise 2026.11.11: the owner chose to wait for its 24 hours (21 November 15:20
+UTC). The newest release older than that, 2026.11.10, is already installed. The owner's
+correction (20 November 2026): the 24-hour rule picks the version, never the day, so nothing is
+snoozed or scheduled for it; the next check that finds 2026.11.11 old enough installs it. The Cookbook
 plugin is updated after this merge. REA cli 6.10.1 becomes routine on 21 November, and
 Firecrawl CLI 1.30.0 on 22 November. The daily runs list them.
 
