@@ -39,7 +39,7 @@ fallback and say that you did.
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
 | The model for a session or a piece: Fable or Opus, and when a banked limit reset is used | the model budget script and its hook, which set the thread's model in **T3 Code**; a dispatch profile per piece | the thread's model as it is, said aloud | [model-budget](recipes/model-budget.md) |
-| Several Claude or Codex subscriptions behind one local address, always on; T3's "Claude (pool)" and "Codex (pool)" | **CLIProxyAPI**, through `cliproxyapi`, `claude-pool` and `codex-pool` | one subscription as it is | [subscription-proxy](recipes/subscription-proxy.md) |
+| Several Claude or Codex subscriptions behind one local address, always on; T3's "(pool)" instances | **CLIProxyAPI**, through `cliproxyapi`, `claude-pool`, `codex-pool` | one subscription as it is | [subscription-proxy](recipes/subscription-proxy.md) |
 | **Check** | | | |
 | Tests, builds and container images | **Depot** CI | GitHub Actions, only as a documented exception | [ci-releases](recipes/ci-releases.md) |
 | Review of every pull request | the `ai-review` Depot job, once, when the pull request is marked ready for review | a **fallback review** of the head by a reviewer that did not write it, when its reviewer's API could not serve the call | [ai-review](recipes/ai-review.md) |
