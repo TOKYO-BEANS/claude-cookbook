@@ -8,7 +8,8 @@ Tailscale; the iPhone's T3 Connect chats run on this laptop.
 - `scripts/cliproxyapi.service`: a systemd user unit that runs `cliproxyapi start` under
   `graphical-session.target` (no linger: the key store is unlocked only while the owner is
   signed in), `Restart=always`, `UMask=0077`, `KillMode=mixed`, and an `ExecStopPost` that
-  deletes `config.yaml` after a launcher that was killed. The launcher is unchanged, so its
+  deletes `config.yaml` after a launcher that was killed (`cliproxyapi cleanup`, new: not when
+  a live manual start or login holds the lock; the AI review's finding). Its `start` is unchanged, so its
   hardening holds: key store, 0700 folder, a new client key per start, the config deleted on
   stop. Installed in `~/.config/systemd/user` and enabled.
 - The installed template got Theo's `routing` block: `round-robin`, `session-affinity` with
@@ -21,11 +22,12 @@ Tailscale; the iPhone's T3 Connect chats run on this laptop.
   `~/.local/bin/claude-pool`) in `~/.t3/userdata/settings.json`. No key in T3.
 - Recipe, setup page, catalog, the map row and the model-budget page say "always on".
 
-**Verification.** `node --test scripts/cliproxyapi.test.mjs` passes (20). As a service:
+**Verification.** `node --test scripts/cliproxyapi.test.mjs` passes (23), `npm test` on boat. As a service:
 127.0.0.1:8317 only; 401 without or with a wrong key, 200 with it; management API the same;
 the routing read back from the management API; a manual start refused; a new key per start;
 `config.yaml` gone after a stop and after the launcher was killed, the service back in 10 s;
-no key in the journal. A pooled `claude-pool -p` reached the proxy (400, no account) and left
+no key in the journal; beside a live manual start the service was refused and the
+manual start's config stayed. A pooled `claude-pool -p` reached the proxy (400, no account) and left
 `~/.claude/.credentials.json` unchanged. T3 listed "Claude (pool)" with its models.
 
 **Outstanding.**

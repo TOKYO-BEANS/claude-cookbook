@@ -7,7 +7,8 @@ Browne's published setup (owner's choice; no Tailscale: the iPhone's T3 Connect 
 - **The risk is the owner's.** Toward Anthropic it poses as Claude Code. Accounts can be banned,
   and a ban takes the owner's own Claude Code with it. A sign-in is the owner's step, never
   Claude's: `cliproxyapi login claude` (or `codex`, `codex-device`) in a terminal, one account
-  at a time; the running proxy picks the new account up without a restart.
+  at a time. Beside the running service a login uses its proxy's config, and the proxy picks
+  the new account up without a restart.
 - **Theo's rules hold:** Claude subscriptions only in Claude Code through the proxy; never anyone
   else's traffic; a home connection, not a VPN, an exit node or a datacenter address (checked
   20 November 2026: Wi-Fi, no exit node). A laptop away from home sends from where it is.

@@ -219,3 +219,50 @@ test("startProblem: no start without the pinned console, or with a .env the prox
   assert.match(startProblem(paths), /\.env exists: the proxy would load it/);
   assert.match(startProblem(paths, { console: false }), /\.env exists/, "a sign-in loads it too");
 });
+
+// ---- The always-on user service --------------------------------------------------
+
+import { homedir } from "node:os";
+import { cleanupAfterStop, loginRoute } from "../plugins/cookbook/skills/cookbook/scripts/cliproxyapi.mjs";
+
+test("cleanupAfterStop: deletes the config a stopped launcher left, but not one a live launcher holds the lock for", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "cpa-cleanup-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const paths = { config: join(dir, "config.yaml"), lock: join(dir, "launcher.lock") };
+  // A live manual start or login holds the lock: its config stays.
+  writeFileSync(paths.config, "x");
+  writeFileSync(paths.lock, "4242");
+  assert.equal(cleanupAfterStop(paths, (pid) => pid === 4242), false);
+  assert.equal(existsSync(paths.config), true);
+  // The lock's launcher is gone (the service's own, killed): the config goes; the stale lock stays for takeLock.
+  assert.equal(cleanupAfterStop(paths, () => false), true);
+  assert.equal(existsSync(paths.config), false);
+  assert.equal(existsSync(paths.lock), true);
+  // No lock, or one that holds no pid: the config goes.
+  for (const lock of [null, "not a pid"]) {
+    writeFileSync(paths.config, "x");
+    if (lock === null) rmSync(paths.lock, { force: true }); else writeFileSync(paths.lock, lock);
+    assert.equal(cleanupAfterStop(paths, () => true), true);
+    assert.equal(existsSync(paths.config), false);
+  }
+});
+
+test("loginRoute: a login beside the running service uses its proxy's config; alone it holds the lock itself", () => {
+  assert.equal(loginRoute(null, false, false), "own");
+  assert.equal(loginRoute(4242, true, true), "running", "the service holds the lock and its proxy is up");
+  assert.equal(loginRoute(4242, false, true), "refuse", "no config: the holder is still starting");
+  assert.equal(loginRoute(4242, true, false), "refuse", "nothing answers yet");
+});
+
+test("the user unit runs the installed launcher, cleans up through it, and keeps the hardening", () => {
+  const unit = readFileSync(join(SCRIPTS, "cliproxyapi.service"), "utf8");
+  const line = (key) => unit.split("\n").filter((l) => l.startsWith(`${key}=`)).map((l) => l.slice(key.length + 1));
+  const launcher = "/usr/bin/node %h/.local/bin/cliproxyapi.mjs";
+  assert.deepEqual(line("ExecStart"), [`${launcher} start`]);
+  assert.deepEqual(line("ExecStopPost"), [`${launcher} cleanup`]);
+  assert.deepEqual(line("UMask"), ["0077"]);
+  assert.deepEqual(line("Restart"), ["always"]);
+  assert.deepEqual(line("WantedBy"), ["graphical-session.target"]);
+  // The launcher the unit names is the one whose PATHS point at the private folder in this home.
+  assert.equal(PATHS.config, join(homedir(), ".local", "share", "cliproxyapi", "private", "config.yaml"));
+});

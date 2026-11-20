@@ -17,6 +17,8 @@
 //                                     never put on the clipboard or shown here: the owner copies
 //                                     it in Proton Pass and pastes it into the login box
 //   cliproxyapi status                is it up, and how many models it serves
+//   cliproxyapi cleanup               the user unit's ExecStopPost: config.yaml after a killed
+//                                     launcher, unless a live launcher holds the lock
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
@@ -118,6 +120,26 @@ export function removeConfig(paths = PATHS) {
   try { rmSync(paths.config, { force: true }); } catch (e) { say(`could not delete ${paths.config} (${e.code ?? e})`); }
 }
 
+// After the service's launcher stopped (the unit's ExecStopPost): deletes a config.yaml it left,
+// unless a live launcher holds the lock (a manual start or a login), whose config it is. Returns
+// whether it deleted. A stale lock stays: takeLock takes it over.
+export function cleanupAfterStop(paths = PATHS, isAlive = alive) {
+  let holder = NaN;
+  try { holder = Number.parseInt(readFileSync(paths.lock, "utf8"), 10); } catch { /* no lock */ }
+  if (Number.isInteger(holder) && holder > 0 && isAlive(holder)) return false;
+  removeConfig(paths);
+  return true;
+}
+
+// How a login runs, by who holds the lock: "own" (this login holds it and fills the template with
+// a throwaway key), "running" (the service or a manual start holds it and its proxy is up: the
+// login uses that proxy's config, which it neither rewrites nor deletes), or "refuse" (a launcher
+// holds it but no proxy answers yet).
+export function loginRoute(holder, configExists, up) {
+  if (!holder) return "own";
+  return configExists && up ? "running" : "refuse";
+}
+
 // The arguments of `secret-tool store` for the client key: the item with-key.mjs reads back.
 // The value is never one of them: it goes to secret-tool on stdin.
 export const STORE_ARGS = Object.freeze(["store", "--label", `key/${CLIENT_KEY_NAME}`, "service", SECRET_SERVICE, "name", CLIENT_KEY_NAME]);
@@ -175,8 +197,7 @@ async function login(provider) {
   if (problem) { say(problem); return 1; }
   const holder = takeLock();
   if (holder) {
-    // A running proxy's own config serves the login; it is neither rewritten nor deleted.
-    if (existsSync(PATHS.config) && await isUp()) return run();
+    if (loginRoute(holder, existsSync(PATHS.config), await isUp()) === "running") return run();
     say(`another launcher (pid ${holder}) is starting the proxy; try again when it is up`);
     return 1;
   }
@@ -213,7 +234,8 @@ async function status() {
 
 if (isMain(import.meta.url)) {
   const [cmd, arg] = process.argv.slice(2);
-  const run = { start, login: () => login(arg), panel, status }[cmd];
-  if (!run) { say("usage: cliproxyapi start | login <provider> | panel | status"); process.exit(2); }
+  const cleanup = async () => (cleanupAfterStop() ? 0 : (say("a live launcher holds the lock; its config.yaml stays"), 0));
+  const run = { start, login: () => login(arg), panel, status, cleanup }[cmd];
+  if (!run) { say("usage: cliproxyapi start | login <provider> | panel | status | cleanup"); process.exit(2); }
   run().then((code) => process.exit(code), (e) => { say(String(e?.message ?? e)); process.exit(1); });
 }
