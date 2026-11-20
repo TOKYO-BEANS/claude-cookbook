@@ -29,3 +29,10 @@ must not be empty"): pass `-V mainfont=...` (in the recipe).
 **Evidence.** `~/.local/share/vetting/typst-0.15.1/`, `.../blender-5.2.4/`,
 `.../jupyter-2026.11.19/` (NOTES.md, scans, sandbox logs) and
 `~/.local/share/claude-cookbook/evidence/creative-kit-2026-11-20/` (the proof outputs).
+
+**Review follow-up (#209's four low findings, fixed in the next pull request).** The Jupyter
+updater points at the recipe's full install line (a partial line dropped `jupyter`); an
+`@preview` Typst package counts as outside code to vet; "own documents only" covers pandoc's
+Typst path; the map row names Typst beside ImageMagick and links both pages, the Office row
+says "Office files; editing PDFs", and the memory row names `HANDOFF.md` again. Bytes for it
+came from the CLIProxyAPI row's command names (its recipe has them) and the description.
