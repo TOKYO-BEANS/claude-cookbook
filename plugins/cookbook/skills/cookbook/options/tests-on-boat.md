@@ -15,8 +15,10 @@ on mains power), each repository at its `main`, the install included, five runs 
 
 Medians. boat's own part is about 4.7 seconds before a test starts (Gitleaks about 1, the
 start about 2, the upload about 1.5). A run costs about USD 0.0001, so price does not decide.
-The hook therefore names a `default` sandbox: half the time of `small`, about the same share
-of the plan, since `small` counts half.
+The hook therefore names a `default` sandbox for every suite. It halves the cookbook's time
+for about the same plan time (14.2 against 15.1 plan-seconds, since `small` counts half); for
+Stack-Atlas it saves 1.7 s for nearly double (21.6 against 11.7). One sandbox size keeps the
+hook simple, and a run is a few seconds out of 2,000,000 a month.
 
 **Weighed:**
 

@@ -17,12 +17,18 @@ no Safe Chain on the laptop. The closed list of 19 November (key store, display,
 laptop) stands.
 
 **What changed.** The hook names a `default` sandbox (`--type default --timeout 1200`) instead
-of `small` for tests: half the time, about the same share of the plan. New page
+of `small` for tests: half the cookbook's time for about the same plan time (nearly double
+for Stack-Atlas, which gains 1.7 s; one size keeps the hook simple). New page
 `options/tests-on-boat.md`, linked from `recipes/boat.md`; `boat.md` says an upload holds no
 `.git`; `boat-setup.md`'s 150 seconds is the Windows PC's.
 
-**Verification.** The suite of this branch on boat `default` (below in the pull request), and
-the pull request's checks.
+**Verification.** The suite of this branch did not run on boat before the push: the measurement
+had used up the plan's hourly starts (`BOAT-RUN: not started`, exit 75). The run before that
+failed only the page-size check, fixed before the push. `node scripts/check.mjs` passed, and
+Depot CI on #180 passed (`test`, `semgrep`, CodeQL, `test (windows-2025)`). #180 merged as
+`553e4dc` through `merge-when-green.sh` (AI review: 0 high, 0 medium, 2 low; Graphify Formal
+Verification neutral, set aside); release check `verified` (execution 1898). The two lows (this
+paragraph and the plan-time claim) are fixed in the follow-up pull request.
 
 **A correction.** The 17 November entry put Stack-Atlas's one failure on boat ("own tree holds
 no scanner ignore file") down to the Desktop clone. It is boat's upload: no `.git`, so the
@@ -41,4 +47,4 @@ test's `git ls-files` fails. It fails on every boat run and passes on the laptop
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-20-boat-vs-local/`:
 `local-hyperfine.json`, `local-load.txt`, `boat-runs.jsonl` (with phase times),
 `boat-runs-cookbook-small-round1.jsonl`, `boat-stack-atlas-git-failure.log`, the three local
-test logs and `boat-bench.mjs`, the script that timed the boat runs.
+test logs and `boat-bench.mjs`, the script that timed the boat runs; `release-cookbook-180-merge.log`.
