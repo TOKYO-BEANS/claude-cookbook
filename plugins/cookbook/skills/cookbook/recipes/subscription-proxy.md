@@ -37,8 +37,7 @@ Browne's published setup (owner's choice; no Tailscale: the iPhone's T3 Connect 
   open pooled threads (Claude or Codex) fail with 401 until their session starts again.
 - **T3's pooled limits** (Usage providers, hub `cliproxy-127.0.0.1-8317`): set up 20 November
   2026 on the owner's yes, a second exception: T3 keeps the management secret in its own
-  secret store (0600). Not set up: several machines, Tailscale or linger, access changes
-  that go to the owner first.
+  secret store (0600). Several machines, Tailscale or linger: access changes, owner first.
 
 Where its files are, how it is hardened, an update and the open findings:
 [setup and evidence](subscription-proxy-setup.md).
