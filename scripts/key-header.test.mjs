@@ -55,7 +55,7 @@ test("only a key the source lists for a header is printed: any other name is ref
   assert.deepEqual([...HEADER_KEYS], ["firecrawl"], "a new name here is a decision: the helper can print that key");
   const read = [];
   const readKey = async (name) => { read.push(name); return { key: "synthetic-key" }; };
-  for (const name of ["anthropic-api", "k", "FIRECRAWL", "firecrawl "]) {
+  for (const name of ["parallel-api", "k", "FIRECRAWL", "firecrawl "]) {
     const got = await run([name], { allowed: undefined, readKey });
     assert.equal(got.code, 2, name);
     assert.equal(got.out, "");

@@ -24,8 +24,9 @@ fair trial; they never pick an owner.
   one more server in every session); ast-grep (syntax search, no call graph); `rg` alone (the
   fallback: text, not structure).
 - **Judgement in product code: TypeSafe / Jev.** Typed answers with probabilities and an
-  explicit no-match. Weighed: a Claude API call with a typed answer (the fallback when no
-  primitive fits; slower and dearer per item); embeddings with a threshold (no reasons, a
+  explicit no-match. Weighed: a locked-down `claude -p` on the plan token with a typed answer
+  (the fallback when no primitive fits; slower and dearer per item; never the API since
+  20 November 2026); embeddings with a threshold (no reasons, a
   store to keep); fixed rules (measure them first: where a rule scores 0.925 or more, keep it).
 - **Visual design: Claude Design.** Options side by side on a canvas with the project's design
   system, in the tool already open. Weighed: Figma with its MCP server (a second tool and

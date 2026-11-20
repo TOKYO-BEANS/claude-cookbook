@@ -26,12 +26,10 @@ Measured on 17 November 2026: one committer, seven private repositories and one 
   `org --apply` attaches it again. Before: USD 136 in 17 days. Proof is behaviour, never a
   setting: no run of `dynamic/agents/github-advanced-security` after a push, no AI rows in
   the usage read. A USD 0 hard-stop budget on `code_security_ai_unit` is kept, never tested.
-- **The `ai-review` job is paid in cash once the plan's monthly API credit is used.** It was
-  used up on 16 November. From the token counts in the review comments, a floor: USD 17 to 27 for the
-  40 reviews of 16 November. With no balance the job answers "credit balance too low" and
-  the [fallback review](ai-review-fallback.md) applies. The owner chose one review, run on the Claude plan by a
-  reviewer in the session; the API job stays until that is built and measured
-  ([ai-review](ai-review.md)).
+- **The `ai-review` job costs no cash: it runs only on the Claude plan token** (standard v27;
+  owner, 20 November 2026: no API usage, only the subscription). The API credit it used before
+  ran out on 16 November (a floor of USD 17 to 27 for that day's 40 reviews); the API keys are
+  retired. The plan's limit is the cap ([ai-review](ai-review.md)).
 - **The purchase when the trial ends, about 28 November 2026.** Secret Protection is USD 19
   and Code Security USD 30 for each active committer a month (one, 17 November). Semgrep's
   free code rules found none of CodeQL's 78 alerts (5 not fully analysed), and it has no
