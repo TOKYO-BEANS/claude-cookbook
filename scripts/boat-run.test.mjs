@@ -147,8 +147,7 @@ test("an upload holds the tracked files with their uncommitted edits, never an u
   }
 });
 
-// The sandbox is Linux, so the step runs under a POSIX sh: Depot's Linux job runs it, the
-// Windows job has no such sh.
+// The sandbox is Linux, so the step runs under a POSIX sh: Depot's Linux job and boat run it.
 test("a pushed copy is a git checkout before the command runs, and the command's arguments arrive as they were", { skip: process.platform === "win32" && "the sandbox's sh is Linux's" }, () => {
   const { root, dir } = repo();
   try {

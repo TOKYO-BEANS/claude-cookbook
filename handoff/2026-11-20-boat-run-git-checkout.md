@@ -15,7 +15,7 @@ exit code; a run without `--push` is unchanged.
 **What changed.** `scripts/boat-run.mjs` (`AS_CHECKOUT`, `boatArgv`), its tests (the argv
 for a push, and a test that stages a real repository, runs the wrapped command under `sh` and
 reads `git ls-files`, a clean `git status`, `HEAD` and a failing command's exit code; skipped
-on Windows only, where no POSIX sh runs it), and `options/tests-on-boat.md`'s parity note.
+on Windows only, where no POSIX sh runs it; CI has no Windows job since #174), and `options/tests-on-boat.md`'s parity note.
 `recipes/boat.md` is unchanged: it sits at the page limit and its sentence (no `.git` in the
 upload) still holds.
 
@@ -30,4 +30,4 @@ test, because a sentence added to `recipes/boat.md` left it no room for that tes
 link. Fixed by updating the argv test and leaving `boat.md` as it was.
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-20-boat-git-checkout/`:
-`boat-cookbook-suite.log`, `boat-stack-atlas-suite.log`.
+`boat-cookbook-suite.log`, `boat-cookbook-suite-after-main.log` (the same counts after merging #174), `boat-stack-atlas-suite.log`.
