@@ -35,9 +35,8 @@ no scanner ignore file") down to the Desktop clone. It is boat's upload: no `.gi
 test's `git ls-files` fails. It fails on every boat run and passes on the laptop and in CI.
 
 **Outstanding.**
-- That false failure. Fix it in Stack-Atlas (the test skips outside a git checkout) or in
-  boat-run (a `git init` and `git add` of the uploaded copy before the command). Owner: a later
-  Cookbook or Stack-Atlas pull request; no owner step needed.
+- That false failure: cleared the same day in boat-run, see
+  `2026-11-20-boat-run-git-checkout.md`.
 - One local run in this job was outside the closed list: the hook's own test file, once, after
   the edit (12 of 12 passed). The measurement runs were the job itself. Every later run went to
   boat.
