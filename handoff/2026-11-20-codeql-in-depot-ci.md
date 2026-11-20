@@ -15,8 +15,18 @@ repository, versions, history, cost). `recipes/security.md`, `recipes/security-c
 `options/check.md` (GitHub Actions now kept for Probiz's Windows job and for default setup
 until a repository moves) and the GitHub and Depot entries of `catalog.json` say the same.
 
-**Verification.** `npm test` (see the pull request's checks).
+**Verification.** `npm test` in the pull request's Depot CI `test` job (boat refused to start,
+below). The page sizes were measured before the push: `options/check.md` is at exactly the
+4000-byte Read limit and `SKILL.md` at 13996 of 14000 bytes, so a few neighbouring lines were
+rewrapped or shortened to fit.
 
 **Outstanding.** The pages describe Stack-Atlas #252, which was a draft when this was written;
 if it changes before it merges, these pages follow. No repository has moved yet; the
 rollout starts with claude-cookbook (#252, "Not in this PR").
+
+**Dead ends.** `boat-run` would not start the local test run ("the plan's starts are nearly
+used"), so the tests ran only in Depot CI. The first push failed `npm test` because this entry
+lacked its "Dead ends" and "Evidence" parts; fixed in the next commit.
+
+**Evidence.** The proof these pages rest on is Stack-Atlas #252's:
+`~/.local/share/stack-atlas/evidence/2026-11-20-codeql-depot/proof.md`.
