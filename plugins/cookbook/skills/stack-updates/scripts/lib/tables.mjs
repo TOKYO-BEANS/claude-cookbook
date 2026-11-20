@@ -55,6 +55,9 @@ export const VERSION_COMMANDS = Object.freeze({
   "rustup/cli": { argv: ["rustup", "--version"], pattern: /^rustup (\d+\.\d+\.\d+)/m },
   "ast-grep/cli": { argv: ["ast-grep", "--version"], pattern: /^ast-grep (\d+\.\d+\.\d+)/m },
   "yt-dlp/cli": { argv: ["yt-dlp", "--version"], pattern: /^(\d{4}\.\d{2}\.\d{2})\s*$/m },
+  // Proton Mail Bridge is an apt package; its own --version starts the window. Written against
+  // the real output on the Ubuntu laptop on 20 November 2026.
+  "proton-mail-bridge/app": { argv: ["dpkg-query", "--show", "protonmail-bridge"], pattern: /^protonmail-bridge\s+(\d+\.\d+\.\d+)/m },
 });
 
 // The only commands the daily update check runs to prove a service answers,
