@@ -15,8 +15,10 @@ on mains power), each repository at its `main`, the install included, five runs 
 
 Medians. boat's own part is about 4.7 seconds before a test starts (Gitleaks about 1, the
 start about 2, the upload about 1.5). A run costs about USD 0.0001, so price does not decide.
-The hook therefore names a `default` sandbox: half the time of `small`, about the same share
-of the plan, since `small` counts half.
+The hook therefore names a `default` sandbox for every suite. It halves the cookbook's time
+for about the same plan time (14.2 against 15.1 plan-seconds, since `small` counts half); for
+Stack-Atlas it saves 1.7 s for nearly double (21.6 against 11.7). One sandbox size keeps the
+hook simple, and a run is a few seconds out of 2,000,000 a month.
 
 **Weighed:**
 
@@ -28,9 +30,9 @@ of the plan, since `small` counts half.
   beside the unlocked key store, which any process of the owner can read, and the laptop has
   no Safe Chain. A sandbox holds no secret.
 - **Parity with CI:** boat has CI's Ubuntu 24.04 and Node 24; the laptop has Node 26. boat's
-  upload holds no `.git`, so a test that calls git fails there and passes in CI: Stack-Atlas's
-  "own tree holds no scanner ignore file" fails on every boat run. Read such a failure before
-  calling a change broken. CI decides either way.
+  upload holds no `.git`; since 20 November 2026 boat-run makes the copy a git checkout in
+  the sandbox before the command, so a test that calls git (Stack-Atlas's "own tree holds no
+  scanner ignore file") runs there as in CI. CI decides either way.
 - **Cost:** both near zero; boat's plan is 2,000,000 seconds a month.
 
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-20-boat-vs-local/`.

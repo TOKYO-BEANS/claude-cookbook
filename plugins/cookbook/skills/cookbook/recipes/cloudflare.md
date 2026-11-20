@@ -1,6 +1,11 @@
 # Cloudflare
 
-- Projects with a `wrangler.jsonc` use the project-pinned Wrangler; otherwise the `cf` CLI.
+- Projects with a `wrangler.jsonc` use the project-pinned Wrangler; a project with a
+  `cloudflare.config.ts` uses the `cf` CLI the same way, pinned in its own `package.json`.
+  Neither is installed machine-wide, whatever the plugin's skills say (`npm install --global
+  cf`): weighed on 20 November 2026 (a 1.0.0 release candidate; no project here needs it).
+  Everything else (a Worker with neither file, account work): the plugin's `execute`, or a
+  small script on the API with the key-store token.
 - Before a deploy: build, test, dry run, list pending D1 migrations, note the rollback version.
   A deploy follows a merge whose checks passed, and the release check follows the deploy at once.
   An Access change needs the owner's yes. So does a change customers see on a live site that

@@ -58,7 +58,7 @@ fallback and say that you did.
 | Source control, pull requests, GitHub's API | **GitHub** through `gh`, and **Git** | — | [ci-releases](recipes/ci-releases.md) |
 | From a finished change to a merged pull request | **sa-release** with `merge: true` | `gh pr merge`, once the merge condition holds | [ci-releases](recipes/ci-releases.md) |
 | After a merge or deploy | **Release Maintenance** through **sa-release** | the `release-maintenance` skill inline | [ci-releases](recipes/ci-releases.md) |
-| Hosting, edge, storage, access control | **Cloudflare**, with **Wrangler** or the `cf` CLI | — | [cloudflare](recipes/cloudflare.md) |
+| Hosting, edge, storage, access control | **Cloudflare**, with the project's own **Wrangler** or `cf` CLI | — | [cloudflare](recipes/cloudflare.md) |
 | A site that lives on Wix | the **Wix** MCP | the built-in browser on the Wix dashboard | [wix](recipes/wix.md) |
 | A Shopify store or theme | the **Shopify CLI** and the **Shopify theme skills** | the built-in browser on the Shopify admin | — |
 | Bring a repository onto the standard | **sa-onboard** | — | [workflows](recipes/workflows.md) |

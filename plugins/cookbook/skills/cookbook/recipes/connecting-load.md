@@ -35,10 +35,10 @@ not in a headless run and was not measured.
      Claude Code 2.1.287 or later). It stays connected and every tool waits behind tool
      search: call `ToolSearch` with `select:<tool name>` first. A plugin's server and a
      claude.ai connector have no entry of the user's, so this is not for them.
-  2. A plugin off in the user settings and on in a project's `.claude/settings.local.json`
-     (`"enabledPlugins": {"<plugin>@<source>": true}`): OpenSEO, Wix, Aikido. The file is
-     not in git, so a T3 worktree thread does not have it: open the chat in the project
-     folder. A deny in `deniedMcpServers` cannot be lifted by a project.
+  2. A plugin off in the user settings and on in a project's `.claude/settings.json`
+     (`"enabledPlugins": {"<plugin>@<source>": true}`): OpenSEO, Wix, Aikido. That file is
+     in git, so a T3 worktree thread has it too (`settings.local.json` is not). A deny in
+     `deniedMcpServers` cannot be lifted by a project.
   3. A child session that loads the one server. For a plugin switched off:
      `claude -p --setting-sources "" --plugin-dir <the plugin's folder under
      ~/.claude/plugins/cache>`; OpenSEO connected that way with its stored sign-in (no call

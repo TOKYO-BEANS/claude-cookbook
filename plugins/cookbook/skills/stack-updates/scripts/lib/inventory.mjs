@@ -37,6 +37,7 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 const PLUGIN_ID = /^[a-zA-Z0-9._-]{1,80}@[a-zA-Z0-9._-]{1,80}$/;
 const REPO = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
 const PROJECT_KEY = /^[a-z0-9-]{1,40}$/;
+const PROJECT_PATH = /^(?!.*\.\.)[A-Za-z0-9._-]{1,80}(?:\/[A-Za-z0-9._-]{1,80}){0,5}$/;
 const SCRIPT_EXT = /\.(exe|cmd|bat|com|ps1|mjs|js|sh)$/i;
 
 const cause = (e) => String(e?.message ?? e).split("\n")[0].slice(0, 180) || "unreadable";
@@ -316,7 +317,9 @@ async function readProject(installed, gh, home) {
   if (!NPM_NAME.test(String(installed.package))) return unreadable("the package must be an npm package name");
   const { repository, message } = await resolveProject(installed, home);
   if (!repository) return unreadable(message);
-  const text = await ghFile(gh, repository, "package-lock.json");
+  // `path` (optional): the folder whose lockfile holds the package, when that is not the root.
+  if ("path" in installed && (typeof installed.path !== "string" || !PROJECT_PATH.test(installed.path))) return unreadable("the project path must be a plain relative folder");
+  const text = await ghFile(gh, repository, installed.path ? `${installed.path}/package-lock.json` : "package-lock.json");
   const version = JSON.parse(text)?.packages?.[`node_modules/${installed.package}`]?.version;
   if (version === undefined) return notFound(`${installed.package} is not in the lockfile of ${repository}`);
   if (!cleanText(version)) return unreadable(`${installed.package} has no usable version in that lockfile`);
