@@ -14,6 +14,10 @@ default) and inactive, with no domain.
 - `scripts/model-budget.test.mjs`: the account helper writes its own `nsswitch.conf` and socket
   path; eight new cases (Ubuntu's default with sssd off, sssd running, LDAP, winbind behind an
   action, a commented source, no group line, `files` missing, no file).
+- #184's own two low review findings: `systemd` counts as a local source only while its user
+  database can add no member (no file in `/etc/userdb`, `/run/userdb`, `/usr/lib/userdb`, and
+  no systemd-homed socket); two more test cases. The register's Aikido row no longer says a
+  session starts its processes "there".
 - #182's two low review findings: `recipes/photos.md` now carries PhotoCraft's line (installed
   for the owner's editing, its update check off, the owner's condition); the duplicate "a new
   high finding goes to the owner" in the LightCraft lines is kept once. `recipes/connecting-load.md`

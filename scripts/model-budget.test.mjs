@@ -1097,13 +1097,16 @@ test("readUsage: T3 Code's file may be writable by its group only when that grou
   const uid = process.getuid();
   const { gid } = statSync(file);
   const LOCAL = "passwd: files systemd\ngroup: files systemd\n";
-  const accounts = (passwd, group, { nsswitch = LOCAL, sssRunning = false } = {}) => {
+  const accounts = (passwd, group, { nsswitch = LOCAL, sssRunning = false, userdb = null, homed = false } = {}) => {
     const dir = mkdtempSync(join(home, "etc-"));
     if (passwd !== null) writeFileSync(join(dir, "passwd"), passwd);
     if (group !== null) writeFileSync(join(dir, "group"), group);
     if (nsswitch !== null) writeFileSync(join(dir, "nsswitch.conf"), nsswitch);
     if (sssRunning) writeFileSync(join(dir, "nss.sock"), "");
-    return { passwd: join(dir, "passwd"), group: join(dir, "group"), nsswitch: join(dir, "nsswitch.conf"), sssSocket: join(dir, "nss.sock") };
+    if (homed) writeFileSync(join(dir, "home.sock"), "");
+    mkdirSync(join(dir, "userdb"));
+    if (userdb !== null) writeFileSync(join(dir, "userdb", userdb), "{}");
+    return { passwd: join(dir, "passwd"), group: join(dir, "group"), nsswitch: join(dir, "nsswitch.conf"), sssSocket: join(dir, "nss.sock"), userdbDirs: [join(dir, "userdb"), join(dir, "absent")], homedSocket: join(dir, "home.sock") };
   };
   const source = async (mode, accountFiles) => {
     chmodSync(file, mode);
@@ -1138,4 +1141,6 @@ test("readUsage: T3 Code's file may be writable by its group only when that grou
   assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: "passwd: files\n" })), undefined, "no group line");
   assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: "passwd: systemd\ngroup: systemd\n" })), undefined, "the files not asked at all");
   assert.equal(await source(0o664, accounts(other + me, groups, { nsswitch: null })), undefined, "no nsswitch.conf to read");
+  assert.equal(await source(0o664, accounts(other + me, groups, { userdb: "other:mine.membership" })), undefined, "systemd's user database adds a member");
+  assert.equal(await source(0o664, accounts(other + me, groups, { homed: true })), undefined, "systemd-homed answering");
 });

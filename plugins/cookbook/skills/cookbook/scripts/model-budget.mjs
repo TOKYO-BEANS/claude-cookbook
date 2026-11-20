@@ -8,7 +8,7 @@
 // script decides, not a model. It only reads. It never prints or stores the sign-in, calls
 // the one address below and nothing else, and redeems nothing.
 // Usage: node model-budget.mjs [--json]     exit code 1 when the reading is unknown
-import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -303,7 +303,21 @@ export function parseT3(json, now) {
 // service answers user and group lookups: nsswitch.conf may name `files` and `systemd`, and
 // `sss` only while sssd's lookup socket is absent (Ubuntu lists `sss` with sssd installed and
 // off). Any other source (ldap, nis, winbind, sssd running) means "not the user's alone".
-export const ACCOUNT_FILES = Object.freeze({ passwd: "/etc/passwd", group: "/etc/group", nsswitch: "/etc/nsswitch.conf", sssSocket: "/var/lib/sss/pipes/nss" });
+// `systemd` is local too, unless its user database can add members: a record or `.membership`
+// file in a userdb folder, or systemd-homed answering (its socket present).
+export const ACCOUNT_FILES = Object.freeze({
+  passwd: "/etc/passwd", group: "/etc/group", nsswitch: "/etc/nsswitch.conf", sssSocket: "/var/lib/sss/pipes/nss",
+  userdbDirs: ["/etc/userdb", "/run/userdb", "/usr/lib/userdb"], homedSocket: "/run/systemd/userdb/io.systemd.Home",
+});
+const userdbAdds = (files) =>
+  lstatSync(files.homedSocket, { throwIfNoEntry: false }) !== undefined ||
+  files.userdbDirs.some((d) => {
+    try {
+      return readdirSync(d).length > 0;
+    } catch (e) {
+      return e?.code !== "ENOENT"; // a folder that cannot be read is not "empty"
+    }
+  });
 const LOCAL_SOURCES = new Set(["files", "systemd"]);
 const filesAnswer = (files) => {
   const lines = readFileSync(files.nsswitch, "utf8").split("\n").map((l) => l.replace(/#.*/, "").trim());
@@ -313,6 +327,7 @@ const filesAnswer = (files) => {
     const sources = found[0].slice(db.length + 1).replace(/\[[^\]]*\]/g, " ").split(/\s+/).filter(Boolean);
     if (!sources.includes("files")) return false;
     for (const src of sources) {
+      if (src === "systemd" && userdbAdds(files)) return false;
       if (LOCAL_SOURCES.has(src)) continue;
       if (src === "sss" && lstatSync(files.sssSocket, { throwIfNoEntry: false }) === undefined) continue;
       return false;
