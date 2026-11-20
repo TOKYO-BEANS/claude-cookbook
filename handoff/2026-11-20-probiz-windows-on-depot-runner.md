@@ -27,7 +27,11 @@ has the measurement.
 | Per job, at the median | about 0.12 | about 0.07 |
 
 November to the 20th: 133 Depot Windows jobs, 2,571 runner minutes (about 10.30 over the
-allowance; the organisation's runner minutes this period: 9,101).
+allowance, about 15 for a whole month; the organisation's runner minutes this period: 9,101, of
+which Stack-Atlas's and release-maintenance's Windows jobs, retired on 20 November, were 5,549).
+
+**Verification.** `npm test` on boat: 749 tests, 745 pass, 0 fail. The figures above are
+read back from the saved job lists in the evidence folder.
 
 **Outstanding.** None for this job. A cheaper option, not tried: `depot-windows-2025` (2 vCPU,
 2 runner minutes a minute) is cheaper per job only if the job takes less than twice as long.
