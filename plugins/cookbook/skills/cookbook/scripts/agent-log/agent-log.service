@@ -1,0 +1,12 @@
+[Unit]
+Description=Nightly copy of the agent session transcripts, keys masked (the Cookbook's learning loop)
+Documentation=https://github.com/TOKYO-BEANS/claude-cookbook/blob/main/plugins/cookbook/skills/cookbook/recipes/learning-loop.md
+ConditionPathExists=%h/.local/bin/agent-log-nightly.mjs
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h
+Nice=10
+ExecStart=/usr/bin/node %h/.local/bin/agent-log-nightly.mjs
+TimeoutStartSec=30min
