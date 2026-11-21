@@ -9,7 +9,7 @@ import { homedir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { zstdCompressSync } from "node:zlib";
-import { maskText } from "../agentshield/sanitize.mjs";
+import { maskText, shapesIn } from "../agentshield/sanitize.mjs";
 
 export const defaultDest = (home = homedir()) => join(home, ".local", "share", "agent-log");
 export const defaultSources = (home = homedir()) => [
@@ -42,7 +42,8 @@ const bump = (counts, name) => { counts[name] = (counts[name] ?? 0) + 1; };
 function cleanValue(value, counts, key = "") {
   if (typeof value === "string") {
     if (DROPPED_KEYS.has(key)) { bump(counts, `${key}-dropped`); return "<dropped>"; }
-    if (ID_KEYS.has(key) && ID_VALUE.test(value)) return value;
+    // An id is kept only when no named credential shape is in it: "random-looking" alone is what ids are.
+    if (ID_KEYS.has(key) && ID_VALUE.test(value) && shapesIn(value).every((n) => n === "long-random")) return value;
     if (IMAGE.test(value)) { bump(counts, "image-dropped"); return "<image-dropped>"; }
     const cut = value.length > MAX_STRING ? (bump(counts, "string-cut"), `${value.slice(0, MAX_STRING)}<cut ${value.length - MAX_STRING} chars>`) : value;
     return maskText(cut, counts);

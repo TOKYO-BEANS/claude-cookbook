@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { zstdDecompressSync } from "node:zlib";
 import { archiveAll, cleanTranscript } from "../plugins/cookbook/skills/cookbook/scripts/agent-log/archive.mjs";
+import { resolveArchive, run } from "../plugins/cookbook/skills/cookbook/scripts/agent-log/agent-log-nightly.mjs";
 import { buildDigest, sessionSignals, signature } from "../plugins/cookbook/skills/cookbook/scripts/agent-log/digest.mjs";
 
 // Built at run time so no credential shape sits in this file.
@@ -76,4 +77,45 @@ test("buildDigest lists an error only when it came back in another session", () 
   assert.match(md, /2 sessions, 2 times/);
   assert.doesNotMatch(md, /only once/);
   assert.match(md, /aaaaaaaa \(1 errors\)\n- stop/);
+});
+
+test("an id field keeps a random id but not a credential", () => {
+  const out = cleanTranscript(JSON.stringify({ id: fakeToken, tool_use_id: toolId, input: { session_id: [fakeToken] } }));
+  assert.ok(!out.includes(fakeToken));
+  assert.ok(out.includes(toolId));
+});
+
+// A home with the plugin registry; `installPath` is where the registry says the plugin is.
+function fakeHome(installPath) {
+  const home = mkdtempSync(join(tmpdir(), "agent-log-home-"));
+  const plugins = join(home, ".claude", "plugins");
+  mkdirSync(plugins, { recursive: true });
+  const entries = installPath === null ? [] : [{ scope: "user", installPath: installPath(home) }];
+  writeFileSync(join(plugins, "installed_plugins.json"), JSON.stringify({ plugins: { "cookbook@claude-cookbook": entries } }));
+  return home;
+}
+function placePlugin(dir) {
+  mkdirSync(join(dir, "skills", "cookbook", "scripts", "agent-log"), { recursive: true });
+  writeFileSync(join(dir, "skills", "cookbook", "scripts", "agent-log", "archive.mjs"), "export const archiveAll = () => ({ copied: 2, skipped: 0, bytesIn: 0, bytesOut: 0, counts: {} }); export const defaultSources = () => [];\n");
+}
+
+test("resolveArchive finds the user's plugin and refuses one outside ~/.claude/plugins", async () => {
+  const inside = fakeHome((h) => join(h, ".claude", "plugins", "cache", "cookbook"));
+  const outside = fakeHome((h) => join(h, "elsewhere"));
+  const missing = fakeHome(null);
+  try {
+    placePlugin(join(inside, ".claude", "plugins", "cache", "cookbook"));
+    placePlugin(join(outside, "elsewhere"));
+    assert.match(resolveArchive(inside), /agent-log\/archive\.mjs$/);
+    assert.throws(() => resolveArchive(outside), /outside/);
+    assert.throws(() => resolveArchive(missing), /not installed/);
+    const ok = await run({ home: inside });
+    assert.equal(ok.copied, 2);
+    assert.equal(JSON.parse(readFileSync(join(inside, ".local", "share", "agent-log", "last-run.json"), "utf8")).ok, true);
+    const failed = await run({ home: outside });
+    assert.equal(failed.ok, false);
+    const note = JSON.parse(readFileSync(join(outside, ".local", "share", "agent-log", "last-run.json"), "utf8"));
+    assert.equal(note.ok, false);
+    assert.match(note.error, /outside/);
+  } finally { for (const h of [inside, outside, missing]) rmSync(h, { recursive: true, force: true }); }
 });

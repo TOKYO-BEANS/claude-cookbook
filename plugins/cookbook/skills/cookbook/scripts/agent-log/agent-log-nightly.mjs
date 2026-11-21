@@ -7,7 +7,7 @@
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, relative } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const PLUGIN_ID = "cookbook@claude-cookbook";
 
@@ -23,16 +23,24 @@ export function resolveArchive(home = homedir()) {
   return script;
 }
 
-const dest = join(homedir(), ".local", "share", "agent-log");
-mkdirSync(dest, { recursive: true, mode: 0o700 });
-const started = new Date().toISOString();
-try {
-  const { archiveAll } = await import(pathToFileURL(resolveArchive()).href);
-  const r = archiveAll({ dest });
-  writeFileSync(join(dest, "last-run.json"), JSON.stringify({ started, ended: new Date().toISOString(), ok: true, ...r }, null, 2), { mode: 0o600 });
-  console.log(`agent-log: ${r.copied} copied, ${r.skipped} unchanged`);
-} catch (e) {
-  writeFileSync(join(dest, "last-run.json"), JSON.stringify({ started, ended: new Date().toISOString(), ok: false, error: String(e?.message ?? e) }, null, 2), { mode: 0o600 });
-  console.error(`agent-log: ${e?.message ?? e}`);
-  process.exitCode = 1;
+export async function run({ home = homedir(), now = () => new Date().toISOString() } = {}) {
+  const dest = join(home, ".local", "share", "agent-log");
+  mkdirSync(dest, { recursive: true, mode: 0o700 });
+  const started = now();
+  const write = (body) => writeFileSync(join(dest, "last-run.json"), JSON.stringify({ started, ended: now(), ...body }, null, 2), { mode: 0o600 });
+  try {
+    const { archiveAll, defaultSources } = await import(pathToFileURL(resolveArchive(home)).href);
+    const r = archiveAll({ sources: defaultSources(home), dest });
+    write({ ok: true, ...r });
+    return { ok: true, ...r };
+  } catch (e) {
+    write({ ok: false, error: String(e?.message ?? e) });
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
+  const r = await run();
+  if (r.ok) console.log(`agent-log: ${r.copied} copied, ${r.skipped} unchanged`);
+  else { console.error(`agent-log: ${r.error}`); process.exitCode = 1; }
 }
