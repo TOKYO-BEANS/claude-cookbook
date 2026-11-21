@@ -1,0 +1,123 @@
+# The `AI fix` Depot CI workflow: one fix commit for a pull request whose Depot
+# CI failed or whose AI review found a high or medium problem. Read README.md
+# in this folder first. The Stack Atlas standard writes this file to
+# .depot/workflows/ai-fix.yml and fix.mjs to .depot/ai-review/. Change them in
+# Stack Atlas, never by hand. Owner's yes, 20 November 2026.
+#
+# - It runs after every run of the repository's CI and AI review workflows
+#   (and by hand, workflow_dispatch). The fixer is checked out at the default
+#   branch's head commit as GitHub's API names it, never at a ref from the
+#   event, so a pull request cannot change the fixer that holds the tokens. It reads
+#   the open pull requests itself, so it does not depend on the trigger's
+#   event fields (Depot documents only name, path and basepath).
+# - Only pull requests from a branch of this repository, not drafts, not
+#   opened by a bot, without the label `no-ai-fix`. One attempt per head
+#   commit and at most three per pull request, recorded in one comment.
+# - It never runs the pull request's code: one `claude -p` on the Claude plan
+#   reads and edits the head's files with five file tools, each limited to
+#   the checkout, whose git folder lives outside it; no shell. fix.mjs refuses
+#   a change to .depot/, .github/, .git, the standard's and agents' files,
+#   lint, scanner and test-runner settings, lockfiles, credential-shaped paths
+#   or text, removed test lines, suppressions and skipped tests.
+# - One commit, pushed without force with the job token (contents: write; the
+#   push starts CI like any push, probe of 20 November 2026). The commit needs
+#   a new AI review; nothing here merges.
+# - One run at a time (concurrency below): each run reads every open pull
+#   request, so a run that waits replaces the older waiting one.
+# - Secrets: CLAUDE_CODE_OAUTH_TOKEN_REVIEW (the AI review's plan token) and,
+#   optional, DEPOT_CI_LOGS_TOKEN (a Depot token that reads CI logs; a job's
+#   own Depot token cannot). Without the second, a CI failure is recorded as
+#   not fixable here and only review findings are fixed.
+name: AI fix
+on:
+  workflow_run:
+    workflows: [.depot/workflows/ci.yml, .depot/workflows/ai-review.yml]
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.repository }}
+  cancel-in-progress: false
+jobs:
+  ai-fix:
+    runs-on: depot-ubuntu-24.04
+    # Two pull requests a run, each at most 25 minutes of Claude Code and
+    # 4 x 2 minutes of logs, plus checkout and install.
+    timeout-minutes: 80
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "24"
+      # The fixer must be the default branch's. The commit comes from GitHub's
+      # API, not from the event (Depot documents no ref or commit for
+      # workflow_run); anything unexpected stops the run here.
+      - name: Name the default branch's head commit
+        id: base
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            const api = (route) => fetch(`https://api.github.com/repos/${process.env.REPO}${route}`, {
+              headers: { authorization: `Bearer ${process.env.GITHUB_TOKEN}`, accept: "application/vnd.github+json", "user-agent": "stack-atlas-ai-fix" },
+            }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+            const branch = (await api("")).default_branch;
+            if (!/^[A-Za-z0-9._\/-]{1,200}$/.test(branch ?? "")) throw new Error("no default branch");
+            const sha = (await api(`/commits/${encodeURIComponent(branch)}`)).sha;
+            if (!/^[0-9a-f]{40}$/.test(sha ?? "")) throw new Error("no head commit");
+            (await import("node:fs")).appendFileSync(process.env.GITHUB_OUTPUT, `sha=${sha}\n`);
+          '
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ steps.base.outputs.sha }}
+          persist-credentials: false
+      - name: Check the checkout is that commit
+        env:
+          SHA: ${{ steps.base.outputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] && [ "$(git rev-parse HEAD)" = "$SHA" ]
+      # node only (no dependencies): reads the pull requests, records a head
+      # it cannot fix and says whether Claude Code is needed.
+      - name: Find the pull requests to fix
+        id: find
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DEPOT_CI_LOGS_TOKEN: ${{ secrets.DEPOT_CI_LOGS_TOKEN }}
+        run: node .depot/ai-review/fix.mjs find
+      - name: Install Aikido Safe Chain (malware check on npm and pip installs)
+        if: steps.find.outputs.work == 'true'
+        retry:
+          retries: 3
+          backoff: exponential
+          delay-seconds: 10
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://github.com/AikidoSec/safe-chain/releases/download/1.5.27/install-safe-chain.sh -o "$RUNNER_TEMP/install-safe-chain.sh"
+          echo "600ebddcb3aaf1fd53653a8d7985df44528722c0f5ee7eb9fff86f26a1a4e5a8  $RUNNER_TEMP/install-safe-chain.sh" | sha256sum -c -
+          cd "$RUNNER_TEMP"
+          sh "$RUNNER_TEMP/install-safe-chain.sh" --ci
+          echo "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24" >> "$GITHUB_ENV"
+      - name: Install the fixer's locked dependencies
+        if: steps.find.outputs.work == 'true'
+        run: |
+          set -euo pipefail
+          cd .depot/ai-review
+          npm ci --ignore-scripts
+      # Runs from the checkout's root, where fix.mjs reads CLAUDE.md and
+      # AGENTS.md of the default branch.
+      - name: AI fix
+        if: steps.find.outputs.work == 'true'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN_REVIEW: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_REVIEW }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DEPOT_CI_LOGS_TOKEN: ${{ secrets.DEPOT_CI_LOGS_TOKEN }}
+        run: node .depot/ai-review/fix.mjs fix

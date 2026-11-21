@@ -169,3 +169,30 @@ jobs:
           echo "SAFE_CHAIN_MINIMUM_PACKAGE_AGE_HOURS=24" >> "$GITHUB_ENV"
       - run: npm ci
       - run: npm test
+
+  codeql:
+    runs-on: depot-ubuntu-24.04-4
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          # A pull request is analysed on its head commit, as default setup did.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      # The token goes only to the steps that talk to GitHub, never to the
+      # one that builds and analyses the repository's code.
+      - name: CodeQL prepare (bundle, languages)
+        env:
+          CODEQL_VERSION: "2.27.5"
+          CODEQL_SHA256: "141e6eb4e99c8498a1258e282e6f7b59c747b4b1a7eabc7cbf7d1aa92792edf0"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .depot/codeql/scan.sh prepare
+      - name: CodeQL analyse
+        run: bash .depot/codeql/scan.sh analyse
+      - name: CodeQL upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .depot/codeql/scan.sh upload

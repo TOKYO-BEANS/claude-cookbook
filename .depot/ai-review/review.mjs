@@ -479,7 +479,7 @@ async function callPlan({ env, params, log, run = runClaude, binary = CLAUDE_BIN
 export const MAX_COMMENT_FINDINGS = 20;
 export const FIELD_LIMITS = { file: 200, evidence: 1_000, fix: 1_000 };
 
-function cap(text, max) {
+export function cap(text, max) {
   const s = String(text ?? "");
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
 }
@@ -496,7 +496,7 @@ function inertUrl(url) {
 // link, image or reference can form. Each character is escaped once, in one
 // pass (a zero-width space after "@" stops a mention).
 const PROSE_ESCAPES = { "\\": "\\\\", "<": "&lt;", "[": "\\[", "]": "\\]", "@": "@​" };
-function clean(text) {
+export function clean(text) {
   const flat = String(text ?? "").replace(/\r?\n/g, " ");
   let out = "";
   let last = 0;
@@ -509,7 +509,7 @@ function clean(text) {
 }
 
 // For text inside a code span: no backticks, no scheme separator, no mentions.
-function cleanCode(text) {
+export function cleanCode(text) {
   return String(text ?? "")
     .replace(/\r?\n/g, " ")
     .replaceAll("`", "'")
