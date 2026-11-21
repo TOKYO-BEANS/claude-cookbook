@@ -9,14 +9,14 @@ the timer and the tasks on the Ubuntu laptop on 19 November.
   `~/.local/bin` nor the mise shims). It sees Node, a signed-in `gh`, `claude`, the OS key
   store (a user unit read a key through `with-key.mjs`) and no API key in its environment.
   `Persistent=true` starts a missed run at the next login. Today: `stack-updates-daily`
-  (07:00; [update-check.md](update-check.md)). Creating a timer needs the owner's yes. A script that needs a model for one bounded read starts its own `claude -p`
+  (07:00; [update-check.md](update-check.md)) and `agent-log` (03:30; [learning-loop.md](learning-loop.md)). Creating a timer needs the owner's yes. A script that needs a model for one bounded read starts its own `claude -p`
   request with every limit on the command line (`scripted-runs.md`).
 - **An agent run: a T3 Code scheduled task** (`schedule_task`: a fixed time, an interval, once,
   or a webhook). The run is a thread in the project's sidebar, where the owner works, with the
   T3 tools. Proven: a `once` task ran on time in a thread of its own, in its own worktree, and
   answered in 25 seconds. Today, in the Cookbook project: "Daily sidebar sweep" (07:45;
   [owner-questions.md](owner-questions.md)), "AgentShield weekly scan" (Mondays 08:00;
-  [agent-audit.md](agent-audit.md)) and the weekly fixer (Mondays 08:30); in the standard's
+  [agent-audit.md](agent-audit.md)), the weekly fixer (Mondays 08:30) and "Weekly lessons" (Mondays 09:00); in the standard's
   project its daily run (07:30).
   - The task tool takes no model: a task stores the model of the chat that made it. For a
     cheaper run, set the model on the task's thread (`t3_thread_configure`). Not yet proven
