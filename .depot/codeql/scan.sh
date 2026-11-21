@@ -6,9 +6,9 @@
 # own code:
 #   prepare  (token)    the pinned bundle (sha256 checked), the languages,
 #                        the ref and commit to upload to;
-#   analyse  (no token) a database per language and its analysis with the
-#                        repository's query suite (a Go build runs the
-#                        repository's code, here, with no token around);
+#   analyse  (no token) a database per language (build mode none: no
+#                        repository code runs) and its analysis with the
+#                        repository's query suite;
 #   upload   (token)    the SARIF to GitHub code scanning under the categories
 #                        default setup used (`/language:<language>`), waiting
 #                        until GitHub has processed each one.
@@ -72,7 +72,15 @@ prepare() {
     case "$name" in
       JavaScript|TypeScript|Vue) want[javascript-typescript]=1 ;;
       Python) want[python]=1 ;;
-      Go) want[go]=1 ;;
+      Go)
+        # Go has no build mode `none`: its autobuild runs the repository's
+        # own build, which could write $GITHUB_ENV, $GITHUB_PATH or the SARIF
+        # files and so reach the upload step's token. The scan runs no
+        # repository code, so it stops here instead (no TOKYO-BEANS
+        # repository holds Go; a standard change decides when one does).
+        echo "::error::Go needs a build, which this scan does not run: the standard has to decide how before Go is scanned"
+        exit 1
+        ;;
       Java|Kotlin) want[java-kotlin]=1 ;;
       C|C++) want[c-cpp]=1 ;;
       C#) want[csharp]=1 ;;
@@ -129,10 +137,9 @@ analyse() {
       c-cpp) pack=cpp ;;
       *) pack="$lang" ;;
     esac
-    case "$lang" in
-      go) mode=autobuild ;;
-      *) mode=none ;;
-    esac
+    # Every language here is extracted without a build: no repository code
+    # runs in this stage.
+    mode=none
     echo "::group::CodeQL $lang"
     "$WORK/codeql/codeql" database create "$WORK/db/$lang" --language="$lang" \
       --build-mode="$mode" --source-root="$SRC" --threads=0 --overwrite
