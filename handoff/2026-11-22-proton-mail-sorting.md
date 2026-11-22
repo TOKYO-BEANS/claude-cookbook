@@ -34,8 +34,12 @@ the sent copies) into a new sender folder; then moved to Trash and the folder re
 call on made-up senders: a known brand on another domain merged at 1.0, an unrelated one went
 to "none" (0.66).
 
-**Outstanding.** The owner sets the two forwards (Gmail, Outlook); the first forwarded mails
-show whether Microsoft 365 keeps the original To (if not, an `also` alias in the config). The
+**Outstanding.** The Gmail forward is on (set the same evening in the built-in browser and the
+owner's own browser: Google's "verify it's you" and "Proceed" windows are pop-ups the built-in
+browser does not show); a test sent from the Proton account itself never came back (Proton keeps
+one copy per Message-ID), so the first real Gmail mail in its folder is the proof. The work
+forward is off: the tenant answered `550 5.7.520` (no outside forwarding); the owner chose to
+leave work mail out (question dialog), and the work address left the sorter's config. The
 older mail in Archive was sorted on the owner's yes (question dialog, this chat): 419 of 432
 mails matched an account and went to 59 sender folders (Jev asked 9 times); 13 matched no
 account and stay in Archive. Of #224's last review's two low findings, the 401/403 one is fixed
