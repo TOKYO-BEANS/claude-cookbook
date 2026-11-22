@@ -1,0 +1,14 @@
+[Unit]
+Description=Sort Proton mail into a folder per account and a sub-folder per sender (the Cookbook's proton-sort)
+Documentation=https://github.com/TOKYO-BEANS/claude-cookbook/blob/main/plugins/cookbook/skills/cookbook/recipes/proton-mail-sorting.md
+ConditionPathExists=%h/.local/bin/proton-sort.py
+After=proton-bridge.service
+
+[Service]
+Type=oneshot
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h
+Nice=10
+# Two keys at run time: the Bridge password, then Jev's (TypeSafe). Neither is written anywhere.
+ExecStart=/usr/bin/node %h/.local/bin/with-key.mjs proton-bridge PROTON_BRIDGE_PASSWORD /usr/bin/node %h/.local/bin/with-key.mjs jev-compaction TYPESAFE_API_KEY /usr/bin/python3 -I %h/.local/bin/proton-sort.py sort
+TimeoutStartSec=10min

@@ -37,8 +37,7 @@ address). Mail-link sign-ins stay on `in.nofix.dev` ([sign-ins](sign-ins-mail-an
   kept), the three DKIM CNAMEs. Email Routing keeps `in.nofix.dev`; its "misconfigured" for
   the apex is expected. DMARC
   `p=reject` stays: Proton signs with DKIM.
-- **A folder per address** (owner's choice, 20 November 2026): a Proton filter (Sieve,
-  recipient in To, Cc or Bcc) files each address's mail, sent copies too, into
-  `Folders/<address>`; the Inbox stays empty. Claude's own mail: `list --folder
-  "Folders/claude@nofix.dev"`. A new address gets a folder and a filter like the others.
+- **Folders:** one per address, one per sender inside it, and the forwarded Gmail and work
+  mail: [sorting](proton-mail-sorting.md). Claude's own mail: `list --folder
+  "Folders/claude@nofix.dev"`.
 - **Not used:** Himalaya (15 advisories) and a community MCP server (tools in every session).
