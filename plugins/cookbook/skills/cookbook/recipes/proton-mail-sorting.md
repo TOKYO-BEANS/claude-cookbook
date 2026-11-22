@@ -18,11 +18,10 @@ first, Jev only for a sender the rules cannot place.
   Inbox and each `Folders/<account>`, finds the account (Gmail's `X-Forwarded-For` first, then
   To and Cc, then `Delivered-To`, then the folder it sits in) and moves the mail to the sender's sub-folder, which it
   makes when missing. Mail from the owner's own addresses stays where it is.
-- **Sender groups:** a company is its domain without sub-domains and without `.com`, `.net`,
-  `.org` or a listed country ending (`amazon.dk` and `amazon.com` are one; `danskebank.io` and
-  `.xyz` are not the bank); a
-  free-mail address, or a colleague on the account's own domain, is that address. A look-alike
-  (the same name on another address or ending) never joins by rule: it goes to Jev (`jev-1.14.0`, key `jev-compaction`): one Choice over at most 12 candidates plus "none
+- **Sender groups:** by rule, a company is its exact domain without sub-domains
+  (`mail.amazon.dk` is `amazon.dk`) and a free-mail address, or a colleague on the account's own
+  domain, is that address. Anything else that looks alike (`amazon.com`, `danskebank.io`, the
+  same name on another address) never joins by rule: it goes to Jev (`jev-1.14.0`, key `jev-compaction`): one Choice over at most 12 candidates plus "none
   of these", kept only above `max(0.6, 1/n + 0.25)`. Jev sees the sender's name and address and
   the candidates' names and three addresses each, never a subject or a text. At most 25 calls a
   run; without the key the rules decide alone.

@@ -68,13 +68,6 @@ FREEMAIL = {
     "mail.dk", "jubii.dk", "sol.dk", "ofir.dk", "tdcadsl.dk", "webspeed.dk", "fastmail.com",
     "zoho.com", "yandex.com", "hey.com", "tutanota.com", "tuta.io",
 }
-# The endings dropped from a company's key: .com, .net, .org and the countries whose shops and
-# banks write to the owner. Open endings anyone uses for look-alikes (.io, .co, .me, .ai, ...)
-# are not here, so they stay in the key and reach the company only through Jev.
-BRAND_ENDINGS = {
-    "com", "net", "org", "dk", "se", "no", "fi", "is", "de", "at", "ch", "nl", "be", "fr", "es",
-    "it", "pt", "ie", "uk", "pl", "eu", "us", "ca", "au", "nz", "jp",
-}
 SECOND_LEVEL = {"com", "co", "net", "org", "gov", "ac", "edu"}
 TWO_LEVEL = {
     "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "co.kr",
@@ -150,15 +143,13 @@ def sender_of(from_header, account=""):
         label = name if len(norm(name)) >= 2 else local
         return {"addr": addr, "name": name, "kind": "person", "key": f"p:{local}@{domain}",
                 "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(local))}
+    # A company is its registrable domain, exactly: mail.amazon.dk is amazon.dk. Another ending
+    # (amazon.com, danskebank.io) never joins by rule; it is a candidate for Jev.
     base = registrable(domain)
-    # Only an ending in BRAND_ENDINGS is dropped (amazon.dk = amazon.com); any other
-    # ending stays in the key, so danskebank.xyz is a candidate for Jev, not the bank by rule.
-    first, ending = base.split(".", 1) if "." in base else (base, "")
-    tld = ending.rsplit(".", 1)[-1]
-    brand = first if tld in BRAND_ENDINGS and first not in SECOND_LEVEL else base
-    label = name if norm(name) == norm(brand) else brand.capitalize()
-    return {"addr": addr, "name": name, "kind": "org", "key": "o:" + (norm(brand) or "unknown"),
-            "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(brand))}
+    first = base.split(".", 1)[0]
+    label = name if norm(name) == norm(first) else first.capitalize()
+    return {"addr": addr, "name": name, "kind": "org", "key": "o:" + base,
+            "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(first))}
 
 
 def account_of(headers, accounts, folder):
@@ -242,14 +233,21 @@ def log(path, row):
 
 # ---- grouping ----------------------------------------------------------------------------
 
+def stem(key):
+    """The name part of a group key: a company's domain without its ending, a person's address
+    without its domain."""
+    kind, rest = key.split(":", 1)
+    return norm(rest.split("@", 1)[0] if kind == "p" else rest.split(".", 1)[0])
+
+
 def candidates(sender, groups):
     """Existing groups the new sender might belong to: one name inside the other, or a shared
     word that is not noise. The list Jev picks from is narrowed here, in code."""
-    key = sender["key"].split(":", 1)[1]
+    key = stem(sender["key"])
     toks = set(sender["tokens"])
     out = []
     for gkey, g in groups.items():
-        gk = gkey.split(":", 1)[1]
+        gk = stem(gkey)
         inside = len(key) >= 4 and len(gk) >= 4 and (key in gk or gk in key)
         if inside or toks & set(g.get("tokens", [])):
             out.append(gkey)

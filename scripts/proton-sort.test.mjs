@@ -25,7 +25,8 @@ out["label_bank"] = ps.sender_of("Danske Bank <no-reply@mail.danskebank.dk>")["l
 out["label_brand"] = ps.sender_of("Amazon.dk <noreply@amazon.dk>")["label"]
 out["person"] = [k("John Doe <john.doe+news@gmail.com>"), k("<johndoe@gmail.com>"), k("John Doe <jd@hotmail.com>")]
 out["endings"] = [k("x@amazon.net"), k("x@mail.danskebank.co.uk"), k("x@danskebank.xyz"), k("x@danskebank.io"),
-                  k("x@shop.a.com.pl"), k("x@b.com.pl"), k("x@c.com.tw")]
+                  k("x@shop.a.com.pl"), k("x@b.com.pl"), k("x@c.com.tw"),
+                  k("x@danskebank.com.se"), k("x@mail.amazon.dk")]
 out["colleague"] = k("Jens Hansen <jh@firma.dk>", "me@firma.dk")
 out["company_for_other_account"] = k("Jens Hansen <jh@firma.dk>", "someone@gmail.com")
 out["danish"] = ps.sender_of("Søren Ærø <s@gmail.com>")["label"]
@@ -152,7 +153,7 @@ def boxes():
     return {
         "INBOX": {
             "1": mail(From="Amazon <noreply@amazon.dk>", To="list@example.org", X_Forwarded_For="home.mail@gmail.com inbox@pm.me", X_Forwarded_To="inbox@pm.me"),
-            "2": mail(From="Amazon.com <order@amazon.com>", To="home.mail@gmail.com"),
+            "2": mail(From="Amazon <shipping@mail.amazon.dk>", To="home.mail@gmail.com"),
             "3": mail(From="inbox@pm.me", To="home.mail@gmail.com"),
             "4": mail(From="Someone <s@example.org>", To="list@example.org"),
         },
@@ -183,16 +184,17 @@ function run() {
   return cached;
 }
 
-test("sender rules: one company across domains and countries, one person across address forms", opts, () => {
+test("sender rules: a company is its exact domain, a person their address, whatever the name", opts, () => {
   const o = run();
-  assert.deepEqual(o.amazon, ["o:amazon", "o:amazon", "o:amazon"]);
-  assert.equal(o.bank, "o:danskebank");
+  assert.deepEqual(o.amazon, ["o:amazon.dk", "o:amazon.com", "o:amazon.co.uk"]);
+  assert.equal(o.bank, "o:danskebank.dk");
   assert.equal(o.label_bank, "Danske Bank");
   assert.equal(o.label_brand, "Amazon");
   assert.deepEqual(o.person, ["p:johndoe@gmail.com", "p:johndoe@gmail.com", "p:jd@hotmail.com"]);
   assert.equal(o.colleague, "p:jh@firma.dk");
-  assert.deepEqual(o.endings, ["o:amazon", "o:danskebank", "o:danskebankxyz", "o:danskebankio", "o:a", "o:b", "o:ccomtw"]);
-  assert.equal(o.company_for_other_account, "o:firma");
+  assert.deepEqual(o.endings, ["o:amazon.net", "o:danskebank.co.uk", "o:danskebank.xyz", "o:danskebank.io",
+    "o:a.com.pl", "o:b.com.pl", "o:c.com.tw", "o:danskebank.com.se", "o:amazon.dk"]);
+  assert.equal(o.company_for_other_account, "o:firma.dk");
   assert.equal(o.danish, "Soren Aero");
   assert.deepEqual(o.encoded, ["Soren Aero", "p:s@gmail.com", ["aero", "soren"]]);
   assert.equal(o.bad_addr, null);
@@ -225,7 +227,7 @@ test("Jev's pick counts only with a clear lead; none, a near tie or a bad answer
   assert.equal(o.no_key_calls, 0);
   assert.deepEqual(o.bad_shapes, Array(5).fill("Facebookmail"));
   assert.equal(o.http_error, "Facebookmail");
-  assert.deepEqual(o.lookalikes_no_jev, ["John Doe", "John Doe (person hotmail.com)", "Danske Bank", "Danskebank.xyz"]);
+  assert.deepEqual(o.lookalikes_no_jev, ["John Doe", "John Doe (person hotmail.com)", "Danske Bank", "Danske Bank (org danskebank.xyz)"]);
   assert.deepEqual(o.lookalike_with_jev, ["John Doe", "John Doe", 1]);
   assert.deepEqual(o.alias, ["Facebook", 1]);
   assert.deepEqual(o.clash, ["Danske Bank", "Danske Bank (person gmail.com)"]);

@@ -8,8 +8,9 @@ first, Jev only for unclear senders (names and addresses only).
 **What changed.**
 - `scripts/proton-sort.py` (new, beside `proton-mail.py`): files mail from the Inbox and each
   `Folders/<account>` into `Folders/<account>/<sender>`; rules first, a Jev Choice over at most
-  12 candidates plus "none of these", gated at `max(0.6, 1/n + 0.25)`. A person is an address and a company keeps any ending but a country,
-  `.com`, `.net` or `.org`, so a look-alike reaches Jev, never a rule (review rounds 1 to 4). State and Jev log in
+  12 candidates plus "none of these", gated at `max(0.6, 1/n + 0.25)`. By rule a company is its exact domain and a person their address;
+  everything alike (other endings, the same name) reaches Jev. Dead end: dropping endings by
+  rule (country, .com) let a look-alike in twice (review rounds 4 to 6), so it was removed. State and Jev log in
   `~/.local/share/proton-sort/`. Units `scripts/proton-sort/proton-sort.{service,timer}`, every
   10 minutes.
 - Recipe `proton-mail-sorting.md` (new); the folder bullet in `proton-mail.md` moved there.
