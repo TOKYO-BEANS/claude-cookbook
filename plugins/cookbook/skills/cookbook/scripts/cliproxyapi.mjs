@@ -213,12 +213,20 @@ async function login(provider) {
 // printed. Proton Pass holds the same secret and clears its own copy from the clipboard.
 export const PANEL_NOTE = 'the management secret is not on the clipboard and is not shown here: copy it in Proton Pass (vault "Claude", item key/cliproxyapi-management) and paste it into the login box';
 
+// Started from the app grid (scripts/cliproxyapi-console.desktop) there is no terminal: the
+// lines also go to a desktop notification. They never hold the secret.
+export const panelNotice = (lines, isTTY) => (isTTY ? null : ["notify-send", ["--app-name=CLIProxyAPI Console", "CLIProxyAPI Console", lines.join("\n")]]);
+
 async function panel() {
-  if (!(await isUp())) { say("not running: start it first with `cliproxyapi start`"); return 1; }
+  const tell = (...lines) => {
+    for (const l of lines) say(l);
+    const notice = panelNotice(lines, Boolean(process.stderr.isTTY));
+    if (notice) spawnSync(notice[0], notice[1], { stdio: "ignore", timeout: 5_000 });
+  };
+  if (!(await isUp())) { tell("not running: start it with `systemctl --user start cliproxyapi`"); return 1; }
   const address = `${URL_BASE}/management.html`;
   const r = spawnSync("xdg-open", [address], { stdio: "ignore", timeout: 15_000 });
-  say(r.status === 0 ? `console opened (${address})` : `could not open a browser (${r.error?.code ?? `exit ${r.status}`}); open ${address} yourself`);
-  say(PANEL_NOTE);
+  tell(r.status === 0 ? `console opened (${address})` : `could not open a browser (${r.error?.code ?? `exit ${r.status}`}); open ${address} yourself`, PANEL_NOTE);
   return r.status === 0 ? 0 : 1;
 }
 

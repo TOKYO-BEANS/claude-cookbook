@@ -266,3 +266,20 @@ test("the user unit runs the installed launcher, cleans up through it, and keeps
   // The launcher the unit names is the one whose PATHS point at the private folder in this home.
   assert.equal(PATHS.config, join(homedir(), ".local", "share", "cliproxyapi", "private", "config.yaml"));
 });
+
+import { panelNotice } from "../plugins/cookbook/skills/cookbook/scripts/cliproxyapi.mjs";
+
+test("panel: a notification only without a terminal, with the note and never a secret", () => {
+  assert.equal(panelNotice(["console opened", PANEL_NOTE], true), null);
+  const [cmd, args] = panelNotice(["console opened", PANEL_NOTE], false);
+  assert.equal(cmd, "notify-send");
+  assert.equal(args.at(-1), `console opened\n${PANEL_NOTE}`);
+});
+
+test("the console app runs the installed launcher's panel, with no path from this machine", () => {
+  const app = readFileSync(join(SCRIPTS, "cliproxyapi-console.desktop"), "utf8");
+  const line = (key) => app.split("\n").filter((l) => l.startsWith(`${key}=`)).map((l) => l.slice(key.length + 1));
+  assert.deepEqual(line("Exec"), ['sh -c "exec /usr/bin/node \\\\$HOME/.local/bin/cliproxyapi.mjs panel"']);
+  assert.deepEqual(line("Terminal"), ["false"]);
+  assert.doesNotMatch(app, /\/home\//);
+});
