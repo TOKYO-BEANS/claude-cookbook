@@ -20,6 +20,14 @@ product here needs it yet. The owner chose to record it as weighed.
   (Turnstile) and OAuth for a Worker-hosted MCP server are Cloudflare's
   ([cloudflare](../recipes/cloudflare.md)); keys and logins are the key store's and the
   vault's ([keys](../recipes/keys.md)).
+- **Passport** (asked the same day; early access since 17 November 2026,
+  <https://workos.com/passport>). Staff sign-in, not product sign-in: an employee registers a
+  Mac once, then work apps connected over SAML or OpenID Connect open already signed in
+  (Apple's Platform SSO), with an app list, Mac device management and company rules for AI
+  tools and MCP servers. Not now: Mac only at launch while this setup runs on Linux, built for
+  a team of employees where here is one owner (logins are the vault's), early access for
+  selected teams, no price published. Weigh it again for a team on Macs, or when a group's AI
+  tools need one set of MCP rules.
 - **What would bring it in.** (1) A product that outside companies sign into, each with its
   own users: start from AuthKit on its free tier. (2) A customer asks for SSO or SCIM: WorkOS
   is the first choice, and its connection price is a spend the owner approves. (3) A public
