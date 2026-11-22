@@ -9,7 +9,7 @@
 // Who gets the stored key is decided here, before the CLI runs, and narrowly: only a
 // command on the list below, only with options this launcher knows before it, and only for
 // Firecrawl's own API. Every other call starts with the caller's environment as it is.
-// The lists are those of the pinned CLI (1.29.0): after an update of the pin, read its
+// The lists are those of the pinned CLI (1.30.0): after an update of the pin, read its
 // `--help` again. A command or option that is new there gets no key until it is listed.
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -48,7 +48,7 @@ function addresses(env, argv) {
 // - `experimental` (`x`), which holds `download` and `sql`, and the hidden `sql`: a
 //   group gets new commands between versions, and each would get the key unread.
 // - `browser` (hidden, deprecated for `interact`): its file holds a function that starts
-//   a local shell with the whole environment. Nothing calls it in 1.29.0.
+//   a local shell with the whole environment. Nothing calls it in 1.30.0.
 const KEYED_COMMANDS = new Set(["scrape", "crawl", "batch-scrape", "map", "parse", "monitor", "search", "find-tools", "find-skills", "read-skill",
   "create-skill", "update-skill", "list", "list-tools", "alexandria", "developer", "gov", "research", "feedback", "search-feedback", "agent", "interact",
   "status", "credit-usage", "credits"]);
