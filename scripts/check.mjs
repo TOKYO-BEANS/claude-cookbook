@@ -24,6 +24,20 @@ export const PAGE_READ_LIMIT = 4000;
 // SKILL.md loads in full on every non-trivial task: it holds the map and the ground rules only.
 export const SKILL_LIMIT = 14000;
 export const readCost = (text) => Buffer.byteLength(text) + 9 * text.split("\n").length;
+// What is left before each limit: SKILL.md always, a page only when it is within `near` bytes,
+// tightest first. Every run prints the SKILL.md line; `--room` adds the pages, so an edit sees
+// its room before boat-run or a push.
+export function roomReport({ skillText, pages, near = 150 }) {
+  const skill = Buffer.byteLength(skillText);
+  const close = pages
+    .map(({ name, text }) => ({ name, cost: readCost(text.replace(/\r/g, "")) }))
+    .filter((p) => PAGE_READ_LIMIT - p.cost < near)
+    .sort((a, b) => b.cost - a.cost || a.name.localeCompare(b.name));
+  return [
+    `SKILL.md: ${skill} of ${SKILL_LIMIT} bytes, ${SKILL_LIMIT - skill} left`,
+    ...close.map((p) => `${p.name}: ${p.cost} of ${PAGE_READ_LIMIT} as a Read result, ${PAGE_READ_LIMIT - p.cost} left`),
+  ];
+}
 const mdLinks = (text) => [...text.matchAll(/\]\(([^)\s]+\.md)\)/g)].map((m) => m[1]).filter((t) => !t.includes("://"));
 const resolveLink = (from, target) => posix.normalize(posix.join(posix.dirname(from), target));
 const pageTitle = (text) => /^# (.+)\n/.exec(text)?.[1].trim();
@@ -461,10 +475,14 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const handoff = handoffErrors({ closedText: readFileSync(new URL("HANDOFF.md", root), "utf8"), entryNames });
   for (const name of entryNames.filter((n) => HANDOFF_ENTRY_NAME.test(n)))
     handoff.push(...handoffEntryErrors({ name, text: readFileSync(new URL(`handoff/${name}`, root), "utf8") }));
+  const skillText = readFileSync(new URL("plugins/cookbook/skills/cookbook/SKILL.md", root), "utf8");
+  const pages = readPages(new URL("plugins/cookbook/skills/cookbook/", root));
+  const room = roomReport({ skillText, pages });
+  for (const line of process.argv.includes("--room") ? room : room.slice(0, 1)) console.log(line);
   const errors = checkCookbook({
     catalogText: readFileSync(new URL("plugins/cookbook/catalog.json", root), "utf8"),
-    skillText: readFileSync(new URL("plugins/cookbook/skills/cookbook/SKILL.md", root), "utf8"),
-    pages: readPages(new URL("plugins/cookbook/skills/cookbook/", root)),
+    skillText,
+    pages,
     otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: readFileSync(new URL(p, root), "utf8") })),
   });
   errors.push(...handoff);
