@@ -36,8 +36,13 @@ to "none" (0.66).
 
 **Outstanding.** The owner sets the two forwards (Gmail, Outlook); the first forwarded mails
 show whether Microsoft 365 keeps the original To (if not, an `also` alias in the config). The
-older mail in Archive (about 430) is not sorted: the owner's choice.
+older mail in Archive was sorted on the owner's yes (question dialog, this chat): 419 of 432
+mails matched an account and went to 59 sender folders (Jev asked 9 times); 13 matched no
+account and stay in Archive. Of #224's last review's two low findings, the 401/403 one is fixed
+(a key error ends Jev for the run); the other (state from before #224 keeps old folder names)
+needs nothing: the state was empty when #224 was installed.
 
-**Dead ends and failures.** None.
+**Dead ends and failures.** Dropping endings by rule (country, `.com`) to merge a company's
+domains: two variants let a look-alike in (review rounds 4 to 6); removed, Jev decides instead.
 
 **Evidence.** Run output in this chat; state and Jev log in `~/.local/share/proton-sort/`.

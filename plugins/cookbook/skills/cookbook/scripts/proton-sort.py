@@ -328,10 +328,11 @@ def ask_jev(sender, cands, groups, key, opener=urllib.request.urlopen, timeout=2
 
 def jev_outage(e):
     """True when a failed Jev call means the service or the connection is down (a timeout, no
-    connection, a 5xx or 429 reply, a broken HTTP exchange), so every later call would fail too.
+    connection, a 5xx, 401, 403 or 429 reply, a broken HTTP exchange), so every later call would fail too.
     A malformed answer or another 4xx reply is about that one request and is not an outage."""
     if isinstance(e, urllib.error.HTTPError):
-        return e.code >= 500 or e.code == 429
+        # A 401 or 403 is the key itself (wrong, revoked, expired): every later call fails too.
+        return e.code >= 500 or e.code in (401, 403, 429)
     return isinstance(e, (OSError, http.client.HTTPException))
 
 
