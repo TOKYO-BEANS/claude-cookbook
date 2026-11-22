@@ -68,6 +68,7 @@ FREEMAIL = {
     "mail.dk", "jubii.dk", "sol.dk", "ofir.dk", "tdcadsl.dk", "webspeed.dk", "fastmail.com",
     "zoho.com", "yandex.com", "hey.com", "tutanota.com", "tuta.io",
 }
+BRAND_ENDINGS = {"com", "net", "org"}
 TWO_LEVEL = {
     "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "co.kr",
     "com.br", "co.za", "com.mx", "co.in", "com.tr", "com.cn", "com.hk", "com.sg", "com.ar", "co.il",
@@ -134,14 +135,20 @@ def sender_of(from_header, account=""):
         name = ""
     own_domain = account.rsplit("@", 1)[-1].lower() if "@" in account else ""
     if domain in FREEMAIL or (own_domain and own_domain not in FREEMAIL and registrable(domain) == registrable(own_domain)):
+        # A person is the address itself (no +tag, no Gmail dots): the same name on another
+        # address is only a candidate for Jev, never a match by rule.
         local = local.split("+", 1)[0]
         if domain in ("gmail.com", "googlemail.com"):
-            local = local.replace(".", "")
+            local, domain = local.replace(".", ""), "gmail.com"
         label = name if len(norm(name)) >= 2 else local
-        return {"addr": addr, "name": name, "kind": "person", "key": "p:" + (norm(label) or norm(local) or "unknown"),
+        return {"addr": addr, "name": name, "kind": "person", "key": f"p:{local}@{domain}",
                 "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(local))}
     base = registrable(domain)
-    brand = base.split(".", 1)[0]
+    # Only a country ending or .com, .net, .org is dropped (amazon.dk = amazon.com); any other
+    # ending stays in the key, so danskebank.xyz is a candidate for Jev, not the bank by rule.
+    first, ending = base.split(".", 1) if "." in base else (base, "")
+    tld = ending.rsplit(".", 1)[-1]
+    brand = first if len(tld) == 2 or tld in BRAND_ENDINGS else base
     label = name if norm(name) == norm(brand) else brand.capitalize()
     return {"addr": addr, "name": name, "kind": "org", "key": "o:" + (norm(brand) or "unknown"),
             "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(brand))}

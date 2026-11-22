@@ -24,6 +24,7 @@ out["bank"] = k("Danske Bank <no-reply@mail.danskebank.dk>")
 out["label_bank"] = ps.sender_of("Danske Bank <no-reply@mail.danskebank.dk>")["label"]
 out["label_brand"] = ps.sender_of("Amazon.dk <noreply@amazon.dk>")["label"]
 out["person"] = [k("John Doe <john.doe+news@gmail.com>"), k("<johndoe@gmail.com>"), k("John Doe <jd@hotmail.com>")]
+out["endings"] = [k("x@amazon.net"), k("x@mail.danskebank.co.uk"), k("x@danskebank.xyz")]
 out["colleague"] = k("Jens Hansen <jh@firma.dk>", "me@firma.dk")
 out["company_for_other_account"] = k("Jens Hansen <jh@firma.dk>", "someone@gmail.com")
 out["danish"] = ps.sender_of("Søren Ærø <s@gmail.com>")["label"]
@@ -113,6 +114,11 @@ ga.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>")
 alias_label = ga.group_for("a@gmail.com", ps.sender_of("FB <other@facebookmail.com>"))
 out["alias"] = [alias_label, ga.jev_calls]
 gu = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
+gl = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
+out["lookalikes_no_jev"] = [gl.group_for("a@gmail.com", ps.sender_of(h)) for h in
+    ["John Doe <john.doe@gmail.com>", "John Doe <anything@hotmail.com>", "Danske Bank <x@danskebank.dk>", "Danske Bank <x@danskebank.xyz>"]]
+gj = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}}}))
+out["lookalike_with_jev"] = [gj.group_for("a@gmail.com", ps.sender_of(h)) for h in ["John Doe <john.doe@gmail.com>", "John Doe <jd@hotmail.com>"]] + [gj.jev_calls]
 out["clash"] = [gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <x@danskebank.dk>")),
                 gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <fake@gmail.com>"))]
 
@@ -182,11 +188,12 @@ test("sender rules: one company across domains and countries, one person across 
   assert.equal(o.bank, "o:danskebank");
   assert.equal(o.label_bank, "Danske Bank");
   assert.equal(o.label_brand, "Amazon");
-  assert.deepEqual(o.person, ["p:johndoe", "p:johndoe", "p:johndoe"]);
-  assert.equal(o.colleague, "p:jenshansen");
+  assert.deepEqual(o.person, ["p:johndoe@gmail.com", "p:johndoe@gmail.com", "p:jd@hotmail.com"]);
+  assert.equal(o.colleague, "p:jh@firma.dk");
+  assert.deepEqual(o.endings, ["o:amazon", "o:danskebank", "o:danskebankxyz"]);
   assert.equal(o.company_for_other_account, "o:firma");
   assert.equal(o.danish, "Soren Aero");
-  assert.deepEqual(o.encoded, ["Soren Aero", "p:sorenaero", ["aero", "soren"]]);
+  assert.deepEqual(o.encoded, ["Soren Aero", "p:s@gmail.com", ["aero", "soren"]]);
   assert.equal(o.bad_addr, null);
 });
 
@@ -217,6 +224,8 @@ test("Jev's pick counts only with a clear lead; none, a near tie or a bad answer
   assert.equal(o.no_key_calls, 0);
   assert.deepEqual(o.bad_shapes, Array(5).fill("Facebookmail"));
   assert.equal(o.http_error, "Facebookmail");
+  assert.deepEqual(o.lookalikes_no_jev, ["John Doe", "John Doe (person hotmail.com)", "Danske Bank", "Danskebank.xyz"]);
+  assert.deepEqual(o.lookalike_with_jev, ["John Doe", "John Doe", 1]);
   assert.deepEqual(o.alias, ["Facebook", 1]);
   assert.deepEqual(o.clash, ["Danske Bank", "Danske Bank (person gmail.com)"]);
   assert.equal(o.unrelated_calls, 0);
