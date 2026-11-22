@@ -29,6 +29,7 @@ out["company_for_other_account"] = k("Jens Hansen <jh@firma.dk>", "someone@gmail
 out["danish"] = ps.sender_of("Søren Ærø <s@gmail.com>")["label"]
 enc = ps.sender_of("=?utf-8?q?S=C3=B8ren_=C3=86r=C3=B8?= <s@gmail.com>")
 out["encoded"] = [enc["label"], enc["key"], enc["tokens"]]
+out["amp"] = [ps.sender_of("H&M <news@hm.com>")["label"], ps.clean_label("A & B")]
 evil = ps.sender_of('"Ev\\"il / ..\\\\ x" <a@gmail.com>')["label"] + ps.clean_label('Evil" DELETE /..\r\nBcc: \\x\u202e')
 out["evil_label"] = evil
 out["evil_ok"] = ps.pm.mailbox_name("Folders/a@b.dk/" + evil)
@@ -66,6 +67,14 @@ out["jev_unsure"] = g2.group_for("a@gmail.com", ps.sender_of("Facebookmail <secu
 g3 = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g7": 1.0}}}}))
 g3.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 out["jev_malformed"] = g3.group_for("a@gmail.com", ps.sender_of("Facebookmail <security@facebookmail.com>"))
+bad_shapes = [{"answers": [1]}, {"answers": {"same_sender": [1]}}, [1],
+              {"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": None, "none": 1.0}}}},
+              {"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": True, "none": 0.0}}}}]
+out["bad_shapes"] = []
+for bad in bad_shapes:
+    gb = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with(bad))
+    gb.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+    out["bad_shapes"].append(gb.group_for("a@gmail.com", ps.sender_of("Facebookmail <security@facebookmail.com>")))
 g4 = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
 g4.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 g4.group_for("a@gmail.com", ps.sender_of("Facebookmail <security@facebookmail.com>"))
@@ -112,7 +121,8 @@ test("sender rules: one company across domains and countries, one person across 
 
 test("a folder name from a hostile sender name is one safe IMAP name", opts, () => {
   const o = run();
-  assert.match(o.evil_label, /^[A-Za-z0-9 &._+()-]+$/);
+  assert.match(o.evil_label, /^[A-Za-z0-9 ._+()-]+$/);
+  assert.deepEqual(o.amp, ["H and M", "A and B"]);
   assert.ok(!o.evil_label.includes("/"));
   assert.ok(o.evil_ok.startsWith('"Folders/a@b.dk/'));
 });
@@ -134,6 +144,7 @@ test("Jev's pick counts only with a clear lead; none, a near tie or a bad answer
   assert.equal(o.jev_unsure, "Facebookmail");
   assert.equal(o.jev_malformed, "Facebookmail");
   assert.equal(o.no_key_calls, 0);
+  assert.deepEqual(o.bad_shapes, Array(5).fill("Facebookmail"));
   assert.equal(o.unrelated_calls, 0);
 });
 

@@ -97,8 +97,10 @@ def tokens(text):
 
 
 def clean_label(text):
-    """A folder name made from outside text: ASCII letters, digits and a few signs, one line."""
-    text = re.sub(r"[^A-Za-z0-9 &._+()-]+", " ", fold(pm.one_line(text, 120)))
+    """A folder name made from outside text: ASCII letters, digits and a few signs, one line.
+    No `&`: in an IMAP folder name it starts an encoded run (RFC 3501, 5.1.3)."""
+    text = fold(pm.one_line(text, 120)).replace("&", " and ")
+    text = re.sub(r"[^A-Za-z0-9 ._+()-]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip(" .")
     return text[:60].rstrip(" .") or "Unknown"
 
@@ -270,10 +272,13 @@ def ask_jev(sender, cands, groups, key, opener=urllib.request.urlopen, timeout=2
                                  headers={"authorization": f"Bearer {key}", "content-type": "application/json"})
     with opener(req, timeout=timeout) as r:
         data = json.loads(r.read().decode("utf-8"))
-    a = (data.get("answers") or {}).get("same_sender") or {}
-    probs = a.get("probabilities")
+    answers = data.get("answers") if isinstance(data, dict) else None
+    a = answers.get("same_sender") if isinstance(answers, dict) else None
+    probs = a.get("probabilities") if isinstance(a, dict) else None
     ids = {f"g{i}" for i in range(len(cands))} | {"none"}
-    if a.get("type") != "choice" or not isinstance(probs, dict) or not set(probs) <= ids:
+    if not isinstance(a, dict) or a.get("type") != "choice" or not isinstance(probs, dict) or not set(probs) <= ids:
+        raise ValueError("malformed Jev answer")
+    if not all(type(v) in (int, float) for v in probs.values()):
         raise ValueError("malformed Jev answer")
     vals = {i: float(probs.get(i, 0)) for i in ids}
     if not all(0 <= v <= 1 for v in vals.values()) or not 0.9 < sum(vals.values()) < 1.1:
@@ -313,7 +318,7 @@ class Grouper:
                     pick = gate(probs, cands)
                     row = {"account": account, "addr": sender["addr"], "rule": key, "candidates": cands,
                            "probs": probs, "pick": pick, "model": model}
-                except (OSError, ValueError, urllib.error.URLError) as e:
+                except (OSError, ValueError, TypeError, AttributeError, urllib.error.URLError) as e:
                     row = {"account": account, "addr": sender["addr"], "rule": key, "candidates": cands,
                            "jev_error": pm.one_line(e, 200)}
                 if self.log_path:
@@ -358,8 +363,9 @@ def cmd_sort(cfg, args):
     accounts, own = load_settings(cfg)
     state_path = os.path.join(STATE_DIR, "state.json")
     state = load_state(state_path)
-    jev_key = os.environ.get("TYPESAFE_API_KEY") or None
-    grouper = Grouper(state, jev_key, args.max_jev, os.path.join(STATE_DIR, "log.jsonl"))
+    # A dry run asks Jev nothing and logs nothing: the rules alone show the plan.
+    jev_key = None if args.dry_run else os.environ.get("TYPESAFE_API_KEY") or None
+    grouper = Grouper(state, jev_key, args.max_jev, None if args.dry_run else os.path.join(STATE_DIR, "log.jsonl"))
     conn = pm.imap_connect(cfg)
     moved, left = {}, 0
     try:
@@ -405,7 +411,7 @@ def cmd_sort(cfg, args):
             pass
     total = sum(moved.values())
     print(f"{'would move' if args.dry_run else 'moved'} {total} mail(s) into {len(moved)} sender folder(s); "
-          f"{left} left in place; Jev asked {grouper.jev_calls} time(s){'' if jev_key else ' (no Jev key: rules only)'}.")
+          f"{left} left in place; Jev asked {grouper.jev_calls} time(s){' (dry run: rules only)' if args.dry_run else '' if jev_key else ' (no Jev key: rules only)'}.")
     if args.verbose:
         for dest, n in sorted(moved.items()):
             print(f"{n}\t{pm.one_line(dest, 160)}")
@@ -415,7 +421,7 @@ def parser():
     p = argparse.ArgumentParser(prog="proton-sort", description="Sort Proton mail by account and sender.")
     sub = p.add_subparsers(dest="cmd", required=True)
     sp = sub.add_parser("sort")
-    sp.add_argument("--dry-run", action="store_true", help="plan only: nothing moves, no folder is made, no state saved")
+    sp.add_argument("--dry-run", action="store_true", help="plan only, by the rules alone: nothing moves, no folder is made, no state saved, Jev is not asked")
     sp.add_argument("--verbose", action="store_true", help="print each sender folder and its count")
     sp.add_argument("--max-moves", type=int, default=500)
     sp.add_argument("--max-jev", type=int, default=25)
