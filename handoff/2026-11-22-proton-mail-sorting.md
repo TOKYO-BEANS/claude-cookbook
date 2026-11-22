@@ -10,7 +10,9 @@ first, Jev only for unclear senders (names and addresses only).
   `Folders/<account>` into `Folders/<account>/<sender>`; rules first, a Jev Choice over at most
   12 candidates plus "none of these", gated at `max(0.6, 1/n + 0.25)`. By rule a company is its exact domain and a person their address;
   everything alike (other endings, the same name) reaches Jev. Dead end: dropping endings by
-  rule (country, .com) let a look-alike in twice (review rounds 4 to 6), so it was removed. State and Jev log in
+  rule (country, .com) let a look-alike in twice (review rounds 4 to 6), so it was removed. Jev also answers "imitation?" in the same request; a
+  join needs it under 0.5 (live: `danskebank-verify.io` and `paypal-account-update.com` 0.98
+  to 0.99 though Jev called them the same sender; own domains 0.04 to 0.13). State and Jev log in
   `~/.local/share/proton-sort/`. Units `scripts/proton-sort/proton-sort.{service,timer}`, every
   10 minutes.
 - Recipe `proton-mail-sorting.md` (new); the folder bullet in `proton-mail.md` moved there.

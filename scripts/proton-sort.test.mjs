@@ -57,14 +57,15 @@ def opener_with(answer):
         sent.append(json.loads(req.data)); return Resp(json.dumps(answer).encode())
     return opener
 state = {"accounts": {}}
-g = ps.Grouper(state, "k", 5, None, opener_with({"model": "jev-1.14.0", "answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.92, "none": 0.08}}}}))
+g = ps.Grouper(state, "k", 5, None, opener_with({"model": "jev-1.14.0", "answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.92, "none": 0.08}}, "imitation": {"type": "noul", "noul": 0.05}}}))
 first = g.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 second = g.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
 again = g.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
 out["jev_merge"] = [first, second, again, g.jev_calls]
 out["jev_request"] = sent[0]["state"]
 out["jev_ids"] = sorted(sent[0]["questions"]["same_sender"]["criteria"])
-g2 = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.5, "none": 0.5}}}}))
+out["jev_questions"] = sorted(sent[0]["questions"])
+g2 = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.5, "none": 0.5}}, "imitation": {"type": "noul", "noul": 0.05}}}))
 g2.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 out["jev_unsure"] = g2.group_for("a@gmail.com", ps.sender_of("Facebookmail <security@facebookmail.com>"))
 g3 = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g7": 1.0}}}}))
@@ -110,16 +111,22 @@ def raises(exc):
 gh = ps.Grouper({"accounts": {}}, "k", 5, None, raises(http.client.IncompleteRead(b"")))
 gh.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 out["http_error"] = gh.group_for("a@gmail.com", ps.sender_of("Facebookmail <security@facebookmail.com>"))
-ga = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}}}))
+ga = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}, "imitation": {"type": "noul", "noul": 0.05}}}))
 ga.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 ga.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
 alias_label = ga.group_for("a@gmail.com", ps.sender_of("FB <other@facebookmail.com>"))
 out["alias"] = [alias_label, ga.jev_calls]
 gu = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
+gi = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.99, "none": 0.01}}, "imitation": {"type": "noul", "noul": 0.97}}}))
+gi.group_for("a@gmail.com", ps.sender_of("Danske Bank <no-reply@danskebank.dk>"))
+out["imitation"] = [gi.group_for("a@gmail.com", ps.sender_of("Danske Bank <secure@danskebank-verify.io>")), gi.jev_calls]
+gm = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.99, "none": 0.01}}}}))
+gm.group_for("a@gmail.com", ps.sender_of("Danske Bank <no-reply@danskebank.dk>"))
+out["imitation_missing"] = gm.group_for("a@gmail.com", ps.sender_of("Danske Bank <info@danskebank.se>"))
 gl = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
 out["lookalikes_no_jev"] = [gl.group_for("a@gmail.com", ps.sender_of(h)) for h in
     ["John Doe <john.doe@gmail.com>", "John Doe <anything@hotmail.com>", "Danske Bank <x@danskebank.dk>", "Danske Bank <x@danskebank.xyz>"]]
-gj = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}}}))
+gj = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}, "imitation": {"type": "noul", "noul": 0.05}}}))
 out["lookalike_with_jev"] = [gj.group_for("a@gmail.com", ps.sender_of(h)) for h in ["John Doe <john.doe@gmail.com>", "John Doe <jd@hotmail.com>"]] + [gj.jev_calls]
 out["clash"] = [gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <x@danskebank.dk>")),
                 gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <fake@gmail.com>"))]
@@ -227,6 +234,8 @@ test("Jev's pick counts only with a clear lead; none, a near tie or a bad answer
   assert.equal(o.no_key_calls, 0);
   assert.deepEqual(o.bad_shapes, Array(5).fill("Facebookmail"));
   assert.equal(o.http_error, "Facebookmail");
+  assert.deepEqual(o.imitation, ["Danskebank-verify", 1]);
+  assert.equal(o.imitation_missing, "Danske Bank (org danskebank.se)");
   assert.deepEqual(o.lookalikes_no_jev, ["John Doe", "John Doe (person hotmail.com)", "Danske Bank", "Danske Bank (org danskebank.xyz)"]);
   assert.deepEqual(o.lookalike_with_jev, ["John Doe", "John Doe", 1]);
   assert.deepEqual(o.alias, ["Facebook", 1]);
@@ -250,6 +259,7 @@ test("Jev sees names and addresses only, with a none-of-these option", opts, () 
   assert.deepEqual(o.jev_request.new_sender, { name: "Facebook", address: "security@facebookmail.com" });
   assert.deepEqual(o.jev_request.groups, { g0: { name: "Facebook", addresses: ["notify@facebook.com"] } });
   assert.deepEqual(o.jev_ids, ["g0", "none"]);
+  assert.deepEqual(o.jev_questions, ["imitation", "same_sender"]);
 });
 
 test("settings: accounts are required, one address each, lower-cased; own addresses kept", opts, () => {

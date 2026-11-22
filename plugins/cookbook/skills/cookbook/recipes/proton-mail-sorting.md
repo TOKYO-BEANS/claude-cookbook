@@ -22,7 +22,9 @@ first, Jev only for a sender the rules cannot place.
   (`mail.amazon.dk` is `amazon.dk`) and a free-mail address, or a colleague on the account's own
   domain, is that address. Anything else that looks alike (`amazon.com`, `danskebank.io`, the
   same name on another address) never joins by rule: it goes to Jev (`jev-1.14.0`, key `jev-compaction`): one Choice over at most 12 candidates plus "none
-  of these", kept only above `max(0.6, 1/n + 0.25)`. Jev sees the sender's name and address and
+  of these", kept only above `max(0.6, 1/n + 0.25)` and when a second question,
+  "is this address an imitation?", stays under 0.5 (own domains 0.04 to 0.13, phishing
+  look-alikes 0.97 to 0.99, 22 November 2026). Jev sees the sender's name and address and
   the candidates' names and three addresses each, never a subject or a text. At most 25 calls a
   run; without the key the rules decide alone.
 - **Config:** `"sort": {"accounts": [...], "own": [...]}` in `~/.config/proton-mail/config.json`
