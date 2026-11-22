@@ -11,3 +11,9 @@ This repository follows the Stack Atlas standard. `.stack-atlas.json` records th
 - In CI, every package install runs after the Safe Chain step.
 - The tool stack is defined by the Cookbook (`TOKYO-BEANS/claude-cookbook`, `plugins/cookbook/catalog.json`); use its `cookbook` skill to choose tools. Add, change or retire tools there.
 <!-- stack-atlas-standard:end -->
+
+## Tests
+
+Run the suite on boat, from a commit (the upload is the files git tracks):
+`node plugins/cookbook/skills/cookbook/scripts/boat-run.mjs --timeout 600 --push . -- bash -c 'npm ci --ignore-scripts && npm test'`,
+in the background. `node scripts/check.mjs --room` runs here (0.1 s) and shows each limit's room.
