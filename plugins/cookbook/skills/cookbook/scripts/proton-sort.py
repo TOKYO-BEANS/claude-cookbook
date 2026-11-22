@@ -154,9 +154,11 @@ def sender_of(from_header, account=""):
     # (amazon.com, danskebank.io) never joins by rule; it is a candidate for Jev.
     base = registrable(domain)
     first = base.split(".", 1)[0]
-    label = name if norm(name) == norm(first) else first.capitalize()
+    # The folder always names the domain too: a look-alike that writes first must not take a
+    # folder that reads like the company's ("Danske Bank (danske-bank.io)", never "Danske Bank").
+    shown = clean_label(name, 50) if norm(name) == norm(first) else first.capitalize()
     return {"addr": addr, "name": name, "kind": "org", "key": "o:" + base,
-            "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(first))}
+            "label": clean_label(f"{shown} ({base})", 100), "tokens": sorted(tokens(name) | tokens(first))}
 
 
 def account_of(headers, accounts, folder):
@@ -252,13 +254,16 @@ def candidates(sender, groups):
     word that is not noise. The list Jev picks from is narrowed here, in code."""
     key = stem(sender["key"])
     toks = set(sender["tokens"])
-    out = []
+    scored = []
     for gkey, g in groups.items():
         gk = stem(gkey)
         inside = len(key) >= 4 and len(gk) >= 4 and (key in gk or gk in key)
-        if inside or toks & set(g.get("tokens", [])):
-            out.append(gkey)
-    return sorted(out)[:MAX_CANDIDATES]
+        shared = len(toks & set(g.get("tokens", [])))
+        if inside or shared:
+            scored.append((-(2 * inside + shared), gkey))
+    # The best matches first (a name inside the other, then the most shared words), so a cut at
+    # MAX_CANDIDATES drops the weakest, not the last in the alphabet.
+    return [gkey for _, gkey in sorted(scored)[:MAX_CANDIDATES]]
 
 
 def jev_questions(cands, groups):
@@ -381,6 +386,7 @@ class Grouper:
                     if self.log_path:
                         log(self.log_path, {"account": account, "addr": sender["addr"], "rule": key,
                                             "candidates": cands, "jev_error": pm.one_line(e, 200)})
+                    self.jev_left = 0  # one failure ends Jev for this run: the rest waits for the next
                     return None
                 if self.log_path:
                     log(self.log_path, row)
