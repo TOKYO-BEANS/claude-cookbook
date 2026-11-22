@@ -24,7 +24,8 @@ out["bank"] = k("Danske Bank <no-reply@mail.danskebank.dk>")
 out["label_bank"] = ps.sender_of("Danske Bank <no-reply@mail.danskebank.dk>")["label"]
 out["label_brand"] = ps.sender_of("Amazon.dk <noreply@amazon.dk>")["label"]
 out["person"] = [k("John Doe <john.doe+news@gmail.com>"), k("<johndoe@gmail.com>"), k("John Doe <jd@hotmail.com>")]
-out["endings"] = [k("x@amazon.net"), k("x@mail.danskebank.co.uk"), k("x@danskebank.xyz")]
+out["endings"] = [k("x@amazon.net"), k("x@mail.danskebank.co.uk"), k("x@danskebank.xyz"), k("x@danskebank.io"),
+                  k("x@shop.a.com.pl"), k("x@b.com.pl"), k("x@c.com.tw")]
 out["colleague"] = k("Jens Hansen <jh@firma.dk>", "me@firma.dk")
 out["company_for_other_account"] = k("Jens Hansen <jh@firma.dk>", "someone@gmail.com")
 out["danish"] = ps.sender_of("Søren Ærø <s@gmail.com>")["label"]
@@ -190,7 +191,7 @@ test("sender rules: one company across domains and countries, one person across 
   assert.equal(o.label_brand, "Amazon");
   assert.deepEqual(o.person, ["p:johndoe@gmail.com", "p:johndoe@gmail.com", "p:jd@hotmail.com"]);
   assert.equal(o.colleague, "p:jh@firma.dk");
-  assert.deepEqual(o.endings, ["o:amazon", "o:danskebank", "o:danskebankxyz"]);
+  assert.deepEqual(o.endings, ["o:amazon", "o:danskebank", "o:danskebankxyz", "o:danskebankio", "o:a", "o:b", "o:ccomtw"]);
   assert.equal(o.company_for_other_account, "o:firma");
   assert.equal(o.danish, "Soren Aero");
   assert.deepEqual(o.encoded, ["Soren Aero", "p:s@gmail.com", ["aero", "soren"]]);

@@ -68,7 +68,14 @@ FREEMAIL = {
     "mail.dk", "jubii.dk", "sol.dk", "ofir.dk", "tdcadsl.dk", "webspeed.dk", "fastmail.com",
     "zoho.com", "yandex.com", "hey.com", "tutanota.com", "tuta.io",
 }
-BRAND_ENDINGS = {"com", "net", "org"}
+# The endings dropped from a company's key: .com, .net, .org and the countries whose shops and
+# banks write to the owner. Open endings anyone uses for look-alikes (.io, .co, .me, .ai, ...)
+# are not here, so they stay in the key and reach the company only through Jev.
+BRAND_ENDINGS = {
+    "com", "net", "org", "dk", "se", "no", "fi", "is", "de", "at", "ch", "nl", "be", "fr", "es",
+    "it", "pt", "ie", "uk", "pl", "eu", "us", "ca", "au", "nz", "jp",
+}
+SECOND_LEVEL = {"com", "co", "net", "org", "gov", "ac", "edu"}
 TWO_LEVEL = {
     "co.uk", "org.uk", "ac.uk", "gov.uk", "com.au", "net.au", "org.au", "co.nz", "co.jp", "co.kr",
     "com.br", "co.za", "com.mx", "co.in", "com.tr", "com.cn", "com.hk", "com.sg", "com.ar", "co.il",
@@ -108,7 +115,7 @@ def clean_label(text):
 
 def registrable(domain):
     parts = [p for p in domain.lower().strip(".").split(".") if p]
-    if len(parts) >= 3 and ".".join(parts[-2:]) in TWO_LEVEL:
+    if len(parts) >= 3 and (".".join(parts[-2:]) in TWO_LEVEL or (parts[-2] in SECOND_LEVEL and len(parts[-1]) == 2)):
         return ".".join(parts[-3:])
     return ".".join(parts[-2:])
 
@@ -144,11 +151,11 @@ def sender_of(from_header, account=""):
         return {"addr": addr, "name": name, "kind": "person", "key": f"p:{local}@{domain}",
                 "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(local))}
     base = registrable(domain)
-    # Only a country ending or .com, .net, .org is dropped (amazon.dk = amazon.com); any other
+    # Only an ending in BRAND_ENDINGS is dropped (amazon.dk = amazon.com); any other
     # ending stays in the key, so danskebank.xyz is a candidate for Jev, not the bank by rule.
     first, ending = base.split(".", 1) if "." in base else (base, "")
     tld = ending.rsplit(".", 1)[-1]
-    brand = first if len(tld) == 2 or tld in BRAND_ENDINGS else base
+    brand = first if tld in BRAND_ENDINGS and first not in SECOND_LEVEL else base
     label = name if norm(name) == norm(brand) else brand.capitalize()
     return {"addr": addr, "name": name, "kind": "org", "key": "o:" + (norm(brand) or "unknown"),
             "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(brand))}
