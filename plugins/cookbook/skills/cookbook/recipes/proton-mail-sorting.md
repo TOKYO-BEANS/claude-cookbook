@@ -26,7 +26,8 @@ first, Jev only for a sender the rules cannot place.
   "is this address an imitation?", stays under 0.5 (own domains 0.04 to 0.13, phishing
   look-alikes 0.97 to 0.99, 22 November 2026). Jev sees the sender's name and address and
   the candidates' names and three addresses each, never a subject or a text. At most 25 calls a
-  run; without the key the rules decide alone.
+  run; past that, or when a call fails, the mail waits for the next run. Without the key
+  the rules decide alone. A person's folder always names the address: `Name (address)`.
 - **Config:** `"sort": {"accounts": [...], "own": [...]}` in `~/.config/proton-mail/config.json`
   (addresses stay out of this public repository). An account written `{"address": ...,
   "also": ["alias@..."]}` also matches a forwarding alias.

@@ -83,6 +83,13 @@ g4 = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
 g4.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 g4.group_for("a@gmail.com", ps.sender_of("Facebookmail <security@facebookmail.com>"))
 out["no_key_calls"] = g4.jev_calls
+sd = {"accounts": {}}
+gd = ps.Grouper(sd, "k", 0, None, opener_with({}))
+gd.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+first_try = gd.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
+recorded = "security@facebookmail.com" in sd["accounts"]["a@gmail.com"]["senders"]
+gd2 = ps.Grouper(sd, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}, "imitation": {"type": "noul", "noul": 0.05}}}))
+out["deferred"] = [first_try, recorded, gd.jev_calls, gd2.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>")), gd2.jev_calls]
 g5 = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({}))
 g5.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 g5.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
@@ -202,14 +209,14 @@ test("sender rules: a company is its exact domain, a person their address, whate
   assert.deepEqual(o.endings, ["o:amazon.net", "o:danskebank.co.uk", "o:danskebank.xyz", "o:danskebank.io",
     "o:a.com.pl", "o:b.com.pl", "o:c.com.tw", "o:danskebank.com.se", "o:amazon.dk"]);
   assert.equal(o.company_for_other_account, "o:firma.dk");
-  assert.equal(o.danish, "Soren Aero");
-  assert.deepEqual(o.encoded, ["Soren Aero", "p:s@gmail.com", ["aero", "soren"]]);
+  assert.equal(o.danish, "Soren Aero (s@gmail.com)");
+  assert.deepEqual(o.encoded, ["Soren Aero (s@gmail.com)", "p:s@gmail.com", ["aero", "soren"]]);
   assert.equal(o.bad_addr, null);
 });
 
 test("a folder name from a hostile sender name is one safe IMAP name", opts, () => {
   const o = run();
-  assert.match(o.evil_label, /^[A-Za-z0-9 ._+()-]+$/);
+  assert.match(o.evil_label, /^[A-Za-z0-9 ._+()@-]+$/);
   assert.deepEqual(o.amp, ["H and M", "A and B"]);
   assert.ok(!o.evil_label.includes("/"));
   assert.ok(o.evil_ok.startsWith('"Folders/a@b.dk/'));
@@ -225,21 +232,22 @@ test("routing: Gmail's forward header beats the target, then To, then an alias, 
   assert.equal(o.route_none, null);
 });
 
-test("Jev's pick counts only with a clear lead; none, a near tie or a bad answer makes a new group", opts, () => {
+test("Jev's pick counts only with a clear lead; none or a near tie makes a new group, a bad or missing answer waits", opts, () => {
   const o = run();
   assert.deepEqual(o.gate, ["o:a", null, null, "o:a"]);
   assert.deepEqual(o.jev_merge, ["Facebook", "Facebook", "Facebook", 1]);
   assert.equal(o.jev_unsure, "Facebookmail");
-  assert.equal(o.jev_malformed, "Facebookmail");
+  assert.equal(o.jev_malformed, null);
   assert.equal(o.no_key_calls, 0);
-  assert.deepEqual(o.bad_shapes, Array(5).fill("Facebookmail"));
-  assert.equal(o.http_error, "Facebookmail");
+  assert.deepEqual(o.bad_shapes, Array(5).fill(null));
+  assert.equal(o.http_error, null);
+  assert.deepEqual(o.deferred, [null, false, 0, "Facebook", 1]);
   assert.deepEqual(o.imitation, ["Danskebank-verify", 1]);
-  assert.equal(o.imitation_missing, "Danske Bank (org danskebank.se)");
-  assert.deepEqual(o.lookalikes_no_jev, ["John Doe", "John Doe (person hotmail.com)", "Danske Bank", "Danske Bank (org danskebank.xyz)"]);
-  assert.deepEqual(o.lookalike_with_jev, ["John Doe", "John Doe", 1]);
+  assert.equal(o.imitation_missing, null);
+  assert.deepEqual(o.lookalikes_no_jev, ["John Doe (johndoe@gmail.com)", "John Doe (anything@hotmail.com)", "Danske Bank", "Danske Bank (org danskebank.xyz)"]);
+  assert.deepEqual(o.lookalike_with_jev, ["John Doe (johndoe@gmail.com)", "John Doe (johndoe@gmail.com)", 1]);
   assert.deepEqual(o.alias, ["Facebook", 1]);
-  assert.deepEqual(o.clash, ["Danske Bank", "Danske Bank (person gmail.com)"]);
+  assert.deepEqual(o.clash, ["Danske Bank", "Danske Bank (fake@gmail.com)"]);
   assert.equal(o.unrelated_calls, 0);
 });
 
@@ -248,9 +256,11 @@ test("a free-mail sender named like a company gets a folder of its own, in eithe
   const [bank, fake, fakeFirst, bankSecond] = o.lookalike;
   assert.equal(bank, "Danske Bank");
   assert.notEqual(fake.toLowerCase(), bank.toLowerCase());
-  assert.equal(fake, "Danske Bank (person gmail.com)");
+  assert.equal(fake, "Danske Bank (anything@gmail.com)");
+  assert.equal(fakeFirst, "Danske Bank (anything@gmail.com)");
+  assert.equal(bankSecond, "Danske Bank");
   assert.notEqual(bankSecond.toLowerCase(), fakeFirst.toLowerCase());
-  for (const label of o.lookalike) assert.match(label, /^[A-Za-z0-9 ._+()-]+$/);
+  for (const label of o.lookalike) assert.match(label, /^[A-Za-z0-9 ._+()@-]+$/);
 });
 
 test("Jev sees names and addresses only, with a none-of-these option", opts, () => {

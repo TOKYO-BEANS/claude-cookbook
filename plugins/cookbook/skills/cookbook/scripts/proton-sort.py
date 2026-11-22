@@ -101,13 +101,13 @@ def tokens(text):
     return {t for t in re.split(r"[^a-z0-9]+", fold(text).lower()) if len(t) >= 3 and t not in NOISE}
 
 
-def clean_label(text):
+def clean_label(text, limit=60):
     """A folder name made from outside text: ASCII letters, digits and a few signs, one line.
     No `&`: in an IMAP folder name it starts an encoded run (RFC 3501, 5.1.3)."""
     text = fold(pm.one_line(text, 120)).replace("&", " and ")
-    text = re.sub(r"[^A-Za-z0-9 ._+()-]+", " ", text)
+    text = re.sub(r"[^A-Za-z0-9 ._+()@-]+", " ", text)
     text = re.sub(r"\s+", " ", text).strip(" .")
-    return text[:60].rstrip(" .") or "Unknown"
+    return text[:limit].rstrip(" .") or "Unknown"
 
 
 def registrable(domain):
@@ -144,9 +144,11 @@ def sender_of(from_header, account=""):
         local = local.split("+", 1)[0]
         if domain in ("gmail.com", "googlemail.com"):
             local, domain = local.replace(".", ""), "gmail.com"
-        label = name if len(norm(name)) >= 2 else local
+        # The folder always names the address: a display name is the sender's own choice, and a
+        # free-mail "Danske Bank" must never hold a folder that reads like the bank's.
+        label = f"{clean_label(name, 40)} ({local}@{domain})" if len(norm(name)) >= 2 else f"{local}@{domain}"
         return {"addr": addr, "name": name, "kind": "person", "key": f"p:{local}@{domain}",
-                "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(local))}
+                "label": clean_label(label, 100), "tokens": sorted(tokens(name) | tokens(local))}
     # A company is its registrable domain, exactly: mail.amazon.dk is amazon.dk. Another ending
     # (amazon.com, danskebank.io) never joins by rule; it is a candidate for Jev.
     base = registrable(domain)
@@ -350,6 +352,9 @@ class Grouper:
         self.jev_calls = 0
 
     def group_for(self, account, sender):
+        """The sender's folder label, or None to leave the mail in place this run: a sender that
+        has candidates but no answer from Jev yet (its budget used up, or the call failed) is
+        asked again next run instead of being given a folder of its own for good."""
         acc = self.state["accounts"].setdefault(account, {"groups": {}, "senders": {}})
         groups, senders = acc["groups"], acc["senders"]
         known = senders.get(sender["addr"])
@@ -361,7 +366,9 @@ class Grouper:
         if key not in groups:
             cands = candidates(sender, groups)
             pick = None
-            if cands and self.jev_key and self.jev_left > 0:
+            if cands and self.jev_key and self.jev_left <= 0:
+                return None
+            if cands and self.jev_key:
                 self.jev_left -= 1
                 self.jev_calls += 1
                 try:
@@ -370,8 +377,10 @@ class Grouper:
                     row = {"account": account, "addr": sender["addr"], "rule": key, "candidates": cands,
                            "probs": probs, "imitation": imitation, "pick": pick, "model": model}
                 except (OSError, ValueError, TypeError, AttributeError, http.client.HTTPException) as e:
-                    row = {"account": account, "addr": sender["addr"], "rule": key, "candidates": cands,
-                           "jev_error": pm.one_line(e, 200)}
+                    if self.log_path:
+                        log(self.log_path, {"account": account, "addr": sender["addr"], "rule": key,
+                                            "candidates": cands, "jev_error": pm.one_line(e, 200)})
+                    return None
                 if self.log_path:
                     log(self.log_path, row)
             if pick:
@@ -440,7 +449,11 @@ def cmd_sort(cfg, args):
                 if not account or not sender or sender["addr"] in own:
                     left += 1
                     continue
-                dest = f"Folders/{account}/{grouper.group_for(account, sender)}"
+                label = grouper.group_for(account, sender)
+                if label is None:
+                    left += 1
+                    continue
+                dest = f"Folders/{account}/{label}"
                 plan.setdefault(dest, []).append(uid)
             for dest, batch in sorted(plan.items()):
                 batch = batch[:budget]
