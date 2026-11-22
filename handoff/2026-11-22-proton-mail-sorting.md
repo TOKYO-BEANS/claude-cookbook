@@ -23,6 +23,12 @@ first, Jev only for unclear senders (names and addresses only).
   `sort` block in `~/.config/proton-mail/config.json` (four accounts; Claude's two addresses
   left out so their mail stays readable as before).
 
+- Follow-up PR: a company folder names its domain too (`Name (domain)`), so a look-alike
+  that writes first never holds the bare name; Jev's candidates are ranked before the cut at
+  12; one failed Jev call ends Jev for that run.
+- Installed after #223 (6e73614): script in `~/.local/bin`, units enabled, a run under systemd
+  read both keys from the store.
+
 **Verification.** Live: a dry run, then two test mails to an own address were moved (4 with
 the sent copies) into a new sender folder; then moved to Trash and the folder removed. Live Jev
 call on made-up senders: a known brand on another domain merged at 1.0, an unrelated one went
