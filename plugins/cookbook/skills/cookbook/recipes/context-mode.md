@@ -1,7 +1,7 @@
 # Context window (context-mode)
 
 The owner added it on 5 November 2026 for every project and every new session: the
-`context-mode@context-mode` plugin (marketplace `mksglu/context-mode`, version 2.1.0, licence
+`context-mode@context-mode` plugin (marketplace `mksglu/context-mode`, now version 2.2.1, licence
 Elastic-2.0) at user scope. No project turns it off; a new project gets it without a step.
 
 - **What it does:** a stdio MCP server (`node server.mjs`, 9 tool names) and hooks on SessionStart,
