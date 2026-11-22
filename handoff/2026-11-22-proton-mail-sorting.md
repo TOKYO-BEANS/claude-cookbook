@@ -39,7 +39,11 @@ owner's own browser: Google's "verify it's you" and "Proceed" windows are pop-up
 browser does not show); a test sent from the Proton account itself never came back (Proton keeps
 one copy per Message-ID), so the first real Gmail mail in its folder is the proof. The work
 forward is off: the tenant answered `550 5.7.520` (no outside forwarding); the owner chose to
-leave work mail out (question dialog), and the work address left the sorter's config. The
+leave work mail out (question dialog), and the work address left the sorter's config. An app
+route is closed as well: a Mail.Read sign-in with Microsoft's own Graph command-line client ends
+"Need admin approval" (AADSTS90094), so only the tenant's IT can open it (outside forwarding, or
+admin consent for an app). Asking IT is outstanding: the owner answered "not now" on 22 Nov 2026
+(owner; cleared when IT allows one of the two, then switch it on and test). The
 older mail in Archive was sorted on the owner's yes (question dialog, this chat): 419 of 432
 mails matched an account and went to 59 sender folders (Jev asked 9 times); 13 matched no
 account and stay in Archive. Of #224's last review's two low findings, the 401/403 one is fixed
