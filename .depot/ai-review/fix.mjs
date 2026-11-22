@@ -328,7 +328,48 @@ const SUPPRESSIONS = [
 // `numstat`: [{ added, removed, path }] (added "-" for a binary file);
 // `added`: the added lines' text; `secrets`: values that may never appear.
 // Returns null (fine) or the reason the change is refused.
-export function guardChange({ changes, numstat, added, secrets = [], gitFolder = false }) {
+// A repository's own list of paths the AI fix never changes: `.ai-fix-protected`
+// at the root of the DEFAULT branch (read from the workflow's checkout, never
+// from the pull request), one glob per line, `#` for comments. For gates the
+// owner keeps for himself, such as a site's visual check. It is a hidden file,
+// so the fix cannot change the list itself.
+export const PROTECTED_FILE = ".ai-fix-protected";
+export function readProtectedList(text) {
+  return String(text ?? "")
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\s+#.*$/, "").trim())
+    .filter((l) => l && !l.startsWith("#"));
+}
+export const PROTECTED_MAX = 500;
+
+// gitignore-like: `*` within a segment, `**` across segments, `?` one
+// character; a leading `/` anchors to the root, a pattern without a slash
+// matches a name at any depth, and a folder pattern covers what is under it.
+export function globToRegExp(pattern) {
+  const anchored = pattern.startsWith("/");
+  // `foo/**/` and `foo/` mean everything under foo: the trailing slash goes.
+  const glob = pattern.replace(/^\/+/, "").replace(/\/+$/, "");
+  let out = "";
+  for (let i = 0; i < glob.length; i++) {
+    const c = glob[i];
+    if (c === "*" && glob[i + 1] === "*") {
+      const slash = glob[i + 2] === "/";
+      out += slash ? "(?:.*/)?" : ".*";
+      i += slash ? 2 : 1;
+    } else if (c === "*") out += "[^/]*";
+    else if (c === "?") out += "[^/]";
+    else out += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
+  }
+  const anywhere = !anchored && !glob.includes("/");
+  return new RegExp(`^${anywhere ? "(?:.*/)?" : ""}${out}(?:/.*)?$`, "i");
+}
+
+export function protectedByList(p, globs) {
+  return globs.find((g) => globToRegExp(g).test(String(p))) ?? null;
+}
+
+export function guardChange({ changes, numstat, added, secrets = [], gitFolder = false, protectedGlobs = [] }) {
   if (gitFolder) return "the change writes a .git folder";
   if (!changes.length) return "no change";
   if (changes.length > LIMITS.files) return `more than ${LIMITS.files} files`;
@@ -339,6 +380,8 @@ export function guardChange({ changes, numstat, added, secrets = [], gitFolder =
     if (c.status === "M" && c.oldMode !== c.newMode) return `\`${cleanCode(c.path)}\`: a mode change`;
     const why = protectedPath(c.path);
     if (why) return `\`${cleanCode(c.path)}\`: ${why}`;
+    const listed = protectedByList(c.path, protectedGlobs);
+    if (listed) return `\`${cleanCode(c.path)}\`: listed in ${PROTECTED_FILE} (\`${cleanCode(listed)}\`)`;
   }
   let lines = 0;
   for (const n of numstat) {
@@ -429,11 +472,14 @@ function neutralise(text) {
   );
 }
 
-export function systemPrompt(rules) {
+export function systemPrompt(rules, protectedGlobs = []) {
   const text = String(rules ?? "").trim().slice(0, RULES_CHARS);
+  const listed = protectedGlobs.length
+    ? `\n\nThis repository also forbids any change to these paths (${PROTECTED_FILE}); a change to one is thrown away whole:\n${protectedGlobs.map((g) => `- ${g}`).join("\n")}`
+    : "";
   return text
-    ? `${FIX_RUBRIC}\n\nRepository rules (CLAUDE.md and AGENTS.md from the default branch):\n<repository_rules>\n${text}\n</repository_rules>`
-    : FIX_RUBRIC;
+    ? `${FIX_RUBRIC}${listed}\n\nRepository rules (CLAUDE.md and AGENTS.md from the default branch):\n<repository_rules>\n${text}\n</repository_rules>`
+    : `${FIX_RUBRIC}${listed}`;
 }
 
 // The request: what to fix, all of it delimited and redacted.
@@ -502,7 +548,10 @@ export function fixArguments(systemFile) {
 }
 
 export function fixEnvironment(env, home) {
-  return { ...planEnvironment(env, home), CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1" };
+  // The review's environment, unchanged. CLAUDE_CODE_SUBPROCESS_ENV_SCRUB is not
+  // set: it forces the permission mode back to "default" (Claude Code 2.1.326),
+  // and the run has no shell to scrub; the first CI run with it never started.
+  return planEnvironment(env, home);
 }
 
 // The run's stream: { answer, usage } or { unavailable }. A run that was not on
@@ -777,8 +826,13 @@ const CLAUDE_BINARY = path.join(path.dirname(fileURLToPath(import.meta.url)), "n
 
 function runClaude({ args, input, env, cwd }) {
   return new Promise((resolve, reject) => {
-    const child = spawn(CLAUDE_BINARY, args, { cwd, env, stdio: ["pipe", "pipe", "ignore"] });
+    const child = spawn(CLAUDE_BINARY, args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     const out = [];
+    // Kept for the job log only when the run does not start (callFixer).
+    let err = "";
+    child.stderr.on("data", (d) => {
+      if (err.length < 4_000) err += d.toString("utf8");
+    });
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
@@ -789,16 +843,24 @@ function runClaude({ args, input, env, cwd }) {
       clearTimeout(timer);
       reject(error);
     });
-    child.on("close", () => {
+    child.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ stdout: Buffer.concat(out).toString("utf8"), timedOut });
+      resolve({ stdout: Buffer.concat(out).toString("utf8"), stderr: err, code, timedOut });
     });
     child.stdin.on("error", () => {});
     child.stdin.end(input);
   });
 }
 
-export async function callFixer({ env, cwd, system, input, run = runClaude, binary = CLAUDE_BINARY }) {
+// What the job log says about a run that did no work (no tool call): the reason
+// the stream gave, the exit code and the first lines of Claude Code's stderr,
+// redacted and capped. Never the comment.
+export function startFailure({ code, stderr }, reason) {
+  const text = redactSecrets(String(stderr ?? "")).text.replace(/\s+/g, " ").trim();
+  return `ai-fix: the fixer did no work (${reason ?? "unknown"}); Claude Code exit code ${code ?? "?"}; stderr: ${cap(text || "(none)", 400)}`;
+}
+
+export async function callFixer({ env, cwd, system, input, run = runClaude, binary = CLAUDE_BINARY, log = () => {} }) {
   // `notStarted`: the model never ran, so the head is "not tried".
   if (!env.CLAUDE_CODE_OAUTH_TOKEN_REVIEW)
     return { unavailable: "the CLAUDE_CODE_OAUTH_TOKEN_REVIEW secret is not set", notStarted: true };
@@ -810,7 +872,11 @@ export async function callFixer({ env, cwd, system, input, run = runClaude, bina
     const ran = await run({ args: fixArguments(systemFile), input, env: fixEnvironment(env, home), cwd });
     if (ran.timedOut) return { unavailable: "the fixer timed out" };
     const read = readFixStream(ran.stdout);
-    return read.unavailable && !read.toolCalls ? { ...read, notStarted: true } : read;
+    if (read.unavailable && !read.toolCalls) {
+      log(startFailure(ran, read.unavailable));
+      return { ...read, notStarted: true };
+    }
+    return read;
   } catch {
     return { unavailable: "Claude Code could not start", notStarted: true };
   } finally {
@@ -917,7 +983,7 @@ export async function fixPull(item, deps) {
     try {
       ran = await deps.fixer({
         cwd: ws.dir,
-        system: systemPrompt(deps.rules),
+        system: systemPrompt(deps.rules, deps.protectedGlobs ?? []),
         input: fixInput({ pr, findings: s.findings, failures }),
       });
     } finally {
@@ -926,7 +992,7 @@ export async function fixPull(item, deps) {
     if (ran.notStarted) return save(`${NOT_TRIED}${ran.unavailable}`);
     if (ran.unavailable) return save(outcomeText({ unavailable: ran.unavailable, note }));
     const secrets = [deps.env.CLAUDE_CODE_OAUTH_TOKEN_REVIEW, deps.env.GITHUB_TOKEN, deps.env.DEPOT_CI_LOGS_TOKEN];
-    const refused = guardChange({ ...ws.changes(), secrets });
+    const refused = guardChange({ ...ws.changes(), secrets, protectedGlobs: deps.protectedGlobs ?? [] });
     if (refused) return save(outcomeText({ refused, answer: ran.answer, note }));
     const sha = ws.commit(commitMessage({ head: s.head, findings: s.findings, failures, answer: ran.answer }));
     // Recorded before the push: if the ledger cannot be written, nothing is
@@ -942,6 +1008,30 @@ export async function fixPull(item, deps) {
   } finally {
     ws?.remove();
   }
+}
+
+// The default branch's list. A file that exists but cannot be read, or holds
+// more than PROTECTED_MAX entries, stops the run: a list is never half read.
+export function repoProtected(cwd) {
+  let text;
+  try {
+    text = readFileSync(path.join(cwd, PROTECTED_FILE), "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return [];
+    throw new Error(`${PROTECTED_FILE} could not be read`);
+  }
+  const globs = readProtectedList(text);
+  if (globs.length > PROTECTED_MAX) throw new Error(`${PROTECTED_FILE} has more than ${PROTECTED_MAX} entries`);
+  // Only `*`, `**`, `?` and a leading `/` are understood: a bracket, a
+  // backslash or a leading `!` would match nothing, so it stops the run.
+  // So does a pattern that could never name a git path: a `.` or `..`
+  // segment (`./checks/**`), an empty segment (`a//b`) or nothing at all (`/`).
+  const odd = globs.find((g) => {
+    const body = g.replace(/^\//, "").replace(/\/$/, "");
+    return /[[\]\\]/.test(g) || g.startsWith("!") || !body || body.split("/").some((seg) => seg === "" || seg === "." || seg === "..");
+  });
+  if (odd !== undefined) throw new Error(`${PROTECTED_FILE}: unsupported pattern syntax`);
+  return globs;
 }
 
 function repoRules(cwd) {
@@ -978,9 +1068,10 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
           log,
           env,
           rules: repoRules(process.cwd()),
+          protectedGlobs: repoProtected(process.cwd()),
           workspace: () => workspace({ repo: github.repo, token: env.GITHUB_TOKEN }),
           logs: (jobId) => depotLogs(jobId, env.DEPOT_CI_LOGS_TOKEN),
-          fixer: (args) => callFixer({ env, ...args }),
+          fixer: (args) => callFixer({ env, log, ...args }),
         }).catch((error) => log(`ai-fix: #${item.number}: stopped: ${cap(String(error?.message ?? error), 200)}`));
       }
       return work;
