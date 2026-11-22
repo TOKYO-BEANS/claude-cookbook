@@ -295,6 +295,24 @@ def gate(probs, cands):
     return cands[int(top[1:])] if probs[top] >= bar else None
 
 
+def unique_label(sender, groups):
+    """The new group's folder name, distinct from every other group's in the account: the
+    destination is built from the label alone, so a free-mail sender named like a company must
+    not share the company's folder. On a clash the kind and the domain are added."""
+    taken = {str(g.get("label", "")).lower() for g in groups.values()}
+    label = sender["label"]
+    if label.lower() not in taken:
+        return label
+    domain = sender["addr"].rsplit("@", 1)[-1]
+    base = label[:30].rstrip(" .") or "Unknown"
+    extra = clean_label(f"{sender['kind']} {domain}")[:24].rstrip(" .")
+    for n in range(1, 1000):
+        cand = f"{base} ({extra})" + (f" {n}" if n > 1 else "")
+        if cand.lower() not in taken:
+            return cand
+    raise Fail("no free folder name for a sender")
+
+
 class Grouper:
     def __init__(self, state, jev_key=None, max_jev=25, log_path=None, opener=urllib.request.urlopen):
         self.state, self.jev_key, self.jev_left, self.log_path, self.opener = state, jev_key, max_jev, log_path, opener
@@ -326,7 +344,7 @@ class Grouper:
             if pick:
                 key = pick
             else:
-                groups[key] = {"label": sender["label"], "tokens": [], "addresses": []}
+                groups[key] = {"label": unique_label(sender, groups), "tokens": [], "addresses": []}
         g = groups[key]
         g["tokens"] = sorted(set(g["tokens"]) | set(sender["tokens"]))
         if sender["addr"] not in g["addresses"] and len(g["addresses"]) < 10:

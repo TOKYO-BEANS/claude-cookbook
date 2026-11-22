@@ -83,6 +83,13 @@ g5 = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({}))
 g5.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 g5.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
 out["unrelated_calls"] = g5.jev_calls
+g6 = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
+g6_bank = g6.group_for("a@gmail.com", ps.sender_of("Danske Bank <no-reply@mail.danskebank.dk>"))
+g6_fake = g6.group_for("a@gmail.com", ps.sender_of('"Danske Bank" <anything@gmail.com>'))
+g7 = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
+g7_fake = g7.group_for("a@gmail.com", ps.sender_of('"Danske Bank" <anything@gmail.com>'))
+g7_bank = g7.group_for("a@gmail.com", ps.sender_of("Danske Bank <no-reply@mail.danskebank.dk>"))
+out["lookalike"] = [g6_bank, g6_fake, g7_fake, g7_bank]
 def fails(cfg):
     try:
         ps.load_settings(cfg); return None
@@ -146,6 +153,16 @@ test("Jev's pick counts only with a clear lead; none, a near tie or a bad answer
   assert.equal(o.no_key_calls, 0);
   assert.deepEqual(o.bad_shapes, Array(5).fill("Facebookmail"));
   assert.equal(o.unrelated_calls, 0);
+});
+
+test("a free-mail sender named like a company gets a folder of its own, in either order", opts, () => {
+  const o = run();
+  const [bank, fake, fakeFirst, bankSecond] = o.lookalike;
+  assert.equal(bank, "Danske Bank");
+  assert.notEqual(fake.toLowerCase(), bank.toLowerCase());
+  assert.equal(fake, "Danske Bank (person gmail.com)");
+  assert.notEqual(bankSecond.toLowerCase(), fakeFirst.toLowerCase());
+  for (const label of o.lookalike) assert.match(label, /^[A-Za-z0-9 ._+()-]+$/);
 });
 
 test("Jev sees names and addresses only, with a none-of-these option", opts, () => {
