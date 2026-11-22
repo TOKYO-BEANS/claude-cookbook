@@ -229,6 +229,10 @@ g5x.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
 g5x.group_for("a@gmail.com", ps.sender_of("Facebook <x@facebookmail.com>"))
 g5x.group_for("a@gmail.com", ps.sender_of("Netflix <y@netflixmail.com>"))
 out["outage_5xx_calls"] = g5x.jev_calls
+g401 = ps.Grouper({"accounts": {}}, "k", 25, None, raises(urllib.error.HTTPError("https://x", 401, "Unauthorized", {}, None)))
+for h in ["Facebook <notify@facebook.com>", "Netflix <info@netflix.com>", "Facebook <x@facebookmail.com>", "Netflix <y@netflixmail.com>"]:
+    g401.group_for("a@gmail.com", ps.sender_of(h))
+out["outage_401_calls"] = g401.jev_calls
 out["run"] = sort_run([])
 out["dry"] = sort_run(["--dry-run"])
 out["capped"] = sort_run(["--max-moves", "1"])
@@ -359,6 +363,7 @@ test("a company folder names its domain in either order; candidates are ranked; 
   assert.deepEqual(o.ranked, ["o:fakturaservice.dk", 12]);
   assert.deepEqual(o.outage, [null, null, 1]);
   assert.equal(o.outage_5xx_calls, 1);
+  assert.equal(o.outage_401_calls, 1);
 });
 
 test("a malformed answer or a 4xx reply for one sender leaves Jev on for the others", opts, () => {
