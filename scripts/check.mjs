@@ -28,7 +28,7 @@ export const readCost = (text) => Buffer.byteLength(text) + 9 * text.split("\n")
 // tightest first. Every run prints the SKILL.md line; `--room` adds the pages, so an edit sees
 // its room before boat-run or a push.
 export function roomReport({ skillText, pages, near = 150 }) {
-  const skill = Buffer.byteLength(skillText);
+  const skill = Buffer.byteLength(skillText.replace(/\r/g, ""));
   const close = pages
     .map(({ name, text }) => ({ name, cost: readCost(text.replace(/\r/g, "")) }))
     .filter((p) => PAGE_READ_LIMIT - p.cost < near)
@@ -415,6 +415,8 @@ export function handoffErrors({ closedText, entryNames, pinned = HANDOFF_CLOSED_
 // the 114 AI review findings on the 60 pull requests merged before 18 November 2026 were about
 // the entry itself. Entries named from HANDOFF_CONTENT_FROM on are read; older ones are not.
 export const HANDOFF_CONTENT_FROM = "2026-11-19";
+// What scripts/new-handoff.mjs writes after each label; an entry that still holds it fails.
+export const HANDOFF_PLACEHOLDER = "(to fill)";
 export const HANDOFF_PARTS = ["What changed", "Verification", "Outstanding", "Dead ends", "Evidence"];
 const isLabel = (line) => /^\s*(\*\*|#{1,6}\s)/.test(line);
 // The label's own text: the bold span that opens the line, or the heading's text. A word in the
@@ -430,6 +432,7 @@ export function handoffEntryErrors({ name, text }) {
     const named = new RegExp(`\\b${part}\\b`, "i");
     if (!lines.some((l) => named.test(labelText(l)))) errors.push(`handoff/${name}: no "${part}" part (a bold label or a heading; "None." is an answer)`);
   }
+  if (lines.some((l) => l.includes(HANDOFF_PLACEHOLDER))) errors.push(`handoff/${name}: "${HANDOFF_PLACEHOLDER}" is still there: fill in every part`);
   const start = lines.findIndex((l) => /\bevidence\b/i.test(labelText(l)));
   if (start >= 0) {
     const next = lines.findIndex((l, i) => i > start && isLabel(l));

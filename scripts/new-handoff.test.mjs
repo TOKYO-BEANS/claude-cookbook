@@ -7,12 +7,15 @@ import { join } from "node:path";
 import { HANDOFF_ENTRY_NAME, handoffEntryErrors } from "./check.mjs";
 import { newHandoff, scaffold } from "./new-handoff.mjs";
 
-test("scaffold: the five parts in order, and the check finds none missing", () => {
+test("scaffold: the five parts in order; the check fails until each is filled", () => {
   const text = scaffold("Merge scripts poll faster");
   assert.match(text, /^# Merge scripts poll faster\n/);
   const labels = [...text.matchAll(/^\*\*(.+?)\.\*\*/gm)].map((m) => m[1]);
   assert.deepEqual(labels, ["What changed", "Verification", "Outstanding", "Dead ends", "Evidence"]);
-  assert.deepEqual(handoffEntryErrors({ name: "2026-11-22-x.md", text }), []);
+  const unfilled = handoffEntryErrors({ name: "2026-11-22-x.md", text });
+  assert.equal(unfilled.length, 1);
+  assert.match(unfilled[0], /"\(to fill\)" is still there/);
+  assert.deepEqual(handoffEntryErrors({ name: "2026-11-22-x.md", text: text.replaceAll("(to fill)", "None.") }), []);
 });
 
 test("newHandoff: writes handoff/<date>-<slug>.md once, refuses a bad slug or an existing file", () => {

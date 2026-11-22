@@ -505,4 +505,6 @@ test("room report: SKILL.md always, pages only when close to the limit, tightest
     `recipes/b.md: ${PAGE_READ_LIMIT - 5} of ${PAGE_READ_LIMIT} as a Read result, 5 left`,
     `recipes/a.md: ${PAGE_READ_LIMIT - 120} of ${PAGE_READ_LIMIT} as a Read result, 120 left`,
   ]);
+  const crlf = roomReport({ skillText: "x\r\n".repeat(10), pages: [] });
+  assert.deepEqual(crlf, roomReport({ skillText: "x\n".repeat(10), pages: [] }));
 });

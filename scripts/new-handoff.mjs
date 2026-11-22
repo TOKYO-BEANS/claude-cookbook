@@ -1,13 +1,14 @@
 // A new handoff entry with the five parts the check asks for (scripts/check.mjs, HANDOFF_PARTS):
 //   node scripts/new-handoff.mjs <slug> "<title>" [--date YYYY-MM-DD]
-// Writes handoff/<date>-<slug>.md and prints its path; never overwrites an entry.
+// Writes handoff/<date>-<slug>.md and prints its path; never overwrites an entry. Each part says
+// "(to fill)" until it is written, and the check fails while one does.
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HANDOFF_ENTRY_NAME, HANDOFF_PARTS } from "./check.mjs";
+import { HANDOFF_ENTRY_NAME, HANDOFF_PARTS, HANDOFF_PLACEHOLDER } from "./check.mjs";
 
 export const scaffold = (title) =>
-  [`# ${title}`, "", ...HANDOFF_PARTS.flatMap((part) => [`**${part}.** `, ""])].join("\n");
+  [`# ${title}`, "", ...HANDOFF_PARTS.flatMap((part) => [`**${part}.** ${HANDOFF_PLACEHOLDER}`, ""])].join("\n");
 
 export function newHandoff({ root, date, slug, title }) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`date must be YYYY-MM-DD, not ${date}`);
