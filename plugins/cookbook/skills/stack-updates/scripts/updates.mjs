@@ -253,9 +253,10 @@ export const labelOf = ({ tool, part }) => {
 // ---- pages: what one call prints stays under context-mode's cut ---------------------
 
 // The owner's sessions run the context-mode plugin, whose PostToolUse hook replaces
-// any tool output over 4,096 bytes (REPLACE_TRIGGER_BYTES, context-mode 2.1.0
-// README "Run, then replace" and hook.mjs) with a few chunks and a search pointer.
-// So `run` and `page` never print more than PAGE_BYTES: a report that does not fit
+// any tool output over CTX_REPLACE_TRIGGER_BYTES (8,192 on the owner's machine since
+// 22 Nov 2026; context-mode's default and older sessions 4,096; README "Run, then
+// replace" and hook.mjs) with a few chunks and a search pointer. PAGE_BYTES stays
+// under the default, so `run` and `page` never print more than PAGE_BYTES: a report that does not fit
 // is printed in pages, page 1 by `run` and the others by `page <n>`.
 export const PAGE_BYTES = 3_500;
 export const MAX_PAGES = 99;

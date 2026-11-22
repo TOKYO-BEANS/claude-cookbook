@@ -48,8 +48,8 @@ node <this skill's folder>/scripts/updates.mjs run
 
 - A quiet day (no change, nothing broken, no warning) prints one line. Otherwise it prints the path
   of `report.md` and its text: give the owner that text as it is.
-- No call prints more than 3,500 bytes, because context-mode replaces any tool output over 4,096
-  bytes with a search pointer. A longer report starts with `Page 1 of N: <path>`; run the same
+- No call prints more than 3,500 bytes, because context-mode replaces any tool output over its cut
+  (8,192 bytes here since 22 November 2026, 4,096 by default) with a search pointer. A longer report starts with `Page 1 of N: <path>`; run the same
   command with `page 2`, then `page 3`, up to `page N` in place of `run`, and give the owner every
   page in order. `page <n> <date>` prints the report of an earlier run.
 - State lives in `~/.local/share/stack-updates/`: `state.json` and `runs/<date>/`. The first run
