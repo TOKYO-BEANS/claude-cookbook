@@ -110,7 +110,7 @@ out["settings_none"] = fails({"user": "u@pm.me"})
 out["settings_bad"] = fails({"user": "u@pm.me", "sort": {"accounts": ["a@b.dk, c@d.dk"]}})
 acc, own = ps.load_settings({"user": "u@pm.me", "sort": {"accounts": ["A@Gmail.com"], "own": ["me@x.dk"]}})
 out["settings_ok"] = [acc, sorted(own)]
-import http.client, os, tempfile, contextlib
+import http.client, os, tempfile, contextlib, email, email.policy
 def raises(exc):
     def opener(req, timeout=0):
         raise exc
@@ -182,6 +182,28 @@ def sort_run(argv):
         ps.cmd_sort(cfg, ps.parser().parse_args(["sort", *argv]))
     return {"calls": [c for c in fake.calls if c[0] != "SELECT"], "readonly": sorted({c[2] for c in fake.calls if c[0] == "SELECT"}),
             "state": os.path.exists(os.path.join(ps.STATE_DIR, "state.json")), "inbox": sorted(fake.boxes["INBOX"]), "said": o.getvalue().strip()}
+class FailingMove(FakeImap):
+    def uid(self, cmd, *a):
+        if cmd == "MOVE" and a[1].strip('"').endswith("/Netflix"):
+            return "NO", [b"no space"]
+        return super().uid(cmd, *a)
+def failing_run():
+    fake = FailingMove(boxes())
+    fake.boxes["Folders/inbox@pm.me/Netflix"] = {}
+    ps.pm.imap_connect = lambda c: fake
+    ps.STATE_DIR = tempfile.mkdtemp()
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            ps.cmd_sort(cfg, ps.parser().parse_args(["sort"]))
+        raised = None
+    except ps.Fail as e:
+        raised = str(e)
+    saved = json.load(open(os.path.join(ps.STATE_DIR, "state.json")))
+    return [raised, sorted(saved["accounts"]["inbox@pm.me"]["senders"])]
+out["failing_move"] = failing_run()
+raw8 = b"From: \xc6bler Shop <shop@aebler.dk>\r\nTo: inbox@pm.me\r\n\r\n"
+h8 = email.message_from_bytes(raw8, policy=email.policy.compat32)
+out["raw8"] = [type(h8.get("From")).__name__, (ps.sender_of(str(h8.get("From", "") or "")) or {}).get("key"), (ps.sender_of(h8.get("From")) or {}).get("key")]
 out["run"] = sort_run([])
 out["dry"] = sort_run(["--dry-run"])
 out["capped"] = sort_run(["--max-moves", "1"])
@@ -296,4 +318,12 @@ test("a run makes the folders it needs, moves by account and sender, keeps the c
   assert.equal(o.dry.state, false);
   assert.match(o.dry.said, /^would move 3 mail.*dry run: rules only/);
   assert.equal(o.capped.calls.filter((c) => c[0] === "MOVE").map((c) => c[2]).join(" "), "1");
+});
+
+test("a failed move still saves the groups made so far; a raw 8-bit From header is read as text", opts, () => {
+  const o = run();
+  assert.match(o.failing_move[0], /move failed/);
+  assert.deepEqual(o.failing_move[1], ["info@netflix.com"]);
+  assert.equal(o.raw8[1], "o:aebler.dk");
+  assert.equal(o.raw8[2], "o:aebler.dk");
 });

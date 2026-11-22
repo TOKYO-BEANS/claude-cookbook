@@ -4,13 +4,14 @@
 
 Each account named in the config ("sort" in ~/.config/proton-mail/config.json) has the folder
 Folders/<account>. A mail in the Inbox or in such a folder goes to Folders/<account>/<sender>:
-the account comes from the forwarding headers first (Gmail writes X-Forwarded-For), then To and
-Cc; the sender group from fixed rules first (the company's domain without its country ending,
-or for a free-mail or own-domain address the person's name). A new sender that the rules
-cannot place but that looks like an existing group goes to Jev (TypeSafe): its name and address
-and the candidate groups' names and up to three addresses each, never a subject or a mail text.
-Jev's pick counts only with a clear lead; otherwise the sender gets a group of its own. Without
-the Jev key the rules decide alone.
+the account comes from Gmail's X-Forwarded-For first, then To and Cc, then Delivered-To. By
+rule a company is its exact registrable domain (mail.amazon.dk is amazon.dk; amazon.com is
+another) and a free-mail or own-domain sender is its address. A new sender that looks like an
+existing group (another ending, the same name) goes to Jev (TypeSafe): its name and address and
+the candidate groups' names and up to three addresses each, never a subject or a mail text. A
+join needs Jev's clear lead and its "imitation?" answer under 0.5; otherwise the sender gets a
+group of its own, and with no answer yet the mail waits for the next run. Without the Jev key
+the rules decide alone.
 
   node ~/.local/bin/with-key.mjs proton-bridge PROTON_BRIDGE_PASSWORD \
     node ~/.local/bin/with-key.mjs jev-compaction TYPESAFE_API_KEY \
@@ -129,7 +130,7 @@ def decode_words(text):
 
 def sender_of(from_header, account=""):
     """The sender group a From header falls in by the fixed rules, or None for no address."""
-    name, addr = parseaddr(from_header or "")
+    name, addr = parseaddr(str(from_header or ""))
     addr = addr.strip().lower()
     if not pm.ADDRESS.fullmatch(addr):
         return None
@@ -445,7 +446,8 @@ def cmd_sort(cfg, args):
             plan = {}
             for uid, h in fetch(conn, uids):
                 account = account_of(h, accounts, source)
-                sender = sender_of(h.get("From", ""), account or "")
+                # compat32 returns a Header object for raw 8-bit bytes: make it text first.
+                sender = sender_of(str(h.get("From", "") or ""), account or "")
                 if not account or not sender or sender["addr"] in own:
                     left += 1
                     continue
@@ -455,20 +457,24 @@ def cmd_sort(cfg, args):
                     continue
                 dest = f"Folders/{account}/{label}"
                 plan.setdefault(dest, []).append(uid)
-            for dest, batch in sorted(plan.items()):
-                batch = batch[:budget]
-                if not batch:
-                    break
-                budget -= len(batch)
-                moved[dest] = moved.get(dest, 0) + len(batch)
-                if args.dry_run:
-                    continue
-                if dest not in folders:
-                    pm.ok(conn.create(pm.mailbox_name(dest)), "create folder")
-                    folders.add(dest)
-                pm.ok(conn.uid("MOVE", ",".join(batch), pm.mailbox_name(dest)), "move")
-            if not args.dry_run:
-                save_state(state_path, state)
+            # The groups behind the moves are saved even when a later CREATE or MOVE fails, so the
+            # next run follows the same decisions instead of asking Jev again.
+            try:
+                for dest, batch in sorted(plan.items()):
+                    batch = batch[:budget]
+                    if not batch:
+                        break
+                    budget -= len(batch)
+                    moved[dest] = moved.get(dest, 0) + len(batch)
+                    if args.dry_run:
+                        continue
+                    if dest not in folders:
+                        pm.ok(conn.create(pm.mailbox_name(dest)), "create folder")
+                        folders.add(dest)
+                    pm.ok(conn.uid("MOVE", ",".join(batch), pm.mailbox_name(dest)), "move")
+            finally:
+                if not args.dry_run:
+                    save_state(state_path, state)
     finally:
         try:
             conn.logout()
