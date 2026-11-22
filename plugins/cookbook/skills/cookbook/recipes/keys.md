@@ -33,7 +33,7 @@ One store, and helpers that read it. Linux since 19 November 2026.
   lists, for `https://api.firecrawl.dev`. A setup command (`env`, `init`, `launch`, ...) or
   an unknown option before the command starts without it, with one line on stderr. Every
   start turns the CLI's self-update off. After an update of the pin, read its
-  `--help` against the launcher's lists. The pin (1.29.0 in
+  `--help` against the launcher's lists. The pin (1.30.0 in
   `~/.local/share/firecrawl-cli`) overrides `zod` to 4.6.7 (owner's yes, 19 November 2026):
   it resolves to 3.25.76, which has a high advisory that no 3.x release fixes
   (GHSA-mrhx-c7xc-m3w5). Scrape, map, search and crawl answered with it; a scrape with a
