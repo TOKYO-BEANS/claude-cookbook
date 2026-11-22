@@ -26,6 +26,7 @@ import email
 import email.errors
 import email.header
 import email.policy
+import http.client
 import importlib.util
 import json
 import os
@@ -33,7 +34,6 @@ import re
 import sys
 import time
 import unicodedata
-import urllib.error
 import urllib.request
 from email.utils import getaddresses, parseaddr
 
@@ -324,7 +324,9 @@ class Grouper:
         known = senders.get(sender["addr"])
         if known in groups:
             return groups[known]["label"]
-        key = sender["key"]
+        # A rule key Jev once joined to another group follows that decision without a new call.
+        aliases = acc.setdefault("aliases", {})
+        key = aliases.get(sender["key"], sender["key"])
         if key not in groups:
             cands = candidates(sender, groups)
             pick = None
@@ -336,12 +338,13 @@ class Grouper:
                     pick = gate(probs, cands)
                     row = {"account": account, "addr": sender["addr"], "rule": key, "candidates": cands,
                            "probs": probs, "pick": pick, "model": model}
-                except (OSError, ValueError, TypeError, AttributeError, urllib.error.URLError) as e:
+                except (OSError, ValueError, TypeError, AttributeError, http.client.HTTPException) as e:
                     row = {"account": account, "addr": sender["addr"], "rule": key, "candidates": cands,
                            "jev_error": pm.one_line(e, 200)}
                 if self.log_path:
                     log(self.log_path, row)
             if pick:
+                aliases[key] = pick
                 key = pick
             else:
                 groups[key] = {"label": unique_label(sender, groups), "tokens": [], "addresses": []}

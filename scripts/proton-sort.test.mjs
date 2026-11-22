@@ -99,6 +99,70 @@ out["settings_none"] = fails({"user": "u@pm.me"})
 out["settings_bad"] = fails({"user": "u@pm.me", "sort": {"accounts": ["a@b.dk, c@d.dk"]}})
 acc, own = ps.load_settings({"user": "u@pm.me", "sort": {"accounts": ["A@Gmail.com"], "own": ["me@x.dk"]}})
 out["settings_ok"] = [acc, sorted(own)]
+import http.client, os, tempfile, contextlib
+def raises(exc):
+    def opener(req, timeout=0):
+        raise exc
+    return opener
+gh = ps.Grouper({"accounts": {}}, "k", 5, None, raises(http.client.IncompleteRead(b"")))
+gh.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+out["http_error"] = gh.group_for("a@gmail.com", ps.sender_of("Facebookmail <security@facebookmail.com>"))
+ga = ps.Grouper({"accounts": {}}, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}}}))
+ga.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+ga.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
+alias_label = ga.group_for("a@gmail.com", ps.sender_of("FB <other@facebookmail.com>"))
+out["alias"] = [alias_label, ga.jev_calls]
+gu = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
+out["clash"] = [gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <x@danskebank.dk>")),
+                gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <fake@gmail.com>"))]
+
+class FakeImap:
+    def __init__(self, boxes):
+        self.boxes, self.calls, self.cur = boxes, [], None
+    def list(self):
+        return "OK", [b'(\\Unmarked) "/" "' + n.encode() + b'"' for n in self.boxes]
+    def create(self, name):
+        n = name.strip('"'); self.calls.append(["CREATE", n]); self.boxes.setdefault(n, {}); return "OK", [b"CREATE"]
+    def select(self, name, readonly=False):
+        self.cur = name.strip('"'); self.calls.append(["SELECT", self.cur, readonly]); return "OK", [b"1"]
+    def uid(self, cmd, *a):
+        box = self.boxes[self.cur]
+        if cmd == "SEARCH":
+            return "OK", [" ".join(sorted(box, key=int)).encode()]
+        if cmd == "FETCH":
+            return "OK", [(f"{u} (UID {u} BODY[] {{1}}".encode(), box[u]) for u in a[0].split(",")]
+        if cmd == "MOVE":
+            dest = a[1].strip('"'); self.calls.append(["MOVE", self.cur, a[0], dest])
+            for u in a[0].split(","):
+                self.boxes.setdefault(dest, {})[u] = box.pop(u)
+            return "OK", [b""]
+        raise AssertionError(cmd)
+    def logout(self):
+        pass
+def mail(**h):
+    return "".join(f"{k.replace('_', '-')}: {v}\r\n" for k, v in h.items()).encode() + b"\r\n"
+def boxes():
+    return {
+        "INBOX": {
+            "1": mail(From="Amazon <noreply@amazon.dk>", To="list@example.org", X_Forwarded_For="home.mail@gmail.com inbox@pm.me", X_Forwarded_To="inbox@pm.me"),
+            "2": mail(From="Amazon.com <order@amazon.com>", To="home.mail@gmail.com"),
+            "3": mail(From="inbox@pm.me", To="home.mail@gmail.com"),
+            "4": mail(From="Someone <s@example.org>", To="list@example.org"),
+        },
+        "Folders/inbox@pm.me": {"7": mail(From="Netflix <info@netflix.com>", To="inbox@pm.me")},
+    }
+cfg = {"user": "inbox@pm.me", "sort": {"accounts": ["home.mail@gmail.com", "inbox@pm.me"]}}
+def sort_run(argv):
+    fake = FakeImap(boxes())
+    ps.pm.imap_connect = lambda c: fake
+    ps.STATE_DIR = tempfile.mkdtemp()
+    with contextlib.redirect_stdout(io.StringIO()) as o:
+        ps.cmd_sort(cfg, ps.parser().parse_args(["sort", *argv]))
+    return {"calls": [c for c in fake.calls if c[0] != "SELECT"], "readonly": sorted({c[2] for c in fake.calls if c[0] == "SELECT"}),
+            "state": os.path.exists(os.path.join(ps.STATE_DIR, "state.json")), "inbox": sorted(fake.boxes["INBOX"]), "said": o.getvalue().strip()}
+out["run"] = sort_run([])
+out["dry"] = sort_run(["--dry-run"])
+out["capped"] = sort_run(["--max-moves", "1"])
 print(json.dumps(out))
 `;
 
@@ -152,6 +216,9 @@ test("Jev's pick counts only with a clear lead; none, a near tie or a bad answer
   assert.equal(o.jev_malformed, "Facebookmail");
   assert.equal(o.no_key_calls, 0);
   assert.deepEqual(o.bad_shapes, Array(5).fill("Facebookmail"));
+  assert.equal(o.http_error, "Facebookmail");
+  assert.deepEqual(o.alias, ["Facebook", 1]);
+  assert.deepEqual(o.clash, ["Danske Bank", "Danske Bank (person gmail.com)"]);
   assert.equal(o.unrelated_calls, 0);
 });
 
@@ -178,4 +245,23 @@ test("settings: accounts are required, one address each, lower-cased; own addres
   assert.match(o.settings_none, /needs "sort"/);
   assert.match(o.settings_bad, /one address per value/);
   assert.deepEqual(o.settings_ok, [[{ address: "a@gmail.com", also: [] }], ["a@gmail.com", "me@x.dk", "u@pm.me"]]);
+});
+
+test("a run makes the folders it needs, moves by account and sender, keeps the cap; a dry run changes nothing", opts, () => {
+  const o = run();
+  assert.deepEqual(o.run.calls, [
+    ["CREATE", "Folders/home.mail@gmail.com"],
+    ["CREATE", "Folders/home.mail@gmail.com/Amazon"],
+    ["MOVE", "INBOX", "1,2", "Folders/home.mail@gmail.com/Amazon"],
+    ["CREATE", "Folders/inbox@pm.me/Netflix"],
+    ["MOVE", "Folders/inbox@pm.me", "7", "Folders/inbox@pm.me/Netflix"],
+  ]);
+  assert.deepEqual(o.run.inbox, ["3", "4"]);
+  assert.equal(o.run.state, true);
+  assert.match(o.run.said, /^moved 3 mail\(s\) into 2 sender folder\(s\); 2 left in place/);
+  assert.deepEqual(o.dry.calls, []);
+  assert.deepEqual(o.dry.readonly, [true]);
+  assert.equal(o.dry.state, false);
+  assert.match(o.dry.said, /^would move 3 mail.*dry run: rules only/);
+  assert.equal(o.capped.calls.filter((c) => c[0] === "MOVE").map((c) => c[2]).join(" "), "1");
 });
