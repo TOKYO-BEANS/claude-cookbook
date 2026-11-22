@@ -12,6 +12,9 @@ Browne's published setup (owner's choice; no Tailscale: the iPhone's T3 Connect 
 - **Theo's rules hold:** Claude subscriptions only in Claude Code through the proxy; never anyone
   else's traffic; a home connection, not a VPN, an exit node or a datacenter address (checked
   20 November 2026: Wi-Fi, no exit node). A laptop away from home sends from where it is.
+- **Antigravity** (owner's yes, 22 November 2026; not in Theo's guide): Gemini only, its Claude
+  models excluded (`oauth-excluded-models`). Google's terms name proxy use as grounds for
+  suspension.
 - **Always on:** the systemd user service `cliproxyapi` (`systemctl --user status|restart
   cliproxyapi`, log in `journalctl --user -u cliproxyapi`) runs `cliproxyapi start` while the
   owner is signed in to the desktop; the key store is locked otherwise. It restarts after a
@@ -20,16 +23,14 @@ Browne's published setup (owner's choice; no Tailscale: the iPhone's T3 Connect 
   `key/cliproxyapi-management`, pasted in, never on the clipboard or shown).
 - **Routing as Theo's:** accounts in turn (`round-robin`), a session kept on one account for
   an hour (`session-affinity`, TTL `1h`: prompt caches are per account), `request-retry: 3`.
-- **In T3 Code:** the provider instance "Claude (pool)" (`claudePool`) runs `claude-pool` as its
-  binary, with the normal Claude home, so a thread can switch between "Claude" and "Claude
-  (pool)". `claude-pool` takes the client key from the key store at run time; nothing in T3
-  holds it. In a pooled session claude.ai connectors are off (Claude Code's own warning).
-- **Codex** (since 20 November 2026): `codex-pool` is Codex through the proxy, and T3's "Codex
-  (pool)" (`codexPool`, existing CLI) runs it with the normal Codex home. It puts the client
-  key in one variable of the Codex process, named by a provider's `env_key`, and gives that
-  provider as `-c` overrides: no key and no change in `config.toml`, so the plain `codex` keeps
-  its own sign-in. It refuses `login` and `logout`. T3 shows Codex's own model list; a
-  model the proxy does not list (`cliproxyapi status`) fails: "unknown provider for model".
+- **In T3 Code:** "Claude (pool)" (`claudePool`) runs `claude-pool` with the normal Claude
+  home, so a thread can switch to and from "Claude". The client key comes from the key store
+  at run time, never from T3. In a pooled session claude.ai connectors are off.
+- **Codex:** `codex-pool` is Codex through the proxy, and T3's "Codex
+  (pool)" (`codexPool`, existing CLI) runs it with the normal Codex home. The client key goes
+  in one variable named by `env_key`, the provider in `-c` overrides: `config.toml` unchanged,
+  so plain `codex` keeps its sign-in. It refuses `login` and `logout`. A model the proxy
+  does not list (`cliproxyapi status`) fails: "unknown provider for model".
 - **The keys, and the two exceptions** (owner, 18 and 20 November 2026; the second is T3's
   hub, below): the proxy reads its client key only from `config.yaml` and keeps sign-ins as
   JSON files, so both may be plain files in the private folder (0700) and nowhere else. Each start makes a new client key, saved in the key
