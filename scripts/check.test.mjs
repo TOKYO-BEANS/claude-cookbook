@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { OTHER_TEXTS, PAGE_READ_LIMIT, SKILL_LIMIT, checkCookbook, readCost, readPages } from "./check.mjs";
+import { OTHER_TEXTS, PAGE_READ_LIMIT, SKILL_LIMIT, checkCookbook, readCost, readPages, roomReport } from "./check.mjs";
 import { CHANGELOG_HOSTS, SELF_UPDATING_TOOLS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -493,4 +493,16 @@ test("hooks.json: a command starts node or bash by name and a script under the p
   assert.ok(commands.length > 0);
   for (const c of commands) assert.match(c, shape);
   for (const c of ['/usr/bin/node "${CLAUDE_PLUGIN_ROOT}/hooks/x.mjs"', '"C:/Program Files/nodejs/node.exe" "${CLAUDE_PLUGIN_ROOT}/hooks/x.mjs"', 'node "/home/x/hooks/x.mjs"']) assert.doesNotMatch(c, shape);
+});
+
+test("room report: SKILL.md always, pages only when close to the limit, tightest first", () => {
+  const near = (n) => `# T\n${"x".repeat(PAGE_READ_LIMIT - n - 9 * 3 - 5)}\n`;
+  const lines = roomReport({ skillText: "x".repeat(SKILL_LIMIT - 44), pages: [
+    { name: "recipes/a.md", text: near(120) }, { name: "recipes/b.md", text: near(5) }, { name: "recipes/c.md", text: "# C\n" },
+  ] });
+  assert.deepEqual(lines, [
+    `SKILL.md: ${SKILL_LIMIT - 44} of ${SKILL_LIMIT} bytes, 44 left`,
+    `recipes/b.md: ${PAGE_READ_LIMIT - 5} of ${PAGE_READ_LIMIT} as a Read result, 5 left`,
+    `recipes/a.md: ${PAGE_READ_LIMIT - 120} of ${PAGE_READ_LIMIT} as a Read result, 120 left`,
+  ]);
 });

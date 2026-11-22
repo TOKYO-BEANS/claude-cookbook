@@ -11,7 +11,8 @@
   push. Push until the change is done and its checks pass, then ask. The merge commands ask
   themselves when the head has no `ai-review` run. By hand: `gh pr ready <n> --undo` (not for a
   draft), then `gh pr ready <n>`. A fix for a finding is a new head and needs a new request. Never
-  ask again over a review that ran.
+  ask again over a review that ran. A review with no high or medium finding ends the rounds:
+  [fast-merges](fast-merges.md).
 - Advisory: the job always passes and is not a required check. A failed call posts
   `review unavailable: <reason>`, never "no findings"; treat that pull request as not reviewed.
 - **Fallback review**, only when the job's reviewer could not serve the call (the plan's limit or
