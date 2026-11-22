@@ -35,6 +35,7 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.request
 from email.utils import getaddresses, parseaddr
 
@@ -154,9 +155,11 @@ def sender_of(from_header, account=""):
     # (amazon.com, danskebank.io) never joins by rule; it is a candidate for Jev.
     base = registrable(domain)
     first = base.split(".", 1)[0]
-    label = name if norm(name) == norm(first) else first.capitalize()
+    # The folder always names the domain too: a look-alike that writes first must not take a
+    # folder that reads like the company's ("Danske Bank (danske-bank.io)", never "Danske Bank").
+    shown = clean_label(name, 50) if norm(name) == norm(first) else first.capitalize()
     return {"addr": addr, "name": name, "kind": "org", "key": "o:" + base,
-            "label": clean_label(label), "tokens": sorted(tokens(name) | tokens(first))}
+            "label": clean_label(f"{shown} ({base})", 100), "tokens": sorted(tokens(name) | tokens(first))}
 
 
 def account_of(headers, accounts, folder):
@@ -252,13 +255,16 @@ def candidates(sender, groups):
     word that is not noise. The list Jev picks from is narrowed here, in code."""
     key = stem(sender["key"])
     toks = set(sender["tokens"])
-    out = []
+    scored = []
     for gkey, g in groups.items():
         gk = stem(gkey)
         inside = len(key) >= 4 and len(gk) >= 4 and (key in gk or gk in key)
-        if inside or toks & set(g.get("tokens", [])):
-            out.append(gkey)
-    return sorted(out)[:MAX_CANDIDATES]
+        shared = len(toks & set(g.get("tokens", [])))
+        if inside or shared:
+            scored.append((-(2 * inside + shared), gkey))
+    # The best matches first (a name inside the other, then the most shared words), so a cut at
+    # MAX_CANDIDATES drops the weakest, not the last in the alphabet.
+    return [gkey for _, gkey in sorted(scored)[:MAX_CANDIDATES]]
 
 
 def jev_questions(cands, groups):
@@ -318,6 +324,15 @@ def ask_jev(sender, cands, groups, key, opener=urllib.request.urlopen, timeout=2
     if type(imitation) not in (int, float) or not 0 <= imitation <= 1:
         raise ValueError("malformed Jev answer")
     return vals, float(imitation), data.get("model")
+
+
+def jev_outage(e):
+    """True when a failed Jev call means the service or the connection is down (a timeout, no
+    connection, a 5xx or 429 reply, a broken HTTP exchange), so every later call would fail too.
+    A malformed answer or another 4xx reply is about that one request and is not an outage."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500 or e.code == 429
+    return isinstance(e, (OSError, http.client.HTTPException))
 
 
 def gate(probs, cands):
@@ -381,6 +396,8 @@ class Grouper:
                     if self.log_path:
                         log(self.log_path, {"account": account, "addr": sender["addr"], "rule": key,
                                             "candidates": cands, "jev_error": pm.one_line(e, 200)})
+                    if jev_outage(e):
+                        self.jev_left = 0  # an outage ends Jev for this run: the rest waits for the next
                     return None
                 if self.log_path:
                     log(self.log_path, row)

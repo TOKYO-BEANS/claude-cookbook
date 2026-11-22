@@ -184,12 +184,12 @@ def sort_run(argv):
             "state": os.path.exists(os.path.join(ps.STATE_DIR, "state.json")), "inbox": sorted(fake.boxes["INBOX"]), "said": o.getvalue().strip()}
 class FailingMove(FakeImap):
     def uid(self, cmd, *a):
-        if cmd == "MOVE" and a[1].strip('"').endswith("/Netflix"):
+        if cmd == "MOVE" and a[1].strip('"').endswith("/Netflix (netflix.com)"):
             return "NO", [b"no space"]
         return super().uid(cmd, *a)
 def failing_run():
     fake = FailingMove(boxes())
-    fake.boxes["Folders/inbox@pm.me/Netflix"] = {}
+    fake.boxes["Folders/inbox@pm.me/Netflix (netflix.com)"] = {}
     ps.pm.imap_connect = lambda c: fake
     ps.STATE_DIR = tempfile.mkdtemp()
     try:
@@ -204,6 +204,31 @@ out["failing_move"] = failing_run()
 raw8 = b"From: \xc6bler Shop <shop@aebler.dk>\r\nTo: inbox@pm.me\r\n\r\n"
 h8 = email.message_from_bytes(raw8, policy=email.policy.compat32)
 out["raw8"] = [type(h8.get("From")).__name__, (ps.sender_of(str(h8.get("From", "") or "")) or {}).get("key"), (ps.sender_of(h8.get("From")) or {}).get("key")]
+go = ps.Grouper({"accounts": {}}, None, 5, None, opener_with({}))
+out["org_first"] = [go.group_for("a@gmail.com", ps.sender_of(h)) for h in ["Danske Bank <x@danske-bank.io>", "Danske Bank <no-reply@danskebank.dk>"]]
+many = {f"p:anna{i}@gmail.com": {"label": f"Anna {i}", "tokens": ["anna"], "addresses": []} for i in range(14)}
+many["o:fakturaservice.dk"] = {"label": "Fakturaservice", "tokens": ["fakturaservice"], "addresses": []}
+c = ps.candidates(ps.sender_of("Anna Fakturaservice <anna@fakturaservice.com>"), many)
+out["ranked"] = [c[0], len(c)]
+gf = ps.Grouper({"accounts": {}}, "k", 25, None, raises(OSError("timed out")))
+gf.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+gf.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
+out["outage"] = [gf.group_for("a@gmail.com", ps.sender_of("Facebook <x@facebookmail.com>")),
+                 gf.group_for("a@gmail.com", ps.sender_of("Netflix <y@netflixmail.com>")), gf.jev_calls]
+import urllib.error
+out["one_sender_fails"] = []
+for opener in [opener_with({"answers": [1]}), raises(urllib.error.HTTPError("https://x", 400, "Bad Request", {}, None))]:
+    gs = ps.Grouper({"accounts": {}}, "k", 25, None, opener)
+    gs.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+    gs.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
+    out["one_sender_fails"].append([gs.group_for("a@gmail.com", ps.sender_of("Facebook <x@facebookmail.com>")),
+                                    gs.group_for("a@gmail.com", ps.sender_of("Netflix <y@netflixmail.com>")), gs.jev_calls])
+g5x = ps.Grouper({"accounts": {}}, "k", 25, None, raises(urllib.error.HTTPError("https://x", 503, "Unavailable", {}, None)))
+g5x.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+g5x.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
+g5x.group_for("a@gmail.com", ps.sender_of("Facebook <x@facebookmail.com>"))
+g5x.group_for("a@gmail.com", ps.sender_of("Netflix <y@netflixmail.com>"))
+out["outage_5xx_calls"] = g5x.jev_calls
 out["run"] = sort_run([])
 out["dry"] = sort_run(["--dry-run"])
 out["capped"] = sort_run(["--max-moves", "1"])
@@ -224,8 +249,8 @@ test("sender rules: a company is its exact domain, a person their address, whate
   const o = run();
   assert.deepEqual(o.amazon, ["o:amazon.dk", "o:amazon.com", "o:amazon.co.uk"]);
   assert.equal(o.bank, "o:danskebank.dk");
-  assert.equal(o.label_bank, "Danske Bank");
-  assert.equal(o.label_brand, "Amazon");
+  assert.equal(o.label_bank, "Danske Bank (danskebank.dk)");
+  assert.equal(o.label_brand, "Amazon (amazon.dk)");
   assert.deepEqual(o.person, ["p:johndoe@gmail.com", "p:johndoe@gmail.com", "p:jd@hotmail.com"]);
   assert.equal(o.colleague, "p:jh@firma.dk");
   assert.deepEqual(o.endings, ["o:amazon.net", "o:danskebank.co.uk", "o:danskebank.xyz", "o:danskebank.io",
@@ -239,7 +264,7 @@ test("sender rules: a company is its exact domain, a person their address, whate
 test("a folder name from a hostile sender name is one safe IMAP name", opts, () => {
   const o = run();
   assert.match(o.evil_label, /^[A-Za-z0-9 ._+()@-]+$/);
-  assert.deepEqual(o.amp, ["H and M", "A and B"]);
+  assert.deepEqual(o.amp, ["H and M (hm.com)", "A and B"]);
   assert.ok(!o.evil_label.includes("/"));
   assert.ok(o.evil_ok.startsWith('"Folders/a@b.dk/'));
 });
@@ -257,30 +282,30 @@ test("routing: Gmail's forward header beats the target, then To, then an alias, 
 test("Jev's pick counts only with a clear lead; none or a near tie makes a new group, a bad or missing answer waits", opts, () => {
   const o = run();
   assert.deepEqual(o.gate, ["o:a", null, null, "o:a"]);
-  assert.deepEqual(o.jev_merge, ["Facebook", "Facebook", "Facebook", 1]);
-  assert.equal(o.jev_unsure, "Facebookmail");
+  assert.deepEqual(o.jev_merge, ["Facebook (facebook.com)", "Facebook (facebook.com)", "Facebook (facebook.com)", 1]);
+  assert.equal(o.jev_unsure, "Facebookmail (facebookmail.com)");
   assert.equal(o.jev_malformed, null);
   assert.equal(o.no_key_calls, 0);
   assert.deepEqual(o.bad_shapes, Array(5).fill(null));
   assert.equal(o.http_error, null);
-  assert.deepEqual(o.deferred, [null, false, 0, "Facebook", 1]);
-  assert.deepEqual(o.imitation, ["Danskebank-verify", 1]);
+  assert.deepEqual(o.deferred, [null, false, 0, "Facebook (facebook.com)", 1]);
+  assert.deepEqual(o.imitation, ["Danskebank-verify (danskebank-verify.io)", 1]);
   assert.equal(o.imitation_missing, null);
-  assert.deepEqual(o.lookalikes_no_jev, ["John Doe (johndoe@gmail.com)", "John Doe (anything@hotmail.com)", "Danske Bank", "Danske Bank (org danskebank.xyz)"]);
+  assert.deepEqual(o.lookalikes_no_jev, ["John Doe (johndoe@gmail.com)", "John Doe (anything@hotmail.com)", "Danske Bank (danskebank.dk)", "Danske Bank (danskebank.xyz)"]);
   assert.deepEqual(o.lookalike_with_jev, ["John Doe (johndoe@gmail.com)", "John Doe (johndoe@gmail.com)", 1]);
-  assert.deepEqual(o.alias, ["Facebook", 1]);
-  assert.deepEqual(o.clash, ["Danske Bank", "Danske Bank (fake@gmail.com)"]);
+  assert.deepEqual(o.alias, ["Facebook (facebook.com)", 1]);
+  assert.deepEqual(o.clash, ["Danske Bank (danskebank.dk)", "Danske Bank (fake@gmail.com)"]);
   assert.equal(o.unrelated_calls, 0);
 });
 
 test("a free-mail sender named like a company gets a folder of its own, in either order", opts, () => {
   const o = run();
   const [bank, fake, fakeFirst, bankSecond] = o.lookalike;
-  assert.equal(bank, "Danske Bank");
+  assert.equal(bank, "Danske Bank (danskebank.dk)");
   assert.notEqual(fake.toLowerCase(), bank.toLowerCase());
   assert.equal(fake, "Danske Bank (anything@gmail.com)");
   assert.equal(fakeFirst, "Danske Bank (anything@gmail.com)");
-  assert.equal(bankSecond, "Danske Bank");
+  assert.equal(bankSecond, "Danske Bank (danskebank.dk)");
   assert.notEqual(bankSecond.toLowerCase(), fakeFirst.toLowerCase());
   for (const label of o.lookalike) assert.match(label, /^[A-Za-z0-9 ._+()@-]+$/);
 });
@@ -289,7 +314,7 @@ test("Jev sees names and addresses only, with a none-of-these option", opts, () 
   const o = run();
   assert.deepEqual(Object.keys(o.jev_request).sort(), ["groups", "new_sender"]);
   assert.deepEqual(o.jev_request.new_sender, { name: "Facebook", address: "security@facebookmail.com" });
-  assert.deepEqual(o.jev_request.groups, { g0: { name: "Facebook", addresses: ["notify@facebook.com"] } });
+  assert.deepEqual(o.jev_request.groups, { g0: { name: "Facebook (facebook.com)", addresses: ["notify@facebook.com"] } });
   assert.deepEqual(o.jev_ids, ["g0", "none"]);
   assert.deepEqual(o.jev_questions, ["imitation", "same_sender"]);
 });
@@ -305,10 +330,10 @@ test("a run makes the folders it needs, moves by account and sender, keeps the c
   const o = run();
   assert.deepEqual(o.run.calls, [
     ["CREATE", "Folders/home.mail@gmail.com"],
-    ["CREATE", "Folders/home.mail@gmail.com/Amazon"],
-    ["MOVE", "INBOX", "1,2", "Folders/home.mail@gmail.com/Amazon"],
-    ["CREATE", "Folders/inbox@pm.me/Netflix"],
-    ["MOVE", "Folders/inbox@pm.me", "7", "Folders/inbox@pm.me/Netflix"],
+    ["CREATE", "Folders/home.mail@gmail.com/Amazon (amazon.dk)"],
+    ["MOVE", "INBOX", "1,2", "Folders/home.mail@gmail.com/Amazon (amazon.dk)"],
+    ["CREATE", "Folders/inbox@pm.me/Netflix (netflix.com)"],
+    ["MOVE", "Folders/inbox@pm.me", "7", "Folders/inbox@pm.me/Netflix (netflix.com)"],
   ]);
   assert.deepEqual(o.run.inbox, ["3", "4"]);
   assert.equal(o.run.state, true);
@@ -326,4 +351,17 @@ test("a failed move still saves the groups made so far; a raw 8-bit From header 
   assert.deepEqual(o.failing_move[1], ["info@netflix.com"]);
   assert.equal(o.raw8[1], "o:aebler.dk");
   assert.equal(o.raw8[2], "o:aebler.dk");
+});
+
+test("a company folder names its domain in either order; candidates are ranked; one Jev failure ends Jev for the run", opts, () => {
+  const o = run();
+  assert.deepEqual(o.org_first, ["Danske Bank (danske-bank.io)", "Danske Bank (danskebank.dk)"]);
+  assert.deepEqual(o.ranked, ["o:fakturaservice.dk", 12]);
+  assert.deepEqual(o.outage, [null, null, 1]);
+  assert.equal(o.outage_5xx_calls, 1);
+});
+
+test("a malformed answer or a 4xx reply for one sender leaves Jev on for the others", opts, () => {
+  const o = run();
+  assert.deepEqual(o.one_sender_fails, [[null, null, 2], [null, null, 2]]);
 });
