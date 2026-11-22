@@ -5,11 +5,15 @@ The owner added it on 5 November 2026 for every project and every new session: t
 Elastic-2.0) at user scope. No project turns it off; a new project gets it without a step.
 
 - **What it does:** a stdio MCP server (`node server.mjs`, 9 tool names) and hooks on SessionStart,
-  UserPromptSubmit, PreToolUse and PostToolUse. A tool result over 4,096 bytes (Bash, PowerShell,
+  UserPromptSubmit, PreToolUse and PostToolUse. A tool result over 8,192 bytes (Bash, PowerShell,
   Read, Grep, WebFetch and every MCP server, Firecrawl and Parallel included) is indexed and
-  replaced by its best-matching lines and a search pointer (measured on 15 November 2026: a
-  result of 4,105 bytes was cut). The Skill, Glob and Agent tools are not covered. This is why
-  every page in `recipes/` and `options/` fits one read. The index is a local SQLite FTS5 store in `~/.context-mode`, outside
+  replaced by its best-matching lines and a search pointer. The Skill, Glob and Agent tools are
+  not covered. The cut is `CTX_REPLACE_TRIGGER_BYTES`, set to 8192 in `env` of
+  `~/.claude/settings.json` since 22 November 2026 (machine-setup #45: a 6,000-byte Bash result
+  came back whole, and was cut with 4,096). The default, and a session started before then, cuts
+  at 4,096. In 2.2.1 the value is the hook's cut only: in `server.mjs` it sizes the ranged-read
+  probe (`READ_PROBE_LINES`) and does not limit `ctx_execute` output. Every page in `recipes/`
+  and `options/` still fits one read under 4,000 bytes. The index is a local SQLite FTS5 store in `~/.context-mode`, outside
   `~/.claude`. Its only network calls are a version check against the npm registry
   and `ctx_index` fetching a URL it is given; no telemetry.
 - **Use it:** when a step counts, sums, filters or finds something in more than about 20 lines of

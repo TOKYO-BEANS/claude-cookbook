@@ -28,7 +28,8 @@ What holds here:
 - What reading cannot check is not claimed: a test run, a command's output, git history. Say that
   it was not checked and what would check it. When a tool you need is missing, report that; do
   not work around it.
-- context-mode cuts any tool result over 4,096 bytes. Read a large file with `offset` and `limit`
+- context-mode cuts any tool result over 8,192 bytes (4,096 in a session started before 22
+  November 2026). Read a large file with `offset` and `limit`
   in small ranges (about 40 lines), and never count a cut result as read.
 - Never read `.env*`, `.dev.vars*`, credential stores or `.atlas/`.
 

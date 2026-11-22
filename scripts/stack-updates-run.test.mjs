@@ -1249,7 +1249,7 @@ test("recipeText: every recipe the real catalog names is found; setup and eviden
   assert.doesNotMatch(boat, /On this PC|\.local\/share\/boat/);
 });
 
-// ---- fix round 1 (Task 8): pages under context-mode's 4,096-byte cut -------------------
+// ---- fix round 1 (Task 8): pages under context-mode's default 4,096-byte cut (8,192 here since 22 Nov 2026)
 
 import { NOT_PAGEABLE, PAGE_BYTES, labelOf, reportPages } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
 

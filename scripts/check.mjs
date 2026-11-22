@@ -17,7 +17,8 @@ const dollarErrors = (name, text) =>
   text.replace(/\r/g, "").split("\n").flatMap((line, i) => (/\$\d/.test(line) ? [`${name} line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`] : []));
 
 // The pages beside SKILL.md, by folder. A page is read with one Read call, and context-mode
-// cuts any tool result over 4,096 bytes, so a page must fit: its bytes plus what Read adds
+// cuts any tool result over 8,192 bytes (4,096 by default and before 22 Nov 2026); the page
+// limit stays at 4,000, the owner's call, so a page must fit: its bytes plus what Read adds
 // to each line (a line number and a tab, and a carriage return in a CRLF checkout).
 export const PAGE_FOLDERS = Object.freeze(["recipes", "options"]);
 export const PAGE_READ_LIMIT = 4000;
