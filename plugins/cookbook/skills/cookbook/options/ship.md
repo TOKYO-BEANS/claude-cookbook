@@ -31,7 +31,7 @@ Chosen by fit for the job on 15 November 2026.
 - **Hosting: Cloudflare.** Workers, D1, R2, KV and Access under one account and one CLI.
   Weighed: Vercel and Netlify (strong for front ends, a second platform for data and access
   control); a virtual server (upkeep). Sites that already live on Wix or Shopify stay there
-  as owner-approved exceptions.
+  as owner-approved exceptions. Sign-in for a product: [WorkOS](sign-in-workos.md), weighed.
 - **Wix: the Wix MCP.** Business data through `ExecuteWixAPI` with no token on this PC.
   Weighed: the Wix CLI (needs a token; for code-built sites); the dashboard in the built-in
   browser (the fallback: page layout in the Editor has no API).
