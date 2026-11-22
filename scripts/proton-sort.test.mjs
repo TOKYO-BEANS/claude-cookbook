@@ -215,6 +215,20 @@ gf.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
 gf.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
 out["outage"] = [gf.group_for("a@gmail.com", ps.sender_of("Facebook <x@facebookmail.com>")),
                  gf.group_for("a@gmail.com", ps.sender_of("Netflix <y@netflixmail.com>")), gf.jev_calls]
+import urllib.error
+out["one_sender_fails"] = []
+for opener in [opener_with({"answers": [1]}), raises(urllib.error.HTTPError("https://x", 400, "Bad Request", {}, None))]:
+    gs = ps.Grouper({"accounts": {}}, "k", 25, None, opener)
+    gs.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+    gs.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
+    out["one_sender_fails"].append([gs.group_for("a@gmail.com", ps.sender_of("Facebook <x@facebookmail.com>")),
+                                    gs.group_for("a@gmail.com", ps.sender_of("Netflix <y@netflixmail.com>")), gs.jev_calls])
+g5x = ps.Grouper({"accounts": {}}, "k", 25, None, raises(urllib.error.HTTPError("https://x", 503, "Unavailable", {}, None)))
+g5x.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+g5x.group_for("a@gmail.com", ps.sender_of("Netflix <info@netflix.com>"))
+g5x.group_for("a@gmail.com", ps.sender_of("Facebook <x@facebookmail.com>"))
+g5x.group_for("a@gmail.com", ps.sender_of("Netflix <y@netflixmail.com>"))
+out["outage_5xx_calls"] = g5x.jev_calls
 out["run"] = sort_run([])
 out["dry"] = sort_run(["--dry-run"])
 out["capped"] = sort_run(["--max-moves", "1"])
@@ -344,4 +358,10 @@ test("a company folder names its domain in either order; candidates are ranked; 
   assert.deepEqual(o.org_first, ["Danske Bank (danske-bank.io)", "Danske Bank (danskebank.dk)"]);
   assert.deepEqual(o.ranked, ["o:fakturaservice.dk", 12]);
   assert.deepEqual(o.outage, [null, null, 1]);
+  assert.equal(o.outage_5xx_calls, 1);
+});
+
+test("a malformed answer or a 4xx reply for one sender leaves Jev on for the others", opts, () => {
+  const o = run();
+  assert.deepEqual(o.one_sender_fails, [[null, null, 2], [null, null, 2]]);
 });

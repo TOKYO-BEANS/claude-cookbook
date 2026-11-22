@@ -35,6 +35,7 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.error
 import urllib.request
 from email.utils import getaddresses, parseaddr
 
@@ -325,6 +326,15 @@ def ask_jev(sender, cands, groups, key, opener=urllib.request.urlopen, timeout=2
     return vals, float(imitation), data.get("model")
 
 
+def jev_outage(e):
+    """True when a failed Jev call means the service or the connection is down (a timeout, no
+    connection, a 5xx or 429 reply, a broken HTTP exchange), so every later call would fail too.
+    A malformed answer or another 4xx reply is about that one request and is not an outage."""
+    if isinstance(e, urllib.error.HTTPError):
+        return e.code >= 500 or e.code == 429
+    return isinstance(e, (OSError, http.client.HTTPException))
+
+
 def gate(probs, cands):
     """Jev's pick, kept only when it leads an even split by a clear margin; else None."""
     top = max(probs, key=probs.get)
@@ -386,7 +396,8 @@ class Grouper:
                     if self.log_path:
                         log(self.log_path, {"account": account, "addr": sender["addr"], "rule": key,
                                             "candidates": cands, "jev_error": pm.one_line(e, 200)})
-                    self.jev_left = 0  # one failure ends Jev for this run: the rest waits for the next
+                    if jev_outage(e):
+                        self.jev_left = 0  # an outage ends Jev for this run: the rest waits for the next
                     return None
                 if self.log_path:
                     log(self.log_path, row)

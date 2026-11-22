@@ -28,7 +28,7 @@ first, Jev only for a sender the rules cannot place.
   the candidates' names and three addresses each, never a subject or a text. At most 25 calls a
   run; past that, or when a call fails, the mail waits for the next run. Without the key
   the rules decide alone. A folder always names the address or domain: `Name (address)`,
-  `Name (domain)`. One failed Jev call ends Jev for that run.
+  `Name (domain)`. A Jev outage (a timeout, no connection, a 5xx or 429 reply) ends Jev for that run; a malformed answer or another 4xx reply leaves only that sender's mail waiting.
 - **Config:** `"sort": {"accounts": [...], "own": [...]}` in `~/.config/proton-mail/config.json`
   (addresses stay out of this public repository). An account written `{"address": ...,
   "also": ["alias@..."]}` also matches a forwarding alias.
