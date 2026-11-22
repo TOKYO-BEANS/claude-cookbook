@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=CLIProxyAPI Console
+Comment=Open the subscription proxy's console (cliproxyapi panel)
+Exec=sh -c "exec /usr/bin/node \\$HOME/.local/bin/cliproxyapi.mjs panel"
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Network;
+StartupNotify=false

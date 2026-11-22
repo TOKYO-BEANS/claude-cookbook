@@ -5,12 +5,13 @@ always on since 20 November.
 
 - **Where things are:** in `~/.local/share/cliproxyapi`: the binary in `bin` (the
   `linux_amd64_no-plugin` build), the template `config.template.yaml` (edit that, not the copy;
-  its `routing` block is Theo's), and `private` (0700, files 0600): `config.yaml` while it runs,
+  `routing` is Theo's), and `private` (0700, files 0600): `config.yaml` while it runs,
   sign-ins in `auths`, the console in `static`, `logs`. The launchers are this skill's
   `scripts/cliproxyapi.mjs`, `claude-pool.mjs` and `codex-pool.mjs`, copied to `~/.local/bin` beside
-  `#!/bin/sh` files of the same names; the unit is `scripts/cliproxyapi.service`, copied to
-  `~/.config/systemd/user` and enabled under `graphical-session.target` (no linger).
-- **Hardened** (read in the 8.0.76 source): it listens on 127.0.0.1:8317 only, which alone
+  `#!/bin/sh` files of the same names; `cliproxyapi-console.desktop` (the app) to
+  `~/.local/share/applications`; the unit `scripts/cliproxyapi.service` to `~/.config/systemd/user`,
+  enabled under `graphical-session.target` (no linger).
+- **Hardened** (the 8.0.76 source): it listens on 127.0.0.1:8317 only, which alone
   keeps other machines from the management API. Both APIs refuse a call without their key; no
   plugin loader; the built-in model list. The console is a pinned copy, never fetched. The
   launcher starts the proxy without the variables it acts on; the unit adds `UMask=0077` and an

@@ -15,9 +15,9 @@ Browne's published setup (owner's choice; no Tailscale: the iPhone's T3 Connect 
 - **Always on:** the systemd user service `cliproxyapi` (`systemctl --user status|restart
   cliproxyapi`, log in `journalctl --user -u cliproxyapi`) runs `cliproxyapi start` while the
   owner is signed in to the desktop; the key store is locked otherwise. It restarts after a
-  crash. `cliproxyapi status` answers whether it serves; `cliproxyapi panel` opens the console
-  (management secret: Proton Pass, vault "Claude", item `key/cliproxyapi-management`, pasted
-  into the login box, never on the clipboard or shown).
+  crash. `cliproxyapi status` answers whether it serves; the app "CLIProxyAPI Console" or
+  `cliproxyapi panel` opens the console (management secret: Proton Pass, vault "Claude", item
+  `key/cliproxyapi-management`, pasted in, never on the clipboard or shown).
 - **Routing as Theo's:** accounts in turn (`round-robin`), a session kept on one account for
   an hour (`session-affinity`, TTL `1h`: prompt caches are per account), `request-retry: 3`.
 - **In T3 Code:** the provider instance "Claude (pool)" (`claudePool`) runs `claude-pool` as its
