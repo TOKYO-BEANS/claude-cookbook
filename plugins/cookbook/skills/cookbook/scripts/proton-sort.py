@@ -23,6 +23,8 @@ log.jsonl beside it; both are private to the user.
 
 import argparse
 import email
+import email.errors
+import email.header
 import email.policy
 import importlib.util
 import json
@@ -56,7 +58,8 @@ JEV_URL = "https://api.typesafe.ai/v1/systemone"
 MODEL = "jev-1.14.0"  # pinned like web-batch and owner-questions; the log records the model Jev reports
 MAX_CANDIDATES = 12
 HEADERS = "FROM TO CC DELIVERED-TO X-ORIGINAL-TO X-FORWARDED-FOR X-FORWARDED-TO"
-FORWARD_HEADERS = ("X-Forwarded-For", "X-Forwarded-To", "Delivered-To", "X-Original-To")
+FORWARD_HEADERS = ("X-Forwarded-For",)
+DELIVERY_HEADERS = ("Delivered-To", "X-Original-To")  # after To and Cc: they often name Bridge's own address
 
 FREEMAIL = {
     "gmail.com", "googlemail.com", "outlook.com", "outlook.dk", "hotmail.com", "hotmail.dk", "live.com",
@@ -107,6 +110,16 @@ def registrable(domain):
     return ".".join(parts[-2:])
 
 
+def decode_words(text):
+    """A display name with its RFC 2047 encoded words (=?utf-8?q?...?=) decoded; the text as it
+    is when it has none or they cannot be decoded."""
+    text = str(text or "")
+    try:
+        return str(email.header.make_header(email.header.decode_header(text)))
+    except (email.errors.HeaderParseError, LookupError, UnicodeError, ValueError):
+        return text
+
+
 def sender_of(from_header, account=""):
     """The sender group a From header falls in by the fixed rules, or None for no address."""
     name, addr = parseaddr(from_header or "")
@@ -114,7 +127,7 @@ def sender_of(from_header, account=""):
     if not pm.ADDRESS.fullmatch(addr):
         return None
     local, domain = addr.rsplit("@", 1)
-    name = pm.one_line(name, 80)
+    name = pm.one_line(decode_words(name), 80)
     if "@" in name or not norm(name):
         name = ""
     own_domain = account.rsplit("@", 1)[-1].lower() if "@" in account else ""
@@ -133,8 +146,9 @@ def sender_of(from_header, account=""):
 
 
 def account_of(headers, accounts, folder):
-    """Which configured account a mail belongs to: forwarding headers first, then To and Cc,
-    then the account folder it already sits in. None leaves it where it is. Gmail's
+    """Which configured account a mail belongs to: Gmail's X-Forwarded-For first, then To and Cc,
+    then Delivered-To and X-Original-To, then the account folder it already sits in. None leaves
+    it where it is. Gmail's
     X-Forwarded-For names the Gmail address and the target; the target, named again in
     X-Forwarded-To, is not the account the mail came from."""
     def addrs_in(fields):
@@ -149,7 +163,8 @@ def account_of(headers, accounts, folder):
             if acct["address"] in addrs or any(m in addrs for m in acct["also"]):
                 return acct["address"]
         return None
-    hit = found(FORWARD_HEADERS, skip=frozenset(addrs_in(("X-Forwarded-To",)))) or found(("To", "Cc"))
+    target = frozenset(addrs_in(("X-Forwarded-To",)))
+    hit = found(FORWARD_HEADERS, skip=target) or found(("To", "Cc")) or found(DELIVERY_HEADERS, skip=target)
     if hit:
         return hit
     for acct in accounts:

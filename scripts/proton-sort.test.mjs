@@ -27,6 +27,8 @@ out["person"] = [k("John Doe <john.doe+news@gmail.com>"), k("<johndoe@gmail.com>
 out["colleague"] = k("Jens Hansen <jh@firma.dk>", "me@firma.dk")
 out["company_for_other_account"] = k("Jens Hansen <jh@firma.dk>", "someone@gmail.com")
 out["danish"] = ps.sender_of("Søren Ærø <s@gmail.com>")["label"]
+enc = ps.sender_of("=?utf-8?q?S=C3=B8ren_=C3=86r=C3=B8?= <s@gmail.com>")
+out["encoded"] = [enc["label"], enc["key"], enc["tokens"]]
 evil = ps.sender_of('"Ev\\"il / ..\\\\ x" <a@gmail.com>')["label"] + ps.clean_label('Evil" DELETE /..\r\nBcc: \\x\u202e')
 out["evil_label"] = evil
 out["evil_ok"] = ps.pm.mailbox_name("Folders/a@b.dk/" + evil)
@@ -36,6 +38,7 @@ H = lambda **h: {kk.replace("_", "-"): v for kk, v in h.items()}
 out["route_gmail"] = ps.account_of(H(X_Forwarded_For="home.mail@gmail.com inbox@pm.me", X_Forwarded_To="inbox@pm.me", To="list@example.org"), A, "INBOX")
 out["route_to"] = ps.account_of(H(To="Mads <me@firma.dk>"), A, "INBOX")
 out["route_also"] = ps.account_of(H(Delivered_To="inbox+work@pm.me", To="all@firma.dk"), A, "INBOX")
+out["route_to_before_delivery"] = ps.account_of(H(Delivered_To="inbox@pm.me", X_Original_To="inbox@pm.me", To="me@firma.dk"), A, "INBOX")
 out["route_folder"] = ps.account_of(H(To="list@example.org"), A, "Folders/home.mail@gmail.com")
 out["route_none"] = ps.account_of(H(To="list@example.org"), A, "INBOX")
 out["gate"] = [ps.gate({"g0": 0.9, "none": 0.1}, ["o:a"]), ps.gate({"g0": 0.55, "none": 0.45}, ["o:a"]),
@@ -103,6 +106,7 @@ test("sender rules: one company across domains and countries, one person across 
   assert.equal(o.colleague, "p:jenshansen");
   assert.equal(o.company_for_other_account, "o:firma");
   assert.equal(o.danish, "Soren Aero");
+  assert.deepEqual(o.encoded, ["Soren Aero", "p:sorenaero", ["aero", "soren"]]);
   assert.equal(o.bad_addr, null);
 });
 
@@ -118,6 +122,7 @@ test("routing: Gmail's forward header beats the target, then To, then an alias, 
   assert.equal(o.route_gmail, "home.mail@gmail.com");
   assert.equal(o.route_to, "me@firma.dk");
   assert.equal(o.route_also, "me@firma.dk");
+  assert.equal(o.route_to_before_delivery, "me@firma.dk");
   assert.equal(o.route_folder, "home.mail@gmail.com");
   assert.equal(o.route_none, null);
 });
