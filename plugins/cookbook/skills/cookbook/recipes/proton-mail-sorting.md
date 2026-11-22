@@ -16,12 +16,12 @@ first, Jev only for a sender the rules cannot place.
 - **The sorter:** `scripts/proton-sort.py`, beside `proton-mail.py` in `~/.local/bin`, run by
   the user timer `proton-sort.timer` every 10 minutes (`scripts/proton-sort/`). It reads the
   Inbox and each `Folders/<account>`, finds the account (Gmail's `X-Forwarded-For` first, then
-  To and Cc, then the folder it sits in) and moves the mail to the sender's sub-folder, which it
+  To and Cc, then `Delivered-To`, then the folder it sits in) and moves the mail to the sender's sub-folder, which it
   makes when missing. Mail from the owner's own addresses stays where it is.
-- **Sender groups:** a company is its domain without sub-domains and country ending
-  (`amazon.dk` and `amazon.com` are one); a free-mail address, or a colleague on the account's
-  own domain, is the person's name. A new sender whose name looks like an existing group's goes
-  to Jev (`jev-1.14.0`, key `jev-compaction`): one Choice over at most 12 candidates plus "none
+- **Sender groups:** a company is its domain without sub-domains, a country ending or `.com`,
+  `.net`, `.org` (`amazon.dk` and `amazon.com` are one; `danskebank.xyz` is not the bank); a
+  free-mail address, or a colleague on the account's own domain, is that address. A look-alike
+  (the same name on another address or ending) never joins by rule: it goes to Jev (`jev-1.14.0`, key `jev-compaction`): one Choice over at most 12 candidates plus "none
   of these", kept only above `max(0.6, 1/n + 0.25)`. Jev sees the sender's name and address and
   the candidates' names and three addresses each, never a subject or a text. At most 25 calls a
   run; without the key the rules decide alone.

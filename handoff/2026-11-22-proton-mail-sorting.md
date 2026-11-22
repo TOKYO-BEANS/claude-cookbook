@@ -8,12 +8,14 @@ first, Jev only for unclear senders (names and addresses only).
 **What changed.**
 - `scripts/proton-sort.py` (new, beside `proton-mail.py`): files mail from the Inbox and each
   `Folders/<account>` into `Folders/<account>/<sender>`; rules first, a Jev Choice over at most
-  12 candidates plus "none of these", gated at `max(0.6, 1/n + 0.25)`. State and Jev log in
+  12 candidates plus "none of these", gated at `max(0.6, 1/n + 0.25)`. A person is an address and a company keeps any ending but a country,
+  `.com`, `.net` or `.org`, so a look-alike reaches Jev, never a rule (review rounds 1 to 4). State and Jev log in
   `~/.local/share/proton-sort/`. Units `scripts/proton-sort/proton-sort.{service,timer}`, every
   10 minutes.
 - Recipe `proton-mail-sorting.md` (new); the folder bullet in `proton-mail.md` moved there.
-- Tests `scripts/proton-sort.test.mjs` (6): sender rules, a hostile name as folder name, account
-  routing, the Jev gate, what Jev is sent, settings. No real addresses in the repository.
+- Tests `scripts/proton-sort.test.mjs` (8): sender rules, a hostile name as folder name, account
+  routing, the Jev gate and bad replies, what Jev is sent, look-alikes, settings, and a whole
+  run on a fake IMAP connection. No real addresses in the repository.
 - Outside the repository: the folders for the two forwarded accounts made through Bridge; the
   `sort` block in `~/.config/proton-mail/config.json` (four accounts; Claude's two addresses
   left out so their mail stays readable as before).
