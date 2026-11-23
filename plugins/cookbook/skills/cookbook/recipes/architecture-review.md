@@ -25,13 +25,12 @@ the structure of one whole repository and names where to deepen. Claude starts i
 
 ## The trial (23 November 2026)
 
-One run on a product repository, nothing installed. The catalog keeps the skill at `trial`
-until a candidate has been built.
+One run on a product repository.
 
-- **Cost:** one walk, 142,109 tokens, 57 tool calls, 4.5 minutes, plus the main chat's checks.
-- **Hot spots**, last 150 commits (30 September to 23 November): the routes file (15,302
-  lines, 32 commits), the render file (14,796 lines) and the database file (8,600 lines).
-  26 of 39 feature commits changed routes and render together.
+- **Cost:** one walk, 142,109 tokens, 57 tool calls, 4.5 minutes.
+- **Hot spots**, last 150 commits: the routes file (15,302 lines, 32 commits), the render
+  file (14,796 lines) and the database file (8,600 lines). 26 of 39 feature commits
+  changed routes and render together.
 - **Found, and named by no review before:** the view-state URL is parsed, normalised and
   written in two files, with about 20 "keep the two in step" comments; the request handler
   is one function of 2,744 lines with 51 copies of the same guard, and three test files find
@@ -44,6 +43,8 @@ until a candidate has been built.
   findings in that stretch were three, all low and about single lines. The `cookbook:review`
   passes found lows and one medium, all about the change in hand. None was about structure,
   and the one-function handler is also why the file goes unread.
-- **Limits:** one run on one repository. No candidate is built yet, so "it makes changes
-  easier" is not measured. The walk read the render file to line 1,060 only and left two
+- **Built the same day:** the first candidate, behaviour proven unchanged. The two files
+  lost 713 lines to one module of 607, and the move showed five old defects no review had
+  named. Whether later changes cost less is not measured.
+- **Limits:** one repository; the walk left the render file past line 1,060 and two
   folders unread.
