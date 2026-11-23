@@ -15,17 +15,24 @@ the timer and the tasks on the Ubuntu laptop on 19 November.
   or a webhook). The run is a thread in the project's sidebar, where the owner works, with the
   T3 tools. Proven: a `once` task ran on time in a thread of its own, in its own worktree, and
   answered in 25 seconds. Today, in the Cookbook project: "Daily sidebar sweep" (07:45;
-  [owner-questions.md](owner-questions.md)), "AgentShield weekly scan" (Mondays 08:00;
+  [owner-questions.md](owner-questions.md)), "AgentShield weekly scan" (Mondays 09:30;
   [agent-audit.md](agent-audit.md)), the weekly fixer (Mondays 08:30) and "Weekly lessons" (Mondays 09:00); in the standard's
   project its daily run (07:30).
   - The task tool takes no model: a task stores the model of the chat that made it. For a
-    cheaper run, set the model on the task's thread (`t3_thread_configure`). Not yet proven
-    that a later run keeps it.
+    cheaper run, set the model on the task's thread (`t3_thread_configure`): the next run
+    uses it (23 November 2026: the scan's second run on Sonnet 5.5, in 28 seconds against
+    97, while the task still stores Fable 5.2).
   - A task not bound to a thread makes a new thread and worktree per run: bind a recurring
     task, and delete a task when its job ends (`delete_scheduled_task`). Seen once (16 November
     2026): with `freshSession` and no thread, the first run made a thread and bound the task to
-    it (`boundThreadId` in `list_scheduled_tasks`). Not yet proven that later runs reuse it
-    (first check: the sweep on 17 November 2026).
+    it (`boundThreadId` in `list_scheduled_tasks`). A later run reuses it (the scan's second
+    run, 23 November 2026).
+  - A fixed-time run more than 10 minutes late is dropped, not made up (T3 Code 0.1.11, read
+    in its code). Seen on 23 November 2026: the lid was closed from 07:42 to 08:32, the 08:00
+    scan and the 07:45 sweep were dropped to their next day, each task `failed` with "Missed a
+    scheduled run"; the 08:30 task, 2 minutes late, started. Put a fixed-time task where the
+    laptop is awake, and start a dropped run with `run_scheduled_task_now`. A `once` task
+    has no such limit in the code.
   - A run loads everything a session loads. Keep the prompt to one job and name its stops.
 - **No task runs in Claude Desktop any more** (owner, 19 November 2026). Of the three that
   ran there on the Windows PC, the standard's daily run and the AgentShield scan are T3
