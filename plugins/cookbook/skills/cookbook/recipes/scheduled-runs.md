@@ -29,8 +29,8 @@ the timer and the tasks on the Ubuntu laptop on 19 November.
     run, 23 November 2026).
   - A fixed-time run more than 10 minutes late is dropped, not made up (T3 Code 0.1.11, read
     in its code). Seen on 23 November 2026: the lid was closed from 07:42 to 08:32, the 08:00
-    scan and the 07:45 sweep were dropped to their next day, each task `failed` with "Missed a
-    scheduled run"; the 08:30 task, 2 minutes late, started. Put a fixed-time task where the
+    scan and the 07:45 sweep were dropped to their next run (the weekly scan a week on, the
+    daily sweep a day on), each task `failed` with "Missed a scheduled run"; the 08:30 task, 2 minutes late, started. Put a fixed-time task where the
     laptop is awake, and start a dropped run with `run_scheduled_task_now`. A `once` task
     has no such limit in the code.
   - A run loads everything a session loads. Keep the prompt to one job and name its stops.

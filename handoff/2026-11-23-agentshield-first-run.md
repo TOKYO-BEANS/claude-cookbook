@@ -29,8 +29,11 @@ check at 08:00 UTC and found that the run had never started.
 **Verification.** The task store read before and after (run count 0 to 2, bound thread,
 next run 30 November 08:30 UTC); the journal's suspend lines; both runs read in the task's
 thread; the scan's log and header of each run. `npm test` in a boat sandbox on the commit,
-and the pull request's checks. Release log:
-`~/.local/share/claude-cookbook/evidence/release-cookbook-237-merge.log`.
+and the pull request's checks. #237 merged as `fa41c81`, release check verified:
+`~/.local/share/claude-cookbook/evidence/release-cookbook-237-merge.log`. Its AI review
+had one low finding (the page said both dropped runs moved "to their next day"; the weekly
+scan moved a week), fixed in the follow-up, whose release log is
+`release-cookbook-238-merge.log` in the same folder.
 
 **Outstanding.**
 - A fixed-time task is still dropped when the laptop sleeps through its time and 10 minutes
