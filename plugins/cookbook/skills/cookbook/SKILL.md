@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photo masks, sharpening, cut-outs and straightening, SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photos, SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook
@@ -28,7 +28,7 @@ fallback and say that you did.
 | A long job a program can check: run until the check passes | **Claude Code** `/goal` | a Stop hook with a script check | [goal-runs](recipes/goal-runs.md) |
 | Several agents on one job | the named **`sa-*`** workflows, within their budgets | plain parallel subagents | [workflows](recipes/workflows.md) |
 | One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (the `cookbook:*` agent types) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
-| A second opinion (a consult) on our own work from a model that is not Claude: a design, a risky change, a cross-check | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
+| A second opinion (a consult) on our own work from a model that is not Claude | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` (the Grep tool) | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a plan-token `claude -p` with a typed answer | [judgement](recipes/judgement.md) |
@@ -45,6 +45,7 @@ fallback and say that you did.
 | Tests, builds and container images | **Depot** CI | GitHub Actions, only as a documented exception | [ci-releases](recipes/ci-releases.md) |
 | Review of every pull request | the `ai-review` Depot job, once, when the pull request is marked ready for review | a **fallback review** of the head by a reviewer that did not write it, when its reviewer's API could not serve the call | [ai-review](recipes/ai-review.md) |
 | Review of a commit range with no pull request | **sa-review** | a `cookbook:review` subagent | [workflows](recipes/workflows.md) |
+| A whole repository's structure: where to deepen | **architecture-review** | a `cookbook:review` walk | [architecture-review](recipes/architecture-review.md) |
 | Scan our code | the **Depot** `codeql` job | — | [codeql](recipes/codeql.md) |
 | Vulnerable dependencies | **Semgrep** Supply Chain | — | [security](recipes/security.md) |
 | Leaked keys at push | **GitHub** Secret Protection | — | [security](recipes/security.md) |
@@ -79,14 +80,14 @@ fallback and say that you did.
 | Keys and tokens | the OS key store (GNOME Keyring), read by `with-key.mjs` and `key-header.mjs` | — | [keys](recipes/keys.md) |
 | The owner's Proton mail | **Proton Mail Bridge** | the web app | [proton-mail](recipes/proton-mail.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
-| Run code away from this PC: tests on Linux before a push, a Linux-only failure, a long or parallel job, a long Claude job that stands alone | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md), [boat-claude](recipes/boat-claude.md) |
+| Run code away from this PC: tests on Linux before a push, a long or parallel job, a long Claude job that stands alone | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md), [boat-claude](recipes/boat-claude.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
 | Connect a new app or service | the **Cookbook** first, then the lightest route | — | [connecting](recipes/connecting.md) |
 | Office files; editing PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |
 | **Keep healthy** | | | |
 | Big output kept out of the conversation | **context-mode** | ranged `Read` and `rg` | [context-mode](recipes/context-mode.md) |
 | Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor, by itself | [compaction](recipes/compaction.md) |
-| Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev**; the display is T3 Code's sidebar (`❓ ` marker, pins) | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
+| Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev** | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
 | Several chats at once: a question another chat put to the owner, a job or file another chat has | the **Cookbook**'s `owner-answers` hooks; **T3 Code**'s thread list and read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
 | Memory; lessons | the project's handoff (`HANDOFF.md` or `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md), [learning-loop](recipes/learning-loop.md) |
 | A plain script on a schedule | a systemd user timer | — | [scheduled-runs](recipes/scheduled-runs.md) |
