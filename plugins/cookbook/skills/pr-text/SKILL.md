@@ -30,4 +30,5 @@ for public text still hold.
 Our adapted copy of the `pr` skill of `mattpocock/skills` (MIT: `LICENSE` beside this file), at
 upstream commit `abeeaf95660ba9e8b7c753eb38f441ca707a8823` (19 November 2026); that skill credits
 Humanlayer's `show-me`. The three parts above are the text that was tested
-(`options/skills-compared.md` in the `cookbook` skill).
+(`options/skills-compared.md` in the `cookbook` skill), apart from the masking sentence, which
+was added after the review of the pull request that added this skill and is not tested.
