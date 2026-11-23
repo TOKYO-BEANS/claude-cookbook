@@ -15,10 +15,12 @@ edit. A frontmatter scan of the user skills and of every enabled plugin's skills
 flag only on `handoff` and on context-mode's `ctx-doctor`, `ctx-stats` and `ctx-upgrade`,
 whose jobs are MCP tools Claude already starts. The Cookbook check and the suite on boat.
 
-**Outstanding.** One trial of `improve-codebase-architecture` on a product repository (owner:
-yes in the question dialog, 23 November 2026), in its own chat; the add-ons line is updated
-with the result. The `machine-setup` kit copy of the global rules is refreshed by its own
-pull request. `/code-review ultra` stays the owner's to start (billed).
+**Outstanding.** Two jobs, each in its own chat, and the add-ons line is updated with their
+results: one trial of `improve-codebase-architecture` on a product repository (owner: yes in
+the question dialog, 23 November 2026), and a test of each of the other skills against ours,
+Superpowers first (owner, in chat, the same day). The `machine-setup` kit copy of the global
+rules is refreshed by its own pull request. `/code-review ultra` stays the owner's to start
+(billed).
 
 **Dead ends.** None.
 

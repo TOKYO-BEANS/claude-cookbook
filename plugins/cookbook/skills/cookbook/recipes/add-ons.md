@@ -19,12 +19,13 @@ in every session, headless ones included, so a misbehaving one affects scheduled
   skill, remove the flag in our copy and say in its description when to use it, or give the
   job to a tool Claude can start. `handoff` had the flag until that day. context-mode's
   `ctx-doctor`, `ctx-stats` and `ctx-upgrade` keep it: the same jobs are its MCP tools.
-- **Weighed, not added (23 November 2026):** `mattpocock/skills` (27 skills, MIT). 16 run only
-  when typed, in a fixed order (grill, spec, tickets, implement, review, retro), and each step
-  has an owner here: Superpowers, the `sa-*` workflows, the AI review, the weekly lessons.
-  `handoff` is our adapted copy of one. `improve-codebase-architecture` has no match here: the
-  owner said yes to one trial on a product repository; it is added only if its report finds
-  what the reviews missed.
+- **Weighed, not added so far (23 November 2026):** `mattpocock/skills` (27 skills, MIT). 16
+  run only when typed, in a fixed order (grill, spec, tickets, implement, review, retro), and
+  each step has an owner here: Superpowers, the `sa-*` workflows, the AI review, the weekly
+  lessons. `handoff` is our adapted copy of one. That reading is from the skill texts, not
+  from runs. The owner asked the same day for a test of each one against ours, Superpowers
+  first, and said yes to a trial of `improve-codebase-architecture`, which has no match here.
+  Both run as their own jobs; a skill replaces an owner only on a measured result.
 - Do not install blast-radius (anthropics/claude-code-playground): on the Windows PC it refused
   every risky Bash command at once (no `sleep` or `du` on the PATH, `bash` was the WSL launcher).
   Not tried on the laptop; a new look starts at [connecting](connecting.md). Use permission deny
