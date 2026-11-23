@@ -38,7 +38,8 @@ and the first point of `recipes/building.md` no longer contradicts the sizing po
 check writes
 `~/.local/share/release-maintenance/evidence/2026-11-23-cookbook-skills-compared-lows/release-check.log`.
 
-**Outstanding.** `pr-text` stays at `trial` until it has written real pull requests: look at
+**Outstanding.** The masking sentence of `pr-text` came after the measured runs and is not
+tested (the skill file says so): the look at its first five pull requests covers it. `pr-text` stays at `trial` until it has written real pull requests: look at
 the first five and move it to `active` or take it out (owner: Claude, in the weekly lessons).
 The first daily update check after the merge records the baseline of the new upstream feed.
 The owner's own `~/.claude/skills/handoff` copy needs no change: its one miss was the
