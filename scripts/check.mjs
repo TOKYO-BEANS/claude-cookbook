@@ -13,6 +13,7 @@ export { CHANGELOG_HOSTS };
 export const OTHER_TEXTS = Object.freeze([
   "plugins/cookbook/skills/stack-updates/SKILL.md",
   "plugins/cookbook/skills/architecture-review/SKILL.md",
+  "plugins/cookbook/skills/pr-text/SKILL.md",
 ]);
 // The plugin's other skill bodies as they are on disk (a URL of the repository root, ending in
 // "/"): the check reads these, so a new skill folder is checked without being listed above.

@@ -192,7 +192,7 @@ test("no dollar sign before a digit in the plugin's other skill bodies", () => {
   assert.deepEqual(errors({ otherTexts: [{ name: "a.md", text: 'Use "${1}" and USD 20.' }] }), []);
   // The real files named by OTHER_TEXTS pass.
   assert.deepEqual(errors({ otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: read(p) })) }), []);
-  assert.deepEqual([...OTHER_TEXTS], ["plugins/cookbook/skills/stack-updates/SKILL.md", "plugins/cookbook/skills/architecture-review/SKILL.md"]);
+  assert.deepEqual([...OTHER_TEXTS], ["plugins/cookbook/skills/stack-updates/SKILL.md", "plugins/cookbook/skills/architecture-review/SKILL.md", "plugins/cookbook/skills/pr-text/SKILL.md"]);
 });
 test("no skill of the plugin runs only when typed; the adapted copy keeps its licence and its source", () => {
   const typed = "---\nname: x\ndescription: Use when asked.\ndisable-model-invocation: true\n---\n\n# X\n";
@@ -207,6 +207,11 @@ test("no skill of the plugin runs only when typed; the adapted copy keeps its li
   assert.match(adapted, /mattpocock\/skills/);
   assert.match(adapted, /upstream commit\s+`[0-9a-f]{40}`/);
   assert.match(read("plugins/cookbook/skills/architecture-review/LICENSE"), /^MIT License\n\nCopyright \(c\) 2026 Matt Pocock\n/);
+  const prText = read("plugins/cookbook/skills/pr-text/SKILL.md");
+  assert.match(prText, /^---\nname: pr-text\ndescription: Use when /);
+  assert.match(prText, /mattpocock\/skills/);
+  assert.match(prText, /upstream commit\s+`[0-9a-f]{40}`/);
+  assert.match(read("plugins/cookbook/skills/pr-text/LICENSE"), /^MIT License\n\nCopyright \(c\) 2026 Matt Pocock\n/);
 });
 test("feed: each kind's own fields and values", () => {
   assert.deepEqual(part({ feed: { kind: "npm", package: "@scope/name", tag: "stable", updater: "x" } }), []);
