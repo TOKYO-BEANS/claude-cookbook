@@ -14,6 +14,11 @@ export const OTHER_TEXTS = Object.freeze([
   "plugins/cookbook/skills/stack-updates/SKILL.md",
   "plugins/cookbook/skills/architecture-review/SKILL.md",
 ]);
+// The plugin's other skill bodies as they are on disk (a URL of the repository root, ending in
+// "/"): the check reads these, so a new skill folder is checked without being listed above.
+export const otherSkillFiles = (root) =>
+  readdirSync(new URL("plugins/cookbook/skills/", root), { withFileTypes: true })
+    .filter((d) => d.isDirectory() && d.name !== "cookbook").map((d) => `plugins/cookbook/skills/${d.name}/SKILL.md`).sort();
 // The owner types no skill names (recipes/add-ons.md): a skill of this plugin never has the
 // frontmatter flag that makes it run only when typed.
 const typedOnlyErrors = (name, text) => {
@@ -494,7 +499,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     catalogText: readFileSync(new URL("plugins/cookbook/catalog.json", root), "utf8"),
     skillText,
     pages,
-    otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: readFileSync(new URL(p, root), "utf8") })),
+    otherTexts: otherSkillFiles(root).map((p) => ({ name: p, text: readFileSync(new URL(p, root), "utf8") })),
   });
   errors.push(...handoff);
   errors.push(...versionErrors({

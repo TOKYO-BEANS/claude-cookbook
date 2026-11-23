@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { OTHER_TEXTS, PAGE_READ_LIMIT, SKILL_LIMIT, checkCookbook, readCost, readPages, roomReport } from "./check.mjs";
+import { OTHER_TEXTS, PAGE_READ_LIMIT, SKILL_LIMIT, checkCookbook, otherSkillFiles, readCost, readPages, roomReport } from "./check.mjs";
 import { CHANGELOG_HOSTS, SELF_UPDATING_TOOLS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const read = (p) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
@@ -200,6 +200,8 @@ test("no skill of the plugin runs only when typed; the adapted copy keeps its li
   assert.ok(errors({ skillText: skillText.replace("\n---\n", "\ndisable-model-invocation: true\n---\n") }).some((e) => /^SKILL\.md: disable-model-invocation is set/.test(e)));
   // The flag in the body, where a page quotes it, is not the frontmatter flag.
   assert.deepEqual(errors({ otherTexts: [{ name: "a.md", text: "---\nname: a\ndescription: Use when asked.\n---\n\ndisable-model-invocation: true\n" }] }), []);
+  // Every skill folder of the plugin is read by the check and named in OTHER_TEXTS.
+  assert.deepEqual(otherSkillFiles(new URL("../", import.meta.url)), [...OTHER_TEXTS].sort());
   const adapted = read("plugins/cookbook/skills/architecture-review/SKILL.md");
   assert.match(adapted, /^---\nname: architecture-review\ndescription: Use when /);
   assert.match(adapted, /mattpocock\/skills/);
