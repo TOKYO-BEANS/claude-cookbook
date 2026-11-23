@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { zstdDecompressSync } from "node:zlib";
 import { archiveAll, cleanTranscript } from "../plugins/cookbook/skills/cookbook/scripts/agent-log/archive.mjs";
 import { resolveArchive, run } from "../plugins/cookbook/skills/cookbook/scripts/agent-log/agent-log-nightly.mjs";
-import { buildDigest, sessionSignals, signature } from "../plugins/cookbook/skills/cookbook/scripts/agent-log/digest.mjs";
+import { buildDigest, digestParts, sessionSignals, signature } from "../plugins/cookbook/skills/cookbook/scripts/agent-log/digest.mjs";
 
 // Built at run time so no credential shape sits in this file.
 const fakeToken = "ghp_" + "a1B2".repeat(9);
@@ -77,6 +77,17 @@ test("buildDigest lists an error only when it came back in another session", () 
   assert.match(md, /2 sessions, 2 times/);
   assert.doesNotMatch(md, /only once/);
   assert.match(md, /aaaaaaaa \(1 errors\)\n- stop/);
+});
+
+test("digestParts splits a long week between sessions and loses nothing", () => {
+  const sessions = Array.from({ length: 30 }, (_, i) => ({ project: "p", session: `s${String(i).padStart(7, "0")}x`, start: `2026-11-${10 + (i % 9)}`, errors: [], owner: ["x".repeat(300), `last ${i}`] }));
+  const md = buildDigest(sessions, { days: 7, now: Date.parse("2026-11-21T12:00:00Z") });
+  const parts = digestParts(md, 2_000);
+  assert.ok(parts.length > 2);
+  for (const p of parts) assert.ok(Buffer.byteLength(p) <= 2_000);
+  for (let i = 0; i < 30; i += 1) assert.equal(parts.filter((p) => p.includes(`- last ${i}\n`)).length, 1);
+  assert.match(parts[0], /read part 2 next/);
+  assert.deepEqual(digestParts("short", 2_000), ["short"]);
 });
 
 test("an id field keeps a random id but not a credential", () => {

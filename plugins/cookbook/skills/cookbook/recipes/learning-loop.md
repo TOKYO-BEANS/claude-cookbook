@@ -12,8 +12,9 @@ Asked on 21 November 2026, the owner leaned to the full loop; no model of our ow
   `last-run.json` says how the last night ended. The archive stays on this laptop's encrypted
   disk: never in a repository, never uploaded. A backup copy goes only to an encrypted drive.
 - **Read.** The T3 task "Weekly lessons" (Mondays 09:00, Cookbook project) runs
-  `scripts/agent-log/digest.mjs --days 7`. The digest (80 KB at most, in `digests/`) lists the
-  tool errors that came back in more than one session and what the owner typed, by session.
+  `scripts/agent-log/digest.mjs --days 7`. The digest (in `digests/`, 80 KB a part; a long
+  week goes on in `<date>-2.md` and on, and the review reads every part) lists the tool
+  errors that came back in more than one session and what the owner typed, by session.
   It reads the archive only, never `~/.claude`.
 - **A lesson** is a mistake in three or more sessions, an owner correction, or the same
   failure twice in one job. A hook that denies the same call again and again is a lesson too:
@@ -24,7 +25,9 @@ Asked on 21 November 2026, the owner leaned to the full loop; no model of our ow
      project's `CLAUDE.md`;
   3. a memory line, only for an owner preference.
   Never loosen a check to make a repeat go away. A law that changes how the owner works is
-  asked first.
+  asked first. A Bash mistake that a command's text shows goes into the shell guard
+  (`hooks/shell-guard-lib.mjs`, run by the Bash hook): it denies with the exact next step.
+  Since 23 November 2026 it stops `pkill -f` patterns that match their own shell and `rm -rf`.
 - **The laws ledger** is `~/.local/share/agent-log/laws.md`: per law its date, the rule, where
   it lives and is enforced, and the sessions behind it (ids, no text). The review reads it
   first and counts a lesson already there as "law not working" instead of a new law.
