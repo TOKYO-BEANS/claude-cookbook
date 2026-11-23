@@ -2,7 +2,7 @@
 // and again are stopped before they run, and the denial names the exact next step.
 // - `pkill -f <pattern>` (or `pgrep -f` feeding `kill`) whose pattern can match its own shell:
 //   Claude Code runs the whole command as one bash's argument, so the pattern is in that
-//   bash's command line and the shell kills itself (exit 143 or 144, 14 of 18 runs in a week).
+//   bash's command line and the shell kills itself (exit 143 or 144: 15 of 18 such runs in a week).
 //   A pattern with a bracket class (`[f]ilm.py`) cannot match its own text.
 // - `rm -rf`: the machine's permission rule denies it anyway; this names what to do instead.
 // Pure; the hook file (boat-route.mjs) calls it before the boat route.

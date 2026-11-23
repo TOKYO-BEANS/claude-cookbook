@@ -5,10 +5,10 @@ laws and fixed its own input.
 - `hooks/shell-guard-lib.mjs`, run first by the Bash hook (`boat-route.mjs`, one Node start):
   a `pkill -f` (or a `pgrep -f` that feeds `kill`) whose pattern has no bracket class is denied
   with the bracketed pattern, because Claude Code runs the whole command as one bash's argument
-  and the pattern matches that shell, which kills itself (exit 143/144: 15 times in 11 sessions;
-  14 of 18 such runs failed). An `rm -rf` is denied with the next step (a fresh `mktemp -d`
+  and the pattern matches that shell, which kills itself (exit 143/144: 15 times in 9 sessions;
+  15 of 18 such runs failed). An `rm -rf` is denied with the next step (a fresh `mktemp -d`
   folder, or a move to `~/.local/share/backups/`); the permission rule denied it 31 times in
-  19 sessions and the memory line about it did not reach the agent in time.
+  22 sessions, subagents included, and the memory line about it did not reach the agent in time.
 - `digest.mjs` cut the digest at 80 KB, which dropped the owner's messages of the last three
   days (70 of 120 sessions). It now writes `<date>.md`, `<date>-2.md` and on, split between
   sessions, each part naming the next, and prints every path.
