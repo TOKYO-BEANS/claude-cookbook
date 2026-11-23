@@ -41,5 +41,8 @@ score, then the cost of a run in USD at list rates; the runs per arm are in brac
   task, 6.0 to 6.7 against 5.7 on the second. Our copy is a third of his size and pasted real
   test output in 15 of 15 runs, his in 4 of 15. Added as `cookbook:pr-text`, at `trial`.
 
+**What it could not show:** the long run, which is what the author says the set is for.
+[The interview, read against these numbers](skills-compared-interview.md).
+
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-23-skills-compare/` (the harness,
-the tasks, and every run's stream, score and verdict).
+the tasks, every run's stream, score and verdict, and `interview/transcript.txt`).
