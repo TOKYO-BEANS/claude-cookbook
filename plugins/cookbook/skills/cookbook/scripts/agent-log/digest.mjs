@@ -1,6 +1,8 @@
 // The weekly review's input (recipes/learning-loop.md): from the archived Claude Code sessions
-// of the last N days, the signals a lesson is made of, in one Markdown file small enough for
-// one read: tool errors that came back in more than one session, and what the owner typed.
+// of the last N days, the signals a lesson is made of, in Markdown files small enough for one
+// read each: tool errors that came back in more than one session, and what the owner typed.
+// A week too long for one file goes on in `<date>-2.md` and on, split between sessions; the
+// script prints every file's path. Nothing is cut away (a cut first lost three days).
 // It reads the archive (already masked), never ~/.claude. No model takes part.
 // Usage: node digest.mjs [--days 7] [--archive <folder>] [--out <file>]
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -65,8 +67,8 @@ function* archivedSessions(archive, since) {
   }
 }
 
-/** The digest as Markdown, cut at maxBytes. */
-export function buildDigest(sessions, { days, now = Date.now(), maxBytes = 80_000 } = {}) {
+/** The digest as Markdown, whole. */
+export function buildDigest(sessions, { days, now = Date.now() } = {}) {
   const repeats = new Map();
   for (const s of sessions) for (const e of s.errors) {
     const r = repeats.get(e.sig) ?? { sig: e.sig, count: 0, sessions: new Set(), example: e.text };
@@ -83,9 +85,29 @@ export function buildDigest(sessions, { days, now = Date.now(), maxBytes = 80_00
   for (const s of [...sessions].filter((x) => x.owner.length).sort((a, b) => String(a.start).localeCompare(String(b.start)))) {
     lines.push(`### ${String(s.start).slice(0, 16)} ${s.project} ${s.session.slice(0, 8)} (${s.errors.length} errors)`, ...s.owner.map((m) => `- ${m}`), "");
   }
-  let md = lines.join("\n");
-  if (Buffer.byteLength(md) > maxBytes) md = `${Buffer.from(md).subarray(0, maxBytes).toString("utf8")}\n\n(cut at ${maxBytes} bytes)\n`;
-  return md;
+  return lines.join("\n");
+}
+
+/** The digest in parts of at most maxBytes, split before a session's heading; a part says how many there are. */
+export function digestParts(md, maxBytes = 80_000) {
+  const room = maxBytes - 200; // the part line
+  const parts = [];
+  let cur = "";
+  for (const chunk of md.split(/(?=\n### )/)) {
+    let piece = chunk;
+    // One session longer than a part: its own parts, split at a line.
+    while (Buffer.byteLength(piece) > room) {
+      if (cur) { parts.push(cur); cur = ""; }
+      let cutAt = Buffer.from(piece).subarray(0, room).toString("utf8").lastIndexOf("\n");
+      if (cutAt <= 0) cutAt = Buffer.from(piece).subarray(0, room).toString("utf8").length;
+      parts.push(piece.slice(0, cutAt));
+      piece = piece.slice(cutAt);
+    }
+    if (Buffer.byteLength(cur + piece) > room) { parts.push(cur); cur = ""; }
+    cur += piece;
+  }
+  if (cur) parts.push(cur);
+  return parts.length < 2 ? parts : parts.map((p, i) => `${i ? `(Part ${i + 1} of ${parts.length}.)\n` : ""}${p}${i < parts.length - 1 ? `\n\n(Part ${i + 1} of ${parts.length}: read part ${i + 2} next.)\n` : ""}`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
@@ -96,6 +118,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const sessions = [...archivedSessions(archive, now - days * DAY)];
   const out = arg("--out", join(archive, "digests", `${new Date(now).toISOString().slice(0, 10)}.md`));
   mkdirSync(dirname(out), { recursive: true, mode: 0o700 });
-  writeFileSync(out, buildDigest(sessions, { days, now }), { mode: 0o600 });
-  console.log(`digest: ${sessions.length} sessions -> ${out}`);
+  const parts = digestParts(buildDigest(sessions, { days, now }));
+  const files = parts.map((_, i) => (i ? out.replace(/(\.md)?$/, `-${i + 1}.md`) : out));
+  parts.forEach((p, i) => writeFileSync(files[i], p, { mode: 0o600 }));
+  console.log(`digest: ${sessions.length} sessions -> ${files.join(", ")}`);
 }

@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // PreToolUse hook of the Cookbook plugin: the boat route (boat-route-lib.mjs, recipes/boat.md).
 // A local test run or Semgrep scan in a repository on boat-run's upload list is denied, with
-// the boat-run.mjs command to use instead. It is a route, not a security gate: whatever goes
-// wrong here lets the call run.
+// the boat-run.mjs command to use instead. First, in the same Node start, the shell guard
+// (shell-guard-lib.mjs) stops a `pkill -f` that would kill its own shell and an `rm -rf`, with
+// the next step. Both are routes, not security gates: whatever goes wrong here lets the call run.
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -25,10 +26,12 @@ const text = (file) => {
 let out = null;
 try {
   const input = JSON.parse(readFileSync(0, "utf8"));
+  const { guard, GUARD_HINT } = await import("./shell-guard-lib.mjs");
+  out = typeof input?.tool_input?.command === "string" && GUARD_HINT.test(input.tool_input.command) ? guard(input) : null;
   const { decide, HINT } = await import("./boat-route-lib.mjs");
   // Most commands name no test runner: they leave before git or the upload list is read.
   const command = input?.tool_input?.command;
-  out = typeof command !== "string" || !HINT.test(command) ? null : decide({
+  out ??= typeof command !== "string" || !HINT.test(command) ? null : decide({
     input,
     deps: {
       cwd: (i) => (typeof i?.cwd === "string" && i.cwd ? i.cwd : process.cwd()),
