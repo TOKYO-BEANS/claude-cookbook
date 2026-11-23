@@ -16,7 +16,9 @@ pseudocode, each beside the sentence it supports.
 Before and after, from commands you ran in this session. Paste the output lines as they were
 printed: never retype them, put them in your own words or complete them from memory. Name each
 new or changed test by its exact name. What was not run is written as "not run", with the
-reason. A screenshot only when one was taken.
+reason. A screenshot only when one was taken. Mask a credential, an account id, a home path
+or a private project name in pasted output, and mark the cut with "…"; a project's own rules
+for public text still hold.
 
 ## Merge danger
 

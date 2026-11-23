@@ -32,6 +32,12 @@ YAML file, no script). Gitleaks: no leaks. Trivy: exit 0, nothing in the folder 
 OSV-Scanner: exit 128, no package file to parse, which is no result and not a clean one. No
 sandbox run (a skill). The Cookbook check and the suite on boat.
 
+The review of #244 had two lows, both fixed in the follow-up pull request: `pr-text` now says
+to mask a credential, an account id, a home path or a private project name in pasted output,
+and the first point of `recipes/building.md` no longer contradicts the sizing point. Its release
+check writes
+`~/.local/share/release-maintenance/evidence/2026-11-23-cookbook-skills-compared-lows/release-check.log`.
+
 **Outstanding.** `pr-text` stays at `trial` until it has written real pull requests: look at
 the first five and move it to `active` or take it out (owner: Claude, in the weekly lessons).
 The first daily update check after the merge records the baseline of the new upstream feed.
