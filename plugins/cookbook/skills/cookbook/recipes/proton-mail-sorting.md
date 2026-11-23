@@ -16,8 +16,8 @@ first, Jev only for a sender the rules cannot place.
 - **The sorter:** `scripts/proton-sort.py`, beside `proton-mail.py` in `~/.local/bin`, run by
   the user timer `proton-sort.timer` every 10 minutes (`scripts/proton-sort/`). It reads the
   Inbox and each `Folders/<account>`, finds the account (Gmail's `X-Forwarded-For` first, then
-  To and Cc, then `Delivered-To`, then the folder it sits in) and moves the mail to the sender's sub-folder, which it
-  makes when missing. Mail from the owner's own addresses stays where it is.
+  To and Cc, then `Delivered-To`, then the folder it sits in) and moves read mail to the sender's
+  sub-folder, made when missing; unread mail waits in `Folders/<account>`, as Proton shows no sub-folder's unread on its parent (owner, 23 Nov 2026). Own addresses' mail stays.
 - **Sender groups:** by rule, a company is its exact domain without sub-domains
   (`mail.amazon.dk` is `amazon.dk`) and a free-mail address, or a colleague on the account's own
   domain, is that address. Anything else that looks alike (`amazon.com`, `danskebank.io`, the
@@ -27,13 +27,11 @@ first, Jev only for a sender the rules cannot place.
   look-alikes 0.97 to 0.99, 22 November 2026). Jev sees the sender's name and address and
   the candidates' names and three addresses each, never a subject or a text. At most 25 calls a
   run; past that, or when a call fails, the mail waits for the next run. Without the key
-  the rules decide alone. A folder always names the address or domain: `Name (address)`,
-  `Name (domain)`. A Jev outage (a timeout, no connection, a 5xx, 401, 403 or 429 reply) ends Jev for that run; a malformed answer or another 4xx reply leaves only that sender's mail waiting.
+  the rules decide alone. A folder names the address or domain: `Name (address)`. A Jev outage (a timeout, no connection, a 5xx, 401, 403 or 429 reply) ends Jev for that run; a malformed answer or another 4xx reply leaves only that sender's mail waiting.
 - **Config:** `"sort": {"accounts": [...], "own": [...]}` in `~/.config/proton-mail/config.json`
   (addresses stay out of this public repository). An account written `{"address": ...,
   "also": ["alias@..."]}` also matches a forwarding alias.
-- **State:** `~/.local/share/proton-sort/state.json` (sender to group; a group once made keeps
-  its senders) and `log.jsonl` (each Jev pick and its scores). To move a sender to another
+- **State:** `~/.local/share/proton-sort/state.json` (sender to group; a group keeps its senders) and `log.jsonl` (each Jev pick and its scores). To move a sender to another
   group, edit its line in `senders` and move its folder's mail by hand.
 - **Run by hand:** `node ~/.local/bin/with-key.mjs proton-bridge PROTON_BRIDGE_PASSWORD node
   ~/.local/bin/with-key.mjs jev-compaction TYPESAFE_API_KEY python3 -I

@@ -139,8 +139,8 @@ out["clash"] = [gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <x@danskeb
                 gu.group_for("a@gmail.com", ps.sender_of("Danske Bank <fake@gmail.com>"))]
 
 class FakeImap:
-    def __init__(self, boxes):
-        self.boxes, self.calls, self.cur = boxes, [], None
+    def __init__(self, boxes, unseen=()):
+        self.boxes, self.calls, self.cur, self.unseen = boxes, [], None, set(unseen)
     def list(self):
         return "OK", [b'(\\Unmarked) "/" "' + n.encode() + b'"' for n in self.boxes]
     def create(self, name):
@@ -149,6 +149,8 @@ class FakeImap:
         self.cur = name.strip('"'); self.calls.append(["SELECT", self.cur, readonly]); return "OK", [b"1"]
     def uid(self, cmd, *a):
         box = self.boxes[self.cur]
+        if cmd == "SEARCH" and a[-1] == "UNSEEN":
+            return "OK", [" ".join(sorted(self.unseen & set(box), key=int)).encode()]
         if cmd == "SEARCH":
             return "OK", [" ".join(sorted(box, key=int)).encode()]
         if cmd == "FETCH":
@@ -174,14 +176,15 @@ def boxes():
         "Folders/inbox@pm.me": {"7": mail(From="Netflix <info@netflix.com>", To="inbox@pm.me")},
     }
 cfg = {"user": "inbox@pm.me", "sort": {"accounts": ["home.mail@gmail.com", "inbox@pm.me"]}}
-def sort_run(argv):
-    fake = FakeImap(boxes())
+def sort_run(argv, unseen=()):
+    fake = FakeImap(boxes(), unseen)
     ps.pm.imap_connect = lambda c: fake
     ps.STATE_DIR = tempfile.mkdtemp()
     with contextlib.redirect_stdout(io.StringIO()) as o:
         ps.cmd_sort(cfg, ps.parser().parse_args(["sort", *argv]))
     return {"calls": [c for c in fake.calls if c[0] != "SELECT"], "readonly": sorted({c[2] for c in fake.calls if c[0] == "SELECT"}),
-            "state": os.path.exists(os.path.join(ps.STATE_DIR, "state.json")), "inbox": sorted(fake.boxes["INBOX"]), "said": o.getvalue().strip()}
+            "state": os.path.exists(os.path.join(ps.STATE_DIR, "state.json")), "inbox": sorted(fake.boxes["INBOX"]), "said": o.getvalue().strip(),
+            "boxes": {k: sorted(v, key=int) for k, v in fake.boxes.items() if v}}
 class FailingMove(FakeImap):
     def uid(self, cmd, *a):
         if cmd == "MOVE" and a[1].strip('"').endswith("/Netflix (netflix.com)"):
@@ -236,6 +239,7 @@ out["outage_401_calls"] = g401.jev_calls
 out["run"] = sort_run([])
 out["dry"] = sort_run(["--dry-run"])
 out["capped"] = sort_run(["--max-moves", "1"])
+out["unread"] = sort_run([], unseen={"1", "2", "7"})
 print(json.dumps(out))
 `;
 
@@ -341,7 +345,7 @@ test("a run makes the folders it needs, moves by account and sender, keeps the c
   ]);
   assert.deepEqual(o.run.inbox, ["3", "4"]);
   assert.equal(o.run.state, true);
-  assert.match(o.run.said, /^moved 3 mail\(s\) into 2 sender folder\(s\); 2 left in place/);
+  assert.match(o.run.said, /^moved 3 mail\(s\) into 2 sender folder\(s\); 0 unread moved to its account folder; 2 left in place; 0 unread waiting there;/);
   assert.deepEqual(o.dry.calls, []);
   assert.deepEqual(o.dry.readonly, [true]);
   assert.equal(o.dry.state, false);
@@ -369,4 +373,16 @@ test("a company folder names its domain in either order; candidates are ranked; 
 test("a malformed answer or a 4xx reply for one sender leaves Jev on for the others", opts, () => {
   const o = run();
   assert.deepEqual(o.one_sender_fails, [[null, null, 2], [null, null, 2]]);
+});
+
+test("unread mail waits in its account folder, so Proton's sidebar shows it; read mail goes to its sender", opts, () => {
+  const o = run();
+  assert.deepEqual(o.unread.calls, [
+    ["CREATE", "Folders/home.mail@gmail.com"],
+    ["MOVE", "INBOX", "1,2", "Folders/home.mail@gmail.com"],
+  ]);
+  assert.deepEqual(o.unread.boxes, {
+    INBOX: ["3", "4"], "Folders/home.mail@gmail.com": ["1", "2"], "Folders/inbox@pm.me": ["7"],
+  });
+  assert.match(o.unread.said, /^moved 0 mail\(s\) into 0 sender folder\(s\); 2 unread moved to its account folder; 2 left in place; 3 unread waiting there/);
 });

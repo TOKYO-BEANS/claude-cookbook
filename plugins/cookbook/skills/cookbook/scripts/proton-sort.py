@@ -447,7 +447,7 @@ def cmd_sort(cfg, args):
     jev_key = None if args.dry_run else os.environ.get("TYPESAFE_API_KEY") or None
     grouper = Grouper(state, jev_key, args.max_jev, None if args.dry_run else os.path.join(STATE_DIR, "log.jsonl"))
     conn = pm.imap_connect(cfg)
-    moved, left = {}, 0
+    moved, left, waiting, up = {}, 0, 0, 0
     try:
         folders = existing_folders(conn)
         for acct in accounts:
@@ -461,6 +461,7 @@ def cmd_sort(cfg, args):
                 continue
             pm.ok(conn.select(pm.mailbox_name(source), readonly=args.dry_run), "open folder")
             uids = [u.decode() for u in pm.ok(conn.uid("SEARCH", None, "ALL"), "search")[0].split()]
+            unseen = {u.decode() for u in pm.ok(conn.uid("SEARCH", None, "UNSEEN"), "search")[0].split()}
             plan = {}
             for uid, h in fetch(conn, uids):
                 account = account_of(h, accounts, source)
@@ -468,6 +469,15 @@ def cmd_sort(cfg, args):
                 sender = sender_of(str(h.get("From", "") or ""), account or "")
                 if not account or not sender or sender["addr"] in own:
                     left += 1
+                    continue
+                # Unread mail waits in its account's folder, so that folder shows it as new in
+                # Proton's sidebar (a collapsed parent never counts its sub-folders' unread mail);
+                # the first run after it is read files it under its sender.
+                if uid in unseen:
+                    if source == "Folders/" + account:
+                        waiting += 1
+                    else:
+                        plan.setdefault("Folders/" + account, []).append(uid)
                     continue
                 label = grouper.group_for(account, sender)
                 if label is None:
@@ -483,7 +493,10 @@ def cmd_sort(cfg, args):
                     if not batch:
                         break
                     budget -= len(batch)
-                    moved[dest] = moved.get(dest, 0) + len(batch)
+                    if dest.count("/") > 1:
+                        moved[dest] = moved.get(dest, 0) + len(batch)
+                    else:
+                        up += len(batch)
                     if args.dry_run:
                         continue
                     if dest not in folders:
@@ -500,7 +513,7 @@ def cmd_sort(cfg, args):
             pass
     total = sum(moved.values())
     print(f"{'would move' if args.dry_run else 'moved'} {total} mail(s) into {len(moved)} sender folder(s); "
-          f"{left} left in place; Jev asked {grouper.jev_calls} time(s){' (dry run: rules only)' if args.dry_run else '' if jev_key else ' (no Jev key: rules only)'}.")
+          f"{up} unread moved to its account folder; {left} left in place; {waiting} unread waiting there; Jev asked {grouper.jev_calls} time(s){' (dry run: rules only)' if args.dry_run else '' if jev_key else ' (no Jev key: rules only)'}.")
     if args.verbose:
         for dest, n in sorted(moved.items()):
             print(f"{n}\t{pm.one_line(dest, 160)}")
