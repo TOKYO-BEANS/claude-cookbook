@@ -25,7 +25,7 @@ task, nothing about a repository a year on. Neither side has numbers for that.
 | A review comment becomes a lint rule or a test before a rule to read (51, 85) | The same order: [learning-loop](../recipes/learning-loop.md) |
 | A pull request names its merge danger: the door, the blast radius (40) | `pr-text` |
 | Small contexts: a session per ticket (25 to 28) | One job per chat, the owner's rule |
-| Types, tests and linters as the agent's own feedback (48 to 50) | CI, CodeQL and Semgrep on every pull request |
+| Types, tests and linters as the agent's own feedback (48 to 50) | CI and CodeQL on every pull request |
 | A structure review that finds shallow modules (56, 61) | [architecture-review](../recipes/architecture-review.md): its first candidate is built |
 | That review daily, opening a pull request, one in five sampled (62) | Not taken: ours starts on a sign in the code, a walk is about 142,000 tokens, and the first repository has candidates waiting |
 | A word list and decision records per repository (14 to 23) | Not taken: `domain-modeling` showed no gain on one task and was not run for longer. A handoff holds the decisions |
