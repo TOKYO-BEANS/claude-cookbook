@@ -192,7 +192,19 @@ test("no dollar sign before a digit in the plugin's other skill bodies", () => {
   assert.deepEqual(errors({ otherTexts: [{ name: "a.md", text: 'Use "${1}" and USD 20.' }] }), []);
   // The real files named by OTHER_TEXTS pass.
   assert.deepEqual(errors({ otherTexts: OTHER_TEXTS.map((p) => ({ name: p, text: read(p) })) }), []);
-  assert.deepEqual([...OTHER_TEXTS], ["plugins/cookbook/skills/stack-updates/SKILL.md"]);
+  assert.deepEqual([...OTHER_TEXTS], ["plugins/cookbook/skills/stack-updates/SKILL.md", "plugins/cookbook/skills/architecture-review/SKILL.md"]);
+});
+test("no skill of the plugin runs only when typed; the adapted copy keeps its licence and its source", () => {
+  const typed = "---\nname: x\ndescription: Use when asked.\ndisable-model-invocation: true\n---\n\n# X\n";
+  assert.deepEqual(errors({ otherTexts: [{ name: "skills/x/SKILL.md", text: typed }] }), ["skills/x/SKILL.md: disable-model-invocation is set: the owner types no skills, so say in the description when to use it"]);
+  assert.ok(errors({ skillText: skillText.replace("\n---\n", "\ndisable-model-invocation: true\n---\n") }).some((e) => /^SKILL\.md: disable-model-invocation is set/.test(e)));
+  // The flag in the body, where a page quotes it, is not the frontmatter flag.
+  assert.deepEqual(errors({ otherTexts: [{ name: "a.md", text: "---\nname: a\ndescription: Use when asked.\n---\n\ndisable-model-invocation: true\n" }] }), []);
+  const adapted = read("plugins/cookbook/skills/architecture-review/SKILL.md");
+  assert.match(adapted, /^---\nname: architecture-review\ndescription: Use when /);
+  assert.match(adapted, /mattpocock\/skills/);
+  assert.match(adapted, /upstream commit\s+`[0-9a-f]{40}`/);
+  assert.match(read("plugins/cookbook/skills/architecture-review/LICENSE"), /^MIT License\n\nCopyright \(c\) 2026 Matt Pocock\n/);
 });
 test("feed: each kind's own fields and values", () => {
   assert.deepEqual(part({ feed: { kind: "npm", package: "@scope/name", tag: "stable", updater: "x" } }), []);

@@ -12,7 +12,14 @@ export { CHANGELOG_HOSTS };
 // The plugin's other skill bodies, checked for the dollar-sign rule like the cookbook skill.
 export const OTHER_TEXTS = Object.freeze([
   "plugins/cookbook/skills/stack-updates/SKILL.md",
+  "plugins/cookbook/skills/architecture-review/SKILL.md",
 ]);
+// The owner types no skill names (recipes/add-ons.md): a skill of this plugin never has the
+// frontmatter flag that makes it run only when typed.
+const typedOnlyErrors = (name, text) => {
+  const front = /^---\n([\s\S]*?)\n---\n/.exec(text.replace(/\r/g, ""))?.[1] ?? "";
+  return /^disable-model-invocation:\s*true\s*$/m.test(front) ? [`${name}: disable-model-invocation is set: the owner types no skills, so say in the description when to use it`] : [];
+};
 const dollarErrors = (name, text) =>
   text.replace(/\r/g, "").split("\n").flatMap((line, i) => (/\$\d/.test(line) ? [`${name} line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`] : []));
 
@@ -336,8 +343,8 @@ export function checkCookbook({ catalogText, skillText, pages = [], otherTexts =
       else if (typeof g.reason !== "string" || !g.reason.trim()) errors.push(`ignored entry needs a reason (${g.name})`);
     }
   // A skill called with arguments gets $0, $1 and so on replaced, prices included.
-  errors.push(...dollarErrors("SKILL.md", skill));
-  for (const { name, text } of otherTexts) errors.push(...dollarErrors(name, String(text)));
+  errors.push(...dollarErrors("SKILL.md", skill), ...typedOnlyErrors("SKILL.md", skill));
+  for (const { name, text } of otherTexts) errors.push(...dollarErrors(name, String(text)), ...typedOnlyErrors(name, String(text)));
   errors.push(...pageErrors(skill, pageList));
   // A tool's recipe is the title of a page in recipes/.
   const headings = new Set(pageList.filter((p) => p.name.startsWith("recipes/")).map((p) => pageTitle(p.text)).filter(Boolean));

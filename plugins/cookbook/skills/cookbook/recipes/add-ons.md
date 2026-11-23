@@ -25,6 +25,9 @@ in every session, headless ones included, so a misbehaving one affects scheduled
   lessons. `handoff` is our adapted copy of one. That reading is from the skill texts, not
   from runs. The owner asked the same day for a test of each one against ours, Superpowers
   first, and said yes to a trial of `improve-codebase-architecture`, which has no match here.
+  The trial ran that day on a product repository: it named three structure problems that no
+  review had, and the skill is added as our adapted copy,
+  [architecture-review](architecture-review.md).
   Both run as their own jobs; a skill replaces an owner only on a measured result.
 - Do not install blast-radius (anthropics/claude-code-playground): on the Windows PC it refused
   every risky Bash command at once (no `sleep` or `du` on the PATH, `bash` was the WSL launcher).
