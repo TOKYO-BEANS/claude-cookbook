@@ -43,8 +43,8 @@ One run on a product repository.
   findings in that stretch were three, all low and about single lines. The `cookbook:review`
   passes found lows and one medium, all about the change in hand. None was about structure,
   and the one-function handler is also why the file goes unread.
-- **Built the same day:** the first candidate, behaviour proven unchanged. The two files
-  lost 713 lines to one module of 607, and the move showed five old defects no review had
-  named. Whether later changes cost less is not measured.
+- **Built that day:** the first candidate, behaviour proven unchanged. The two files lost
+  713 lines to one module of 607. The move showed old defects no review had named: five,
+  by the fix still in review. Later cost: not measured.
 - **Limits:** one repository; the walk left the render file past line 1,060 and two
   folders unread.
