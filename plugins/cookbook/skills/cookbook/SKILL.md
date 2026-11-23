@@ -30,7 +30,7 @@ fallback and say that you did.
 | One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (the `cookbook:*` agent types) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
 | A second opinion (a consult) on our own work from a model that is not Claude | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
-| A literal string, comment or config value | `rg` (the Grep tool) | — | — |
+| A literal string, comment or config value | `rg` | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a plan-token `claude -p` with a typed answer | [judgement](recipes/judgement.md) |
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
 | Sharpen, cut out or straighten a photo | none: say so | — | [photos](recipes/photos.md) |
@@ -40,7 +40,7 @@ fallback and say that you did.
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
 | The model for a session or a piece: Fable or Opus, and when a banked limit reset is used | the model budget script and its hook, which set the thread's model in **T3 Code**; a dispatch profile per piece | the thread's model as it is, said aloud | [model-budget](recipes/model-budget.md) |
-| Several Claude or Codex subscriptions behind one local address, always on; T3 "(pool)" | **CLIProxyAPI** | one subscription as it is | [subscription-proxy](recipes/subscription-proxy.md) |
+| Several Claude or Codex subscriptions behind one local address, always on | **CLIProxyAPI** | one subscription as it is | [subscription-proxy](recipes/subscription-proxy.md) |
 | **Check** | | | |
 | Tests, builds and container images | **Depot** CI | GitHub Actions, only as a documented exception | [ci-releases](recipes/ci-releases.md) |
 | Review of every pull request | the `ai-review` Depot job, once, when the pull request is marked ready for review | a **fallback review** of the head by a reviewer that did not write it, when its reviewer's API could not serve the call | [ai-review](recipes/ai-review.md) |
@@ -58,6 +58,7 @@ fallback and say that you did.
 | Health of the Claude setup and its instruction files | **doctor-plus** | Claude Code's own `/doctor` | [add-ons](recipes/add-ons.md) |
 | **Ship** | | | |
 | Source control, pull requests, GitHub's API | **GitHub** through `gh`, and **Git** | — | [ci-releases](recipes/ci-releases.md) |
+| Pull request text | **pr-text** | plain prose | — |
 | From a finished change to a merged pull request | **sa-release** with `merge: true` | `gh pr merge`, once the merge condition holds | [ci-releases](recipes/ci-releases.md) |
 | After a merge or deploy | **Release Maintenance** through **sa-release** | the `release-maintenance` skill inline | [ci-releases](recipes/ci-releases.md) |
 | Hosting, edge, storage, access control | **Cloudflare**, with the project's own **Wrangler** or `cf` CLI | — | [cloudflare](recipes/cloudflare.md) |
@@ -77,7 +78,7 @@ fallback and say that you did.
 | A public page from a script, or one step | **Browserbase**, the `browse` CLI | Firecrawl, when reading is enough | [cloud-browser](recipes/cloud-browser.md) |
 | A site that needs a sign-in | **agent-browser**, with a login from the vault | the built-in browser, where the owner signs in | [sign-ins](recipes/sign-ins.md) |
 | Web logins | the **Proton Pass CLI**, vault "Claude" | the owner signs in | [sign-ins](recipes/sign-ins.md) |
-| Keys and tokens | the OS key store (GNOME Keyring), read by `with-key.mjs` and `key-header.mjs` | — | [keys](recipes/keys.md) |
+| Keys and tokens | the OS key store, read by `with-key.mjs` and `key-header.mjs` | — | [keys](recipes/keys.md) |
 | The owner's Proton mail | **Proton Mail Bridge** | the web app | [proton-mail](recipes/proton-mail.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
 | Run code away from this PC: tests on Linux before a push, a long or parallel job, a long Claude job that stands alone | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md), [boat-claude](recipes/boat-claude.md) |
@@ -86,7 +87,7 @@ fallback and say that you did.
 | Office files; editing PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |
 | **Keep healthy** | | | |
 | Big output kept out of the conversation | **context-mode** | ranged `Read` and `rg` | [context-mode](recipes/context-mode.md) |
-| Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor, by itself | [compaction](recipes/compaction.md) |
+| Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor | [compaction](recipes/compaction.md) |
 | Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev** | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
 | Several chats at once: a question another chat put to the owner, a job or file another chat has | the **Cookbook**'s `owner-answers` hooks; **T3 Code**'s thread list and read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
 | Memory; lessons | the project's handoff (`HANDOFF.md` or `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md), [learning-loop](recipes/learning-loop.md) |

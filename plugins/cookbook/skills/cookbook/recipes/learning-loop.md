@@ -19,6 +19,11 @@ Asked on 21 November 2026, the owner leaned to the full loop; no model of our ow
 - **A lesson** is a mistake in three or more sessions, an owner correction, or the same
   failure twice in one job. A hook that denies the same call again and again is a lesson too:
   the agent learned the rule too late.
+- **Also look at what the sessions ran in** (23 November 2026, from a measured
+  [comparison](../options/skills-compared.md)): an instruction in a steering file that no
+  session needed or followed; a check that exists but nothing runs, or a mistake a mechanical
+  check would have caught; information the agent searched for at length or could not see; a
+  tool call that read far more than it used. Each one the sessions show gets a proposal.
 - **Promote** each lesson to the strongest form that fits, through a normal pull request:
   1. a check, test or hook that stops it, or a hook message that names the exact next step;
   2. a line where the agent reads before acting: the tool's recipe page, the skill, the

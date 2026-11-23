@@ -19,16 +19,22 @@ in every session, headless ones included, so a misbehaving one affects scheduled
   skill, remove the flag in our copy and say in its description when to use it, or give the
   job to a tool Claude can start. `handoff` had the flag until that day. context-mode's
   `ctx-doctor`, `ctx-stats` and `ctx-upgrade` keep it: the same jobs are its MCP tools.
-- **Weighed, not added so far (23 November 2026):** `mattpocock/skills` (27 skills, MIT). 16
-  run only when typed, in a fixed order (grill, spec, tickets, implement, review, retro), and
-  each step has an owner here: Superpowers, the `sa-*` workflows, the AI review, the weekly
-  lessons. `handoff` is our adapted copy of one. That reading is from the skill texts, not
-  from runs. The owner asked the same day for a test of each one against ours, Superpowers
-  first, and said yes to a trial of `improve-codebase-architecture`, which has no match here.
-  The trial ran that day on a product repository: it named three structure problems that no
-  review had, and the skill is added as our adapted copy,
-  [architecture-review](architecture-review.md).
-  Both run as their own jobs; a skill replaces an owner only on a measured result.
+- **`mattpocock/skills` (27 skills, MIT), measured on 23 November 2026:** none replaces an
+  owner here. 16 run only when typed, in a fixed order (grill, spec, tickets, implement,
+  review, retro), and each step has an owner: Superpowers, the `sa-*` workflows, the AI
+  review, the weekly lessons. Each was run against ours and against no skill
+  ([skills compared](../options/skills-compared.md), [the rest](../options/skills-compared-single.md)).
+  Taken from it: `handoff` (our earlier copy), [architecture-review](architecture-review.md)
+  after its own trial, four lines of `retro` in [learning-loop](learning-loop.md), and
+  **pr-text**. A skill replaces an owner only on a measured result.
+- **Pull request text:** the **pr-text** skill (`cookbook:pr-text`, in this plugin; Claude
+  starts it when it writes a pull request's title and body). Three parts: what changed, with
+  the smallest picture; before-and-after output pasted from commands that ran, never
+  retyped; how to roll back and what a rollback leaves behind. Our adapted copy of his `pr`
+  (the licence and the upstream commit are in the skill's folder), at `trial` in the catalog
+  until it has written real pull requests. A project's own rules for the text (no project
+  names in a public repository, the closing lines) still hold. An upstream change shows in
+  the update check: read the diff and take what fits by hand.
 - Do not install blast-radius (anthropics/claude-code-playground): on the Windows PC it refused
   every risky Bash command at once (no `sleep` or `du` on the PATH, `bash` was the WSL launcher).
   Not tried on the laptop; a new look starts at [connecting](connecting.md). Use permission deny
