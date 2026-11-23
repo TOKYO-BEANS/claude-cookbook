@@ -5,7 +5,7 @@
 - **The scan** is `scripts/agentshield/` in the skill's folder (tests:
   `scripts/agentshield.test.mjs` in the repository). `install.sh` copies it to
   `~/.local/share/stack-atlas/agentshield`; the T3 task "AgentShield weekly scan" (Mondays
-  08:00) runs `scan.sh` there and triages by the rules in its prompt. A run checks the
+  09:30) runs `scan.sh` there and triages by the rules in its prompt. A run checks the
   installed copy against its pin (version, lockfile, every file); copies a fixed list of files
   (own settings and instructions, MCP servers, installed plugins, each Desktop project's
   instruction and settings files) with credential values taken out; puts the copy through
