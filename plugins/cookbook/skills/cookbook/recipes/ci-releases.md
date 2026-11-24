@@ -39,4 +39,5 @@
 - **After a merge or deploy**, in the same task: Release Maintenance (commit, checks, deployed
   version, health), recorded with the release verifier, before calling it done. A failed release
   check: roll back to the last good version first, then fix through a new pull request.
-- **Merges queue up**, and what else a merge waits on: [fast-merges](fast-merges.md).
+- **Merges queue up**; a CI re-run is `rerun-ci.mjs`, never a bare `depot ci rerun`; other
+  waits: [fast-merges](fast-merges.md).
