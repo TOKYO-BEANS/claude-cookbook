@@ -23,7 +23,11 @@ Chosen by fit for the job on 15 November 2026.
   ([codex-consult](../recipes/codex-consult.md)). What the comparison showed is kept as practice
   in `recipes/ci-releases.md`: the reviews inside the `sa-*` route found almost nothing, the AI
   review in CI and one reviewer that had not built the change found the defects, and a budget of
-  three review rounds held where an unbudgeted change took six.
+  three review rounds held where an unbudgeted change took six. Weighed on 24 November 2026:
+  Claude Code's `/ship` and `/steward` (a pull request, `/code-review`, then a watch that fixes
+  checks and comments). Only typed by hand, not offered in T3 sessions, no watch in bypass mode;
+  the merge stays a person's, and a watch skips our hooks. `ai-review`, `ai-fix` and the watch
+  above do the job.
 - **After a merge or deploy: Release Maintenance.** It checks the exact commit, the CI
   identities, the deployed version and health, and the release verifier keeps the ledger.
   Weighed: a look at the CI page (no record, no deployed version); a periodic monitor (late,
