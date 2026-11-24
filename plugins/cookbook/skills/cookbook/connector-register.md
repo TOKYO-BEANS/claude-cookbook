@@ -57,6 +57,17 @@ A skill costs its description in every session until it is used. `skillOverrides
 skills, including plugins synced from claude.ai, follow their plugin's scope: `enabledPlugins`, with
 `"<name>@synced"` for a synced plugin.
 
+The listing of skills has its own budget, 1% of the context window by default
+(`skillListingBudgetFraction`, missing from the public settings reference). Over it, Claude Code
+drops the descriptions of the least-used skills: Claude then sees a bare name and cannot judge
+when to start that skill, which the owner leaves to Claude (23 November 2026). Measured on 24
+November 2026 with two `claude -p` runs (Opus 5.5, 111 skills, only the setting changed): at 0.01,
+20 skills besides the seven `name-only` ones had no description, among them
+`superpowers:verification-before-completion`, `superpowers:using-git-worktrees`, the three
+Firecrawl skills, `init`, `security-review` and twelve `anthropic-skills:*`; at 0.02, none, for
+about 3,000 more input tokens at each session start. The user settings hold 0.02 since then. After
+adding a plugin, run the same check again and raise the budget before a description is lost.
+
 | Skills | Calls in 30 days | Decision and reason |
 |---|---|---|
 | `liquid-theme-a11y`, `liquid-theme-standards`, `shopify-liquid-themes` | 0 | `name-only` (done 2 November): used in one store project only, no theme work in 30 days; their names say what they are for |
