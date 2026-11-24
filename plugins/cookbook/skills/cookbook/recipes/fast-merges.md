@@ -7,7 +7,9 @@ pull requests with a second review round took 47% of all open-to-merge time. The
 the waits; none changes [the merge condition](ci-releases.md).
 
 - **Merges queue up:** a push cancels `main`'s running CI; `merge-when-green.sh` waits for it,
-  a hand merge must check first.
+  a hand merge must check first. So does a CI re-run. Fresh CI for a commit (its release check
+  says `stale checks only`) is `node ~/.codex/release-maintenance/claude/rerun-ci.mjs <Repo>
+  <sha>`: it refuses while the branch has a run in progress. Never a bare `depot ci rerun`.
 - **The merge scripts run in the background.** Start `merge-when-green.sh` and `after-merge.sh`
   with the Bash tool's `run_in_background` and a long timeout, then write the handoff entry
   while they run; their notification is the wake-up. Never poll with `sleep` and `gh`: 200 to
