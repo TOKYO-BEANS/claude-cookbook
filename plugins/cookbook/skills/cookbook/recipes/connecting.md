@@ -34,3 +34,5 @@
 - An MCP server that only some projects need goes in project scope (`.mcp.json`), not user scope.
   What each server costs a session start, and the three ways to keep one out of it:
   [connecting-load.md](connecting-load.md).
+- A server that serves skills for a job one of our skills does replaces ours once its skills
+  load in T3 Code; a plugin's duplicate copy is turned off: [mcp-features](../options/mcp-features.md).

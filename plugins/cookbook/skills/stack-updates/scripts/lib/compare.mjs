@@ -17,6 +17,8 @@
 //   a change when that version moves ("installed-changed"), never twice for one
 //   version; a newer release that has not arrived is neither a change nor "still behind".
 // - Unlisted and missing: the first day, then the first run on or after each Monday.
+// - An MCP server serving skills: the day its count first rises above 0 or changes
+//   (stageConnect, against the count kept in the state's `mcpSkills`).
 // - Could not check (a feed or an installed version that could not be read):
 //   the first day, then again every 7 days while it lasts. The part's state is
 //   left as it was, so nothing unread is ever marked seen. When every feed
@@ -44,7 +46,7 @@ const RESHOW_DAYS = 7; // a lasting "could not check" is shown again after this 
 const DAY_MS = 86_400_000;
 // The lists that make a day not quiet. `unchecked` is not one: a service with no
 // check is a standing fact, not news. `suppressed` counts and `weekly` are not either.
-const NEWS = ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing"];
+const NEWS = ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing", "mcpSkills"];
 const COMMIT = /^[0-9a-f]{40}$/;
 const PAGE_HASH = /^[0-9a-f]{64}$/; // feeds.mjs's sha256 of a changelog page
 // `latestSince` (the day the newest release was first seen), `notes` ("<latest> clean",
@@ -116,7 +118,7 @@ export const isQuiet = (result) => NEWS.every((k) => (result?.[k] ?? []).length 
 // ---- state ---------------------------------------------------------------------
 
 const emptyPart = () => Object.fromEntries(PART_FIELDS.map((k) => [k, null]));
-const emptyState = () => ({ version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: null, lastMonday: null, week: { runs: 0, changes: 0 } });
+const emptyState = () => ({ version: 1, parts: {}, unlisted: {}, missing: {}, mcpSkills: {}, lastRun: null, lastMonday: null, week: { runs: 0, changes: 0 } });
 
 // A version 1 state with every field checked, or null when it is not one.
 // Object.fromEntries keeps a "__proto__" key an ordinary property.
@@ -136,8 +138,10 @@ function normalizeState(raw) {
   );
   const firstSeen = (o) => Object.fromEntries(Object.entries(isObject(o) ? o : {}).filter(([, d]) => validDay(d)));
   const week = isObject(raw.week) ? raw.week : {};
+  // The skill count last reported per MCP server (stageConnect): a count above 0 only.
+  const mcpSkills = Object.fromEntries(Object.entries(isObject(raw.mcpSkills) ? raw.mcpSkills : {}).filter(([, n]) => Number.isSafeInteger(n) && n > 0));
   return {
-    version: 1, parts, unlisted: firstSeen(raw.unlisted), missing: firstSeen(raw.missing),
+    version: 1, parts, unlisted: firstSeen(raw.unlisted), missing: firstSeen(raw.missing), mcpSkills,
     lastRun: day(raw.lastRun), lastMonday: day(raw.lastMonday), week: { runs: count(week.runs), changes: count(week.changes) },
   };
 }
@@ -314,7 +318,7 @@ export function compare({ catalog, installed, latest, unlisted, state, today } =
   const mondaySections = firstRun || newWeek;
   const selfUpdating = new Set(SELF_UPDATING_TOOLS);
   const tools = Array.isArray(catalog?.tools) ? catalog.tools.filter(isObject) : [];
-  const next = { version: 1, parts: {}, unlisted: {}, missing: {}, lastRun: today, lastMonday: monday, week: null };
+  const next = { version: 1, parts: {}, unlisted: {}, missing: {}, mcpSkills: { ...prev.mcpSkills }, lastRun: today, lastMonday: monday, week: null };
   const changes = [], stillBehind = [], couldNotCheck = [], missing = [], allFailedParts = [], behindAll = [];
   // Entries a rule held back today because it is not their day, so a quiet day can say so.
   const suppressed = { couldNotCheck: 0, stillBehind: 0, unlisted: 0, missing: 0 };

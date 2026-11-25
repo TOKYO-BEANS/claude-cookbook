@@ -53,7 +53,9 @@ load in every desktop session.
 ## Skills
 
 A skill costs its description in every session until it is used. `skillOverrides` (`on`,
-`name-only`, `user-invocable-only`, `off`) reaches personal, project and bundled skills only. Plugin
+`name-only`, `user-invocable-only`, `off`) reaches personal, project and bundled skills, and the
+skills an MCP server serves (`"<server>:<skill>": "off"`, proven 25 November 2026; a `deny` rule
+does not take them out of the listing: [mcp-features](options/mcp-features.md)). Plugin
 skills, including plugins synced from claude.ai, follow their plugin's scope: `enabledPlugins`, with
 `"<name>@synced"` for a synced plugin.
 

@@ -362,6 +362,7 @@ function fakeRun({ paidOk = true } = {}) {
     const line = argv.join(" ");
     if (argv[0] === "claude" && argv[1] === "-p") return ok(stream(JSON.stringify(/Tool: Superpowers/.test(opts.input) ? RISKY_ANSWER : ANSWER)));
     if (argv[0] === "claude" && argv[1] === "mcp") return ok("");
+    if (argv[0] === "node" && String(argv[1]).endsWith("mcp-skills.mjs")) return ok("skills: 0\n");
     if (line === "gh --version") return ok("gh version 2.83.0 (2026-10-30)\nhttps://github.com/cli/cli/releases/tag/v2.83.0\n");
     if (line === "gh api user --jq .login") return ok("octocat\n");
     // A keyed CLI is started by its full path in ~/.local/bin (either slash: the path is normalized).
@@ -1529,4 +1530,41 @@ test("a plugin installed by commit is never a routine update: releases do not bo
     assert.equal(d.run.calls.some((c) => /routine/.test(String(c.opts?.input ?? ""))), false, "no commit subject reaches the reader");
     assert.doesNotMatch(String(readJson(join(state, "state.json")).parts["book/plugin"].notes), /clean/);
   }
+});
+
+test("renderReport: an MCP server serving skills is news, with the Cookbook page to act on", async () => {
+  const { isQuiet } = await import("../plugins/cookbook/skills/stack-updates/scripts/lib/compare.mjs");
+  const r = base({ mcpSkills: [{ service: "Firecrawl", skills: 3 }] });
+  assert.equal(isQuiet(r), false);
+  const text = renderReport(r);
+  assert.ok(text.startsWith("Updates, 14 Nov: 1 MCP server serving skills\n"), text);
+  assert.ok(text.includes("\nMCP servers now serving skills (retire our own skill for that job: Cookbook options/mcp-features.md)\n- Firecrawl: 3 skills\n"), text);
+  assert.equal(isQuiet(quiet({ mcpSkills: [] })), true);
+});
+
+test("MCP skills: a server is news the day it first serves skills, quiet the next day, and news again when its count changes", async (t) => {
+  const state = tmp(t);
+  // Firecrawl's server answers `skills: <n>` (null: it fails); every other call is the usual fake.
+  const serving = (n) => {
+    const f = fakes();
+    const usual = f.run;
+    f.run = async (argv, opts) => (argv[0] === "node" && String(argv[1]).endsWith("mcp-skills.mjs") && String(argv[2]).includes("firecrawl")
+      ? (n === null ? { code: 1, stdout: "", stderr: "initialize: HTTP 503" } : ok(`skills: ${n}\n`))
+      : usual(argv, opts));
+    return f;
+  };
+  const day = async (today, n) => {
+    const r = await cli(["run", ...at(state, today)], serving(n));
+    assert.equal(r.code, 0, r.err);
+    return readJson(join(state, "runs", today, "result.json")).mcpSkills;
+  };
+  assert.deepEqual(await day("2026-11-13", 3), [{ service: "Firecrawl", skills: 3 }]);
+  assert.deepEqual(readJson(join(state, "state.json")).mcpSkills, { Firecrawl: 3 });
+  assert.deepEqual(await day("2026-11-14", 3), [], "the same count the next day is not news");
+  assert.deepEqual(await day("2026-11-15", null), [], "a failed ask keeps the count");
+  assert.deepEqual(readJson(join(state, "state.json")).mcpSkills, { Firecrawl: 3 });
+  assert.deepEqual(await day("2026-11-16", 5), [{ service: "Firecrawl", skills: 5 }]);
+  assert.deepEqual(await day("2026-11-17", 0), []);
+  assert.deepEqual(readJson(join(state, "state.json")).mcpSkills, {});
+  assert.deepEqual(await day("2026-11-18", 2), [{ service: "Firecrawl", skills: 2 }], "skills again after none are news again");
 });

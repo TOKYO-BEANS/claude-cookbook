@@ -5,9 +5,10 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { runChecks, dueDates, scrub, JEV_LOG, JEV_ANSWER_OUTCOMES } from "../plugins/cookbook/skills/stack-updates/scripts/lib/connect.mjs";
+import { runChecks, dueDates, scrub, checkSkillServers, JEV_LOG, JEV_ANSWER_OUTCOMES } from "../plugins/cookbook/skills/stack-updates/scripts/lib/connect.mjs";
+import { message, skillCount } from "../plugins/cookbook/skills/stack-updates/scripts/lib/mcp-skills.mjs";
 import { expandTokens } from "../plugins/cookbook/skills/stack-updates/scripts/lib/inventory.mjs";
-import { CONNECTION_CHECKS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
+import { CONNECTION_CHECKS, MCP_SKILL_SERVERS } from "../plugins/cookbook/skills/stack-updates/scripts/lib/tables.mjs";
 
 const NOW = new Date("2026-11-14T07:00:00Z");
 const tool = (id, name, lifecycle = "active", parts = [{ name: "cli", installed: { kind: "command" } }], extra = {}) => ({ id, name, lifecycle, parts, ...extra });
@@ -374,4 +375,45 @@ test("the real table: no ok pattern matches an error line, a help text or a not-
 test("the real table: Cloudflare's pattern needs the word active alone on a line", () => {
   const cf = CONNECTION_CHECKS.cloudflare.ok;
   assert.ok(!cf.test("inactive\n") && !cf.test("not active\n") && !cf.test("HTTP 401\n"));
+});
+
+test("MCP skills: a server with skills is reported, none is quiet, and a failure is a short line", async () => {
+  const servers = [
+    { service: "A", argv: ["node", "{lib}/mcp-skills.mjs", "https://a.example/mcp"] },
+    { service: "B", argv: ["node", "{lib}/mcp-skills.mjs", "https://b.example/mcp"] },
+    { service: "C", argv: ["node", "{lib}/mcp-skills.mjs", "https://c.example/mcp"] },
+  ];
+  const calls = [];
+  const run = async (argv) => {
+    calls.push(argv);
+    if (argv[2].includes("a.example")) return { code: 0, stdout: "skills: 3\n", stderr: "" };
+    if (argv[2].includes("b.example")) return { code: 0, stdout: "skills: 0\n", stderr: "" };
+    return { code: 1, stdout: "", stderr: "initialize: HTTP 401" };
+  };
+  const r = await checkSkillServers({ run, home, servers });
+  assert.deepEqual(r.serving, [{ service: "A", skills: 3 }]);
+  assert.deepEqual(r.failed, ["C MCP skills: initialize: HTTP 401"]);
+  assert.equal(calls.length, 3);
+  assert.ok(calls[0][1].endsWith("mcp-skills.mjs") && !calls[0][1].includes("{lib}"), calls[0][1]);
+});
+
+test("MCP skills: the watched servers are Firecrawl and Parallel, asked with no key", () => {
+  assert.deepEqual(MCP_SKILL_SERVERS.map((s) => s.service), ["Firecrawl", "Parallel"]);
+  for (const s of MCP_SKILL_SERVERS) assert.deepEqual(s.argv.slice(0, 2), ["node", "{lib}/mcp-skills.mjs"]);
+});
+
+test("MCP skills: an answer is counted from JSON or an event stream; Method not found is 0", () => {
+  assert.equal(skillCount(message('{"jsonrpc":"2.0","id":2,"result":{"skills":[{},{}]}}')), 2);
+  assert.equal(skillCount(message('event: message\ndata: {"jsonrpc":"2.0","id":2,"error":{"code":-32601,"message":"Method not found"}}\n')), 0);
+  assert.equal(skillCount(message('{"jsonrpc":"2.0","id":2,"error":{"code":-32603}}')), null);
+  assert.equal(skillCount(message("not json")), null);
+});
+
+test("MCP skills: in an event stream the answer to the request is found after a notification, and data may span lines", () => {
+  const stream = [
+    'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/message","params":{}}\n',
+    'event: message\ndata: {"jsonrpc":"2.0","id":2,\ndata: "result":{"skills":[{},{},{}]}}\n',
+  ].join("\n");
+  assert.equal(skillCount(message(stream, 2)), 3);
+  assert.equal(message(stream, 2).id, 2);
 });

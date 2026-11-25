@@ -54,7 +54,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { NOTES, decide, decideAll, warnsOf } from "./lib/apply.mjs";
 import { READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
-import { dueDates, runChecks } from "./lib/connect.mjs";
+import { checkSkillServers, dueDates, runChecks } from "./lib/connect.mjs";
 import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
 import { defaultRun, findUnlisted, projectRepository, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
@@ -524,6 +524,23 @@ async function stageConnect(ctx) {
   result.unchecked = checks.unchecked;
   result.working = checks.working;
   result.dates = dueDates(ctx.catalog, ctx.today);
+  const skills = await checkSkillServers(deps);
+  // A server serving skills is news only when its count differs from the one last reported
+  // (the saved state's, so a second connect in one folder reports the same). A server that
+  // answered 0 is forgotten; one that failed keeps its count.
+  const reported = loadStateInfo(ctx).state.mcpSkills;
+  result.mcpSkills = skills.serving.filter((s) => own(reported, s.service) !== s.skills);
+  const next = readJson(ctx, "next-state.json");
+  if (isObject(next)) {
+    const kept = { ...reported };
+    for (const s of skills.serving) kept[s.service] = s.skills;
+    for (const service of skills.none) delete kept[service];
+    next.mcpSkills = kept;
+    writeJson(ctx, "next-state.json", next);
+  }
+  // Replaced, not added to, so running the connect stage again does not repeat a line.
+  const sources = (Array.isArray(result.unreadableSources) ? result.unreadableSources : []).filter((x) => !/^[^:]* MCP skills: /.test(String(x)));
+  result.unreadableSources = [...sources, ...skills.failed];
   result.paidChecks = paidNames;
   result.quiet = isQuiet(result);
   addStage(result, "connect");

@@ -13,7 +13,7 @@ import { open } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultRun, expandTokens } from "./inventory.mjs";
-import { CONNECTION_CHECKS } from "./tables.mjs";
+import { CONNECTION_CHECKS, MCP_SKILL_SERVERS } from "./tables.mjs";
 
 export const CHECK_TIMEOUT_MS = 30_000;
 const OUTPUT_LIMIT = 100_000; // `boat limits` alone prints about 6 KB of JSON
@@ -206,6 +206,31 @@ export async function runChecks(catalog, { run = defaultRun, home, now = new Dat
     else if (hasHostedPart(tool)) unchecked.push(tool.name);
   }
   return { broken, unchecked, working };
+}
+
+// ---- skills on MCP servers ---------------------------------------------------
+
+// Asks each server of MCP_SKILL_SERVERS whether it serves skills, one after another.
+// `-> { serving: { service, skills }[], none: string[], failed: string[] }`: `serving` holds
+// only servers with at least one skill; `none` the services that answered 0; `failed` a
+// short line per server that gave no count.
+export async function checkSkillServers({ run = defaultRun, home, servers = MCP_SKILL_SERVERS } = {}) {
+  if (typeof home !== "string" || !home) throw new Error("checkSkillServers needs the home folder: pass { home }");
+  const serving = [], none = [], failed = [];
+  for (const { service, argv } of servers) {
+    let res;
+    try {
+      res = await run(expandTokens(argv, home, LIB), { timeoutMs: CHECK_TIMEOUT_MS, maxBytes: OUTPUT_LIMIT, home });
+    } catch (e) {
+      res = { code: -1, stdout: "", stderr: cause(e) };
+    }
+    const m = String(res?.stdout ?? "").match(/^skills: (\d+)\s*$/m);
+    if (res?.timedOut) failed.push(`${service} MCP skills: timed out after ${CHECK_TIMEOUT_MS / 1000} s`);
+    else if (res?.code !== 0 || !m) failed.push(`${service} MCP skills: ${clip(res?.stderr) || `exit ${res?.code ?? "unknown"}, no count`}`);
+    else if (Number(m[1]) > 0) serving.push({ service, skills: Number(m[1]) });
+    else none.push(service);
+  }
+  return { serving, none, failed };
 }
 
 // ---- dates -----------------------------------------------------------------

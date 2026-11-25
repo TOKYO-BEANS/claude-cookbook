@@ -37,6 +37,7 @@ about the dates the catalog records. It installs, updates and commits nothing.
   check, at most once per real day in a state folder (a trial folder reuses the real run's check of
   the day; before that run it makes its own); one request with no tools on the Claude plan per changed part
   (1,400 to 3,500 input and about 200 output tokens, by the length of the notes), at most 10 a run.
-  No Firecrawl credits.
+  No Firecrawl credits. Firecrawl's and Parallel's MCP servers are asked `skills/list` with no
+  key (free); one that serves skills is news ([mcp-features](../options/mcp-features.md)).
 
 More: [routine updates and the catalog](update-check-routine.md).
