@@ -408,3 +408,12 @@ test("MCP skills: an answer is counted from JSON or an event stream; Method not 
   assert.equal(skillCount(message('{"jsonrpc":"2.0","id":2,"error":{"code":-32603}}')), null);
   assert.equal(skillCount(message("not json")), null);
 });
+
+test("MCP skills: in an event stream the answer to the request is found after a notification, and data may span lines", () => {
+  const stream = [
+    'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/message","params":{}}\n',
+    'event: message\ndata: {"jsonrpc":"2.0","id":2,\ndata: "result":{"skills":[{},{},{}]}}\n',
+  ].join("\n");
+  assert.equal(skillCount(message(stream, 2)), 3);
+  assert.equal(message(stream, 2).id, 2);
+});

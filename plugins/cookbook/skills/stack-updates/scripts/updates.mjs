@@ -538,7 +538,9 @@ async function stageConnect(ctx) {
     next.mcpSkills = kept;
     writeJson(ctx, "next-state.json", next);
   }
-  result.unreadableSources = [...(Array.isArray(result.unreadableSources) ? result.unreadableSources : []), ...skills.failed];
+  // Replaced, not added to, so running the connect stage again does not repeat a line.
+  const sources = (Array.isArray(result.unreadableSources) ? result.unreadableSources : []).filter((x) => !/^[^:]* MCP skills: /.test(String(x)));
+  result.unreadableSources = [...sources, ...skills.failed];
   result.paidChecks = paidNames;
   result.quiet = isQuiet(result);
   addStage(result, "connect");

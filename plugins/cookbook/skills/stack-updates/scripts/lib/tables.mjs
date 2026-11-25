@@ -110,8 +110,8 @@ export const CONNECTION_CHECKS = Object.freeze({
 // report says so, and our own skill for that job is retired (Cookbook
 // `options/mcp-features.md`). `lib/mcp-skills.mjs` asks with no key, so only a server that
 // answers `initialize` without a sign-in is here: Graphify answers 401 (25 November 2026)
-// and is checked by hand at its releases. Remove a server once its skills are handled.
+// and is checked by hand at its releases. A count is news once, when it changes (the state keeps it).
 export const MCP_SKILL_SERVERS = Object.freeze([
   { service: "Firecrawl", argv: ["node", "{lib}/mcp-skills.mjs", "https://mcp.firecrawl.dev/v2/mcp"] },
-  { service: "Parallel", argv: ["node", "{lib}/mcp-skills.mjs", "https://search.parallel.ai/mcp"] },
+  { service: "Parallel", argv: ["node", "{lib}/mcp-skills.mjs", "https://mcp.parallel.ai/mcp/claude"] },
 ]);

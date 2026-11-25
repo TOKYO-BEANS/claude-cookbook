@@ -7,17 +7,24 @@
 import { pathToFileURL } from "node:url";
 
 const VERSION = "2025-11-25";
+const MAX_PAGES = 10;
 const HEADERS = { "content-type": "application/json", accept: "application/json, text/event-stream", "mcp-protocol-version": VERSION };
 
-// The JSON-RPC message of a plain JSON or an event-stream body, or null.
-export function message(text) {
+// The JSON-RPC answer to request `id` in a plain JSON or an event-stream body, or null. A
+// stream may carry notifications before the answer, and an event's data may span lines.
+export function message(text, id) {
   const t = String(text ?? "");
-  const data = t.match(/^data: ?(.*)$/m);
-  try {
-    return JSON.parse(data ? data[1] : t);
-  } catch {
-    return null;
-  }
+  const parse = (x) => {
+    try {
+      return JSON.parse(x);
+    } catch {
+      return null;
+    }
+  };
+  if (!/^data:/m.test(t)) return parse(t);
+  const events = t.split(/\r?\n\r?\n/).map((e) => e.split(/\r?\n/).filter((l) => l.startsWith("data:")).map((l) => l.replace(/^data: ?/, "")).join("\n"));
+  const msgs = events.filter(Boolean).map(parse).filter(Boolean);
+  return msgs.find((m) => id !== undefined && m.id === id) ?? msgs.find((m) => "result" in m || "error" in m) ?? null;
 }
 
 // The number of skills a `skills/list` answer holds: 0 for "Method not found", null when
@@ -35,7 +42,7 @@ async function post(url, body, session) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20_000),
   });
-  return { status: res.status, session: res.headers.get("mcp-session-id"), msg: message(await res.text()) };
+  return { status: res.status, session: res.headers.get("mcp-session-id"), msg: message(await res.text(), body.id) };
 }
 
 async function main(url) {
@@ -43,10 +50,17 @@ async function main(url) {
   const init = await post(url, { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: VERSION, capabilities: {}, clientInfo: { name: "stack-updates", version: "1" } } });
   if (init.status !== 200 || !init.msg?.result) throw new Error(`initialize: HTTP ${init.status}`);
   if (init.session) await post(url, { jsonrpc: "2.0", method: "notifications/initialized" }, init.session);
-  const list = await post(url, { jsonrpc: "2.0", id: 2, method: "skills/list", params: {} }, init.session);
-  const n = skillCount(list.msg);
-  if (list.status !== 200 || n === null) throw new Error(`skills/list: HTTP ${list.status}, no list`);
-  console.log(`skills: ${n}`);
+  // Every page of the list, up to MAX_PAGES (a server shows Claude Code up to 100 skills).
+  let total = 0, cursor;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const list = await post(url, { jsonrpc: "2.0", id: 2 + page, method: "skills/list", params: cursor ? { cursor } : {} }, init.session);
+    const n = skillCount(list.msg);
+    if (list.status !== 200 || n === null) throw new Error(`skills/list: HTTP ${list.status}, no list`);
+    total += n;
+    cursor = list.msg?.result?.nextCursor;
+    if (typeof cursor !== "string" || !cursor) break;
+  }
+  console.log(`skills: ${total}`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
