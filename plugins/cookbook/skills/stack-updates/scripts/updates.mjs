@@ -525,7 +525,19 @@ async function stageConnect(ctx) {
   result.working = checks.working;
   result.dates = dueDates(ctx.catalog, ctx.today);
   const skills = await checkSkillServers(deps);
-  result.mcpSkills = skills.serving;
+  // A server serving skills is news only when its count differs from the one last reported
+  // (the saved state's, so a second connect in one folder reports the same). A server that
+  // answered 0 is forgotten; one that failed keeps its count.
+  const reported = loadStateInfo(ctx).state.mcpSkills;
+  result.mcpSkills = skills.serving.filter((s) => own(reported, s.service) !== s.skills);
+  const next = readJson(ctx, "next-state.json");
+  if (isObject(next)) {
+    const kept = { ...reported };
+    for (const s of skills.serving) kept[s.service] = s.skills;
+    for (const service of skills.none) delete kept[service];
+    next.mcpSkills = kept;
+    writeJson(ctx, "next-state.json", next);
+  }
   result.unreadableSources = [...(Array.isArray(result.unreadableSources) ? result.unreadableSources : []), ...skills.failed];
   result.paidChecks = paidNames;
   result.quiet = isQuiet(result);

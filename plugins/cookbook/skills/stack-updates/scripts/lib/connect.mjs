@@ -211,11 +211,12 @@ export async function runChecks(catalog, { run = defaultRun, home, now = new Dat
 // ---- skills on MCP servers ---------------------------------------------------
 
 // Asks each server of MCP_SKILL_SERVERS whether it serves skills, one after another.
-// `-> { serving: { service, skills }[], failed: string[] }`: `serving` holds only servers
-// with at least one skill; `failed` a short line per server that gave no count.
+// `-> { serving: { service, skills }[], none: string[], failed: string[] }`: `serving` holds
+// only servers with at least one skill; `none` the services that answered 0; `failed` a
+// short line per server that gave no count.
 export async function checkSkillServers({ run = defaultRun, home, servers = MCP_SKILL_SERVERS } = {}) {
   if (typeof home !== "string" || !home) throw new Error("checkSkillServers needs the home folder: pass { home }");
-  const serving = [], failed = [];
+  const serving = [], none = [], failed = [];
   for (const { service, argv } of servers) {
     let res;
     try {
@@ -227,8 +228,9 @@ export async function checkSkillServers({ run = defaultRun, home, servers = MCP_
     if (res?.timedOut) failed.push(`${service} MCP skills: timed out after ${CHECK_TIMEOUT_MS / 1000} s`);
     else if (res?.code !== 0 || !m) failed.push(`${service} MCP skills: ${clip(res?.stderr) || `exit ${res?.code ?? "unknown"}, no count`}`);
     else if (Number(m[1]) > 0) serving.push({ service, skills: Number(m[1]) });
+    else none.push(service);
   }
-  return { serving, failed };
+  return { serving, none, failed };
 }
 
 // ---- dates -----------------------------------------------------------------
