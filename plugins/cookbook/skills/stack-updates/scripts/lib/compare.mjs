@@ -44,7 +44,7 @@ const RESHOW_DAYS = 7; // a lasting "could not check" is shown again after this 
 const DAY_MS = 86_400_000;
 // The lists that make a day not quiet. `unchecked` is not one: a service with no
 // check is a standing fact, not news. `suppressed` counts and `weekly` are not either.
-const NEWS = ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing"];
+const NEWS = ["changes", "stillBehind", "broken", "dates", "couldNotCheck", "unlisted", "missing", "mcpSkills"];
 const COMMIT = /^[0-9a-f]{40}$/;
 const PAGE_HASH = /^[0-9a-f]{64}$/; // feeds.mjs's sha256 of a changelog page
 // `latestSince` (the day the newest release was first seen), `notes` ("<latest> clean",

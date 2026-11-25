@@ -54,7 +54,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { NOTES, decide, decideAll, warnsOf } from "./lib/apply.mjs";
 import { READ_LIMIT, compare, compareVersions, isQuiet, isRisky, loadState, saveState } from "./lib/compare.mjs";
-import { dueDates, runChecks } from "./lib/connect.mjs";
+import { checkSkillServers, dueDates, runChecks } from "./lib/connect.mjs";
 import { RESPONSE_LIMIT, readLatest, releaseNotes } from "./lib/feeds.mjs";
 import { defaultRun, findUnlisted, projectRepository, readInstalled } from "./lib/inventory.mjs";
 import { readChange } from "./lib/read.mjs";
@@ -524,6 +524,9 @@ async function stageConnect(ctx) {
   result.unchecked = checks.unchecked;
   result.working = checks.working;
   result.dates = dueDates(ctx.catalog, ctx.today);
+  const skills = await checkSkillServers(deps);
+  result.mcpSkills = skills.serving;
+  result.unreadableSources = [...(Array.isArray(result.unreadableSources) ? result.unreadableSources : []), ...skills.failed];
   result.paidChecks = paidNames;
   result.quiet = isQuiet(result);
   addStage(result, "connect");

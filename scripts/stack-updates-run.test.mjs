@@ -362,6 +362,7 @@ function fakeRun({ paidOk = true } = {}) {
     const line = argv.join(" ");
     if (argv[0] === "claude" && argv[1] === "-p") return ok(stream(JSON.stringify(/Tool: Superpowers/.test(opts.input) ? RISKY_ANSWER : ANSWER)));
     if (argv[0] === "claude" && argv[1] === "mcp") return ok("");
+    if (argv[0] === "node" && String(argv[1]).endsWith("mcp-skills.mjs")) return ok("skills: 0\n");
     if (line === "gh --version") return ok("gh version 2.83.0 (2026-10-30)\nhttps://github.com/cli/cli/releases/tag/v2.83.0\n");
     if (line === "gh api user --jq .login") return ok("octocat\n");
     // A keyed CLI is started by its full path in ~/.local/bin (either slash: the path is normalized).
@@ -1529,4 +1530,14 @@ test("a plugin installed by commit is never a routine update: releases do not bo
     assert.equal(d.run.calls.some((c) => /routine/.test(String(c.opts?.input ?? ""))), false, "no commit subject reaches the reader");
     assert.doesNotMatch(String(readJson(join(state, "state.json")).parts["book/plugin"].notes), /clean/);
   }
+});
+
+test("renderReport: an MCP server serving skills is news, with the Cookbook page to act on", async () => {
+  const { isQuiet } = await import("../plugins/cookbook/skills/stack-updates/scripts/lib/compare.mjs");
+  const r = base({ mcpSkills: [{ service: "Firecrawl", skills: 3 }] });
+  assert.equal(isQuiet(r), false);
+  const text = renderReport(r);
+  assert.ok(text.startsWith("Updates, 14 Nov: 1 MCP server serving skills\n"), text);
+  assert.ok(text.includes("\nMCP servers now serving skills (retire our own skill for that job: Cookbook options/mcp-features.md)\n- Firecrawl: 3 skills\n"), text);
+  assert.equal(isQuiet(quiet({ mcpSkills: [] })), true);
 });

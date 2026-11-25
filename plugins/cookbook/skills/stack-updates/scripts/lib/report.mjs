@@ -192,6 +192,7 @@ function headerItems(result) {
   const n = {
     changes: list(result.changes).length, behind: list(result.stillBehind).length, broken: list(result.broken).length,
     unread: couldNotReadCount(result), unlisted: list(result.unlisted).length, missing: list(result.missing).length, dates: list(result.dates).length,
+    mcpSkills: list(result.mcpSkills).length,
   };
   const applied = list(result.applied).filter(isObject);
   const installed = applied.filter((a) => a.ok === true).length, failed = applied.length - installed;
@@ -207,6 +208,7 @@ function headerItems(result) {
     n.unlisted && `${n.unlisted} not in the Cookbook`,
     n.missing && `${n.missing} missing`,
     n.dates && plural(n.dates, "warning"),
+    n.mcpSkills && `${n.mcpSkills} MCP server${n.mcpSkills === 1 ? "" : "s"} serving skills`,
   ].filter(Boolean);
 }
 
@@ -294,6 +296,8 @@ export function renderReport(result) {
     ...section("Could not check", couldNotCheckLines(result)),
     ...section("Not in the Cookbook", list(result.unlisted).filter(isObject).map((u) => `- ${inert(u.name) || "unnamed"} (${inert(u.kind) || "unknown"})`)),
     ...section("Missing", list(result.missing).filter(isObject).map((m) => `- ${nameOf(result, m.key)}`)),
+    ...section("MCP servers now serving skills (retire our own skill for that job: Cookbook options/mcp-features.md)",
+      list(result.mcpSkills).filter(isObject).map((x) => `- ${inert(x.service) || "a server"}: ${plural(count(x.skills), "skill")}`)),
   );
   const unchecked = list(result.unchecked).map((s) => inert(s)).filter(Boolean);
   if (unchecked.length) blocks.push(`Unchecked (no real call exists)\n- ${unchecked.join(", ")}`);

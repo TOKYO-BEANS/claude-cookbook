@@ -105,3 +105,13 @@ export const CONNECTION_CHECKS = Object.freeze({
   cloudflare: { argv: ["node", "{bin}/with-key.mjs", "cloudflare-wrangler", "CLOUDFLARE_API_TOKEN", "node", "{lib}/cloudflare-verify.mjs"], ok: /^active\s*$/m },
   parallel: { argv: shim("parallel-cli", "search", "status", "--json", "--max-results", "1", "--excerpt-max-chars-total", "200"), ok: /"status":\s*"ok"/, paid: true },
 });
+
+// The hosted MCP servers watched for skills (Skills over MCP): when one serves skills, the
+// report says so, and our own skill for that job is retired (Cookbook
+// `options/mcp-features.md`). `lib/mcp-skills.mjs` asks with no key, so only a server that
+// answers `initialize` without a sign-in is here: Graphify answers 401 (25 November 2026)
+// and is checked by hand at its releases. Remove a server once its skills are handled.
+export const MCP_SKILL_SERVERS = Object.freeze([
+  { service: "Firecrawl", argv: ["node", "{lib}/mcp-skills.mjs", "https://mcp.firecrawl.dev/v2/mcp"] },
+  { service: "Parallel", argv: ["node", "{lib}/mcp-skills.mjs", "https://search.parallel.ai/mcp"] },
+]);
