@@ -8,6 +8,9 @@
   others when the owner asks. The
   canvas is the decision record; the repository holds the real implementation (themes, components,
   tests).
+- Build the chosen option with no design skill on top: Google's `gemini-frontend-design` and
+  Anthropic's `frontend-design` both scored below no skill ([weighed](../options/design-skills-compared.md)).
+  After the build, capture the whole page at 1440 and 390 px and check the phone for sideways scroll.
 - Not for backend or non-visual work, or a small fix inside an existing, clear design.
 - Canvases stay private until the user shares them. Send only what the mockup needs: no secrets,
   customer data or private repository content.
