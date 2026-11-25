@@ -1,6 +1,6 @@
 ---
 name: cookbook
-description: Task-to-tool recipes and the list of tools in the stack. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photos, SEO, Wix sites, a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit and use them the way that works. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
+description: Task-to-tool recipes and the stack's tool list. Use at the start of any non-trivial task, and whenever you are about to choose a tool for research, web pages, code search, security scanning, CI, releases, hosting, deploys, classification or ranking, model choice, debugging, reverse engineering, visual design, photos, SEO, Wix sites, mail (drafts, mail.proton.me links), a change customers see on a live site (its visual check), Claude Code add-ons, scripted `claude -p` runs or multi-agent work, to pick the tool and skill that fit. Also use when the user asks "what should we use for…", "how do we usually…", or mentions the cookbook.
 ---
 
 # Cookbook

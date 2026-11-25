@@ -35,7 +35,7 @@
 - The owner's domain `nofix.dev`: the apex and `/privacy` (Worker `nofix-site`) keep Google's
   sign-in screen in production, so nothing else goes there; `in.nofix.dev` is the mail inbox
   ([sign-ins](sign-ins-mail-and-access.md)). Since 20 November 2026 the apex's mail is Proton's
-  ([proton-mail](proton-mail.md)); its DMARC record says `p=reject` (owner's yes, 18 November
+  ([proton-mail](proton-mail-setup.md)); its DMARC record says `p=reject` (owner's yes, 18 November
   2026), which Proton's DKIM passes: any other sender for it is refused.
   Private pages on its subdomains behind Access were
   weighed on 17 November 2026 and not built: an Artifact is already private, opens wherever the
