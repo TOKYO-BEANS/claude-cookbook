@@ -73,6 +73,9 @@ out["folder_utf8"] = fails(pm.mailbox_name, "Folders/Bücher")
 import email, email.policy
 raw = b"From: a@b.c\r\nSubject: s\r\nContent-Type: text/plain; charset=x-no-such-charset\r\n\r\nhello\r\n"
 out["bad_charset"] = pm.body_text(email.message_from_bytes(raw, policy=email.policy.default)).strip()
+lines = [b'(\\HasNoChildren) "/" "INBOX"', b'(\\HasNoChildren \\Drafts) "/" "Drafts"', b'(\\Noselect) "/" "Folders"']
+out["drafts"] = pm.drafts_folder(lines)
+out["drafts_none"] = fails(pm.drafts_folder, lines[:1])
 print(json.dumps(out))
 `;
 
@@ -164,6 +167,22 @@ test("non-ASCII search words pass, non-ASCII folder names are refused, an unknow
   assert.equal(o.search_utf8, "Rechnung März");
   assert.match(o.folder_utf8, /as `folders` prints it/);
   assert.equal(o.bad_charset, "hello");
+});
+
+test("draft: the folder is the one marked \\Drafts; a dry run connects to nothing", opts, () => {
+  const o = run();
+  assert.equal(o.drafts, "Drafts");
+  assert.match(o.drafts_none, /no folder has the \\Drafts attribute/);
+  const dir = mkdtempSync(join(tmpdir(), "proton-mail-test-"));
+  try {
+    const cfg = join(dir, "c.json");
+    writeFileSync(cfg, JSON.stringify({ user: "a@b.c", cert: join(dir, "none.pem") }));
+    const r = spawnSync("python3", ["-I", "-B", script, "draft", "--dry-run", "--to", "shop@example.com", "--subject", "s", "--body", "b"], { encoding: "utf8", env: { PATH: process.env.PATH, PROTON_MAIL_CONFIG: cfg } });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /^dry run: draft from a@b\.c to shop@example\.com/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test("--max below 1 is refused before any connection", opts, () => {
