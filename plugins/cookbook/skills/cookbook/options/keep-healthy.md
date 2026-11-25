@@ -6,7 +6,8 @@ day, not assumed.
 - **Big output: context-mode.** It cuts any tool result over 8,192 bytes (4,096 by default; set
   on 22 November 2026, `recipes/context-mode.md`) and indexes the rest
   locally, so no project has to remember to do it. Weighed: ranged reads and `rg` by hand (the
-  fallback); a subagent per large read (a whole context for one answer).
+  fallback); a subagent per large read (a whole context for one answer). Anthropic's "code
+  execution with MCP" (weighed 25 November 2026): tool search and context-mode give both gains.
 - **Compaction: Jev compaction.** Checked: it is the one that compacts, in T3 Code too (40
   compactions in 8 days, 32 by Jev, 8 handed to the built-in compactor, which is the
   fallback). Weighed: the built-in compactor alone (a summary written by the model, slower
