@@ -4,15 +4,20 @@
   redesigns. Start on a Design canvas before writing UI code whenever the look needs a decision.
 - Call the Artifact tool with `action: "quickstart"` and `intent: "design"`, then publish from the
   Design type it returns. Use the project's design system when one exists, otherwise the default.
-- Put 2–3 options side by side, pick the strongest yourself and build it in code; show the
-  others when the owner asks. The
-  canvas is the decision record; the repository holds the real implementation (themes, components,
-  tests).
-- Build the chosen option with Anthropic's `frontend-design` skill loaded: the owner picked its
-  page in all three briefs of a blind trial; not Google's `gemini-frontend-design`
-  ([weighed](../options/design-skills-compared.md)). Make its design choices yourself. Every
-  option has parts worth keeping: carry the best of the others into the one built. After the
-  build, capture the whole page at 1440 and 390 px and check the phone for sideways scroll.
+- Put 2–3 options side by side. Start them from a look a person already likes: a site of the
+  owner's, a reference site someone named. A look only Claude has seen is a guess.
+- A new look (a new site, a redesign, a product's first screen) is picked by the owner, from
+  pictures: every option as a full page at 1440 and 390 px, sent as images in the chat. Build
+  nothing more until one is picked, then carry over the parts of the others the owner names.
+  Pick alone only inside a look that already exists. The canvas is the decision record; the
+  repository holds the real implementation (themes, components, tests).
+- Build the chosen option with no design skill on top: Google's `gemini-frontend-design` and
+  Anthropic's `frontend-design` were both tried and neither is used
+  ([weighed](../options/design-skills-compared.md)).
+- After the build, capture the whole page at 1440 and 390 px and check the phone for sideways
+  scroll. Captures nobody looked at check nothing: a reader that did not build the page
+  compares them with the picked option before the job is called done, and the owner gets the
+  pictures with the report.
 - Not for backend or non-visual work, or a small fix inside an existing, clear design.
 - Canvases stay private until the user shares them. Send only what the mockup needs: no secrets,
   customer data or private repository content.
