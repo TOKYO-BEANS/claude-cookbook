@@ -13,6 +13,13 @@ const withTools = (fn) => JSON.stringify({ ...catalog, tools: fn(structuredClone
 const pages = readPages(new URL("../plugins/cookbook/skills/cookbook/", import.meta.url));
 const errors = (o = {}) => checkCookbook({ catalogText, skillText, pages, ...o });
 const withPage = (name, fn) => pages.map((p) => (p.name === name ? { name, text: fn(p.text) } : p));
+// Some tests add text to the real SKILL.md or a real page and expect no error. They are not
+// about size, so they read the file filled to its limit and leave size errors out: a file at
+// its stated limit passes the suite, as it passes check.mjs. The limits have their own test.
+const filled = (text, limit, cost) => `${text}${"x".repeat(limit - cost(text))}`;
+const fullSkill = filled(skillText, SKILL_LIMIT, Buffer.byteLength);
+const fullPage = (t) => filled(t, PAGE_READ_LIMIT, readCost);
+const besidesSize = (list) => list.filter((e) => !/ over \d+: (split the page|move text to a recipe page)$/.test(e));
 
 test("the real files pass", () => {
   assert.deepEqual(errors(), []);
@@ -48,8 +55,9 @@ test("the map: a row cannot point to a recipe file that does not exist", () => {
 
 test("the map: every row has an owner, a fallback and a recipe page, a dash or 'being built'", () => {
   const row = (r) => skillText.replace("| **Keep healthy** | | | |", `| **Keep healthy** | | | |\n${r}`);
-  assert.deepEqual(errors({ skillText: row("| A new job | someone | — | — |") }), []);
-  assert.deepEqual(errors({ skillText: row("| A new job | someone | — | being built |") }), []);
+  const fullRow = (r) => fullSkill.replace("| **Keep healthy** | | | |", `| **Keep healthy** | | | |\n${r}`);
+  assert.deepEqual(besidesSize(errors({ skillText: fullRow("| A new job | someone | — | — |") })), []);
+  assert.deepEqual(besidesSize(errors({ skillText: fullRow("| A new job | someone | — | being built |") })), []);
   assert.ok(errors({ skillText: row("| A new job | someone | — | see the wiki |") }).some((e) => /row "A new job" names no recipe page/.test(e)));
   assert.ok(errors({ skillText: row("| A new job | someone | — | |") }).some((e) => /row "A new job" names no recipe page/.test(e)));
   assert.ok(errors({ skillText: row("| A new job | | — | — |") }).some((e) => /row "A new job" has no owner/.test(e)));
@@ -59,7 +67,7 @@ test("the map: every row has an owner, a fallback and a recipe page, a dash or '
   const blank = errors({ skillText: row("| A new job | | | |") });
   assert.ok(blank.some((e) => /row "A new job" has no owner/.test(e)) && blank.some((e) => /row "A new job" has no fallback/.test(e)));
   assert.ok(blank.some((e) => /row "A new job" names no recipe page/.test(e)));
-  assert.deepEqual(errors({ skillText: row("| **A new group** | | | |") }), []);
+  assert.deepEqual(besidesSize(errors({ skillText: fullRow("| **A new group** | | | |") })), []);
   assert.ok(errors({ skillText: row("| A new job | someone | — | [why](options/ship.md) |") }).some((e) => /a recipe page is in recipes\//.test(e)));
   assert.ok(errors({ skillText: skillText.replace("## The map", "## Choosing") }).some((e) => /no "## The map" section/.test(e)));
 });
@@ -72,7 +80,7 @@ test("pages: a link between pages resolves, and every page is reached from SKILL
   // Reached through another page, not only from the map.
   assert.ok(!skillText.includes("boat-setup.md") && pages.some((p) => p.name === "recipes/boat-setup.md"));
   // A link out of the skill folder or to another site is not a page link.
-  assert.deepEqual(errors({ pages: withPage("recipes/boat.md", (t) => `${t}\n[doc](https://example.com/a.md)\n`) }), []);
+  assert.deepEqual(besidesSize(errors({ pages: withPage("recipes/boat.md", (t) => `${fullPage(t)}\n[doc](https://example.com/a.md)\n`) })), []);
 });
 
 test("the stack-updates skill's update table names recipe pages by their exact titles", () => {
@@ -101,6 +109,10 @@ test("pages: each fits one Read, has its own title and a plain name; SKILL.md st
   assert.ok(errors({ pages: withPage("recipes/seo.md", (t) => `${t}\nCosts $5.\n`) }).some((e) => /recipes\/seo\.md line \d+: dollar sign before a digit/.test(e)));
   const fat = `${skillText}\n${"word ".repeat(SKILL_LIMIT / 5)}`;
   assert.ok(errors({ skillText: fat }).some((e) => /^SKILL\.md is \d+ bytes, over 14000/.test(e)));
+  // The stated limits are the real ceilings: a file filled to its limit passes, one byte more fails.
+  assert.deepEqual(errors({ skillText: fullSkill, pages: withPage("recipes/seo.md", fullPage) }), []);
+  assert.ok(errors({ skillText: `${fullSkill}x` }).some((e) => e === `SKILL.md is ${SKILL_LIMIT + 1} bytes, over ${SKILL_LIMIT}: move text to a recipe page`));
+  assert.ok(errors({ pages: withPage("recipes/seo.md", (t) => `${fullPage(t)}x`) }).some((e) => e === `recipes/seo.md: ${PAGE_READ_LIMIT + 1} bytes as a Read result, over ${PAGE_READ_LIMIT}: split the page`));
 });
 
 test("field rules", () => {
@@ -247,7 +259,7 @@ test("a tool with a recipe is named in the skill", () => {
 
 test("no dollar sign before a digit: Claude Code fills it with an argument", () => {
   assert.ok(errors({ skillText: `${skillText}\nCosts $5.` }).some((e) => /line \d+: dollar sign before a digit/.test(e)));
-  assert.deepEqual(errors({ skillText: `${skillText}\nUse "\${1}", $ARGUMENTS and USD 30.` }), []);
+  assert.deepEqual(besidesSize(errors({ skillText: `${fullSkill}\nUse "\${1}", $ARGUMENTS and USD 30.` })), []);
 });
 
 test("version commands: every key names a command part and every command part has a key", () => {
