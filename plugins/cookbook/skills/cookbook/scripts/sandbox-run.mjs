@@ -292,8 +292,10 @@ export function takeSlot(dir, { pid = process.pid, alive = isAlive, max = LIMITS
     release();
     return null;
   }
-  const up = () => {
+  // `inLedger`: the ledger now holds this run's most, so the place keeps none of it.
+  const up = (inLedger = false) => {
     try {
+      if (inLedger) writeFileSync(file, "0");
       renameSync(file, file + UP);
     } catch { /* not renamed: the run stays counted as waiting, the safe side */ }
   };
@@ -403,6 +405,8 @@ function isAlive(pid) {
 }
 
 export const SIGNALS = Object.freeze(["SIGINT", "SIGTERM", "SIGHUP"]);
+// How often a failed create looks for its sandbox by name.
+export const NAME_LOOKUPS = 3;
 
 // Depot's Connect API (depot.sandbox.v1.SandboxService), by fetch: no SDK to install.
 export const API = "https://api.depot.dev/depot.sandbox.v1.SandboxService/";
@@ -673,28 +677,31 @@ export async function main(argv, deps = REAL) {
     id = created?.sandbox?.sandboxId ?? null;
     if (!id || !/^[a-z0-9]{6,40}$/.test(id)) {
       id = null;
-      // Depot may have made the sandbox all the same: found by its name, it is stopped and
-      // written to the ledger below; one that cannot be looked for is named.
-      let lost = false;
-      try {
-        const made = (await api.list())?.sandboxes?.find((s) => s?.name === name) ?? null;
-        if (made) {
-          const found = String(made.sandboxId ?? "");
-          if (/^[a-z0-9]{6,40}$/.test(found)) {
-            id = found;
-            hold(id, run, deps);
-          }
-          else lost = true;
-        }
-      } catch {
-        lost = true;
+      // Depot may have made the sandbox all the same: found by its name (asked a few times,
+      // as a new one can take a moment to be listed), it is stopped and written to the
+      // ledger below. One that is not found is named, and the ledger holds the run's most
+      // under that name: it may be running unseen.
+      let found = null;
+      for (let i = 0; i < NAME_LOOKUPS && found === null; i += 1) {
+        if (i > 0) await deps.wait(2000);
+        try {
+          const made = (await api.list())?.sandboxes?.find((s) => s?.name === name) ?? null;
+          if (made) found = String(made.sandboxId ?? "");
+        } catch { /* asked again, then named */ }
+      }
+      const lost = found === null || !/^[a-z0-9]{6,40}$/.test(found);
+      if (lost) hold(`name:${name}`, run, deps);
+      else {
+        id = found;
+        hold(id, run, deps);
       }
       const code = stop(failure ? (why ?? oneLine(failure?.message)) : "no result (Depot gave no sandbox id)");
       if (lost) deps.say(`${SAY}: a sandbox named ${name} may still be running: node sandbox-run.mjs --list, then --stop <id>`);
       return code;
     }
-    slot.up();
-    hold(id, run, deps);
+    // The ledger holds the run's most from here on; its place then holds nothing, so the
+    // month's check does not count it twice.
+    slot.up(hold(id, run, deps));
     deps.say(`${SAY}: ${id} started (${run.type}, ${vcpus} vCPU)`);
     await ready(api, id, deps, cut.signal);
     if (upload) {
@@ -731,12 +738,15 @@ export async function main(argv, deps = REAL) {
 }
 
 // The ledger line written when a sandbox exists: the most the run can take.
+// True when the line was written.
 function hold(id, run, deps) {
   const most = heldCost(run);
   try {
     deps.record({ month: monthOf(deps.now()), id, vcpuSeconds: most, usd: Number((most * RATE_USD).toFixed(4)), from: "held" });
+    return true;
   } catch {
     deps.say(`${SAY}: the ledger could not be written (${LEDGER})`);
+    return false;
   }
 }
 
