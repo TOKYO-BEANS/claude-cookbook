@@ -35,7 +35,7 @@ fallback and say that you did.
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
 | Sharpen, cut out or straighten a photo | none: say so | — | [photos](recipes/photos.md) |
 | Photo masks by a word, colour by region | **LightCraft**, own photos | none: say so | [photos](recipes/photos.md) |
-| Images, 3D; new PDFs, notebooks | **ImageMagick**, **Typst** and the kit | — | [creative-kit](recipes/creative-kit.md), [documents-kit](recipes/documents-kit.md) |
+| Images, 3D; new PDFs, notebooks; generative images | **ImageMagick**, **Typst** and the kit; **ArtCraft Studio** | — | [creative-kit](recipes/creative-kit.md), [documents-kit](recipes/documents-kit.md), [artcraft](recipes/artcraft.md) |
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
