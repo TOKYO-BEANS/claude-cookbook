@@ -2,7 +2,9 @@
 
 Tried 25 November 2026: Google's `gemini-frontend-design` (demolab, 10 November 2026) and the
 `frontend-design` skill in Anthropic's plugin directory, each against Opus 5.5 with no design
-skill. Neither is used: with no skill the pages scored best, and Gemini's skill made them worse.
+skill. **Anthropic's skill is used** (26 November): an Opus judge put it second, but the owner,
+scrolling all 18 pages blind, picked its page as best in all three briefs. Each page had parts
+the owner liked and parts not, so options side by side stay.
 
 | Arm | Overall | Brief | Distinct | Craft | Phone | First | Last |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -19,12 +21,14 @@ was the same within 12 % (about 25,000 to 29,000 output tokens, 3.5 to 4 minutes
   prices and day pickers, a conference programme set wholly in display type so the tickets fell
   below 7,000 px, and sections under a strong hero that turn plain. Written for Gemini models;
   on Claude it was last in 9 of 12 judgements and never first.
-- **Anthropic's skill.** The most distinctive pages (8.3 against 7.3), but weaker craft and
-  phone layouts, and 3 questions to the owner per run against 1.3. A narrow loss, not a gain.
+- **Anthropic's skill.** The most distinctive pages (8.3 against 7.3); the judge marked down
+  craft and phone layouts, and it asked 3 questions per run against 1.3. The owner weighs
+  distinct over the judge's craft: the skill is used, its questions answered by Claude.
+- **The judge.** Read stills only and stopped at 7,000 px, so motion and page ends went unseen.
+  A judge on stills does not decide a visual choice: the owner's blind pick does.
 - **What stays.** Claude Design for the look ([visual-design](../recipes/visual-design.md)),
-  then Opus builds it with no design skill. Worth borrowing as plain checks after a build, not
-  as a skill: a phone capture at 390 px with a sideways-scroll test, and the whole page
-  captured, not only the first screen.
+  then Opus builds it with `frontend-design`, and after the build a phone capture at 390 px
+  with a sideways-scroll test, the whole page captured.
 
 **How it was run.** Three briefs (a bicycle repair workshop, an on-call dashboard for a team of
 twelve, a two-day conference), each built twice per arm: 18 runs of a fresh `claude -p` on the
@@ -39,4 +43,5 @@ sections were cut in all three arms and the conference scores weigh a little les
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-25-design-skill-trial/`:
 `summary.json`, `runs/` (each page and its stream), `shots/`, `judge/` (each verdict with its
-reasons), `harness/`, `versions.txt` (the skill commits).
+reasons), `harness/`, `versions.txt` (the skill commits), `owner-gallery/` (the
+blind pages, their key and full phone captures).
