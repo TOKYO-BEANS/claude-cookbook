@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AS_CHECKOUT, CALL_SECONDS, LIFETIME_MARGIN_MINUTES, SIGNALS, heldCost, vetFolder, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
+import { AS_CHECKOUT, CALL_SECONDS, LIFETIME_MARGIN_MINUTES, NAME_LOOKUPS, SIGNALS, heldCost, vetFolder, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
 
 const args = (...a) => parseArgs(a);
 // What the gate reads: nothing running, nothing under way, nothing spent this month.
@@ -605,7 +605,7 @@ function world(over = {}, apiOver = {}) {
   const deps = {
     key: async () => "token-value",
     api: (token) => { calls.push(["api", token === "token-value"]); return api; },
-    slot: (cost) => { calls.push(["slot", cost]); return { waiting: 0, reserved: 0, up: () => calls.push(["up"]), release: () => released.push("slot") }; },
+    slot: (cost) => { calls.push(["slot", cost]); return { waiting: 0, reserved: 0, up: (inLedger) => calls.push(inLedger ? ["up"] : ["up", "not in the ledger"]), release: () => released.push("slot") }; },
     spent: () => 0,
     record: (entry) => ledger.push(entry),
     permit: (folder) => { calls.push(["permit", folder]); return { ok: true, key: "github.com/some-org/shop", list: "/state/upload-allowed.txt", data: ["fixtures/prices.csv"] }; },
@@ -1028,7 +1028,7 @@ test("the stop handlers stay until the sandbox is stopped and in the ledger; SIG
   assert.deepEqual(order, ["record:held", "stop", "record:depot", "unhook"]);
 });
 
-test("the wait for a new sandbox checks its limit before each try, and bounds each try by what is left", async () => {
+test("the wait for a new sandbox checks its limit before each try: none starts after it", async () => {
   const tries = [];
   const w = world({ now: () => w.clock, wait: async () => { w.clock += 50000; } }, {
     run: async (id, cmd, a, o = {}) => { if (cmd === "/bin/true") { tries.push(w.clock); return { started: true, code: 1 }; } return { started: true, code: 0 }; },
@@ -1037,4 +1037,56 @@ test("the wait for a new sandbox checks its limit before each try, and bounds ea
   assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);
   assert.match(w.out.join("\n"), /did not answer in 120 seconds/);
   assert.deepEqual(tries, [0, 50000, 100000], "no try starts after the limit");
+});
+
+test("a create that fails and whose sandbox is not listed: asked three times, then named, and its most held in the ledger", async () => {
+  assert.equal(NAME_LOOKUPS, 3);
+  let lists = 0;
+  const w = world({}, { create: async () => { throw new Error("CreateSandbox: The operation was aborted due to timeout"); }, list: async () => { lists += 1; return { sandboxes: [] }; } });
+  assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);
+  assert.equal(lists, 1 + 3, "the gate's read, then three lookups by name");
+  assert.match(w.out.join("\n"), /not started: CreateSandbox: The operation was aborted due to timeout/);
+  assert.match(w.out.at(-1), /^SANDBOX-RUN: a sandbox named sandbox-run-\d+-[0-9a-f]{8} may still be running/);
+  assert.equal(w.ledger.length, 1);
+  assert.match(w.ledger[0].id, /^name:sandbox-run-\d+-[0-9a-f]{8}$/);
+  assert.equal(w.ledger[0].from, "held");
+  assert.equal(w.ledger[0].vcpuSeconds, (2 + 6) * 60 * 4);
+  // Listed at the second lookup: found, stopped, and Depot's record replaces the held line.
+  let n = 0;
+  const late = world({}, { create: async (opts) => { late.pending = opts; throw new Error("CreateSandbox: HTTP 502"); } });
+  const list = late.api.list;
+  late.api.list = async () => { n += 1; if (n === 3) late.sandboxes.set(ID, { sandboxId: ID, name: late.pending.name, status: "SANDBOX_STATUS_RUNNING", createdAt: "2026-11-26T10:00:00.000Z", resources: { vcpus: 4 } }); return list(); };
+  assert.equal(await main(["--timeout", "120", "--", "x"], late.deps), NOT_STARTED);
+  assert.equal(late.sandboxes.get(ID).status, "SANDBOX_STATUS_FINISHED");
+  assert.deepEqual(late.ledger.map((e) => [e.id, e.from]), [[ID, "held"], [ID, "depot"]]);
+});
+
+test("once the ledger holds a run's most, its place holds nothing: the month's check counts it once", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sandbox-run-slots-"));
+  try {
+    const alive = () => true;
+    const a = takeSlot(dir, { pid: 601, alive, cost: 1920 });
+    assert.equal(takeSlot(dir, { pid: 602, alive, cost: 10 }).reserved, 1920);
+    a.up(true);
+    assert.equal(takeSlot(dir, { pid: 603, alive, cost: 10 }).reserved, 10, "only 602's place");
+    // A run whose ledger line could not be written keeps its figure in its place.
+    const b = takeSlot(dir, { pid: 604, alive, cost: 2520 });
+    b.up(false);
+    assert.equal(takeSlot(dir, { pid: 605, alive, cost: 10 }).reserved, 10 + 10 + 2520);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  // main marks its place as in the ledger only when the held line was written.
+  const failing = world({ record: () => { throw new Error("EACCES"); } });
+  assert.equal(await main(["--timeout", "120", "--", "x"], failing.deps), 0);
+  assert.deepEqual(failing.calls.find((c) => c[0] === "up"), ["up", "not in the ledger"]);
+});
+
+test("under its old name a run with no --type stays small, as boat-run's was", async () => {
+  const { oldDefaults } = await import("../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs");
+  assert.deepEqual(oldDefaults(["--timeout", "7200", "--", "npm", "test"]), ["--type", "small", "--timeout", "7200", "--", "npm", "test"]);
+  assert.equal(gate(parseArgs(oldDefaults(["--timeout", "7200", "--", "x"])), seen()), null);
+  for (const kept of [["--type", "large", "--timeout", "60", "--", "x"], ["--list"], ["--stop", "abcdef1"]]) assert.deepEqual(oldDefaults(kept), kept);
+  // A --type after -- belongs to the command, not to the run.
+  assert.deepEqual(oldDefaults(["--timeout", "60", "--", "node", "--type", "x"]).slice(0, 2), ["--type", "small"]);
 });
