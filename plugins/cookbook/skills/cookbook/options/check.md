@@ -19,9 +19,9 @@ Chosen by fit for the job on 15 November 2026. Security has had one owner per jo
   Weighed: default setup (GitHub Actions); Semgrep Code (one scanner owns the job); Snyk Code (a second vendor).
 - **Dependencies: Semgrep Supply Chain.** It blocks high or critical ones not classed
   unreachable. Weighed: Dependabot alerts (off in the organisation configuration: one owner);
-  OSV-Scanner in CI (kept for outside code only); Snyk and Socket (a second vendor).
+  OSV-Scanner as a CI job (outside code only); Snyk and Socket (a second vendor).
 - **Keys at push: GitHub Secret Protection.** It blocks before the key lands and checks
-  validity. Weighed: Gitleaks in CI (finds a key after the push).
+  validity. Weighed: Gitleaks CI scans (find a key after the push).
 - **Packages at install: Aikido Safe Chain.** It checks a package before its install script
   runs. Weighed: Socket (a second vendor); `npm ci --ignore-scripts` alone (stops scripts, not a
   malicious package that is imported later).
