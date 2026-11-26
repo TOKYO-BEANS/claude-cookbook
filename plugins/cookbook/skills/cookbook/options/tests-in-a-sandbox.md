@@ -1,8 +1,10 @@
-# Options weighed: tests before a push, boat or the laptop
+# Options weighed: tests before a push, a sandbox or the laptop
 
-The owner's choice on 20 November 2026, after the numbers below: keep boat for every
-repository on the upload list. A run stays on the laptop only when it needs the laptop itself
-(its key store, its display or an app on it), as [the hook](../recipes/boat-setup.md) says.
+The owner's choice on 20 November 2026, after the numbers below: tests run in a cloud sandbox
+for every repository on the upload list (boat then, a Depot sandbox since 26 November
+2026). A run stays on the laptop only when it needs the laptop itself (its key store, its
+display or an app on it), as [the hook](../recipes/sandboxes-setup.md) says, or when the
+repository tracks customer data, which no sandbox gets.
 
 **Measured** 19 and 20 November 2026, on the Ubuntu 26.04 laptop (Ryzen 5 5500U, 12 threads,
 on mains power), each repository at its `main`, the install included, five runs each:
@@ -29,12 +31,12 @@ hook simple, and a run is a few seconds out of 2,000,000 a month.
 - **Isolation, which decided it:** on the laptop the test code and its npm packages run
   beside the unlocked key store, which any process of the owner can read, and the laptop has
   no Safe Chain. A sandbox holds no secret.
-- **Parity with CI:** boat has CI's Ubuntu 24.04 and Node 24; the laptop has Node 26. boat's
-  upload holds no `.git`; since 20 November 2026 boat-run makes the copy a git checkout in
-  the sandbox before the command, so a test that calls git (Stack-Atlas's "own tree holds no
-  scanner ignore file") runs there as in CI. CI decides either way.
-- **Cost:** both near zero; boat's plan is 2,000,000 seconds a month.
-- **A Depot sandbox instead of boat** (20 November 2026): slower and 20 to 40 times dearer a
-  run, with no upload scan, spend guard or Claude proxy ([measured](sandboxes-depot-vs-boat.md)).
+- **Parity with CI:** the sandbox has CI's Ubuntu 24.04 and Node 24; the laptop has Node 26.
+  The upload holds no `.git`; since 20 November 2026 the script makes the copy a git checkout
+  in the sandbox before the command, so a test that calls git (Stack-Atlas's "own tree holds
+  no scanner ignore file") runs there as in CI. CI decides either way.
+- **Cost:** near zero either way; a Depot run of this suite is about USD 0.003.
+- **A Depot sandbox instead of boat:** chosen on 26 November 2026, with the upload scan and a
+  spend guard moved into the script ([measured](sandboxes.md)).
 
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-20-boat-vs-local/`.

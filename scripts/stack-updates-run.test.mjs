@@ -329,8 +329,8 @@ const CAT = {
       { recipe: "Building a change (Superpowers)", repository: "obra/superpowers" }),
     tool("github", "GitHub", [{ name: "gh-cli", installed: { kind: "command" }, feed: { kind: "github", repository: "cli/cli" } }], { recipe: "CI and releases" }),
     tool("parallel", "Parallel", [{ name: "cli", installed: { kind: "none" }, feed: { kind: "none", reason: "fixture" } }], { recipe: "Research" }),
-    tool("boat", "boat", [{ name: "cli", installed: { kind: "none" }, feed: { kind: "none", reason: "fixture" } }],
-      { lifecycle: "trial", dates: [{ label: "boat trial ends, then USD 20 a month", on: "2026-11-20" }] }),
+    tool("browserbase", "Browserbase", [{ name: "cli", installed: { kind: "none" }, feed: { kind: "none", reason: "fixture" } }],
+      { lifecycle: "trial", dates: [{ label: "Browserbase trial ends, then USD 20 a month", on: "2026-11-20" }] }),
   ],
 };
 // What the fixture profile holds that CAT does not name.
@@ -368,7 +368,7 @@ function fakeRun({ paidOk = true } = {}) {
     // A keyed CLI is started by its full path in ~/.local/bin (either slash: the path is normalized).
     const launcher = (name) => String(argv[0]).replaceAll("\\", "/").endsWith(`/.local/bin/${name}`);
     if (launcher("firecrawl")) return ok("Credits: 100 / 500\n");
-    if (launcher("boat")) return ok('{"billingStatus":"trial"}');
+    if (launcher("browse")) return ok('[{"id": "x", "concurrency": 25}]');
     if (launcher("parallel-cli")) return paidOk ? ok('{"status": "ok"}') : { code: 1, stdout: "", stderr: "402 payment required" };
     return { code: 127, stdout: "", stderr: `no fake for ${argv[0]}` };
   };
@@ -426,7 +426,7 @@ test("run end to end on the fixture home with fake fetcher and run: writes the f
   assert.equal(report.split("\n").find((l) => l.startsWith("- Firecrawl: ")),
     "- Firecrawl: 1.29.0 -> 1.31.0, behind since today; waits: its notes could not be checked yet");
   assert.equal(readJson(join(state, "state.json")).parts["firecrawl/cli"].notes, null, "a check that failed is not stored: it is made again");
-  assert.ok(report.includes("\nWarning: boat trial ends, then USD 20 a month (20 Nov, in 7 days).\n"));
+  assert.ok(report.includes("\nWarning: Browserbase trial ends, then USD 20 a month (20 Nov, in 7 days).\n"));
   assert.ok(report.endsWith("\n\nOne paid Parallel check.\n"));
   const inventory = readJson(join(folder, "inventory.json"));
   assert.deepEqual(inventory.installed["firecrawl/cli"], { state: "read", version: "1.29.0" });
@@ -434,7 +434,7 @@ test("run end to end on the fixture home with fake fetcher and run: writes the f
   assert.equal(inventory.unlisted.items.length, UNLISTED);
   assert.equal(readJson(join(folder, "latest.json")).latest["firecrawl/cli"].version, "1.31.0");
   const result1 = readJson(join(folder, "result.json"));
-  assert.deepEqual([...result1.working].sort(), ["Firecrawl", "GitHub", "Parallel", "boat"]);
+  assert.deepEqual([...result1.working].sort(), ["Browserbase", "Firecrawl", "GitHub", "Parallel"]);
   assert.deepEqual(result1.paidChecks, ["Parallel"]);
   assert.deepEqual(result1.stages, ["inventory", "compare", "connect", "read", "report"]);
   const saved = readJson(join(state, "state.json"));
@@ -1245,9 +1245,9 @@ test("recipeText: every recipe the real catalog names is found; setup and eviden
     assert.equal(text.match(/^# /gm).length, 1, t.id + ": one page only");
   }
   // The page that says how the tool is used goes; the page with this PC's paths and key names does not.
-  const boat = recipeText(pages, "Cloud sandboxes (boat)");
-  assert.match(boat, /Every job goes through the script/);
-  assert.doesNotMatch(boat, /On this PC|\.local\/share\/boat/);
+  const sandboxes = recipeText(pages, "Cloud sandboxes (Depot)");
+  assert.match(sandboxes, /Every job goes through the script/);
+  assert.doesNotMatch(sandboxes, /The state folder|\.local\/share\/sandbox-run/);
 });
 
 // ---- fix round 1 (Task 8): pages under context-mode's default 4,096-byte cut (8,192 here since 22 Nov 2026)

@@ -45,7 +45,6 @@ export const VERSION_COMMANDS = Object.freeze({
   "osv-scanner/cli": { argv: ["osv-scanner", "--version"], pattern: /^osv-scanner version: (\d+\.\d+\.\d+)/m },
   "lightcraft/cli": { argv: ["{share}/lightcraft/bin/lightcraft-cli", "--version"], pattern: /^lightcraft-cli (\d+\.\d+\.\d+)/m },
   "photocraft/cli": { argv: ["{share}/photocraft/bin/photocraft-cli", "--version"], pattern: /^photocraft-cli (\d+\.\d+\.\d+)/m },
-  "boat/cli": { argv: ["{share}/boat/boat", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
   "cliproxyapi/cli": { argv: ["{share}/cliproxyapi/bin/cli-proxy-api", "-h"], pattern: /^CLIProxyAPI Version: (\d+\.\d+\.\d+),/m },
   "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
   "google-workspace-cli/cli": { argv: ["{share}/gws/gws", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },
@@ -96,7 +95,6 @@ export const CONNECTION_CHECKS = Object.freeze({
   // allows that read once a minute, so a second run in that minute would read as broken.
   depot: { argv: ["node", "{bin}/with-key.mjs", "depot-org", "DEPOT_TOKEN", "depot", "org", "invoices", "list", "--page-size", "1"], ok: /^\{\s*"invoices":\s*\[/ },
   firecrawl: { argv: shim("firecrawl", "--status"), ok: /Credits: [\d,]+ \/ [\d,]+/ },
-  boat: { argv: shim("boat", "limits"), ok: /"billingStatus":"[a-z_]+"/ },
   browserbase: { argv: shim("browse", "cloud", "projects", "list"), ok: /"concurrency":\s*\d+/ },
   // A signed-in CLI answers with "- Key: value" lines, among them "- Personal Access Token:
   // [Agent] <name>" (seen on 14 November 2026); its error and usage lines never count.

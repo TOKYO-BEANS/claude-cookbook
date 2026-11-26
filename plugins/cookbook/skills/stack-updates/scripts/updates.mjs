@@ -332,10 +332,10 @@ function pageOf(ctx, n, day = ctx.today) {
 }
 
 /**
- * The Cookbook recipe titled `heading`, from `pages` (`[{ name: "boat.md", text }]`, the
+ * The Cookbook recipe titled `heading`, from `pages` (`[{ name: "sandboxes.md", text }]`, the
  * files of the Cookbook skill's `recipes/` folder): the one page whose first line is
  * `# <heading>`. "" when there is none. Only that page goes into the read request: it says
- * how the stack uses the tool. A recipe's further pages (`boat-setup.md` for `boat.md`)
+ * how the stack uses the tool. A recipe's further pages (`sandboxes-setup.md` for `sandboxes.md`)
  * hold this PC's paths, key names and evidence, which the request does not need.
  */
 export function recipeText(pages, heading) {

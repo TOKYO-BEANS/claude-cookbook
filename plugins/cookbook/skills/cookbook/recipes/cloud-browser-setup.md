@@ -10,7 +10,7 @@
 - **To update:** resolve the new version to a lockfile in an empty folder, run the three local
   scans from [connecting.md](connecting.md) (OSV-Scanner on the lockfile, Gitleaks on a copy
   of the installed packages outside a `node_modules` path, because Gitleaks skips that path, and
-  Trivy) and the sandbox run from [boat.md](boat.md); `pinned-vet.sh` there does all four.
+  Trivy) and the sandbox run from [vetting-sandbox.md](vetting-sandbox.md); `pinned-vet.sh` there does all four.
   Drop the `zod` override once `browse` resolves to a fixed version, then `npm ci
   --ignore-scripts` in the install folder and run one session. A package whose own install script
   fetches its program (its lockfile entry says `hasInstallScript`; the Parallel CLI is one) is not

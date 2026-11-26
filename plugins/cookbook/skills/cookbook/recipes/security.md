@@ -15,7 +15,7 @@ the end state.
 | Malicious packages at install | **Aikido Safe Chain** before every `npm ci` / `pip install`, Probiz's Windows job included; 24-hour age hold; rules and limits: [safe-chain.md](safe-chain.md) |
 | AI review of every pull request | the Depot `ai-review` job ([ai-review.md](ai-review.md)); advisory only |
 | Fixing findings, failed CI, conflicts, review comments | Claude (Auto-fix, `sa-*` workflows) |
-| Vetting outside code before install | local Gitleaks, OSV-Scanner and Trivy, then one run in a boat sandbox ([connecting.md](connecting.md) and [boat.md](boat.md)); never part of CI |
+| Vetting outside code before install | local Gitleaks, OSV-Scanner and Trivy, then one run in a Depot sandbox ([connecting.md](connecting.md) and [vetting-sandbox.md](vetting-sandbox.md)); never part of CI |
 
 - Default setup, where it still runs, uses Depot runners in a private repository and GitHub's in
   a public one; never turn it on again for a moved repository. Runners, AI Scan, costs and the

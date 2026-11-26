@@ -8,7 +8,7 @@
 - Find candidates with Parallel Search and Firecrawl developer search, and check that each one exists
   today, is maintained and has a licence that fits. Never guess one.
 - Before any install: read the code, scan it locally (OSV-Scanner, Gitleaks with `--config`, Trivy),
-  run it once in a sandbox ([boat.md](boat.md), [vetting-sandbox.md](vetting-sandbox.md)) and get the
+  run it once in a sandbox ([sandboxes.md](sandboxes.md), [vetting-sandbox.md](vetting-sandbox.md)) and get the
   owner's yes. Then add the tool here in the same pull request. These three scanners run
   only here, on outside code, never as part of a repository's CI. The sandbox run is a step, not
   a choice. The one exemption is in [vetting-sandbox-report.md](vetting-sandbox-report.md) (a Claude

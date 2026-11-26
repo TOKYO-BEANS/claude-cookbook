@@ -1,4 +1,4 @@
-// The boat route hook (plugins/cookbook/hooks/boat-route*.mjs, recipes/boat.md).
+// The sandbox route hook (plugins/cookbook/hooks/sandbox-route*.mjs, recipes/sandboxes.md).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -6,9 +6,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { decide, find, instead, kind, marked, place, read, semgrepPin, sh } from "../plugins/cookbook/hooks/boat-route-lib.mjs";
+import { decide, find, instead, kind, marked, place, read, semgrepPin, sh } from "../plugins/cookbook/hooks/sandbox-route-lib.mjs";
 
-const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/boat-route.mjs", import.meta.url));
+const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/sandbox-route.mjs", import.meta.url));
 const read_ = (rel) => readFileSync(new URL(rel, import.meta.url), "utf8");
 const kinds = (text, opts = {}) => find(text, { cwd: "/w", windows: false, ...opts }).runs.map((r) => r.kind);
 
@@ -37,7 +37,7 @@ test("the test runners and scans it stops, in command position", () => {
 test("what it leaves alone: other commands, quoted words, scripts, here-documents", () => {
   for (const text of [
     'grep -n "npm test" README.md',
-    "git commit -m 'run npm test on boat'",
+    "git commit -m 'run npm test in a sandbox'",
     "npm ci",
     "npm install --save-dev x",
     "npm run build",
@@ -47,7 +47,7 @@ test("what it leaves alone: other commands, quoted words, scripts, here-document
     "echo pytest",
     "cat > notes.md <<'EOF'\nnpm test\npytest\nEOF\ngit status",
     "node plugins/cookbook/skills/cookbook/scripts/boat-run.mjs --timeout 1200 --push . -- npm test",
-    "node boat-run.mjs --timeout 600 --push . -- bash -c 'npm ci && npm test'",
+    "node sandbox-run.mjs --timeout 600 --push . -- bash -c 'npm ci && npm test'",
   ]) assert.deepEqual(kinds(text), [], text);
   assert.deepEqual(kinds("$x = @'\nnpm test\n'@\nWrite-Output $x", { shell: "powershell" }), []);
 });
@@ -80,7 +80,7 @@ test("the marker keeps a run local only with a reason", () => {
 });
 
 const REPO = { listed: true, key: "github.com/o/r", top: "C:/w/r", prefix: "", deps: false, lock: true, requirements: false, semgrep: null };
-const deps = (repo = REPO) => ({ cwd: (i) => i.cwd, home: "C:/Users/me", windows: true, script: "C:/p/boat-run.mjs", repo: () => repo });
+const deps = (repo = REPO) => ({ cwd: (i) => i.cwd, home: "C:/Users/me", windows: true, script: "C:/p/sandbox-run.mjs", repo: () => repo });
 const ask = (command, tool = "Bash") => ({ tool_name: tool, cwd: "C:/w/r", tool_input: { command } });
 
 test("the command it names instead, rebuilt from the parsed words", () => {
@@ -95,7 +95,7 @@ test("the command it names instead, rebuilt from the parsed words", () => {
   assert.equal(as("npm --prefix sub test", { ...REPO, prefix: "sub/" }), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'cd sub && npm test'`);
   assert.equal(as("pytest -q", { ...REPO, requirements: true }),
     `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'uv run --with pytest --with-requirements requirements.txt pytest -q'`);
-  // Variables stay in front; a timeout wrapper is dropped (boat-run has its own).
+  // Variables stay in front; a timeout wrapper is dropped (sandbox-run has its own).
   assert.equal(as("PYTHONPATH=. pytest -q"), `node "s" --type default --timeout 1200 --push "C:/w/r" -- bash -c 'PYTHONPATH=. uv run --with pytest pytest -q'`);
   assert.equal(as("SEMGREP_SEND_METRICS=off semgrep scan --config p/default", { ...REPO, semgrep: "1.140.0" }),
     `node "s" --type default --timeout 1800 --push "C:/w/r" -- bash -c 'SEMGREP_SEND_METRICS=off uvx semgrep@1.140.0 scan --config p/default'`);
@@ -146,7 +146,7 @@ test("third review of #108: what the reader does not model is let through; pytes
 });
 
 test("review of #108: an odd quote in a commit message's here-document, and a quoted Windows folder", () => {
-  const msg = "git commit -m \"$(cat <<'EOF'\nHook: a 6\" timeout\nnpm test now runs on boat\nEOF\n)\"";
+  const msg = "git commit -m \"$(cat <<'EOF'\nHook: a 6\" timeout\nnpm test now runs in a sandbox\nEOF\n)\"";
   assert.deepEqual(kinds(msg), []);
   assert.equal(decide({ input: ask(msg), deps: deps() }), null);
   const r = find(String.raw`cd "C:\r\sub" && npm test`, { cwd: "C:/", windows: true }).runs;
@@ -156,8 +156,8 @@ test("review of #108: an odd quote in a commit message's here-document, and a qu
 test("decide: a listed repository is denied with the route; others run", () => {
   const out = decide({ input: ask("npm test"), deps: deps() });
   assert.equal(out.hookSpecificOutput.permissionDecision, "deny");
-  assert.match(out.hookSpecificOutput.permissionDecisionReason, /github\.com\/o\/r is on boat-run's upload list/);
-  assert.match(out.hookSpecificOutput.permissionDecisionReason, /node "C:\/p\/boat-run\.mjs" --type default --timeout 1200 --push "C:\/w\/r" -- bash -c 'npm test'/);
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /github\.com\/o\/r is on sandbox-run's upload list/);
+  assert.match(out.hookSpecificOutput.permissionDecisionReason, /node "C:\/p\/sandbox-run\.mjs" --type default --timeout 1200 --push "C:\/w\/r" -- bash -c 'npm test'/);
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /# local-run: <why>/);
   // The escape is a closed list of three cases, and names nothing of Windows.
   assert.match(out.hookSpecificOutput.permissionDecisionReason, /only when it needs this PC itself: its key store, its display, or an app installed on it/);
@@ -174,7 +174,7 @@ test("decide: a listed repository is denied with the route; others run", () => {
 // The hook as a process, on a repository made here and on the real upload list: a folder
 // that is no repository, and one whose origin is not listed, both run.
 test("the hook process lets unlisted folders run, and never fails the call", () => {
-  const tmp = mkdtempSync(join(tmpdir(), "boat-route-"));
+  const tmp = mkdtempSync(join(tmpdir(), "sandbox-route-"));
   try {
     const hook = (input) => spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), encoding: "utf8" });
     let r = hook({ tool_name: "Bash", cwd: tmp, tool_input: { command: "npm test" } });

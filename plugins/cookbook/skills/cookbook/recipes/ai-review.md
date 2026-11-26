@@ -9,7 +9,7 @@
 - **Once, not on every push** (owner, 16 November 2026: "Opus 5.5, once per PR"; standard v18). The
   job runs when the pull request is marked ready for review, on the head as it is then, and on no
   push. Push until the change is done and its checks pass, then ask. Or ask at the final push
-  when the same suite already passed on boat for that exact commit (owner, 22 November 2026:
+  when the same suite already passed in a sandbox for that exact commit (owner, 22 November 2026:
   "nice to have if you were confident in the CI passing"). The merge commands ask
   themselves when the head has no `ai-review` run. By hand: `gh pr ready <n> --undo` (not for a
   draft), then `gh pr ready <n>`. A fix for a finding is a new head and needs a new request. Never

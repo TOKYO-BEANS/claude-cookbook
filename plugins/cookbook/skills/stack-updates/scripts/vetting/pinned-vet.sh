@@ -5,7 +5,7 @@
 # (same overrides, the new version), unpacks it without running any script, and runs
 # OSV-Scanner, Gitleaks and Trivy. Nothing is executed on this PC and the install is not
 # touched. It stops when the lockfile or the unpack fails. Last, pinned-sandbox.sh installs the package with its install scripts and starts
-# it once in a boat sandbox, and prints what that did.
+# it once in a Depot sandbox, and prints what that did.
 set -uo pipefail
 FOLDER="$1"; PKG="$2"; VER="$3"
 # Before any `cd`: started by a relative path, the folder of this file is found only from here.

@@ -28,12 +28,12 @@ the waits; none changes [the merge condition](ci-releases.md).
   two changes can each fit a limit and break it together.
 - **Room before a push** (this repository): `node scripts/check.mjs --room` prints what is
   left in `SKILL.md` and every page within 150 bytes of its limit. It runs in 0.1 seconds, is
-  not a test suite, and catches a byte-limit failure before boat-run and CI do.
+  not a test suite, and catches a byte-limit failure before sandbox-run and CI do.
 - **The handoff entry goes in the job's own pull request** (owner, 22 November 2026), naming
   the release log the run will write. A separate handoff pull request only when the release
   check fails or an owner answer arrives after the merge, at most one per repository a day.
   Here `node scripts/new-handoff.mjs <slug> "<title>"` writes the entry with its five parts.
-- **Tests before a push run in the background.** Start boat-run with `run_in_background`,
+- **Tests before a push run in the background.** Start sandbox-run with `run_in_background`,
   write the pull request text meanwhile, and push only after exit 0. Never pipe its output
   into `tail` or `grep` without `set -o pipefail`: the exit code is then the pipe's, and 31
   failing runs read as passes that way.

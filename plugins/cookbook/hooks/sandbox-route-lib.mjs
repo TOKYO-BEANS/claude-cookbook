@@ -1,8 +1,8 @@
-// The boat route (recipes/boat.md): a local `npm test`, `node --test`, `pytest` or
-// `semgrep scan|ci` in a repository on boat-run's upload list is stopped before it starts,
-// and the denial names the boat-run.mjs command to use instead. A run that needs Windows or
+// The sandbox route (recipes/sandboxes.md): a local `npm test`, `node --test`, `pytest` or
+// `semgrep scan|ci` in a repository on sandbox-run's upload list is stopped before it starts,
+// and the denial names the sandbox-run.mjs command to use instead. A run that needs Windows or
 // this PC ends with a `# local-run: <why>` comment. Everything here is pure; the hook file
-// (boat-route.mjs) brings git and the upload list.
+// (sandbox-route.mjs) brings git and the upload list.
 import { posix, win32 } from "node:path";
 
 // Cheap first look: most commands name none of these, and they leave without a parse.
@@ -119,7 +119,7 @@ const PS_SHELLS = new Set(["powershell", "pwsh"]);
 const SCRIPT = /\.(m|c)?(j|t)s$/i;
 
 // The words of one command after the wrappers that only start another: `VAR=1`,
-// `timeout 600`, `env`, `time`. The variables are kept on `env` (boat-run has its own timeout).
+// `timeout 600`, `env`, `time`. The variables are kept on `env` (sandbox-run has its own timeout).
 function unwrap(words) {
   let i = 0;
   const env = [];
@@ -141,7 +141,7 @@ function unwrap(words) {
 // What kind of heavy run one command is, or null. `dir` is set when the command names its
 // own folder (`npm --prefix x test`); `words` is the command without it and without the
 // wrappers, `env` its leading variables, and `typed`/`envTyped` the same words as they were
-// typed (`typed` defaults to `words`): what runs on boat.
+// typed (`typed` defaults to `words`): what runs in the sandbox.
 export function kind(words, typed = words) {
   const w = unwrap(words);
   if (!w.length) return null;
@@ -308,7 +308,7 @@ export function instead(run, repo, { script, shell = "bash" }) {
   return `node "${script}" ${size} --push "${repo.top}" -- bash -c ${quoted}`;
 }
 
-// The hook's answer: a denial naming the boat-run commands, or null to let the call run.
+// The hook's answer: a denial naming the sandbox-run commands, or null to let the call run.
 // deps.repo(dir) → { listed, key, top, prefix, deps, lock, requirements, semgrep } or null.
 export function decide({ input, deps }) {
   const tool = input?.tool_name;
@@ -327,14 +327,14 @@ export function decide({ input, deps }) {
     if (run.kind === "semgrep-ci") {
       lines.push(`- \`${run.raw}\`: \`semgrep ci\` needs the Semgrep token, which does not go into a sandbox; the repository's CI \`semgrep\` job runs it on every push (read it with \`gh pr checks\`), and sa-review's evidence step runs its own Supply Chain script.`);
     } else {
-      lines.push(`- \`${run.raw}\` on boat:\n  ${instead(run, repo, { script: deps.script, shell })}`);
+      lines.push(`- \`${run.raw}\` in a Depot sandbox:\n  ${instead(run, repo, { script: deps.script, shell })}`);
     }
   }
   if (!lines.length) return null;
   const reason = [
-    `Not run on this PC: ${[...repos].join(", ")} ${repos.size === 1 ? "is" : "are"} on boat-run's upload list, so tests and scans run on boat (recipes/boat.md).`,
+    `Not run on this PC: ${[...repos].join(", ")} ${repos.size === 1 ? "is" : "are"} on sandbox-run's upload list, so tests and scans run in a Depot sandbox (recipes/sandboxes.md).`,
     ...lines,
-    "A run stays here only when it needs this PC itself: its key store, its display, or an app installed on it (owner, 19 November 2026). End such a command with `# local-run: <why>`, a reason of at least ten characters that says which of the three. Everything else runs on boat.",
+    "A run stays here only when it needs this PC itself: its key store, its display, or an app installed on it (owner, 19 November 2026). End such a command with `# local-run: <why>`, a reason of at least ten characters that says which of the three. Everything else runs in a sandbox.",
   ].join("\n");
   return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } };
 }

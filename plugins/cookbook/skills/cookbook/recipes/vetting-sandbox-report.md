@@ -14,7 +14,7 @@ started, files written outside the project, and processes left running.
   0; "the install did not end in time" (the probe waits 10 minutes, `PROBE_INSTALL_TIMEOUT`
   seconds otherwise); a DNS question of another type than an address lookup, or one sent to
   another server than the system's.
-- **No result:** a run that did not start or did not finish (boat is missing or refuses, the
+- **No result:** a run that did not start or did not finish (the runner is missing or refuses, the
   command timed out, the probe's last line is absent).
 - A surprise or "no result" stops the install until the owner has seen it, a routine update
   included.
@@ -23,7 +23,7 @@ started, files written outside the project, and processes left running.
   outside a session. Its check is the read of the whole diff between the two commits. The
   report says "no sandbox run (plugin or skill)".
 - **Gone since the move to Linux** (19 November 2026): the exemption for the Windows binary
-  installed here (boat, the Proton Pass CLI, gws). The installed build is now the Linux one,
+  installed here (boat, since retired, the Proton Pass CLI, gws). The installed build is now the Linux one,
   which the sandbox runs: a pinned binary gets the run like any other code, after its
   checksum. The three were installed that day on their checksums; each gets the run at its
   next update.

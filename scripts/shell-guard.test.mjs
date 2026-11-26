@@ -5,7 +5,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { guard } from "../plugins/cookbook/hooks/shell-guard-lib.mjs";
 
-const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/boat-route.mjs", import.meta.url));
+const HOOK = fileURLToPath(new URL("../plugins/cookbook/hooks/sandbox-route.mjs", import.meta.url));
 const bash = (command) => ({ tool_name: "Bash", tool_input: { command } });
 const denied = (command) => guard(bash(command))?.hookSpecificOutput.permissionDecision === "deny";
 const reason = (command) => guard(bash(command)).hookSpecificOutput.permissionDecisionReason;

@@ -1,6 +1,6 @@
 // Tests of the vetting scripts beside the stack-updates skill (scripts/vetting). They run
 // the real shell scripts: the probe's report on captured files, and the sandbox step
-// against a stand-in for the `boat` command. No sandbox is started and nothing is installed.
+// against a stand-in for the sandbox runner (sandbox-run.mjs). No sandbox is started and nothing is installed.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
@@ -148,8 +148,8 @@ test("what the package prints is cut and stripped of control characters", { skip
   assert.match(out, /^SANDBOX dns capture failed: /m);
 });
 
-// The sandbox step, against a stand-in for `boat` that prints a prepared log.
-function step({ log, exit = 0, lockfile = true, boat = true }) {
+// The sandbox step, against a stand-in for the runner that prints a prepared log.
+function step({ log, exit = 0, lockfile = true, runner = true }) {
   const root = mkdtempSync(path.join(tmpdir(), "step-"));
   const v = path.join(root, "share", "vetting", "tool-1.0.0");
   mkdirSync(path.join(v, "lock"), { recursive: true });
@@ -158,16 +158,16 @@ function step({ log, exit = 0, lockfile = true, boat = true }) {
     writeFileSync(path.join(v, "lock", "package.json"), "{}\n");
     writeFileSync(path.join(v, "lock", "package-lock.json"), "{}\n");
   }
-  writeFileSync(path.join(root, "boat.log"), log ?? "");
-  if (boat) {
-    const stub = path.join(root, "stub", "boat");
+  writeFileSync(path.join(root, "run.log"), log ?? "");
+  if (runner) {
+    const stub = path.join(root, "stub", "sandbox-run");
     writeFileSync(
       stub,
       [
         "#!/usr/bin/env bash",
         `ls sandbox | sort | tr '\\n' ' ' > "$STUB_ROOT/pushed.txt"`,
         `echo "$*" > "$STUB_ROOT/args.txt"`,
-        `cat "$STUB_ROOT/boat.log"`,
+        `cat "$STUB_ROOT/run.log"`,
         `exit ${exit}`,
         "",
       ].join("\n"),
@@ -179,7 +179,7 @@ function step({ log, exit = 0, lockfile = true, boat = true }) {
     bash,
     [
       "-c",
-      'export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" PATH="$PWD/stub:/usr/bin:/bin"; exec bash "$@"',
+      'export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" VETTING_RUNNER="$PWD/stub/sandbox-run" PATH="$PWD/stub:/usr/bin:/bin"; exec bash "$@"',
       "step",
       `${vetting}/pinned-sandbox.sh`,
       "tool",
@@ -197,42 +197,42 @@ const finished = [
   "SANDBOX some-cli | Ubuntu 24.04.4 LTS | node v24.22.1 | install exit 0 | start exit 0 (some-cli --version)",
   "SANDBOX processes left running: 0",
   "SANDBOX start output: some-cli 1.0.0 ",
-  "exit 0 \u00b7 15s \u00b7 small \u00b7 $0.0001 \u00b7 bx_1 deleted",
+  "SANDBOX-RUN: xg463gql23vmc5g stopped; 15.0 s at 2 vCPU, USD 0.0015 by Depot's record",
   "",
 ].join("\n");
 
-test("the step sends three files, without the account's secrets, and passes a finished run", { skip }, () => {
+test("the step sends three files with --vet, and passes a finished run", { skip }, () => {
   const r = step({ log: finished });
   assert.equal(r.status, 0, r.out);
   // Sorted here: the stub lists the folder in the machine's own sort order, which differs by locale.
   assert.deepEqual(r.pushed.trim().split(/\s+/).sort(), ["package-lock.json", "package.json", "sandbox-probe.sh"]);
-  assert.match(r.args, /^run --type small --no-env --timeout 900 --push sandbox -- bash sandbox-probe\.sh some-cli$/m);
+  assert.match(r.args, /^--type small --timeout 900 --vet sandbox -- bash sandbox-probe\.sh some-cli$/m);
   assert.match(r.out, /^SANDBOX some-cli \| Ubuntu/m);
   assert.ok(!r.out.includes("no result"));
-  assert.ok(!r.out.includes("may still exist"));
+  assert.ok(!r.out.includes("may still be running"));
   assert.equal(readFileSync(path.join(r.v, "out", "sandbox.log"), "utf8"), finished);
 });
 
 test("a run that never starts is no result", { skip }, () => {
-  const noBoat = step({ boat: false });
-  assert.equal(noBoat.status, 2);
-  assert.match(noBoat.out, /SANDBOX: no result \(boat is not on the path\)/);
+  const noRunner = step({ runner: false });
+  assert.equal(noRunner.status, 2);
+  assert.match(noRunner.out, /SANDBOX: no result \(no sandbox runner at /);
   const noLock = step({ log: finished, lockfile: false });
   assert.equal(noLock.status, 2);
   assert.match(noLock.out, /SANDBOX: no result \(no lockfile in /);
-  assert.equal(noLock.pushed, null, "boat was called without a lockfile");
-  // boat itself refuses: no plan, an expired key.
-  const refused = step({ log: "error: 401 unauthorized\n", exit: 1 });
+  assert.equal(noLock.pushed, null, "the runner was called without a lockfile");
+  // The runner itself refuses: no key, the month's allowance used.
+  const refused = step({ log: "SANDBOX-RUN: not started: no result (ListSandboxes: HTTP 401)\n", exit: 75 });
   assert.equal(refused.status, 1);
-  assert.match(refused.out, /SANDBOX: no result \(exit 1\)/);
+  assert.match(refused.out, /SANDBOX: no result \(exit 75\)/);
 });
 
 test("a run that stops early is no result, even with exit code 0", { skip }, () => {
   const timedOut = step({ log: "SANDBOX some-cli | Ubuntu\n", exit: 124 });
   assert.equal(timedOut.status, 1);
   assert.match(timedOut.out, /SANDBOX: no result \(exit 124\)/);
-  assert.match(timedOut.out, /the sandbox may still exist/);
-  const cut = step({ log: "SANDBOX some-cli | Ubuntu\nexit 0 \u00b7 2s \u00b7 small \u00b7 bx_1 deleted\n", exit: 0 });
+  assert.match(timedOut.out, /the sandbox may still be running/);
+  const cut = step({ log: "SANDBOX some-cli | Ubuntu\nSANDBOX-RUN: xg463gql23vmc5g stopped; 2.0 s at 2 vCPU, USD 0.0002 by Depot's record\n", exit: 0 });
   assert.equal(cut.status, 1);
   assert.match(cut.out, /SANDBOX: no result \(exit 0\)/);
 });
@@ -271,7 +271,7 @@ test("a left-over process is found by its parents, not by its name", { skip }, (
   assert.notEqual(none.status, 0, "a missing list of earlier processes must not read as nothing left");
 });
 
-// pinned-install.sh and pinned-vet.sh, with stand-ins for npm, the scanners and boat.
+// pinned-install.sh and pinned-vet.sh, with stand-ins for npm, the scanners and the sandbox runner.
 function shareWith(files) {
   const root = mkdtempSync(path.join(tmpdir(), "vet-"));
   for (const [name, text] of Object.entries(files)) {
@@ -295,7 +295,7 @@ function runIn(root, script, args, env = {}) {
     bash,
     [
       "-c",
-      'N="$(dirname "$(command -v node)")"; export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" PATH="$PWD/stub:$N:/usr/bin:/bin"; exec bash "$@"',
+      'N="$(dirname "$(command -v node)")"; export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" VETTING_RUNNER="$PWD/stub/sandbox-run" PATH="$PWD/stub:$N:/usr/bin:/bin"; exec bash "$@"',
       "run",
       `${vetting}/${script}`,
       ...args,
@@ -411,7 +411,7 @@ function vetShare() {
     "share/vetting/tool-2.0.0/copy/packages/stale/index.js": "old\n",
     "share/vetting/tool-2.0.0/lock/node_modules/stale/index.js": "old\n",
     "share/vetting/tool-2.0.0/lock/package-lock.json": "{}\n",
-    "boat.log": finished,
+    "run.log": finished,
   });
   stub(root, "npm", [
     'echo "npm $*" >> "$STUB_ROOT/calls.txt"',
@@ -432,7 +432,7 @@ function vetShare() {
   stub(root, "osv-scanner", [said("osv-scanner"), quietScan, '[ -n "${STUB_OSV_EMPTY:-}" ] || echo "found 1 package" >&2', `echo '{"results":[]}'`]);
   stub(root, "gitleaks", [said("gitleaks"), quietScan, fileAfter("--report-path"), 'echo "[]" > "$out"']);
   stub(root, "trivy", [said("trivy"), quietScan, fileAfter("--output"), `echo '{"Results":[]}' > "$out"`]);
-  stub(root, "boat", ['echo "boat" >> "$STUB_ROOT/calls.txt"', 'cat "$STUB_ROOT/boat.log"', 'exit "${STUB_BOAT_EXIT:-0}"']);
+  stub(root, "sandbox-run", ['echo "sandbox-run" >> "$STUB_ROOT/calls.txt"', 'cat "$STUB_ROOT/run.log"', 'exit "${STUB_RUN_EXIT:-0}"']);
   const calls = () => readFileSync(path.join(root, "calls.txt"), "utf8");
   return { root, calls, v: path.join(root, "share", "vetting", "tool-2.0.0") };
 }
@@ -444,7 +444,7 @@ test("a vetting run scans what this run unpacked, not an earlier copy", { skip }
   assert.ok(existsSync(path.join(v, "copy", "packages", "some-cli", "index.js")), r.out);
   assert.ok(!existsSync(path.join(v, "copy", "packages", "stale")), "the earlier copy was scanned");
   assert.match(r.out, /resolved some-cli@2\.0\.0 \| packages 1 /);
-  assert.match(calls(), /osv-scanner\ngitleaks\ntrivy\nboat\n$/);
+  assert.match(calls(), /osv-scanner\ngitleaks\ntrivy\nsandbox-run\n$/);
   assert.ok(!calls().includes("an earlier lockfile"), "the lockfile was not resolved afresh");
   assert.match(r.out, /^sandbox exit 0$/m);
 });
@@ -454,11 +454,11 @@ test("a vetting run started by a relative path still reaches its sandbox step", 
   // The script changes folder while it works: its own folder is found before that.
   const r = spawnSync(
     bash,
-    ["-c", 'N="$(dirname "$(command -v node)")"; export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" PATH="$PWD/stub:$N:/usr/bin:/bin"; cd "$1" && exec bash ./pinned-vet.sh tool some-cli 2.0.0', "run", vetting],
+    ["-c", 'N="$(dirname "$(command -v node)")"; export STUB_ROOT="$PWD" VETTING_SHARE="$PWD/share" VETTING_RUNNER="$PWD/stub/sandbox-run" PATH="$PWD/stub:$N:/usr/bin:/bin"; cd "$1" && exec bash ./pinned-vet.sh tool some-cli 2.0.0', "run", vetting],
     { cwd: root, encoding: "utf8" },
   );
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(calls(), /boat\n$/);
+  assert.match(calls(), /sandbox-run\n$/);
   assert.match(r.stdout, /^sandbox exit 0$/m);
 });
 
@@ -471,7 +471,7 @@ test("a vetting run stops when the lockfile or the unpack fails", { skip }, () =
     const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], env);
     assert.equal(r.status, 1, r.out);
     assert.match(r.out, message);
-    assert.ok(!/osv-scanner|gitleaks|trivy|boat/.test(calls()), `a scanner ran after a failure:\n${calls()}`);
+    assert.ok(!/osv-scanner|gitleaks|trivy|sandbox-run/.test(calls()), `a scanner ran after a failure:\n${calls()}`);
     assert.ok(!existsSync(path.join(v, "copy", "packages", "stale")), "the earlier copy was left in place");
   }
 });
@@ -492,7 +492,7 @@ test("a scanner that wrote no report reads as no report, never as an earlier run
 
 test("a vetting run with no sandbox result does not exit 0", { skip }, () => {
   const { root } = vetShare();
-  const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], { STUB_BOAT_EXIT: "1" });
+  const r = runIn(root, "pinned-vet.sh", ["tool", "some-cli", "2.0.0"], { STUB_RUN_EXIT: "1" });
   assert.match(r.out, /^GITLEAKS: 0 findings$/m);
   assert.match(r.out, /SANDBOX: no result \(exit 1\)/);
   assert.notEqual(r.status, 0, r.out);
@@ -557,10 +557,14 @@ test("an OSV report that read no packages is no report", { skip }, () => {
   assert.equal(r.status, 3, r.out);
 });
 
-test("only boat's own last line says the sandbox was deleted", { skip }, () => {
-  // The package prints the word; boat's own last line does not.
-  const log = finished.replace("some-cli 1.0.0 ", "deleted ").replace(/exit 0 .* deleted\n$/, "exit 0\n");
-  assert.match(step({ log }).out, /the sandbox may still exist/);
+test("only the runner's own last line says the sandbox was stopped", { skip }, () => {
+  // The package prints a line like the runner's; the runner's own last line says the stop
+  // was not seen.
+  const log = finished.replace("SANDBOX start output: some-cli 1.0.0 ", "SANDBOX-RUN: xg463gql23vmc5g stopped; by the package\nSANDBOX start output: x")
+    .replace(/SANDBOX-RUN: [^\n]*Depot's record\n$/, "SANDBOX-RUN: the sandbox xg463gql23vmc5g may still be running: node sandbox-run.mjs --list, then --stop xg463gql23vmc5g\n");
+  assert.match(step({ log }).out, /^SANDBOX: the sandbox may still be running/m);
+  // A log that ends in the command's own text, with no line of the runner's after it.
+  assert.match(step({ log: finished.replace(/SANDBOX-RUN: [^\n]*\n$/, "some text\n") }).out, /^SANDBOX: the sandbox may still be running/m);
 });
 
 test("a run in which DNS was not watched is no result", { skip }, () => {

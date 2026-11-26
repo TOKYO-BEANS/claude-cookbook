@@ -40,7 +40,7 @@ export const SKILL_LIMIT = 14000;
 export const readCost = (text) => Buffer.byteLength(text) + 9 * text.split("\n").length;
 // What is left before each limit: SKILL.md always, a page only when it is within `near` bytes,
 // tightest first. Every run prints the SKILL.md line; `--room` adds the pages, so an edit sees
-// its room before boat-run or a push.
+// its room before sandbox-run or a push.
 export function roomReport({ skillText, pages, near = 150 }) {
   const skill = Buffer.byteLength(skillText.replace(/\r/g, ""));
   const close = pages
