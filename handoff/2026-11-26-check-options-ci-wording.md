@@ -13,5 +13,8 @@ and the suite on boat.
 
 **Outstanding.** None here; the Stack Atlas chat runs the audit again after the merge.
 
+**Dead ends.** The suggested longer wording ("it vets only outside code, before an install";
+"as a CI scan") put the page 12 to 42 bytes over its limit; the shorter wording keeps both points.
+
 **Evidence.** The release check writes
 `~/.local/share/release-maintenance/evidence/2026-11-26-cookbook-check-options-ci-wording/release-check.log`.
