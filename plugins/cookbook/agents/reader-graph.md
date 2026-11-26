@@ -28,8 +28,8 @@ What holds here:
 - What reading cannot check is not claimed: a test run, a command's output, git history. Say that
   it was not checked and what would check it. When a tool you need is missing, report that; do
   not work around it.
-- context-mode cuts any tool result over its cut: 8,192 bytes where `CTX_REPLACE_TRIGGER_BYTES`
-  is set (the owner's machine since 22 November 2026), otherwise 4,096. Read a large file
+- context-mode cuts any tool result over its cut: 8,600 bytes where `CTX_REPLACE_TRIGGER_BYTES`
+  is set (the owner's machine since 26 November 2026), otherwise 4,096. Read a large file
   with `offset` and `limit` in small ranges (about 40 lines), and never count a cut result as read.
 - Never read `.env*`, `.dev.vars*`, credential stores or `.atlas/`.
 

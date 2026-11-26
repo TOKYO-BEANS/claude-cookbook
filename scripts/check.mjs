@@ -30,11 +30,12 @@ const dollarErrors = (name, text) =>
   text.replace(/\r/g, "").split("\n").flatMap((line, i) => (/\$\d/.test(line) ? [`${name} line ${i + 1}: dollar sign before a digit (write "\${1}" or USD 30)`] : []));
 
 // The pages beside SKILL.md, by folder. A page is read with one Read call, and context-mode
-// cuts any tool result over 8,192 bytes (4,096 by default and before 22 Nov 2026); the page
-// limit stays at 4,000, the owner's call, so a page must fit: its bytes plus what Read adds
-// to each line (a line number and a tab, and a carriage return in a CRLF checkout).
+// cuts any tool result over 8,600 bytes (the owner's machine since 26 Nov 2026, set above this
+// limit on purpose; 4,096 by default). The page limit is 8,500 (owner, 26 Nov 2026; 4,000
+// before): the page's bytes plus 9 for each line, which covers what Read adds to a line (a line
+// number and a tab, and a carriage return in a CRLF checkout).
 export const PAGE_FOLDERS = Object.freeze(["recipes", "options"]);
-export const PAGE_READ_LIMIT = 4000;
+export const PAGE_READ_LIMIT = 8500;
 // SKILL.md loads in full on every non-trivial task: it holds the map and the ground rules only.
 export const SKILL_LIMIT = 14000;
 export const readCost = (text) => Buffer.byteLength(text) + 9 * text.split("\n").length;

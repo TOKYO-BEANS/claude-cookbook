@@ -6,7 +6,7 @@ about the dates the catalog records. It installs, updates and commits nothing.
 
 - **Run it:** say "check for updates", or run `scripts/updates.mjs run` in the skill's folder. A
   quiet day prints one line; otherwise the report. No call prints more than 3,500 bytes, because
-  context-mode replaces any tool output over its cut (8,192 bytes here since 22 November 2026,
+  context-mode replaces any tool output over its cut (8,600 bytes here since 26 November 2026,
   4,096 by default) with a search pointer: a longer report
   starts with `Page 1 of N` and `updates.mjs page 2` to `page N` print the rest.
 - **Every morning:** the systemd user timer `stack-updates-daily` (07:00, or at the next login
