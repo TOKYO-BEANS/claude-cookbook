@@ -5,7 +5,7 @@ sandboxes and cancel boat once the Depot route is proven. boat cost USD 20 a mon
 a month for its AI credentials proxy, switched off the same day), and the stack used 1.6% of
 its plan.
 
-**What changed.** `scripts/sandbox-run.mjs` is the one route to a cloud sandbox: Depot's
+**What changed.** `plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs` is the one route to a cloud sandbox: Depot's
 Connect API by `fetch`, the `depot-org` key read from the key store into its own process only.
 It keeps boat-run's interface and guarantees (tracked files only, Gitleaks first, the upload
 list, the data-shaped file stop, a timeout, ten at once, exit 75 for a run that did not start)

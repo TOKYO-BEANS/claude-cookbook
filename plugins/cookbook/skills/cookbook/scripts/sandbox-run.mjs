@@ -62,8 +62,8 @@ export const SIZES = Object.freeze({
   default: { vcpus: 4, memoryMb: 8192 },
   large: { vcpus: 8, memoryMb: 16384 },
 });
-// Minutes the sandbox may live past the command's timeout: its start and the upload, each
-// bounded below (ready 2, upload 2, unpack 1), with one to spare.
+// Minutes the sandbox may live past the command's timeout (in whole minutes): its start and
+// the upload, each bounded below (ready 2, upload 2, unpack 1), with one to spare.
 export const LIFETIME_MARGIN_MINUTES = 6;
 export const READY_SECONDS = 120;
 export const UPLOAD_SECONDS = 120;
@@ -76,7 +76,8 @@ const oneLine = (text) => String(text).replace(/[^\x20-\x7e]+/g, " ").trim().sli
 // included, is what a place holds, what the month's check counts and what the ledger writes
 // when Depot's record cannot be read.
 export const maxCost = (run) => run.timeout * SIZES[run.type].vcpus;
-export const heldCost = (run) => (run.timeout + LIFETIME_MARGIN_MINUTES * 60) * SIZES[run.type].vcpus;
+export const lifetimeMinutes = (run) => Math.ceil(run.timeout / 60) + LIFETIME_MARGIN_MINUTES;
+export const heldCost = (run) => lifetimeMinutes(run) * 60 * SIZES[run.type].vcpus;
 
 export function parseArgs(argv) {
   if (argv[0] === "--list" && argv.length === 1) return { mode: "list" };
@@ -299,12 +300,15 @@ export function takeSlot(dir, { pid = process.pid, alive = isAlive, max = LIMITS
   return { file, waiting, reserved, others, up, release };
 }
 
-// The ledger: one JSON line a run, { month: "2026-11", id, vcpuSeconds, usd, from }.
-// `from` says where the figure came from: Depot's record, or the run's most when that
-// record could not be read (the safe side).
+// The ledger: JSON lines { month: "2026-11", id, vcpuSeconds, usd, from }. A run writes a
+// line as soon as its sandbox exists, with the most it can take (`from: "held"`), so a process
+// killed before its stop still leaves the spend counted; the stop writes a second line for
+// the same sandbox with Depot's record (`"depot"`), or the most when that cannot be read
+// (`"most"`). The last line for a sandbox counts.
 export const monthOf = (ms) => new Date(ms).toISOString().slice(0, 7);
 export function spentIn(month, text) {
-  let sum = 0;
+  const last = new Map();
+  let n = 0;
   for (const line of String(text).split("\n")) {
     if (!line.trim()) continue;
     let e;
@@ -313,11 +317,11 @@ export function spentIn(month, text) {
     } catch {
       throw new Error("the ledger has a line that is not JSON");
     }
-    if (e?.month === month) {
-      if (!count(e.vcpuSeconds)) throw new Error("the ledger has a line without vCPU-seconds");
-      sum += e.vcpuSeconds;
-    }
+    if (!count(e?.vcpuSeconds)) throw new Error("the ledger has a line without vCPU-seconds");
+    last.set(typeof e.id === "string" && e.id ? `id:${e.id}` : `line:${(n += 1)}`, e);
   }
+  let sum = 0;
+  for (const e of last.values()) if (e.month === month) sum += e.vcpuSeconds;
   return sum;
 }
 
@@ -397,6 +401,8 @@ function isAlive(pid) {
     return e?.code === "EPERM";
   }
 }
+
+export const SIGNALS = Object.freeze(["SIGINT", "SIGTERM", "SIGHUP"]);
 
 // Depot's Connect API (depot.sandbox.v1.SandboxService), by fetch: no SDK to install.
 export const API = "https://api.depot.dev/depot.sandbox.v1.SandboxService/";
@@ -535,13 +541,13 @@ const REAL = {
   say: (line) => console.error(line),
   now: () => Date.now(),
   wait: (ms) => new Promise((done) => setTimeout(done, ms)),
+  // Held until the sandbox is stopped and in the ledger: a second Ctrl-C, a SIGTERM or a
+  // closed terminal (SIGHUP) asks for the same stop and cannot end the process first.
   onSignal: (stop) => {
     const handler = () => stop("interrupted");
-    process.once("SIGINT", handler);
-    process.once("SIGTERM", handler);
+    for (const s of SIGNALS) process.on(s, handler);
     return () => {
-      process.off("SIGINT", handler);
-      process.off("SIGTERM", handler);
+      for (const s of SIGNALS) process.off(s, handler);
     };
   },
 };
@@ -565,10 +571,11 @@ async function ready(api, id, deps, signal, limitMs = READY_SECONDS * 1000) {
   const from = deps.now();
   for (;;) {
     if (signal.aborted) throw new Error("interrupted");
-    const r = await api.run(id, "/bin/true", [], { signal: AbortSignal.any([signal, AbortSignal.timeout(CALL_SECONDS * 1000)]) }).catch(() => null);
+    const left = limitMs - (deps.now() - from);
+    if (left <= 0) throw new Error(`the sandbox did not answer in ${limitMs / 1000} seconds`);
+    const r = await api.run(id, "/bin/true", [], { signal: AbortSignal.any([signal, AbortSignal.timeout(Math.min(CALL_SECONDS * 1000, left))]) }).catch(() => null);
     if (signal.aborted) throw new Error("interrupted");
     if (r?.code === 0) return;
-    if (deps.now() - from > limitMs) throw new Error(`the sandbox did not answer in ${limitMs / 1000} seconds`);
     await deps.wait(500);
   }
 }
@@ -656,7 +663,7 @@ export async function main(argv, deps = REAL) {
       created = await api.create({
         name,
         resources: { vcpus, memoryMb: SIZES[run.type].memoryMb },
-        timeoutMinutes: Math.ceil(run.timeout / 60) + LIFETIME_MARGIN_MINUTES,
+        timeoutMinutes: lifetimeMinutes(run),
         disableTailnet: true,
         disableDepotCache: true,
       });
@@ -673,7 +680,10 @@ export async function main(argv, deps = REAL) {
         const made = (await api.list())?.sandboxes?.find((s) => s?.name === name) ?? null;
         if (made) {
           const found = String(made.sandboxId ?? "");
-          if (/^[a-z0-9]{6,40}$/.test(found)) id = found;
+          if (/^[a-z0-9]{6,40}$/.test(found)) {
+            id = found;
+            hold(id, run, deps);
+          }
           else lost = true;
         }
       } catch {
@@ -684,6 +694,7 @@ export async function main(argv, deps = REAL) {
       return code;
     }
     slot.up();
+    hold(id, run, deps);
     deps.say(`${SAY}: ${id} started (${run.type}, ${vcpus} vCPU)`);
     await ready(api, id, deps, cut.signal);
     if (upload) {
@@ -712,10 +723,20 @@ export async function main(argv, deps = REAL) {
     return why === "interrupted" ? INTERRUPTED : 1;
   } finally {
     if (timer) clearTimeout(timer);
-    unhook();
     if (id) await settle(api, id, run, deps);
+    unhook();
     if (staged) staged.remove();
     slot.release();
+  }
+}
+
+// The ledger line written when a sandbox exists: the most the run can take.
+function hold(id, run, deps) {
+  const most = heldCost(run);
+  try {
+    deps.record({ month: monthOf(deps.now()), id, vcpuSeconds: most, usd: Number((most * RATE_USD).toFixed(4)), from: "held" });
+  } catch {
+    deps.say(`${SAY}: the ledger could not be written (${LEDGER})`);
   }
 }
 

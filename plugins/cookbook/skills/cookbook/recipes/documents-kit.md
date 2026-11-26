@@ -28,7 +28,7 @@ file or PDF: the bundled `docx`, `pdf`, `pptx` and `xlsx` skills.
 ## How they are installed
 
 - Typst: a mise tool (`mise use -g typst@<version>`), the newest release over 24 hours old,
-  after the three scans and a boat sandbox run; the installed binary's SHA-256 matched the
+  after the three scans and a sandbox run ([vetting-sandbox](vetting-sandbox.md)); the installed binary's SHA-256 matched the
   vetted one. Never `typst update` (its self-update): mise moves it.
 - **Accepted findings (owner, 20 November 2026):** the Typst 0.15.1 binary bundles zip 8.0.0
   (one critical and three high advisories, in the self-update code only), quick-xml 0.38.3
@@ -38,6 +38,6 @@ file or PDF: the bundled `docx`, `pdf`, `pptx` and `xlsx` skills.
 - pandoc: Ubuntu's own apt package, updated with Ubuntu (3.7 does every job here).
 - Jupyter: `uv tool install --force --exclude-newer <now minus 24 h> --python 3.12
   "jupyterlab==<version>" --with nbconvert --with ipykernel --with-executables-from
-  jupyter-core,nbconvert`, after the locked set was scanned and run once in a boat sandbox.
+  jupyter-core,nbconvert`, after the locked set was scanned and run once in a sandbox.
 - Evidence: `~/.local/share/vetting/typst-0.15.1/`, `~/.local/share/vetting/jupyter-2026.11.19/`
   and `~/.local/share/claude-cookbook/evidence/creative-kit-2026-11-20/`.

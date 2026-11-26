@@ -9,8 +9,8 @@
   never into the sandbox. That key can start sandboxes and read the bill; a narrower token is
   an access change, so only on the owner's word.
 - **The API:** Depot's Connect API (`depot.sandbox.v1.SandboxService`) by `fetch`, no SDK:
-  `CreateSandbox` (off the tailnet, without Depot Cache, a lifetime of the timeout plus five
-  minutes), `RunCommand`, `WriteFile`, `StopSandbox`, `GetSandbox`, `ListSandboxes`. The
+  `CreateSandbox` (off the tailnet, without Depot Cache, a lifetime of the timeout in
+  whole minutes plus six), `RunCommand`, `WriteFile`, `StopSandbox`, `GetSandbox`, `ListSandboxes`. The
   image is a GitHub-runner Ubuntu 24.04: user `runner` with sudo, strace, tcpdump, git,
   Node 22 first (the script puts Node 24 from `/opt/hostedtoolcache` first). The `depot
   sandbox exec` command cannot reach a sandbox made by the API.
@@ -18,9 +18,9 @@
   `upload-allowed.txt`, one `github.com/owner/name` a line, `#` for a comment; a repository
   with no origin is listed by its folder. After the name, `data:` and the data-shaped files
   that were looked at and hold no customer data, each a path or a folder ending in `/`
-  (`... data: fixtures/prices.csv db/migrations/`). `ledger.jsonl` holds one line a run:
-  its month, sandbox, vCPU-seconds and USD, from Depot's record of the sandbox (or the run's
-  most when that could not be read). `slots/` holds one file per run under way.
+  (`... data: fixtures/prices.csv db/migrations/`). `ledger.jsonl` holds a line when a sandbox exists (the most
+  its run can take) and one at its stop (Depot's record, or the most when that could not be
+  read); the last line for a sandbox counts, so a killed run stays counted. `slots/` holds one file per run under way.
 - **Proven on 26 November 2026:** this repository's suite through the script; times and
   costs in the handoff entry of that day. A vetting run of a pinned npm copy ran the probe
   with strace and tcpdump as on boat.

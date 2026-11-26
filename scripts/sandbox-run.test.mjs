@@ -9,7 +9,8 @@ import { generateKeyPairSync } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { AS_CHECKOUT, CALL_SECONDS, LIFETIME_MARGIN_MINUTES, heldCost, vetFolder, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
+import { fileURLToPath } from "node:url";
+import { AS_CHECKOUT, CALL_SECONDS, LIFETIME_MARGIN_MINUTES, SIGNALS, heldCost, vetFolder, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
 
 const args = (...a) => parseArgs(a);
 // What the gate reads: nothing running, nothing under way, nothing spent this month.
@@ -81,10 +82,11 @@ test("the month: USD 10 of vCPU-seconds from this PC, a fifth kept back for the 
   // A run holds its timeout and the sandbox's margin for its start and upload.
   assert.equal(LIFETIME_MARGIN_MINUTES, 6);
   const run = args("--timeout", "1000", "--", "x");
-  assert.equal(heldCost(run), (1000 + 360) * 4);
+  // The sandbox lives the timeout in whole minutes plus the margin: 17 + 6 minutes here.
+  assert.equal(heldCost(run), 23 * 60 * 4);
   // 160,000 may go to other runs: spent, under way and this one together.
-  assert.equal(gate(run, seen({ spent: 150000, reserved: 4560 })), null);
-  assert.match(gate(run, seen({ spent: 150000, reserved: 4561 })), /kept back for the vetting step/);
+  assert.equal(gate(run, seen({ spent: 150000, reserved: 4480 })), null);
+  assert.match(gate(run, seen({ spent: 150000, reserved: 4481 })), /kept back for the vetting step/);
   const vet = args("--type", "small", "--timeout", "900", "--vet", "sandbox", "--", "bash", "sandbox-probe.sh", "x"); // 2,520
   assert.equal(gate(vet, seen({ spent: 197480 })), null);
   assert.match(gate(vet, seen({ spent: 197481 })), /month's allowance \(USD 10\.00\) would be passed/);
@@ -102,6 +104,14 @@ test("the ledger: this month's lines are summed; a broken line is no result, nev
   assert.equal(spentIn("2026-11", ""), 0);
   assert.throws(() => spentIn("2026-11", "{not json"), /not JSON/);
   assert.throws(() => spentIn("2026-11", JSON.stringify({ month: "2026-11", id: "x" })), /without vCPU-seconds/);
+  // A sandbox's held line, then its record: only the last counts. A held line alone (a run
+  // killed before its stop) counts in full.
+  const held = [
+    JSON.stringify({ month: "2026-11", id: "a", vcpuSeconds: 1920, from: "held" }),
+    JSON.stringify({ month: "2026-11", id: "b", vcpuSeconds: 2520, from: "held" }),
+    JSON.stringify({ month: "2026-11", id: "a", vcpuSeconds: 50, from: "depot" }),
+  ].join("\n");
+  assert.equal(spentIn("2026-11", held), 2570);
   assert.equal(monthOf(Date.parse("2026-11-30T23:59:59Z")), "2026-11");
   assert.equal(monthOf(Date.parse("2026-12-01T00:00:00Z")), "2026-12");
 });
@@ -407,7 +417,7 @@ test("boat-run.mjs, the old name, is the same script: same exports, and run by i
   const old = await import("../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs");
   assert.equal(old.main, main);
   assert.equal(old.UPLOAD_LIST, (await import("../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs")).UPLOAD_LIST);
-  const script = new URL("../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs", import.meta.url).pathname;
+  const script = fileURLToPath(new URL("../plugins/cookbook/skills/cookbook/scripts/boat-run.mjs", import.meta.url));
   const r = spawnSync(process.execPath, [script, "--", "npm", "test"], { encoding: "utf8" });
   assert.equal(r.status, NOT_STARTED);
   assert.match(r.stderr, /^SANDBOX-RUN: not started: --timeout <seconds> is required$/m);
@@ -627,7 +637,9 @@ test("a run without an upload: the gate, one sandbox off the tailnet and Depot C
   assert.ok(!("env" in opts) && !("configuration" in opts), "no variable and no CI secret reaches the sandbox");
   assert.deepEqual(w.calls[5], ["run", ID, "/bin/bash", "-c", WORK]);
   assert.deepEqual(w.out, [`SANDBOX-RUN: ${ID} started (default, 4 vCPU)`, "stdout: output", `SANDBOX-RUN: ${ID} stopped; 15.7 s at 4 vCPU, USD 0.0031 by Depot's record`]);
-  assert.deepEqual(w.ledger, [{ month: "2026-11", id: ID, vcpuSeconds: 63, usd: 0.0031, from: "depot" }]);
+  // A line with the most as soon as the sandbox exists, then Depot's record: the last counts.
+  assert.deepEqual(w.ledger, [{ month: "2026-11", id: ID, vcpuSeconds: 1920, usd: 0.096, from: "held" }, { month: "2026-11", id: ID, vcpuSeconds: 63, usd: 0.0031, from: "depot" }]);
+  assert.equal(spentIn("2026-11", w.ledger.map((e) => JSON.stringify(e)).join("\n")), 63);
   assert.deepEqual(w.released, ["slot"]);
 });
 
@@ -799,7 +811,7 @@ test("Ctrl-C while the sandbox has not answered yet ends the wait: exit 75, the 
   assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);
   assert.match(w.out.join("\n"), /not started: interrupted/);
   assert.equal(w.sandboxes.get(ID).status, "SANDBOX_STATUS_FINISHED");
-  assert.equal(w.ledger.length, 1);
+  assert.deepEqual(w.ledger.map((e) => e.from), ["held", "depot"]);
   assert.deepEqual(w.released, ["slot"]);
 });
 
@@ -824,7 +836,8 @@ test("a create that fails after Depot made the sandbox: found by its name, stopp
   assert.equal(await main(["--timeout", "120", "--", "x"], lost.deps), NOT_STARTED);
   assert.match(lost.out.join("\n"), /not started: CreateSandbox: The operation was aborted due to timeout/);
   assert.equal(lost.sandboxes.get(ID).status, "SANDBOX_STATUS_FINISHED");
-  assert.deepEqual(lost.ledger, [{ month: "2026-11", id: ID, vcpuSeconds: 63, usd: 0.0031, from: "depot" }]);
+  assert.deepEqual(lost.ledger.at(-1), { month: "2026-11", id: ID, vcpuSeconds: 63, usd: 0.0031, from: "depot" });
+  assert.equal(lost.ledger[0].from, "held");
   assert.equal(lost.out.at(-1), `SANDBOX-RUN: ${ID} stopped; 15.7 s at 4 vCPU, USD 0.0031 by Depot's record`);
   assert.deepEqual(lost.released, ["slot"]);
   // An id that is not one, from a sandbox Depot made: found by its name all the same.
@@ -832,7 +845,7 @@ test("a create that fails after Depot made the sandbox: found by its name, stopp
   assert.equal(await main(["--timeout", "120", "--", "x"], odd.deps), NOT_STARTED);
   assert.match(odd.out.join("\n"), /Depot gave no sandbox id/);
   assert.equal(odd.sandboxes.get(ID).status, "SANDBOX_STATUS_FINISHED");
-  assert.equal(odd.ledger.length, 1);
+  assert.deepEqual(odd.ledger.map((e) => e.from), ["held", "depot"]);
   // The list cannot be read after the failed create: the run says one may still be running.
   let reads = 0;
   const blind = world({}, { create: async () => { throw new Error("CreateSandbox: HTTP 502"); }, list: async () => { reads += 1; if (reads > 1) throw new Error("down"); return { sandboxes: [] }; } });
@@ -848,8 +861,8 @@ test("a stop that fails is tried again; a sandbox still running after that is na
   assert.equal(await main(["--timeout", "120", "--", "x"], once.deps), 0);
   assert.equal(stops, 2);
   assert.match(once.out.at(-1), new RegExp(`^SANDBOX-RUN: ${ID} stopped; Depot's record could not be read`));
-  assert.equal(once.ledger[0].from, "most");
-  assert.equal(once.ledger[0].vcpuSeconds, (120 + 360) * 4);
+  assert.equal(once.ledger.at(-1).from, "most");
+  assert.equal(once.ledger.at(-1).vcpuSeconds, (2 + 6) * 60 * 4);
   const stuck = world({}, { stop: async () => { throw new Error("StopSandbox: HTTP 500"); } });
   assert.equal(await main(["--timeout", "120", "--", "x"], stuck.deps), 0);
   assert.equal(stuck.out.at(-1), `SANDBOX-RUN: the sandbox ${ID} may still be running: node sandbox-run.mjs --list, then --stop ${ID}`);
@@ -1003,4 +1016,25 @@ test("a --vet folder lies under the vetting folder and holds the probe; anything
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("the stop handlers stay until the sandbox is stopped and in the ledger; SIGHUP is one of them", async () => {
+  assert.deepEqual([...SIGNALS], ["SIGINT", "SIGTERM", "SIGHUP"]);
+  const order = [];
+  const w = world({ onSignal: () => () => order.push("unhook"), record: (e) => order.push(`record:${e.from}`) }, {});
+  const stop = w.api.stop;
+  w.api.stop = async (id) => { order.push("stop"); return stop(id); };
+  assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), 0);
+  assert.deepEqual(order, ["record:held", "stop", "record:depot", "unhook"]);
+});
+
+test("the wait for a new sandbox checks its limit before each try, and bounds each try by what is left", async () => {
+  const tries = [];
+  const w = world({ now: () => w.clock, wait: async () => { w.clock += 50000; } }, {
+    run: async (id, cmd, a, o = {}) => { if (cmd === "/bin/true") { tries.push(w.clock); return { started: true, code: 1 }; } return { started: true, code: 0 }; },
+  });
+  w.clock = 0;
+  assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);
+  assert.match(w.out.join("\n"), /did not answer in 120 seconds/);
+  assert.deepEqual(tries, [0, 50000, 100000], "no try starts after the limit");
 });
