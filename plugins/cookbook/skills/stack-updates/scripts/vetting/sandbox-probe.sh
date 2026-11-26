@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs INSIDE a boat sandbox (Ubuntu), never on this PC. pinned-sandbox.sh pushes it there
+# Runs INSIDE a Depot sandbox (Ubuntu), never on this PC. pinned-sandbox.sh pushes it there
 # with a package.json and a package-lock.json. It installs with install scripts ON, starts
 # the package's command once, and prints what the install and the start did: lifecycle
 # scripts, DNS names asked for, connections, programs run, files written elsewhere and
@@ -14,7 +14,7 @@
 #    or: bash sandbox-probe.sh --left <ps after> <pids before> <own pid>
 #    or: bash sandbox-probe.sh --meta-line <key> <value>, --safe-name <name>
 # The second form is for code that is not an npm package (a pnpm workspace, a Python tool):
-# push the folder and this file with `boat run --no-env --push <folder>`, and both commands
+# send the folder and this file with `sandbox-run.mjs --vet <folder>`, and both commands
 # run in that folder under the same probe. The third form only prints the report from a
 # folder of captured files, and the fourth only lists the left-over processes; the tests
 # use both, and they need no sandbox.
@@ -141,9 +141,9 @@ if [ "${1:-}" = "--left" ]; then
   left "$2" "$3" "$4"
   exit $?
 fi
-# Everything below installs and runs outside code: only where a boat sandbox's tools are.
+# Everything below installs and runs outside code: only where a sandbox's tools are.
 if ! command -v strace > /dev/null || ! command -v tcpdump > /dev/null || ! sudo -n true 2> /dev/null; then
-  echo "sandbox-probe.sh installs and runs outside code. It needs strace, tcpdump and sudo, as a boat sandbox has."
+  echo "sandbox-probe.sh installs and runs outside code. It needs strace, tcpdump and sudo, as a Depot sandbox has."
   exit 2
 fi
 

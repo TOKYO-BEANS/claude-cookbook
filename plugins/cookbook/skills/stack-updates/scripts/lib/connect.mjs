@@ -16,7 +16,7 @@ import { defaultRun, expandTokens } from "./inventory.mjs";
 import { CONNECTION_CHECKS, MCP_SKILL_SERVERS } from "./tables.mjs";
 
 export const CHECK_TIMEOUT_MS = 30_000;
-const OUTPUT_LIMIT = 100_000; // `boat limits` alone prints about 6 KB of JSON
+const OUTPUT_LIMIT = 100_000; // a status command can print several KB of JSON
 const ERROR_LIMIT = 200;
 const LIB = dirname(fileURLToPath(import.meta.url));
 

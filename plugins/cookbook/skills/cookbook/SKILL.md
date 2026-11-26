@@ -52,7 +52,7 @@ fallback and say that you did.
 | Malicious packages at install | **Aikido** Safe Chain | — | [security](recipes/security.md) |
 | Dependency updates | Dependabot version updates | — | [security](recipes/security.md) |
 | Open CodeQL alerts and Semgrep findings | **sa-triage** | — | [workflows](recipes/workflows.md) |
-| Vet outside code before an install | the vetting scripts: **Gitleaks**, **OSV-Scanner**, **Trivy**, then one **boat** sandbox run | none: "no result" stops the install | [connecting](recipes/connecting.md), [vetting-sandbox](recipes/vetting-sandbox.md) |
+| Vet outside code before an install | the vetting scripts: **Gitleaks**, **OSV-Scanner**, **Trivy**, then one **Depot** sandbox run | none: "no result" stops the install | [connecting](recipes/connecting.md), [vetting-sandbox](recipes/vetting-sandbox.md) |
 | Visual check of a live site before a customer-visible change | the site's own check script, in its repository: capture, pixels, layout rules, a judge on another model | none: no check recorded and approved for the site, or no pass, means ask the owner | [visual-check](recipes/visual-check.md) |
 | Agent configuration: permissions, hooks, MCP servers | **AgentShield** on a sanitized copy | — | [agent-audit](recipes/agent-audit.md) |
 | Health of the Claude setup and its instruction files | **doctor-plus** | Claude Code's own `/doctor` | [add-ons](recipes/add-ons.md) |
@@ -81,7 +81,7 @@ fallback and say that you did.
 | Keys and tokens | the OS key store, read by `with-key.mjs` and `key-header.mjs` | — | [keys](recipes/keys.md) |
 | The owner's Proton mail | **Proton Mail Bridge** | the web app | [proton-mail](recipes/proton-mail.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
-| Run code away from this PC: tests on Linux before a push, a long or parallel job, a long Claude job that stands alone | **boat** | Depot CI, for a repository's own checks | [boat](recipes/boat.md), [boat-claude](recipes/boat-claude.md) |
+| Run code away from this PC: tests on Linux before a push, a long or parallel job | **Depot** sandboxes, through `sandbox-run.mjs` | Depot CI, for a repository's own checks | [sandboxes](recipes/sandboxes.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
 | Connect a new app or service | the **Cookbook** first, then the lightest route | — | [connecting](recipes/connecting.md) |
 | Office files; editing PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |

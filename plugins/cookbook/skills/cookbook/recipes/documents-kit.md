@@ -22,7 +22,7 @@ file or PDF: the bundled `docx`, `pdf`, `pptx` and `xlsx` skills.
   to a body with `pandoc in.md -t typst -o body.typ` and compile that. A house style: a
   `--reference-doc=style.docx` for Word, a Typst template for PDF.
 - **Jupyter:** `jupyter`, `jupyter-nbconvert` and `jupyter-lab` from one uv tool (JupyterLab,
-  nbconvert, ipykernel). A notebook from elsewhere is code: run it only in a boat sandbox. A
+  nbconvert, ipykernel). A notebook from elsewhere is code: run it only in a sandbox ([sandboxes](sandboxes.md)). A
   notebook with secrets reads them through `with-key.mjs`, never from a cell.
 
 ## How they are installed

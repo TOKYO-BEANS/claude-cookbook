@@ -90,7 +90,7 @@ The script decides, by fixed rules in `scripts/lib/apply.mjs`; no model does, an
 note says can make an update routine. Whatever the script cannot read counts against an update. A
 behind part is routine only when all of these hold:
 
-- its kind is `plugin` or `pinned`, or it is a pinned binary listed in `apply.mjs` (boat, the
+- its kind is `plugin` or `pinned`, or it is a pinned binary listed in `apply.mjs` (the
   Proton Pass CLI). A skill copy and a local port (`@claude-local`) always need a yes: nothing
   on disk says which commit a copy is, so the script cannot check that install;
 - its version step can be read (x.y.z on both sides, or two commit ids) and the first number did
@@ -159,7 +159,7 @@ cannot be read back from disk. By the part's `installed` kind in `catalog.json` 
 | --- | --- | --- |
 | `plugin` | Read the diff from the installed commit to the new one, then `claude plugin marketplace update <marketplace>` and `claude plugin update <id>`. No sandbox run (a plugin starts only inside Claude Code); say so in the report | "Context window (context-mode)"; for a local `claude-local` port, "Compaction" (Updates) |
 | `pinned` (an npm CLI in `~/.local/share`) | New lockfile in an empty folder, OSV-Scanner, Gitleaks and Trivy, the sandbox run (`scripts/vetting/pinned-vet.sh` beside this skill does all of these, and `pinned-install.sh` there installs the vetted lockfile; read its `SANDBOX` lines as "Vetting outside code: reading the sandbox report" says, and an update with a surprise there or with "no result" waits for the owner), `npm ci --ignore-scripts`, the program download when the package's own install script does one (the Parallel CLI), and for site-login the Chromium build its `playwright-core` CLI downloads when `browsers.json` moves the revision (compared before `pinned-install.sh`; the owner's yes each time, as "Sign-ins: setup and evidence" says), one real call | "Cloud browser (Browserbase): setup and updates" (To update) |
-| `command`, a pinned binary | Download it with the published checksum list, compare, run it once in the sandbox under the probe ("Vetting outside code: the sandbox step"; the installed build is the Linux one, so the old Windows exemption is gone), replace, run its version command | "Cloud sandboxes (boat): the plan, setup and evidence"; "Sign-ins: setup and evidence"; "Google accounts: setup and evidence" |
+| `command`, a pinned binary | Download it with the published checksum list, compare, run it once in the sandbox under the probe ("Vetting outside code: the sandbox step"; the installed build is the Linux one, so the old Windows exemption is gone), replace, run its version command | "Sign-ins: setup and evidence"; "Google accounts: setup and evidence" |
 | `command`, an apt package (Git, the GitHub CLI, Node) | `sudo apt` needs the owner's password: ask, and take it through the masked window, never in chat | — |
 | `command`, any other install (the local Semgrep, a uv tool) | What the part's `updater` in `catalog.json` says | — |
 | `skill` (a plain copy in `~/.claude/skills`) | Read the diff, copy the folder, then `record` the commit. No sandbox run; say so in the report | "Claude Code add-ons" (Updates) |

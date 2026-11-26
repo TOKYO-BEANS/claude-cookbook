@@ -252,7 +252,6 @@ test("the real table: each ok pattern matches the line a working service prints"
     github: "some-login\n",
     depot: '{\n  "invoices":  [\n    {\n      "id":  "in_x",\n      "status":  "paid"\n    }\n  ]\n}\n',
     firecrawl: "  Authenticated via FIRECRAWL_API_KEY\n  Credits: 1,033 / 1,000 (103% left this cycle)\n",
-    boat: '{"accessTier":"trial","billingStatus":"trialing","canStart":true}',
     browserbase: '[\n  {\n    "id": "x",\n    "concurrency": 25\n  }\n]',
     "google-workspace-cli": '{"ok":true,"client":true,"accounts":[{"account":"a","works":true}]}',
     cloudflare: "active\n",

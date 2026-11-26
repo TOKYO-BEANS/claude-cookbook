@@ -14,6 +14,6 @@ This repository follows the Stack Atlas standard. `.stack-atlas.json` records th
 
 ## Tests
 
-Run the suite on boat, from a commit (the upload is the files git tracks):
-`node plugins/cookbook/skills/cookbook/scripts/boat-run.mjs --timeout 600 --push . -- bash -c 'npm ci --ignore-scripts && npm test'`,
+Run the suite in a Depot sandbox, from a commit (the upload is the files git tracks):
+`node plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs --timeout 600 --push . -- bash -c 'npm ci --ignore-scripts && npm test'`,
 in the background. `node scripts/check.mjs --room` runs here (0.1 s) and shows each limit's room.

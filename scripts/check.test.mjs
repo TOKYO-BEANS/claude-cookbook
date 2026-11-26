@@ -38,12 +38,12 @@ test("every recipe heading is the title of a page in recipes/", () => {
 });
 
 test("the map: a row cannot point to a recipe file that does not exist", () => {
-  const skill = skillText.replace("(recipes/boat.md)", "(recipes/no-such-page.md)");
+  const skill = skillText.replace("(recipes/sandboxes.md)", "(recipes/no-such-page.md)");
   assert.notEqual(skill, skillText);
   assert.ok(errors({ skillText: skill }).some((e) => e === "SKILL.md: link to recipes/no-such-page.md, which does not exist"));
   // The same when the page itself is gone.
-  const gone = errors({ pages: pages.filter((p) => p.name !== "recipes/boat.md") });
-  assert.ok(gone.some((e) => e === "SKILL.md: link to recipes/boat.md, which does not exist"));
+  const gone = errors({ pages: pages.filter((p) => p.name !== "recipes/sandboxes.md") });
+  assert.ok(gone.some((e) => e === "SKILL.md: link to recipes/sandboxes.md, which does not exist"));
 });
 
 test("the map: every row has an owner, a fallback and a recipe page, a dash or 'being built'", () => {
@@ -65,14 +65,14 @@ test("the map: every row has an owner, a fallback and a recipe page, a dash or '
 });
 
 test("pages: a link between pages resolves, and every page is reached from SKILL.md", () => {
-  const broken = withPage("recipes/boat.md", (t) => `${t}\nSee [x](missing.md).\n`);
-  assert.ok(errors({ pages: broken }).some((e) => e === "recipes/boat.md: link to missing.md, which does not exist"));
+  const broken = withPage("recipes/sandboxes.md", (t) => `${t}\nSee [x](missing.md).\n`);
+  assert.ok(errors({ pages: broken }).some((e) => e === "recipes/sandboxes.md: link to missing.md, which does not exist"));
   const orphan = [...pages, { name: "recipes/orphan.md", text: "# An orphan\n\nNothing links here.\n" }];
   assert.ok(errors({ pages: orphan }).some((e) => e === "recipes/orphan.md: no map row or page links to it"));
   // Reached through another page, not only from the map.
-  assert.ok(!skillText.includes("boat-setup.md") && pages.some((p) => p.name === "recipes/boat-setup.md"));
+  assert.ok(!skillText.includes("sandboxes-setup.md") && pages.some((p) => p.name === "recipes/sandboxes-setup.md"));
   // A link out of the skill folder or to another site is not a page link.
-  assert.deepEqual(errors({ pages: withPage("recipes/boat.md", (t) => `${t}\n[doc](https://example.com/a.md)\n`) }), []);
+  assert.deepEqual(errors({ pages: withPage("recipes/sandboxes.md", (t) => `${t}\n[doc](https://example.com/a.md)\n`) }), []);
 });
 
 test("the stack-updates skill's update table names recipe pages by their exact titles", () => {

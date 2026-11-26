@@ -5,8 +5,8 @@
 //   bash's command line and the shell kills itself (exit 143 or 144: 15 of 18 such runs in a week).
 //   A pattern with a bracket class (`[f]ilm.py`) cannot match its own text.
 // - `rm -rf`: the machine's permission rule denies it anyway; this names what to do instead.
-// Pure; the hook file (boat-route.mjs) calls it before the boat route.
-import { read } from "./boat-route-lib.mjs";
+// Pure; the hook file (sandbox-route.mjs) calls it before the sandbox route.
+import { read } from "./sandbox-route-lib.mjs";
 
 // Cheap first look: most commands name none of these.
 export const GUARD_HINT = /\brm\b|pkill|pgrep/;

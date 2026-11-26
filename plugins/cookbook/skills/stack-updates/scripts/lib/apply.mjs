@@ -16,7 +16,7 @@ export const DAILY_LIMIT = 5; // routine installs offered in one day
 // `command` parts a session may install: pinned binaries whose recipe downloads the
 // release and compares it with the published checksum. Every other `command` part
 // (another checked download, a mise or uv tool, an apt package) asks the owner.
-export const ROUTINE_COMMAND_PARTS = Object.freeze(["boat/cli", "proton-pass-cli/cli"]);
+export const ROUTINE_COMMAND_PARTS = Object.freeze(["proton-pass-cli/cli"]);
 const SESSION_KINDS = ["plugin", "pinned", "command"];
 const COMMIT = /^[0-9a-f]{40}$/;
 const NEVER_KINDS = ["project", "hosted", "none"];

@@ -38,9 +38,8 @@ Chosen by fit for the job on 15 November 2026.
 - **Google accounts: the `google` command with gws.** One consent per account, then
   short-lived tokens, for any Google API. Weighed: Google's MCP connectors (a server per
   product); gws's own sign-in (keeps a second copy of the grant, one account only).
-- **Code away from this PC: boat.** A full Ubuntu machine in under a second, billed per
-  second, deleted after the command, from one CLI. Weighed: Cloudflare Sandbox (in the stack,
-  but needs a Worker around it); E2B, Daytona and Modal (the same job behind an SDK); GitHub
-  Codespaces (made for a person's editor); Docker on this PC (not away from it).
+- **Code away from this PC: Depot sandboxes**, billed per vCPU-second on the CI plan, through
+  one script ([why](sandboxes.md)). Weighed: boat (until 26 November 2026); Cloudflare
+  Sandbox (needs a Worker); E2B, Daytona, Modal (an SDK); Codespaces; Docker here.
 - **SEO: OpenSEO.** Keyword, backlink and audit data with Search Console intake, in skills.
   Weighed: Ahrefs and Semrush (subscriptions for the same data).
