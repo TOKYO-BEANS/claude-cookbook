@@ -12,7 +12,7 @@ this server.
 **What changed.**
 - On the laptop (not in this repository): the server built from commit `5cce1a7` inside the
   vetted ArtCraft 0.41.1 source, installed as `~/.local/share/artcraft-mcp/bin/artcraft-mcp`
-  (SHA-256 `5d257695...b663`), user-scope MCP server `artcraft` with `"alwaysLoad": false`.
+  (SHA-256 `f9830c28...5e2a`), user-scope MCP server `artcraft` with `"alwaysLoad": false`.
   User permissions: 11 tools denied (checkout, subscription, billing portal, referral codes,
   visibility, comments, ratings, tags, three deletes) and 19 generation, edit and upload tools
   on `ask`. The settings file before the change: `~/.local/share/backups/claude-settings-20261126T162606.json`.
@@ -21,32 +21,36 @@ this server.
   not accepted.
 - The review's medium finding: the published `artcraft_download_media_file` wrote any path
   the model named. Our patch takes only a plain file name and never overwrites or follows an
-  existing file. That fixes it only in part: `download_dir` is still the model's choice and is
-  not confined, and the tool is neither `ask` nor denied, so it can create a new file in any
-  directory the user can write. Outstanding below.
+  existing file. The second review (of `5468c41`) found `download_dir` still free: it must now
+  be an existing folder inside `~/Artcraft/downloads` or the session's project, with no hidden
+  folder below that root after links are resolved, and the tool is `ask` (20 artcraft tools
+  on `ask` now).
+- The sign-in did not reach the server (401 after the owner signed in): ArtCraft 0.41.1 keeps
+  its cookie store in `~/.cache/ai.artcraft.app/.cookies`, the server looked in
+  `~/.local/share/...`. Patched to read the cache folder first.
 - This repository: `recipes/artcraft.md`, the catalog entry `artcraft` (a recipe and a second
   part `mcp`, installed as server `artcraft`, with a commit feed), and the map row for images.
 
 **Verification.** Gitleaks (directory and git history): no leaks. OSV-Scanner and Trivy on the
 lockfile, intersected with `cargo tree -p artcraft-mcp`: no advisory left but three
-"unmaintained" notices. Five Depot sandbox runs of the build and one start (the last for the
+"unmaintained" notices. Seven Depot sandbox runs of the build and one start (the last for the
 installed source): install exit 0, DNS only for crates.io and rustup, no other files than
 rustup's and cargo's, no process left, no network at start, an `initialize` answer in
 camelCase. Here: `claude mcp get artcraft` shows Connected; `tools/list` gives 61 tools; a
 real call, `artcraft_get_session_info`, answers 200 from the API, signed out. The download
 check: `../../x.png`, `.bashrc` and `a/b.png` each answer "filename must be a plain name"
 before any network call; `ok-name_1.png` passes the check and reaches the API (404 for the
-test token).
+test token). The folder check, from a test project: `~/.ssh`, `~/Desktop`, a hidden
+subfolder, a link to `~/.config` and the project's parent are refused before any network call;
+a subfolder and the default pass. Signed in: `artcraft_get_credits` answers "Free credits: 0,
+Monthly credits: 0, Banked credits: 0, Total: 0" (no 401).
 `node scripts/check.mjs --room` passed. The release log is `release-cookbook-<pr>-merge.log`
 in `~/.local/share/release-maintenance/evidence/`.
 
-**Outstanding.** The owner signs in once in ArtCraft Studio (the owner's step, 26 November
-2026). Then a signed-in read (`artcraft_get_credits`) proves the sign-in path; the image
-job waiting in the other chat asks for its own yes with the cost. The tools beyond session
-info and the model list are not tried against the live API. The download tool's
-`download_dir` is not confined (AI review, medium): extend the patch to resolve it with
-symlinks followed and refuse any path outside one fixed root, or drop the parameter, and
-until then set `mcp__artcraft__artcraft_download_media_file` to `ask` in the user permissions.
+**Outstanding.** The account has 0 credits: a generation needs a purchase or a plan, the
+owner's decision (a spend), made in the app; the image job waiting in the other chat asks for
+its own yes with the cost. The tools beyond session
+info, credits and the model list are not tried against the live API.
 
 **Dead ends.** The commit as it stands does not build against 0.41.1 (a missing field and a
 tokio feature), and its answers are snake_case, which MCP clients reject: the fixes of 14
