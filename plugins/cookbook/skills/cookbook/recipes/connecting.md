@@ -14,6 +14,10 @@
   a choice. The one exemption is in [vetting-sandbox-report.md](vetting-sandbox-report.md) (a Claude
   Code plugin or skill copy): the vetting notes say when it applied, and the owner hears it
   with the scan results.
+- The owner's yes to a tool answers the question "shall we add this", asked in those words. An
+  answer to "which do you like better" says only that one thing beat the other in that
+  comparison: not a liking for it in general, and never a yes to add it (26 November 2026: a
+  skill was added on such an answer and removed the same day).
 - An ad-hoc Gitleaks scan (a download, a copied folder, a deploy pre-flight) passes `--config` with a
   config you control and `--gitleaks-ignore-path` set to a folder with no `.gitleaksignore`, with
   `GITLEAKS_CONFIG` and `GITLEAKS_CONFIG_TOML` unset. Otherwise Gitleaks loads `.gitleaks.toml` and

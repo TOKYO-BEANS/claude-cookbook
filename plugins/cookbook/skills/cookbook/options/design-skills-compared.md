@@ -2,9 +2,9 @@
 
 Tried 25 November 2026: Google's `gemini-frontend-design` (demolab, 10 November 2026) and the
 `frontend-design` skill in Anthropic's plugin directory, each against Opus 5.5 with no design
-skill. **Anthropic's skill is used** (26 November): an Opus judge put it second, but the owner,
-scrolling all 18 pages blind, picked its page as best in all three briefs. Each page had parts
-the owner liked and parts not, so options side by side stay.
+skill. **Neither is used.** With no skill the pages scored best, and Gemini's skill made them
+worse. Anthropic's skill was added on 26 November 2026 on a misreading of the owner's picks and
+removed the same day on the owner's word (see "The owner's picks").
 
 | Arm | Overall | Brief | Distinct | Craft | Phone | First | Last |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -21,14 +21,25 @@ was the same within 12 % (about 25,000 to 29,000 output tokens, 3.5 to 4 minutes
   prices and day pickers, a conference programme set wholly in display type so the tickets fell
   below 7,000 px, and sections under a strong hero that turn plain. Written for Gemini models;
   on Claude it was last in 9 of 12 judgements and never first.
-- **Anthropic's skill.** The most distinctive pages (8.3 against 7.3); the judge marked down
-  craft and phone layouts, and it asked 3 questions per run against 1.3. The owner weighs
-  distinct over the judge's craft: the skill is used, its questions answered by Claude.
+- **Anthropic's skill.** The most distinctive pages (8.3 against 7.3), but weaker craft and
+  phone layouts, and 3 questions to the owner per run against 1.3. A narrow loss, not a gain.
 - **The judge.** Read stills only and stopped at 7,000 px, so motion and page ends went unseen.
-  A judge on stills does not decide a visual choice: the owner's blind pick does.
+  Its scores are a measurement, not a choice of look: a look is chosen by a person who has
+  seen the pages.
+- **The owner's picks.** On 26 November the owner scrolled the 18 pages blind and picked one
+  page per brief; the key maps all three to `frontend-design` runs. The picks answered one
+  question only: is this page better than the Gemini skill's. They were not a liking for the
+  skill in general, not a ranking over no skill, and not a yes to add it. The Cookbook read
+  them as an adoption (#256). The first real job built with the skill was, in the owner's words,
+  "a complete disaster", and the owner said to remove it: "the 3 I picked out yesterday was
+  just a do you like this better over the Gemini skill, not adopt it".
 - **What stays.** Claude Design for the look ([visual-design](../recipes/visual-design.md)),
-  then Opus builds it with `frontend-design`, and after the build a phone capture at 390 px
-  with a sideways-scroll test, the whole page captured.
+  then Opus builds it with no design skill. Kept as plain checks after a build: a phone
+  capture at 390 px with a sideways-scroll test, and the whole page captured, not only the
+  first screen.
+- **The lesson.** An answer to "which do you like better" says that one thing beat the other
+  in that comparison, nothing more. Adding a tool is its own question to the owner
+  ([connecting](../recipes/connecting.md)).
 
 **How it was run.** Three briefs (a bicycle repair workshop, an on-call dashboard for a team of
 twelve, a two-day conference), each built twice per arm: 18 runs of a fresh `claude -p` on the
