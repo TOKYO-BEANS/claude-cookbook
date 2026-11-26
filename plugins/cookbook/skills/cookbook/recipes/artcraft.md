@@ -31,8 +31,11 @@
   generative edit of a photo of a real person.
 - **Downloads:** `artcraft_download_media_file` takes only a plain `filename` (letters,
   digits, `-`, `_`, `.`; no leading dot, no `..`) and never overwrites or follows an existing
-  file: our patch, since the server as published wrote any path the model named. Pass a
-  `download_dir` inside the project.
+  file: our patch, since the server as published wrote any path the model named. The patch
+  checks only `filename`: `download_dir` is not confined, so the tool can still create a new
+  file in any directory the user can write, and it is neither `ask` nor denied in the user
+  permissions. Open until the patch confines `download_dir` to one fixed root or the tool is
+  set to `ask`. Pass a `download_dir` inside the project.
 - **Known gaps:** the session tool prints "?" for its fields. The server was written against a newer ArtCraft
   than 0.41.1: a tool that fails with a 404 or a parse error may be the API drifting from
   the build, not a sign-in fault.

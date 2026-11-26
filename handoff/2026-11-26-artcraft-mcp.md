@@ -21,7 +21,9 @@ this server.
   not accepted.
 - The review's medium finding: the published `artcraft_download_media_file` wrote any path
   the model named. Our patch takes only a plain file name and never overwrites or follows an
-  existing file.
+  existing file. That fixes it only in part: `download_dir` is still the model's choice and is
+  not confined, and the tool is neither `ask` nor denied, so it can create a new file in any
+  directory the user can write. Outstanding below.
 - This repository: `recipes/artcraft.md`, the catalog entry `artcraft` (a recipe and a second
   part `mcp`, installed as server `artcraft`, with a commit feed), and the map row for images.
 
@@ -41,7 +43,10 @@ in `~/.local/share/release-maintenance/evidence/`.
 **Outstanding.** The owner signs in once in ArtCraft Studio (the owner's step, 26 November
 2026). Then a signed-in read (`artcraft_get_credits`) proves the sign-in path; the image
 job waiting in the other chat asks for its own yes with the cost. The tools beyond session
-info and the model list are not tried against the live API.
+info and the model list are not tried against the live API. The download tool's
+`download_dir` is not confined (AI review, medium): extend the patch to resolve it with
+symlinks followed and refuse any path outside one fixed root, or drop the parameter, and
+until then set `mcp__artcraft__artcraft_download_media_file` to `ask` in the user permissions.
 
 **Dead ends.** The commit as it stands does not build against 0.41.1 (a missing field and a
 tokio feature), and its answers are snake_case, which MCP clients reject: the fixes of 14
