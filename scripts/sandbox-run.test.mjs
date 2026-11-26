@@ -808,6 +808,30 @@ test("a sandbox that does not answer, or a failed start, is stopped and the run 
   assert.deepEqual(failed.released, ["slot"]);
 });
 
+test("a create that fails after Depot made the sandbox: found by its name, stopped and in the ledger", async () => {
+  const keep = (w, opts) => w.sandboxes.set(ID, { sandboxId: ID, name: opts.name, status: "SANDBOX_STATUS_RUNNING", createdAt: "2026-11-26T10:00:00.000Z", resources: { vcpus: opts.resources.vcpus } });
+  const lost = world({}, { create: async (opts) => { keep(lost, opts); throw new Error("CreateSandbox: The operation was aborted due to timeout"); } });
+  assert.equal(await main(["--timeout", "120", "--", "x"], lost.deps), NOT_STARTED);
+  assert.match(lost.out.join("\n"), /not started: CreateSandbox: The operation was aborted due to timeout/);
+  assert.equal(lost.sandboxes.get(ID).status, "SANDBOX_STATUS_FINISHED");
+  assert.deepEqual(lost.ledger, [{ month: "2026-11", id: ID, vcpuSeconds: 63, usd: 0.0031, from: "depot" }]);
+  assert.equal(lost.out.at(-1), `SANDBOX-RUN: ${ID} stopped; 15.7 s at 4 vCPU, USD 0.0031 by Depot's record`);
+  assert.deepEqual(lost.released, ["slot"]);
+  // An id that is not one, from a sandbox Depot made: found by its name all the same.
+  const odd = world({}, { create: async (opts) => { keep(odd, opts); return { sandbox: { sandboxId: "not an id" } }; } });
+  assert.equal(await main(["--timeout", "120", "--", "x"], odd.deps), NOT_STARTED);
+  assert.match(odd.out.join("\n"), /Depot gave no sandbox id/);
+  assert.equal(odd.sandboxes.get(ID).status, "SANDBOX_STATUS_FINISHED");
+  assert.equal(odd.ledger.length, 1);
+  // The list cannot be read after the failed create: the run says one may still be running.
+  let reads = 0;
+  const blind = world({}, { create: async () => { throw new Error("CreateSandbox: HTTP 502"); }, list: async () => { reads += 1; if (reads > 1) throw new Error("down"); return { sandboxes: [] }; } });
+  assert.equal(await main(["--timeout", "120", "--", "x"], blind.deps), NOT_STARTED);
+  assert.match(blind.out.join("\n"), /not started: CreateSandbox: HTTP 502/);
+  assert.match(blind.out.at(-1), /^SANDBOX-RUN: a sandbox named sandbox-run-\d+-[0-9a-f]{8} may still be running: node sandbox-run\.mjs --list/);
+  assert.deepEqual(blind.released, ["slot"]);
+});
+
 test("a stop that fails is tried again; a sandbox still running after that is named, never passed over", async () => {
   let stops = 0;
   const once = world({}, { stop: async (id) => { stops += 1; if (stops === 1) throw new Error("StopSandbox: HTTP 500"); once.sandboxes.get(id).status = "SANDBOX_STATUS_FINISHED"; return {}; } });

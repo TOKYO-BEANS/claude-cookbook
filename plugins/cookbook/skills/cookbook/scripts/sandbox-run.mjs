@@ -626,17 +626,39 @@ export async function main(argv, deps = REAL) {
       cwd = `${WORK}/${basename(dir)}`;
     }
     if (cut.signal.aborted) return stop("interrupted");
-    const created = await api.create({
-      name: `sandbox-run-${deps.now()}-${randomUUID().slice(0, 8)}`,
-      resources: { vcpus, memoryMb: SIZES[run.type].memoryMb },
-      timeoutMinutes: Math.ceil(run.timeout / 60) + LIFETIME_MARGIN_MINUTES,
-      disableTailnet: true,
-      disableDepotCache: true,
-    });
+    const name = `sandbox-run-${deps.now()}-${randomUUID().slice(0, 8)}`;
+    let created = null;
+    let failure = null;
+    try {
+      created = await api.create({
+        name,
+        resources: { vcpus, memoryMb: SIZES[run.type].memoryMb },
+        timeoutMinutes: Math.ceil(run.timeout / 60) + LIFETIME_MARGIN_MINUTES,
+        disableTailnet: true,
+        disableDepotCache: true,
+      });
+    } catch (e) {
+      failure = e;
+    }
     id = created?.sandbox?.sandboxId ?? null;
     if (!id || !/^[a-z0-9]{6,40}$/.test(id)) {
       id = null;
-      return stop("no result (Depot gave no sandbox id)");
+      // Depot may have made the sandbox all the same: found by its name, it is stopped and
+      // written to the ledger below; one that cannot be looked for is named.
+      let lost = false;
+      try {
+        const made = (await api.list())?.sandboxes?.find((s) => s?.name === name) ?? null;
+        if (made) {
+          const found = String(made.sandboxId ?? "");
+          if (/^[a-z0-9]{6,40}$/.test(found)) id = found;
+          else lost = true;
+        }
+      } catch {
+        lost = true;
+      }
+      const code = stop(failure ? (why ?? oneLine(failure?.message)) : "no result (Depot gave no sandbox id)");
+      if (lost) deps.say(`${SAY}: a sandbox named ${name} may still be running: node sandbox-run.mjs --list, then --stop <id>`);
+      return code;
     }
     slot.up();
     deps.say(`${SAY}: ${id} started (${run.type}, ${vcpus} vCPU)`);
