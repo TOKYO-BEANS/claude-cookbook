@@ -14,10 +14,10 @@ repository's `scripts/vetting.test.mjs`. The files of the same names in
   runs it alone). It sends the new `package.json` and `package-lock.json` and a probe script,
   installs with the install scripts on, and starts the package's command once with `--version`.
   A first copy, with no install folder yet: [pinned-copies.md](pinned-copies.md).
-- **Anything else, a pinned binary included:** copy `sandbox-probe.sh` from that folder into the code's
-  folder, then `node <cookbook skill folder>/scripts/sandbox-run.mjs --type small --timeout
+- **Anything else, a pinned binary included:** put the code in a folder under
+  `~/.local/share/vetting` (the script refuses any other), copy `sandbox-probe.sh` into it, then `node <cookbook skill folder>/scripts/sandbox-run.mjs --type small --timeout
   900 --vet <folder> -- bash sandbox-probe.sh --cmd "<install command>" "<start command>"`.
-  `--vet` sends the folder as it is (outside code, no upload list) and runs only the probe;
+  `--vet` sends that folder as it is (outside code, no upload list) and runs only the probe;
   the sandbox gets none of the org's secrets.
 - `pinned-vet.sh` exits 0 only with a sandbox result and a report from each scanner: a scanner
   that wrote none prints "no report" and the run exits 3.

@@ -21,7 +21,8 @@
 //   also read for files shaped like data (a spreadsheet, a database, a dump, a mail export,
 //   an archive): one that the list does not name for that repository stops the run.
 // - --vet sends a folder of outside code as it is, for the vetting step only: the folder
-//   holds sandbox-probe.sh and the command is `bash sandbox-probe.sh ...`
+//   lies under ~/.local/share/vetting, where only outside code is staged, holds
+//   sandbox-probe.sh, and the command is `bash sandbox-probe.sh ...`
 //   (recipes/vetting-sandbox.md). It needs no list: it is public code, never ours.
 // - The sandbox is always stopped when the command ends: also on a timeout, an error or
 //   Ctrl-C. The org's sandboxes are read after; one this run left is stopped again or named.
@@ -61,14 +62,21 @@ export const SIZES = Object.freeze({
   default: { vcpus: 4, memoryMb: 8192 },
   large: { vcpus: 8, memoryMb: 16384 },
 });
-// Minutes the sandbox may live past the command's timeout: its start and the upload.
-export const LIFETIME_MARGIN_MINUTES = 5;
+// Minutes the sandbox may live past the command's timeout: its start and the upload, each
+// bounded below (ready 2, upload 2, unpack 1), with one to spare.
+export const LIFETIME_MARGIN_MINUTES = 6;
+export const READY_SECONDS = 120;
+export const UPLOAD_SECONDS = 120;
 // Where the upload goes in the sandbox (the sandbox user's home).
 export const WORK = "/home/runner/work";
 const SAY = "SANDBOX-RUN";
 
 const oneLine = (text) => String(text).replace(/[^\x20-\x7e]+/g, " ").trim().slice(0, 300);
+// The run's own cap is on its timeout; what it can take in all, its start and upload
+// included, is what a place holds, what the month's check counts and what the ledger writes
+// when Depot's record cannot be read.
 export const maxCost = (run) => run.timeout * SIZES[run.type].vcpus;
+export const heldCost = (run) => (run.timeout + LIFETIME_MARGIN_MINUTES * 60) * SIZES[run.type].vcpus;
 
 export function parseArgs(argv) {
   if (argv[0] === "--list" && argv.length === 1) return { mode: "list" };
@@ -123,12 +131,13 @@ export function gate(run, seen) {
   if (running + waiting >= LIMITS.active) {
     return `${running} sandboxes are running and ${waiting} more ${waiting === 1 ? "is" : "are"} about to start from this PC: ${LIMITS.active} at once is the most; more needs the owner's yes`;
   }
+  const held = heldCost(run);
   const room = LIMITS.monthVcpuSeconds * (run.vet !== null ? 1 : 1 - LIMITS.reserve);
-  if (spent + reserved + cost > room) {
+  if (spent + reserved + held > room) {
     const usd = (s) => (s * RATE_USD).toFixed(2);
     return run.vet !== null
-      ? `the month's allowance (USD ${usd(LIMITS.monthVcpuSeconds)}) would be passed: used USD ${usd(spent)}, under way USD ${usd(reserved)}, this run at most USD ${usd(cost)}; the owner's yes first`
-      : `a fifth of the month's allowance (USD ${usd(LIMITS.monthVcpuSeconds)}) is kept back for the vetting step, and this run would go into it (used USD ${usd(spent)}, under way USD ${usd(reserved)}, this run at most USD ${usd(cost)}): a shorter timeout or a smaller size, or the owner's yes`;
+      ? `the month's allowance (USD ${usd(LIMITS.monthVcpuSeconds)}) would be passed: used USD ${usd(spent)}, under way USD ${usd(reserved)}, this run at most USD ${usd(held)}; the owner's yes first`
+      : `a fifth of the month's allowance (USD ${usd(LIMITS.monthVcpuSeconds)}) is kept back for the vetting step, and this run would go into it (used USD ${usd(spent)}, under way USD ${usd(reserved)}, this run at most USD ${usd(held)}): a shorter timeout or a smaller size, or the owner's yes`;
   }
   return null;
 }
@@ -469,10 +478,28 @@ export function client(token, f = fetch) {
     async write(id, path, data, { signal } = {}) {
       const parts = [envelope({ init: { sandbox: { id }, path, createDirectories: true } })];
       for (let i = 0; i < data.length; i += 1 << 20) parts.push(envelope({ data: data.subarray(i, i + (1 << 20)).toString("base64") }));
-      const limit = AbortSignal.timeout(10 * CALL_SECONDS * 1000);
+      const limit = AbortSignal.timeout(UPLOAD_SECONDS * 1000);
       await stream("WriteFile", Buffer.concat(parts), () => {}, signal ? AbortSignal.any([signal, limit]) : limit);
     },
   };
+}
+
+// Where the vetting scripts stage outside code (pinned-vet.sh, and a checkout or a download
+// for the other vetting runs). A --vet folder must lie under it: anywhere else it could be a
+// repository of ours, which goes only through --push and its checks. No variable moves it.
+export const VETTING_ROOT = join(homedir(), ".local", "share", "vetting");
+export function vetFolder(folder, root = VETTING_ROOT) {
+  let dir;
+  let top;
+  try {
+    dir = realpathSync(resolve(folder));
+    top = realpathSync(root);
+  } catch {
+    throw new Error(`the --vet folder must exist under ${root}`);
+  }
+  if (!dir.startsWith(top + "/") || !statSync(dir).isDirectory()) throw new Error(`the --vet folder must lie under ${root}, where the vetting step stages outside code`);
+  if (!existsSync(join(dir, "sandbox-probe.sh"))) throw new Error("the --vet folder must hold sandbox-probe.sh");
+  return dir;
 }
 
 // One fixed place on the PC. No environment variable moves it: whoever starts the script
@@ -503,11 +530,7 @@ const REAL = {
   dataFiles,
   scan,
   pack,
-  vetFolder: (folder) => {
-    const dir = resolve(folder);
-    if (!statSync(dir).isDirectory() || !existsSync(join(dir, "sandbox-probe.sh"))) throw new Error("the --vet folder must hold sandbox-probe.sh");
-    return dir;
-  },
+  vetFolder: (folder) => vetFolder(folder),
   out: (stream, bytes) => (stream === "stdout" ? process.stdout : process.stderr).write(bytes),
   say: (line) => console.error(line),
   now: () => Date.now(),
@@ -538,7 +561,7 @@ async function admin(run, deps, api) {
 
 // Ready when a trivial command answers; a new sandbox answers in about two seconds.
 // Each try is bounded, and a Ctrl-C or a timeout (`signal`) ends the wait.
-async function ready(api, id, deps, signal, limitMs = 180000) {
+async function ready(api, id, deps, signal, limitMs = READY_SECONDS * 1000) {
   const from = deps.now();
   for (;;) {
     if (signal.aborted) throw new Error("interrupted");
@@ -576,7 +599,7 @@ export async function main(argv, deps = REAL) {
   // could pass beside others that had asked at the same moment.
   let slot;
   try {
-    slot = deps.slot(maxCost(run));
+    slot = deps.slot(heldCost(run));
   } catch (e) {
     return stop(`no result (the count of runs under way could not be kept: ${oneLine(e?.code || e?.message)})`);
   }
@@ -665,7 +688,8 @@ export async function main(argv, deps = REAL) {
     await ready(api, id, deps, cut.signal);
     if (upload) {
       await api.write(id, "/tmp/sandbox-run-upload.tgz", upload, { signal: cut.signal });
-      const unpack = await api.run(id, "/bin/bash", ["-c", `mkdir -p '${cwd}' && tar -xzf /tmp/sandbox-run-upload.tgz -C '${cwd}' && rm -f /tmp/sandbox-run-upload.tgz`], { signal: AbortSignal.any([cut.signal, AbortSignal.timeout(CALL_SECONDS * 1000)]) });
+      // The folder goes as an argument ("$1"), never pasted into the script.
+      const unpack = await api.run(id, "/bin/bash", ["-c", 'mkdir -p "$1" && tar -xzf /tmp/sandbox-run-upload.tgz -C "$1" && rm -f /tmp/sandbox-run-upload.tgz', "sandbox-run", cwd], { signal: AbortSignal.any([cut.signal, AbortSignal.timeout(CALL_SECONDS * 1000)]) });
       if (unpack.code !== 0) return stop(`the upload could not be unpacked in the sandbox (exit ${unpack.code})`);
     }
     if (cut.signal.aborted) return stop("interrupted");
@@ -703,7 +727,7 @@ async function settle(api, id, run, deps) {
   const info = (await api.get(id).catch(() => null))?.sandbox ?? null;
   if (!stopped && STOPPED.test(String(info?.status ?? ""))) stopped = true;
   const took = billed(info, vcpus);
-  const worst = (run.timeout + LIFETIME_MARGIN_MINUTES * 60) * vcpus;
+  const worst = heldCost(run);
   try {
     deps.record({ month: monthOf(deps.now()), id, vcpuSeconds: took ? took.vcpuSeconds : worst, usd: Number((took ? took.usd : worst * RATE_USD).toFixed(4)), from: took ? "depot" : "most" });
   } catch {

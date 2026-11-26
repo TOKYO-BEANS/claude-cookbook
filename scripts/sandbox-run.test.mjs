@@ -9,7 +9,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { AS_CHECKOUT, CALL_SECONDS, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
+import { AS_CHECKOUT, CALL_SECONDS, LIFETIME_MARGIN_MINUTES, heldCost, vetFolder, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
 
 const args = (...a) => parseArgs(a);
 // What the gate reads: nothing running, nothing under way, nothing spent this month.
@@ -78,13 +78,16 @@ test("at most ten sandboxes at once: Depot's running ones and this PC's runs wit
 
 test("the month: USD 10 of vCPU-seconds from this PC, a fifth kept back for the vetting step", async () => {
   assert.equal(LIMITS.monthVcpuSeconds * RATE_USD, 10);
-  const run = args("--timeout", "1000", "--", "x"); // at most 4,000
+  // A run holds its timeout and the sandbox's margin for its start and upload.
+  assert.equal(LIFETIME_MARGIN_MINUTES, 6);
+  const run = args("--timeout", "1000", "--", "x");
+  assert.equal(heldCost(run), (1000 + 360) * 4);
   // 160,000 may go to other runs: spent, under way and this one together.
-  assert.equal(gate(run, seen({ spent: 150000, reserved: 6000 })), null);
-  assert.match(gate(run, seen({ spent: 150000, reserved: 6001 })), /kept back for the vetting step/);
-  const vet = args("--type", "small", "--timeout", "900", "--vet", "sandbox", "--", "bash", "sandbox-probe.sh", "x"); // 1,800
-  assert.equal(gate(vet, seen({ spent: 198200 })), null);
-  assert.match(gate(vet, seen({ spent: 198201 })), /month's allowance \(USD 10\.00\) would be passed/);
+  assert.equal(gate(run, seen({ spent: 150000, reserved: 4560 })), null);
+  assert.match(gate(run, seen({ spent: 150000, reserved: 4561 })), /kept back for the vetting step/);
+  const vet = args("--type", "small", "--timeout", "900", "--vet", "sandbox", "--", "bash", "sandbox-probe.sh", "x"); // 2,520
+  assert.equal(gate(vet, seen({ spent: 197480 })), null);
+  assert.match(gate(vet, seen({ spent: 197481 })), /month's allowance \(USD 10\.00\) would be passed/);
 });
 
 test("the ledger: this month's lines are summed; a broken line is no result, never nothing spent", async () => {
@@ -617,10 +620,10 @@ test("a run without an upload: the gate, one sandbox off the tailnet and Depot C
   assert.equal(await main(["--timeout", "120", "--", "node", "-v"], w.deps), 0);
   assert.deepEqual(kinds(w), ["api", "slot", "list", "create", "up", "run", "stop", "get", "list"]);
   assert.deepEqual(w.calls[0], ["api", true]);
-  assert.deepEqual(w.calls[1], ["slot", 480]);
+  assert.deepEqual(w.calls[1], ["slot", (120 + 360) * 4]);
   const opts = w.calls[3][1];
   assert.match(opts.name, /^sandbox-run-\d+-[0-9a-f]{8}$/);
-  assert.deepEqual({ ...opts, name: undefined }, { name: undefined, resources: { vcpus: 4, memoryMb: 8192 }, timeoutMinutes: 7, disableTailnet: true, disableDepotCache: true });
+  assert.deepEqual({ ...opts, name: undefined }, { name: undefined, resources: { vcpus: 4, memoryMb: 8192 }, timeoutMinutes: 8, disableTailnet: true, disableDepotCache: true });
   assert.ok(!("env" in opts) && !("configuration" in opts), "no variable and no CI secret reaches the sandbox");
   assert.deepEqual(w.calls[5], ["run", ID, "/bin/bash", "-c", WORK]);
   assert.deepEqual(w.out, [`SANDBOX-RUN: ${ID} started (default, 4 vCPU)`, "stdout: output", `SANDBOX-RUN: ${ID} stopped; 15.7 s at 4 vCPU, USD 0.0031 by Depot's record`]);
@@ -646,6 +649,13 @@ test("a run with an upload: listed, staged, data-checked, scanned, packed, sent 
   assert.deepEqual(kinds(w), ["api", "slot", "list", "permit", "stage", "data", "scan", "pack", "create", "up", "write", "run", "run", "stop", "get", "list"]);
   assert.deepEqual(w.calls[10], ["write", ID, "/tmp/sandbox-run-upload.tgz", 3]);
   assert.deepEqual(w.calls[11], ["run", ID, "/bin/bash", "-c"]);
+  // The folder reaches the unpack step as an argument, never inside the script.
+  const unpack = world({}, { run: async (id, cmd, a) => { if (cmd === "/bin/true") return { started: true, code: 0 }; unpack.calls.push(["argv", ...a]); return { started: true, code: 0 }; } });
+  unpack.deps.stage = () => ({ dir: "/tmp/s/it's", tmp: "/tmp/s", prefix: "", remove: () => {} });
+  assert.equal(await main(["--timeout", "120", "--push", ".", "--", "x"], unpack.deps), 0);
+  const first = unpack.calls.find((c) => c[0] === "argv");
+  assert.equal(first[2], 'mkdir -p "$1" && tar -xzf /tmp/sandbox-run-upload.tgz -C "$1" && rm -f /tmp/sandbox-run-upload.tgz');
+  assert.deepEqual(first.slice(3), ["sandbox-run", `${WORK}/it's`]);
   assert.deepEqual(w.calls[12], ["run", ID, "/bin/bash", "-c", `${WORK}/shop`]);
   assert.deepEqual(w.removed, ["/tmp/s/shop"]);
 });
@@ -796,7 +806,7 @@ test("Ctrl-C while the sandbox has not answered yet ends the wait: exit 75, the 
 test("a sandbox that does not answer, or a failed start, is stopped and the run did not start", async () => {
   const w = world({}, { run: async () => { throw new Error("RunCommand: HTTP 503"); } });
   assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);
-  assert.match(w.out.join("\n"), /not started: the sandbox did not answer in 180 seconds/);
+  assert.match(w.out.join("\n"), /not started: the sandbox did not answer in 120 seconds/);
   assert.ok(kinds(w).includes("stop"));
   const noid = world({}, { create: async () => ({ sandbox: {} }) });
   assert.equal(await main(["--timeout", "120", "--", "x"], noid.deps), NOT_STARTED);
@@ -839,7 +849,7 @@ test("a stop that fails is tried again; a sandbox still running after that is na
   assert.equal(stops, 2);
   assert.match(once.out.at(-1), new RegExp(`^SANDBOX-RUN: ${ID} stopped; Depot's record could not be read`));
   assert.equal(once.ledger[0].from, "most");
-  assert.equal(once.ledger[0].vcpuSeconds, (120 + 300) * 4);
+  assert.equal(once.ledger[0].vcpuSeconds, (120 + 360) * 4);
   const stuck = world({}, { stop: async () => { throw new Error("StopSandbox: HTTP 500"); } });
   assert.equal(await main(["--timeout", "120", "--", "x"], stuck.deps), 0);
   assert.equal(stuck.out.at(-1), `SANDBOX-RUN: the sandbox ${ID} may still be running: node sandbox-run.mjs --list, then --stop ${ID}`);
@@ -963,4 +973,34 @@ test("frames split anywhere are read whole", async () => {
   const got = [];
   for (const b of bytes) got.push(...read(Buffer.from([b])));
   assert.deepEqual(got.map((g) => g.msg), [{ a: 1 }, { b: "two" }]);
+});
+
+test("a --vet folder lies under the vetting folder and holds the probe; anything else is refused", { skip: process.platform === "win32" }, () => {
+  const root = mkdtempSync(join(tmpdir(), "sandbox-run-vet-"));
+  try {
+    const vetting = join(root, "vetting");
+    const good = join(vetting, "tool-1.0.0", "sandbox");
+    mkdirSync(good, { recursive: true });
+    writeFileSync(join(good, "sandbox-probe.sh"), "#!/bin/bash\n");
+    assert.equal(vetFolder(good, vetting), good);
+    // A repository of ours, the vetting folder itself, a sibling with a lookalike name, a
+    // link out of it and a missing folder.
+    const repoDir = join(root, "shop");
+    mkdirSync(repoDir);
+    writeFileSync(join(repoDir, "sandbox-probe.sh"), "#!/bin/bash\n");
+    assert.throws(() => vetFolder(repoDir, vetting), /must lie under/);
+    writeFileSync(join(vetting, "sandbox-probe.sh"), "#!/bin/bash\n");
+    assert.throws(() => vetFolder(vetting, vetting), /must lie under/);
+    mkdirSync(join(root, "vetting-other"));
+    writeFileSync(join(root, "vetting-other", "sandbox-probe.sh"), "#!/bin/bash\n");
+    assert.throws(() => vetFolder(join(root, "vetting-other"), vetting), /must lie under/);
+    symlinkSync(repoDir, join(vetting, "link"));
+    assert.throws(() => vetFolder(join(vetting, "link"), vetting), /must lie under/);
+    assert.throws(() => vetFolder(join(vetting, "missing"), vetting), /must exist under/);
+    const noProbe = join(vetting, "empty");
+    mkdirSync(noProbe);
+    assert.throws(() => vetFolder(noProbe, vetting), /must hold sandbox-probe\.sh/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

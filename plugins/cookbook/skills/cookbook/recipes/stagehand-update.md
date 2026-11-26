@@ -3,7 +3,7 @@
 - **To update** (needs the owner's yes; it is never a routine update): scan the new commit's
   `pnpm-lock.yaml` and tree with the three scanners (`cfg/scan.sh` in the vetting folder is the
   pattern); run the same install once in a sandbox, with install scripts on
-  (`sandbox-probe.sh` copied into a checkout of that commit, then `sandbox-run.mjs --type
+  (`sandbox-probe.sh` copied into a checkout of that commit under `~/.local/share/vetting`, then `sandbox-run.mjs --type
   default --timeout 1800 --vet <that checkout> -- bash sandbox-probe.sh --cmd "npm install -g
   pnpm@11.11.0 && <the pnpm install below, without --ignore-scripts>"`; `pinned-vet.sh` is npm
   only), and read its `SANDBOX` lines as [vetting-sandbox.md](vetting-sandbox.md) says. Only the install runs

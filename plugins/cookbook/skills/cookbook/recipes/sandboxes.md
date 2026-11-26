@@ -28,7 +28,7 @@ that day); [why](../options/sandboxes.md).
   does needs the owner's yes. A file shaped like data (a spreadsheet, a database, a dump,
   an archive) stops the run until the list names it: look at it first. A repository that
   tracks customer data runs its tests on the laptop. `--vet <folder>` is for the vetting
-  probe only.
+  probe only, on a folder under `~/.local/share/vetting`.
 - **Tests that need an install:** `-- bash -c 'npm ci --ignore-scripts && npm test'`, from
   the committed lockfile; install scripts on only when the tests need them. Node 24 comes
   first on the path, as in CI.
