@@ -778,6 +778,21 @@ test("Ctrl-C stops the sandbox: exit 130 once the command runs, 75 before it", a
   assert.ok(!kinds(early).includes("create"), "no sandbox is made after Ctrl-C");
 });
 
+test("Ctrl-C while the sandbox has not answered yet ends the wait: exit 75, the sandbox stopped and the ledger written", async () => {
+  let interrupt;
+  const w = world({ onSignal: (end) => { interrupt = end; return () => {}; } }, {
+    run: (id, cmd, a, o = {}) => new Promise((_, failed) => {
+      o.signal.addEventListener("abort", () => failed(new Error("aborted")));
+      if (cmd === "/bin/true") setImmediate(() => interrupt("interrupted"));
+    }),
+  });
+  assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);
+  assert.match(w.out.join("\n"), /not started: interrupted/);
+  assert.equal(w.sandboxes.get(ID).status, "SANDBOX_STATUS_FINISHED");
+  assert.equal(w.ledger.length, 1);
+  assert.deepEqual(w.released, ["slot"]);
+});
+
 test("a sandbox that does not answer, or a failed start, is stopped and the run did not start", async () => {
   const w = world({}, { run: async () => { throw new Error("RunCommand: HTTP 503"); } });
   assert.equal(await main(["--timeout", "120", "--", "x"], w.deps), NOT_STARTED);

@@ -466,10 +466,11 @@ export function client(token, f = fetch) {
       }, signal);
       return result;
     },
-    async write(id, path, data) {
+    async write(id, path, data, { signal } = {}) {
       const parts = [envelope({ init: { sandbox: { id }, path, createDirectories: true } })];
       for (let i = 0; i < data.length; i += 1 << 20) parts.push(envelope({ data: data.subarray(i, i + (1 << 20)).toString("base64") }));
-      await stream("WriteFile", Buffer.concat(parts), () => {}, AbortSignal.timeout(10 * CALL_SECONDS * 1000));
+      const limit = AbortSignal.timeout(10 * CALL_SECONDS * 1000);
+      await stream("WriteFile", Buffer.concat(parts), () => {}, signal ? AbortSignal.any([signal, limit]) : limit);
     },
   };
 }
@@ -536,10 +537,13 @@ async function admin(run, deps, api) {
 }
 
 // Ready when a trivial command answers; a new sandbox answers in about two seconds.
-async function ready(api, id, deps, limitMs = 180000) {
+// Each try is bounded, and a Ctrl-C or a timeout (`signal`) ends the wait.
+async function ready(api, id, deps, signal, limitMs = 180000) {
   const from = deps.now();
   for (;;) {
-    const r = await api.run(id, "/bin/true", []).catch(() => null);
+    if (signal.aborted) throw new Error("interrupted");
+    const r = await api.run(id, "/bin/true", [], { signal: AbortSignal.any([signal, AbortSignal.timeout(CALL_SECONDS * 1000)]) }).catch(() => null);
+    if (signal.aborted) throw new Error("interrupted");
     if (r?.code === 0) return;
     if (deps.now() - from > limitMs) throw new Error(`the sandbox did not answer in ${limitMs / 1000} seconds`);
     await deps.wait(500);
@@ -636,10 +640,10 @@ export async function main(argv, deps = REAL) {
     }
     slot.up();
     deps.say(`${SAY}: ${id} started (${run.type}, ${vcpus} vCPU)`);
-    await ready(api, id, deps);
+    await ready(api, id, deps, cut.signal);
     if (upload) {
-      await api.write(id, "/tmp/sandbox-run-upload.tgz", upload);
-      const unpack = await api.run(id, "/bin/bash", ["-c", `mkdir -p '${cwd}' && tar -xzf /tmp/sandbox-run-upload.tgz -C '${cwd}' && rm -f /tmp/sandbox-run-upload.tgz`]);
+      await api.write(id, "/tmp/sandbox-run-upload.tgz", upload, { signal: cut.signal });
+      const unpack = await api.run(id, "/bin/bash", ["-c", `mkdir -p '${cwd}' && tar -xzf /tmp/sandbox-run-upload.tgz -C '${cwd}' && rm -f /tmp/sandbox-run-upload.tgz`], { signal: AbortSignal.any([cut.signal, AbortSignal.timeout(CALL_SECONDS * 1000)]) });
       if (unpack.code !== 0) return stop(`the upload could not be unpacked in the sandbox (exit ${unpack.code})`);
     }
     if (cut.signal.aborted) return stop("interrupted");
