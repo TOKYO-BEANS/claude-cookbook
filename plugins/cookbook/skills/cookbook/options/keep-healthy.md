@@ -3,8 +3,8 @@
 Chosen by fit for the job on 15 November 2026. Each "checked" below was read from this PC that
 day, not assumed.
 
-- **Big output: context-mode.** It cuts any tool result over 8,192 bytes (4,096 by default; set
-  on 22 November 2026, `recipes/context-mode.md`) and indexes the rest
+- **Big output: context-mode.** It cuts any tool result over 8,600 bytes (4,096 by default; set
+  on 26 November 2026, above the page limit of 8,500, `recipes/context-mode.md`) and indexes the rest
   locally, so no project has to remember to do it. Weighed: ranged reads and `rg` by hand (the
   fallback); a subagent per large read (a whole context for one answer). MCP's own features
   (skills, tasks, elicitation, uploads) and what we use: [mcp-features](mcp-features.md).

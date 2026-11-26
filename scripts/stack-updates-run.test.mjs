@@ -1250,7 +1250,7 @@ test("recipeText: every recipe the real catalog names is found; setup and eviden
   assert.doesNotMatch(sandboxes, /The state folder|\.local\/share\/sandbox-run/);
 });
 
-// ---- fix round 1 (Task 8): pages under context-mode's default 4,096-byte cut (8,192 here since 22 Nov 2026)
+// ---- fix round 1 (Task 8): pages under context-mode's default 4,096-byte cut (8,600 here since 26 Nov 2026)
 
 import { NOT_PAGEABLE, PAGE_BYTES, labelOf, reportPages } from "../plugins/cookbook/skills/stack-updates/scripts/updates.mjs";
 

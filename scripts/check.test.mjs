@@ -16,7 +16,12 @@ const withPage = (name, fn) => pages.map((p) => (p.name === name ? { name, text:
 // Some tests add text to the real SKILL.md or a real page and expect no error. They are not
 // about size, so they read the file filled to its limit and leave size errors out: a file at
 // its stated limit passes the suite, as it passes check.mjs. The limits have their own test.
-const filled = (text, limit, cost) => `${text}${"x".repeat(limit - cost(text))}`;
+// The size check ignores carriage returns, so the fill is measured without them: on a CRLF
+// checkout the filled file is at its limit too, not short of it.
+const filled = (text, limit, cost) => {
+  const t = text.replace(/\r/g, "");
+  return `${t}${"x".repeat(limit - cost(t))}`;
+};
 const fullSkill = filled(skillText, SKILL_LIMIT, Buffer.byteLength);
 const fullPage = (t) => filled(t, PAGE_READ_LIMIT, readCost);
 const besidesSize = (list) => list.filter((e) => !/ over \d+: (split the page|move text to a recipe page)$/.test(e));
@@ -99,7 +104,7 @@ test("the stack-updates skill's update table names recipe pages by their exact t
 
 test("pages: each fits one Read, has its own title and a plain name; SKILL.md stays an index", () => {
   const long = withPage("recipes/seo.md", (t) => `${t}${"x".repeat(60)}\n`.repeat(40));
-  assert.ok(errors({ pages: long }).some((e) => /^recipes\/seo\.md: \d+ bytes as a Read result, over 4000: split the page$/.test(e)));
+  assert.ok(errors({ pages: long }).some((e) => /^recipes\/seo\.md: \d+ bytes as a Read result, over 8500: split the page$/.test(e)));
   assert.equal(readCost("ab\ncd\n"), 6 + 9 * 3);
   for (const p of pages) assert.ok(readCost(p.text.replace(/\r/g, "")) <= PAGE_READ_LIMIT, p.name);
   assert.ok(errors({ pages: withPage("recipes/seo.md", (t) => t.replace(/^# .+\n/, "")) }).some((e) => /seo\.md: must start with a "# Title" line/.test(e)));
