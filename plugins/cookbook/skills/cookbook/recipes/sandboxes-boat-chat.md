@@ -51,7 +51,7 @@ on compute so the pc actually never has to throttle again". Why: a local chat ta
   [--type small|default] [--push]` (about 10 s on a stopped sandbox, 30 s new): proxy on;
   the recorded sandbox resumed, or a new one (`small`, environment `claude-proxy`); T3 at
   this laptop's version (npm `--before` 24 hours ago) and `linkedEnvironmentsEnabled`; the
-  repository pushed to `/home/user/<name>` when it is not there, as `sandbox-run.mjs` uploads
+  repository pushed to `/home/user/<repo>-<branch>` when it is not there, as `sandbox-run.mjs` uploads
   one (on the upload list, the files git tracks with their edits, no unnamed data-shaped
   file, Gitleaks clean; a finding goes to the owner), as a git repository with one base
   commit (`--push` copies it again, only over a copy with nothing unpulled); `t3 serve` on 127.0.0.1:3773, restarted after a resume;

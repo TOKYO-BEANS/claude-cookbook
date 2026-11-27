@@ -10,7 +10,7 @@
 //
 // - `up` brings one sandbox up for chats: the AI credentials proxy on, the sandbox resumed
 //   (or made: `claude-proxy` environment, `small`), the repository pushed to
-//   /home/user/<name> when it is not there yet (or with --push) as sandbox-run uploads one:
+//   /home/user/<repository>-<branch> when it is not there yet (or with --push) as sandbox-run uploads one:
 //   on the upload list, the files git tracks with their edits, no unnamed data-shaped file,
 //   Gitleaks clean (a finding goes to the owner), T3 Code at this laptop's
 //   version, `t3 serve` on 127.0.0.1:3773 (restarted after a resume: the proxy's placeholder
@@ -58,6 +58,7 @@ const STOPPED = new Set(["stopped", "stopping"]);
 const GONE = new Set(["error", "failed", "deleted", "deleting", "archived"]);
 export const stateKind = (state) => (STOPPED.has(state) ? "stopped" : GONE.has(state) || !state ? "gone" : "running");
 const NAME = /^[A-Za-z0-9._-]{1,80}$/;
+const BASE_LINE = /^base: ([0-9a-f]{40}|unknown)( with uncommitted edits)?$/;
 const T3_VERSION = /^t3 v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)\s*$/m;
 
 // The last JSON value of a JSONL output, or null.
@@ -275,10 +276,17 @@ const stopForward = (io) => {
   io.run("pkill", ["-f", `[s]sh.*${LOCAL_PORT}`]);
 };
 
+// The copy's name in the sandbox: the repository and the checkout's branch, so two
+// worktrees of one repository never share a copy, a base or a pull mark.
+export const copyName = (repo, branch) => `${repo}-${String(branch ?? "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "")}`.slice(0, 80).replace(/-+$/, "");
+
 function repoAndName(io, folder) {
   const repo = resolve(folder);
-  const name = repoName(io.run("git", ["-C", repo, "remote", "get-url", "origin"]).stdout) || basename(repo);
-  if (!NAME.test(name)) throw new Error(`the folder's name is not a plain name: ${name}`);
+  const base = repoName(io.run("git", ["-C", repo, "remote", "get-url", "origin"]).stdout) || basename(repo);
+  let branch = io.run("git", ["-C", repo, "rev-parse", "--abbrev-ref", "HEAD"]).stdout.trim();
+  if (!branch || branch === "HEAD") branch = io.run("git", ["-C", repo, "rev-parse", "--short", "HEAD"]).stdout.trim();
+  const name = copyName(base, branch);
+  if (!NAME.test(name) || !branch) throw new Error(`the copy's name is not a plain name: ${name}`);
   return { repo, name };
 }
 
@@ -431,7 +439,9 @@ function pull(io, o) {
     if (inBox(io, id, `cd /home/user/${name} && git update-ref refs/boat/pulled ${mark}`).code !== 0) throw new Error("could not mark the pull in the sandbox");
   };
   const size = io.size(file);
-  io.out(`patch: ${file} (${size} bytes; ${lines.at(-2) ?? "base unknown"})`);
+  // Text from the sandbox is data: only a base line of the script's own shape is shown.
+  const baseLine = BASE_LINE.test(lines.at(-2) ?? "") ? lines.at(-2) : "base unknown";
+  io.out(`patch: ${file} (${size} bytes; ${baseLine})`);
   if (size === 0) {
     io.out("no changes since the last pull");
     return 0;
