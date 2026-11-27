@@ -38,7 +38,7 @@ first, Jev only for a sender the rules cannot place.
   `proton-sort.py undo [--run ID] [--dry-run]` (the same `with-key.mjs proton-bridge` wrapper)
   moves each mail back if it is still where the run put it, keeps it there in later runs, and
   gives each sender Jev joined a group of its own unless a person changed it since. Folders the
-  run made stay; nothing is deleted. A sort and an undo take turns (a lock file in the state folder).
+  run made stay; nothing is deleted. A sort and an undo take turns (a lock file in the state folder). Older mail of a split sender that earlier runs filed stays in the folder Jev picked; the undo says how many.
 - **Run by hand:** `node ~/.local/bin/with-key.mjs proton-bridge PROTON_BRIDGE_PASSWORD node
   ~/.local/bin/with-key.mjs jev-compaction TYPESAFE_API_KEY python3 -I
   ~/.local/bin/proton-sort.py sort --dry-run --verbose`. Without `--dry-run` it moves.
