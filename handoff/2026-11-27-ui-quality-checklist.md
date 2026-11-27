@@ -20,6 +20,8 @@ checkable by a script where possible and by the judge on another model otherwise
 **Verification.** `node scripts/check.mjs` passes; the suite runs in a Depot sandbox (see the
 pull request).
 
+**Dead ends.** None.
+
 **Outstanding.** The rollout: one pull request per site check script. Today one site has a
 check (the first site); its rollout is a job of its own in that repository, opened after this
 merge. Until that layer is merged and proved there, its check runs four layers.
