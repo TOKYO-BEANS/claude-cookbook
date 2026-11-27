@@ -22,7 +22,7 @@
 // - The files land in ~/.local/share/sandbox-run/claude/<run>/ with summary.json (model,
 //   turns, usage and the cap's figure), and the last lines say where.
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -156,9 +156,27 @@ export function unpack(base64, dir) {
     const list = spawnSync("tar", ["-tzf", tgz], { encoding: "utf8" });
     if (list.status !== 0) return "the files could not be read";
     const names = list.stdout.split("\n").filter(Boolean);
-    if (names.length !== FILES.length || names.some((n) => !FILES.includes(n))) return "the files were not the three expected";
-    const x = spawnSync("tar", ["-xzf", tgz, "-C", dir, "--no-same-owner", "--no-same-permissions", ...FILES], { encoding: "utf8" });
-    return x.status === 0 ? null : "the files could not be unpacked";
+    if (names.length !== FILES.length || new Set(names).size !== names.length || names.some((n) => !FILES.includes(n))) return "the files were not the three expected";
+    // Only regular files: a link made in the sandbox must not point at a file on this laptop.
+    const kinds = spawnSync("tar", ["-tvzf", tgz], { encoding: "utf8" });
+    if (kinds.status !== 0) return "the files could not be read";
+    const lines = kinds.stdout.split("\n").filter(Boolean);
+    if (lines.length !== FILES.length || lines.some((l) => !l.startsWith("-"))) return "the files were not three regular files";
+    const out = join(tmp, "out");
+    mkdirSync(out);
+    const x = spawnSync("tar", ["-xzf", tgz, "-C", out, "--no-same-owner", "--no-same-permissions", ...FILES], { encoding: "utf8" });
+    if (x.status !== 0) return "the files could not be unpacked";
+    for (const f of FILES) {
+      let st;
+      try {
+        st = lstatSync(join(out, f));
+      } catch {
+        return "the files could not be unpacked";
+      }
+      if (!st.isFile() || st.nlink !== 1) return "the files were not three regular files";
+    }
+    for (const f of FILES) copyFileSync(join(out, f), join(dir, f), constants.COPYFILE_EXCL);
+    return null;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }
