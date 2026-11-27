@@ -11,6 +11,8 @@ report it with the site's way back, and the mail's restore command.
 **Verification.** `node scripts/check.mjs` passes; the suite runs in a Depot sandbox (see the
 pull request).
 
-**Dead ends.** None. **Outstanding.** None.
+**Dead ends.** None.
+
+**Outstanding.** None.
 
 **Evidence.** The pull request. Release log: the `sa-release` run of this pull request.
