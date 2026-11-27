@@ -24,6 +24,22 @@ front ends it is better at.
   counts as commercial any deployment that earns anyone money, a paid builder included: client
   sites, a care plan, ads and affiliate links. Such a project goes on Cloudflare, or on Vercel
   Pro (USD 20 a seat a month), which is a spend: ask the owner first.
+- **The first site's move off Wix** (an Astro site with Stripe, planned on Cloudflare): it is
+  commercial and not Next.js, so it stays on Cloudflare (Workers static assets, a Worker for the
+  Stripe checkout and webhook). Vercel is a candidate for it only on Pro, a spend the owner
+  decides.
+- **A preview address per branch, the visual check's "after"** ([visual-check](visual-check.md)):
+  on Cloudflare, Workers Builds gives each branch of a linked repository a stable preview URL
+  (`<alias>-<worker>.<subdomain>.workers.dev`, or `wrangler versions upload --preview-alias
+  <branch>`); public once preview URLs are on, so nothing secret goes on them. On Vercel every
+  push to a branch builds a preview with a branch URL; previews sit behind Vercel's sign-in, and
+  a capture script passes it with the project's "Protection Bypass for Automation" secret (all
+  plans), kept in the key store like any key.
+- **A sync or real-time back end** (shared state, WebSockets): Cloudflare Durable Objects hold
+  a room's state and connections with their own storage. Vercel Functions hold WebSockets but
+  each connection is pinned to one instance for a limited time, so shared state needs an outside
+  store. Where a shared local-first sync layer runs is weighed in its own chat (27 November
+  2026); this split follows that decision.
 - **Vercel Connect** (`vercel.com/connect/cloudflare`) hands a Vercel app short-lived
   Cloudflare credentials at run time (OIDC), instead of a Cloudflare token in its environment
   variables. Creating a connector gives Vercel access to the Cloudflare account: an access
