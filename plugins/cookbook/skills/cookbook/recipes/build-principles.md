@@ -30,17 +30,18 @@ so.
    *Check:* list the fields; one the system could fill is a finding, and so is a second
    rating. Box sizes are measured by the UI checklist's item 14.
 3. **Decide the mood first.** Before the first screen of a product, decide what it is for and
-   so its mood: **work** (calm and quiet: no sound, no rewards, motion only with a purpose) or
+   so its mood: **work** (calm and quiet: no sound, no reward screens, motion only with a
+   purpose; principle 4's brief moment after a finished task aside) or
    **playful** (rewards, sound and livelier motion are welcome). Write it as one line,
    `Mood: work` or `Mood: playful`, in the product's `CLAUDE.md`. Claude decides it from what
    the product is for; when the owner's brief leaves that unclear, it is a question about the
    outcome and is asked.
-   *Check:* the line exists, and the change fits it: sound, streaks, confetti or a reward
-   screen in a work product is a finding.
+   *Check:* the line exists, and the change fits it: sound, streaks or a reward screen in a
+   work product is a finding.
 4. **Delight is small, ends fast and never blocks.** A moment of fun (a surprise after a
    cleared list, a playful empty state) comes only after the work is done, ends by itself
    within a few seconds or with one action, never covers or delays a main action, and is
-   still under `prefers-reduced-motion: reduce`. In a work product it stays rare.
+   still under `prefers-reduced-motion: reduce`. In a work product it stays rare and silent.
    *Check:* the delight shows only after a finished task, a person can carry on working at
    once, and it never runs on a path someone uses to get work done.
 5. **Lists become tasks in one action.** Wherever a product with tasks lets people write a
