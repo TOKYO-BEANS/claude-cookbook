@@ -28,8 +28,10 @@ this pull request. Vercel's API is not proven yet: no token (below).
 **Outstanding.**
 - **The token `vercel`** (owner). The Vercel account's email is a "Sign in with Apple" relay made
   for GitHub, which drops all mail from Vercel, so every "Verify your identity" code (token,
-  new email, passkey) never arrives. Claude drafted a support request asking Vercel to set the
-  email to the owner's Proton address; the owner sends it. Clears: Vercel changes the email,
+  new email, passkey) never arrives (proved 27 November 13:14 UTC: a code sent, none reached the
+  Proton mailbox; Vercel offers no other method, and its support agent sends such cases to
+  Account Recovery). The owner submitted Vercel's Account Recovery form the same day, asking
+  for the Proton address as primary. Clears: Vercel changes the email,
   the owner creates the token (`claude-linux`, team scope, 1 year) and saves it as the vault
   note `key/vercel`. Then Claude copies it into the key store, proves it with `GET /v2/user` and
   `GET /v10/projects`, and adds the expiry to the catalog entry's `dates`.

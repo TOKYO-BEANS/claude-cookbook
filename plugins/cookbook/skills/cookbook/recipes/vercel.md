@@ -55,8 +55,11 @@ front ends it is better at.
 - **The token**: a classic token `claude-linux`, scoped to the owner's team, made by the owner
   at `vercel.com/account/tokens` (the sign-in is the owner's GitHub) and saved as the vault
   note `key/vercel`. Vercel asks again for a mailed code before it makes a token: the account's
-  primary email must be one that receives mail (an Apple "Sign in with Apple" relay made for
-  GitHub drops Vercel's mail). Its expiry is in `catalog.json`.
+  primary email must be one that receives mail: an Apple "Sign in with Apple" relay made for
+  GitHub drops all of Vercel's mail, and every way to change it (new email, passkey,
+  authenticator) asks for that code first. The way out is Vercel's Account Recovery form
+  (`vercel.com/accountrecovery`, "Not receiving one-time password"); its support agent cannot
+  change an email. Its expiry goes into the catalog entry's `dates` once the token exists.
 
 ## Not used, and why (27 November 2026)
 
