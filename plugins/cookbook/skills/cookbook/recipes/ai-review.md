@@ -34,5 +34,7 @@
   plan's weekly limit. A smaller input budget, another model or no review for some pull requests is
   the owner's decision.
 - Review every change to `.depot/**`: a branch can edit the job and read the secret.
+- An AI fix commit carries a summary, its diff and an undo like any agent change:
+  [agent-changes](agent-changes.md).
 - Claude fixes its findings together with failed checks and CodeQL alerts; a finding blocks only with
   evidence (a failing test, a CI run, a code-scanning alert, a line of code).

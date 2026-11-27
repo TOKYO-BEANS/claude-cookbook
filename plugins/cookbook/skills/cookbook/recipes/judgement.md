@@ -7,6 +7,8 @@
 - Keep exact calculations, permissions and fixed business rules in code; confidence alone never
   authorizes a write or clears a security finding. A literal fallback never gets the authority
   of a validated classification.
+- A judgement that changes data people use comes with a summary, the changes and an undo:
+  [agent-changes](agent-changes.md).
 - A community Jev hook, compaction package or approval demo is a reference design: never a
   reason to enable transcript uploads, bypass approval or weaken credential handling.
 - Measure the fixed rule first and write the bar before any call. In one local test (October 2026,
