@@ -321,7 +321,10 @@ def split_flow():
     st = {"version": 1, "accounts": {}}
     gj2 = ps.Grouper(st, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}, "imitation": {"type": "noul", "noul": 0.05}}}))
     gj2.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+    tokens_before_join = list(st["accounts"]["a@gmail.com"]["groups"]["o:facebook.com"]["tokens"])
     joined = gj2.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
+    follower = gj2.group_for("a@gmail.com", ps.sender_of("Facebook <help@facebookmail.com>"))
+    picked_before = json.loads(json.dumps(st["accounts"]["a@gmail.com"]["groups"]["o:facebook.com"]))
     ps.save_state(os.path.join(ps.STATE_DIR, "state.json"), st)
     for j in gj2.joins:
         ps.log(os.path.join(ps.STATE_DIR, "moves.jsonl"), {"run": "r1", "join": j})
@@ -333,7 +336,10 @@ def split_flow():
     g = ps.Grouper(s2, "k", 5, None, opener_with({}))
     return {"joined": joined, "joins": len(gj2.joins), "changes": changes, "undo": undone, "aliases": acc.get("aliases"),
             "own": acc["senders"]["security@facebookmail.com"],
-            "after": g.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>")), "calls": g.jev_calls}
+            "after": g.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>")),
+            "follower": [follower, acc["senders"]["help@facebookmail.com"], g.group_for("a@gmail.com", ps.sender_of("Facebook <help@facebookmail.com>"))],
+            "picked_before": picked_before["addresses"], "tokens_before_join": tokens_before_join, "picked": acc["groups"]["o:facebook.com"],
+            "new_addresses": acc["groups"]["o:facebookmail.com"]["addresses"], "calls": g.jev_calls}
 out["split"] = split_flow()
 print(json.dumps(out))
 `;
@@ -518,6 +524,14 @@ test("undo splits a sender Jev joined into a group of its own, and the next run 
   assert.equal(s.own, "o:facebookmail.com");
   assert.notEqual(s.after, "Facebook (facebook.com)");
   assert.equal(s.calls, 0);
+  // A later address that followed the join moves too, and the picked group is as before the join.
+  assert.equal(s.follower[0], "Facebook (facebook.com)");
+  assert.equal(s.follower[1], "o:facebookmail.com");
+  assert.equal(s.follower[2], s.after);
+  assert.deepEqual(s.picked_before, ["notify@facebook.com", "security@facebookmail.com", "help@facebookmail.com"]);
+  assert.deepEqual(s.picked.addresses, ["notify@facebook.com"]);
+  assert.deepEqual(s.picked.tokens, s.tokens_before_join);
+  assert.deepEqual(s.new_addresses, ["help@facebookmail.com", "security@facebookmail.com"]);
 });
 
 test("a sort and an undo never rewrite the state at once: the second waits for the lock", opts, () => {

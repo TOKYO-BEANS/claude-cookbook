@@ -15,7 +15,9 @@ only, recorded no move, and had no undo: a wrong join meant moving mail by hand 
   already undone. Nothing is deleted; folders the run made stay. The mail already put back is
   kept even when a move fails partway (an AI fix commit, from the review's medium finding),
   and a sort and an undo hold a lock file in the state folder, so neither saves an older
-  state over the other (the review's low finding).
+  state over the other (the review's low finding). Splitting a Jev join moves every
+  address that followed it (the same rule key) to the new group and gives the picked group
+  back its addresses and tokens from before the join (the second review's medium finding).
 - `recipes/proton-mail-sorting.md`: the new file and the two commands.
 - `scripts/proton-sort.test.mjs`: two tests. One sorts, shows, undoes (dry and real), checks
   the boxes equal the start, re-sorts and finds nothing to move, then a second undo is refused.

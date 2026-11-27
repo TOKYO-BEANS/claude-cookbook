@@ -427,7 +427,8 @@ class Grouper:
                 aliases[key] = pick
                 self.joins.append({"account": account, "addr": sender["addr"], "rule": key, "pick": pick,
                                    "into": groups[pick]["label"], "label": sender["label"],
-                                   "kind": sender["kind"], "tokens": sender["tokens"]})
+                                   "kind": sender["kind"], "tokens": sender["tokens"],
+                                   "before_tokens": list(groups[pick]["tokens"])})
                 key = pick
             else:
                 groups[key] = {"label": unique_label(sender, groups), "tokens": [], "addresses": []}
@@ -669,10 +670,19 @@ def cmd_undo(cfg, args):
         if args.dry_run:
             continue
         del aliases[j["rule"]]
+        # Every address that reached the picked group through this join (the logged one and any
+        # later one with the same rule key) moves to the new group and leaves the picked one.
+        moving = sorted(a for a, k in senders.items() if k == j["pick"]
+                        and (a == j["addr"] or (sender_of(a, j["account"]) or {}).get("key") == j["rule"]))
+        picked = groups.get(j["pick"], {})
+        picked["addresses"] = [a for a in picked.get("addresses", []) if a not in moving]
+        added = set(j.get("tokens") or []) - set(j.get("before_tokens") or [])
+        picked["tokens"] = sorted(t for t in picked.get("tokens", []) if t not in added)
         groups[j["rule"]] = {"label": unique_label({"label": j.get("label") or j["addr"], "addr": j["addr"],
                                                     "kind": j.get("kind", "")}, groups),
-                             "tokens": list(j.get("tokens") or []), "addresses": [j["addr"]]}
-        senders[j["addr"]] = j["rule"]
+                             "tokens": list(j.get("tokens") or []), "addresses": moving[:10]}
+        for a in moving:
+            senders[a] = j["rule"]
     total = sum(back.values())
     if not args.dry_run:
         save_state(state_path, state)
