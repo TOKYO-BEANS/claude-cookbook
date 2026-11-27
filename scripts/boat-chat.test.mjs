@@ -223,7 +223,7 @@ test("where and usage", async () => {
   assert.equal(bad.calls.length, 0);
 });
 
-test("boat's states: idle runs, stopped resumes, error is replaced", async () => {
+test("boat's states: idle runs, stopped resumes, error is kept as failed, deleted is replaced", async () => {
   assert.deepEqual(["running", "idle", "ready", "starting", "stopped", "stopping", "error", "failed", "archived", "deleted", "deleting", undefined].map(stateKind), ["running", "running", "running", "running", "stopped", "stopped", "failed", "failed", "failed", "gone", "gone", "gone"]);
   const w = world({ sandbox: "idle", serving: true, answers: true, proxy: true });
   assert.equal(await main(["up", "."], w.io), 0, w.out.join("\n"));
@@ -430,10 +430,22 @@ test("an unknown proxy state is never read as off", async () => {
 test("a failed sandbox is never replaced: up stops with its id", async () => {
   const w = world({ sandbox: "error" });
   assert.equal(await main(["up", "."], w.io), 1);
-  assert.match(w.out.at(-1), /sandbox bx_old1234 is error: it may hold unpulled work, so no new one replaces it/);
+  assert.equal(w.out.at(-1), "boat-chat: sandbox bx_old1234 is error: boat recover bx_old1234 first, or down --delete --discard once its work is safe; no new one replaces it");
   assert.ok(!w.boat().some((c) => c.startsWith("new ")));
   assert.equal(w.state.id, "bx_old1234");
-  assert.equal(w.proxy, false, "the proxy this up turned on goes off again");
+  assert.ok(!w.boat().includes("ai proxy on --json"), "a command that must fail spends nothing");
+  assert.equal(w.proxy, false);
+  // pull and down --delete say the same way out, never "run up" or "stopped".
+  const p = world({ sandbox: "failed" });
+  assert.equal(await main(["pull", "."], p.io), 1);
+  assert.equal(p.out.at(-1), "boat-chat: sandbox bx_old1234 is failed: boat recover bx_old1234 first, or down --delete --discard");
+  const d = world({ sandbox: "archived", proxy: true });
+  assert.equal(await main(["down", "--delete"], d.io), 1);
+  assert.equal(d.out.at(-1), "boat-chat: not deleted: sandbox bx_old1234 is archived: boat recover bx_old1234 first, or down --delete --discard");
+  assert.ok(!d.boat().some((c) => c.startsWith("delete ")));
+  const x = world({ sandbox: "error", proxy: true });
+  assert.equal(await main(["down", "--delete", "--discard"], x.io), 0);
+  assert.ok(x.boat().includes("delete bx_old1234 --yes --json"));
 });
 
 test("down leaves the proxy as it is when boat's list cannot be read", async () => {
