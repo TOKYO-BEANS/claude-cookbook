@@ -720,13 +720,21 @@ def cmd_undo(cfg, args):
     if not args.dry_run:
         save_state(state_path, state)
         log(moves_path, {"run": run, "undone": total, "missing": missing, "split": split})
-    older = older_mail(cfg, splits) if splits else 0
+    # Only after a real undo (in a dry run the run's own mail is still there and would be
+    # counted), and a failed count never hides what the undo already did.
+    older, older_error = 0, ""
+    if splits and not args.dry_run:
+        try:
+            older = older_mail(cfg, splits)
+        except (Fail, OSError, pm.imaplib.IMAP4.error, pm.ssl.SSLError) as e:
+            older_error = f" Older mail of those senders not counted ({pm.one_line(e, 120)})."
     print(f"{'would put' if args.dry_run else 'put'} {total} mail(s) of run {run} back "
           f"({', '.join(f'{n} to {pm.one_line(s, 120)}' for s, n in sorted(back.items())) or 'none'}); "
           f"{missing} no longer where the run put them, left alone; {unknown} without a Message-ID, not found; "
           f"{split} sender(s) Jev joined {'would get' if args.dry_run else 'now have'} a group of their own. "
           f"Folders the run made stay."
-          + (f" {older} older mail(s) from those senders, filed by earlier runs, stay in the folder Jev picked: move them by hand." if older else ""))
+          + (f" {older} older mail(s) from those senders, filed by earlier runs, stay in the folder Jev picked: move them by hand." if older else "")
+          + older_error)
 
 
 def parser():

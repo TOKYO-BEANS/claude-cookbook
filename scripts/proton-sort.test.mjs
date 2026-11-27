@@ -335,11 +335,12 @@ def split_flow():
     ps.pm.imap_connect = lambda c: MidImap({"INBOX": {}, "Folders/a@gmail.com/Facebook (facebook.com)": {
         "5": mail(From="Facebook <help@facebookmail.com>", To="a@gmail.com"), "6": mail(From="Facebook <notify@facebook.com>", To="a@gmail.com")}})
     changes = said_by(ps.cmd_changes, ["changes"])
+    dry = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo", "--dry-run"])
     undone = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo"])
     s2 = json.load(open(os.path.join(ps.STATE_DIR, "state.json")))
     acc = s2["accounts"]["a@gmail.com"]
     g = ps.Grouper(s2, "k", 5, None, opener_with({}))
-    return {"joined": joined, "joins": len(gj2.joins), "changes": changes, "undo": undone, "aliases": acc.get("aliases"),
+    return {"dry": dry, "joined": joined, "joins": len(gj2.joins), "changes": changes, "undo": undone, "aliases": acc.get("aliases"),
             "own": acc["senders"]["security@facebookmail.com"],
             "after": g.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>")),
             "follower": [follower, acc["senders"]["help@facebookmail.com"], g.group_for("a@gmail.com", ps.sender_of("Facebook <help@facebookmail.com>"))],
@@ -347,6 +348,21 @@ def split_flow():
             "new_addresses": acc["groups"]["o:facebookmail.com"]["addresses"], "calls": g.jev_calls}
 out["split"] = split_flow()
 out["run_ids"] = [ps.new_run_id(), ps.new_run_id()]
+class SearchFromFails(MidImap):
+    def uid(self, cmd, *a):
+        if cmd == "SEARCH" and "FROM" in a:
+            return "NO", [b"unsupported"]
+        return super().uid(cmd, *a)
+ps.STATE_DIR = tempfile.mkdtemp()
+st = {"version": 1, "accounts": {}}
+gk = ps.Grouper(st, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}, "imitation": {"type": "noul", "noul": 0.05}}}))
+gk.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+gk.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
+ps.save_state(os.path.join(ps.STATE_DIR, "state.json"), st)
+for j in gk.joins:
+    ps.log(os.path.join(ps.STATE_DIR, "moves.jsonl"), {"run": "r2", "join": j})
+ps.pm.imap_connect = lambda c: SearchFromFails({"INBOX": {}, "Folders/a@gmail.com/Facebook (facebook.com)": {}})
+out["count_fails"] = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo"])
 print(json.dumps(out))
 `;
 
@@ -524,6 +540,7 @@ test("undo splits a sender Jev joined into a group of its own, and the next run 
   const s = run().split;
   assert.equal(s.joined, "Facebook (facebook.com)");
   assert.equal(s.joins, 1);
+  assert.match(s.dry, /1 sender\(s\) Jev joined would get a group of their own\. Folders the run made stay\.$/);
   assert.match(s.changes, /^run r1: 0 mail\(s\) moved, 1 sender\(s\) joined to a group by Jev\.\nJev joined security@facebookmail\.com to Facebook \(facebook\.com\)\nundo: proton-sort undo --run r1$/);
   assert.match(s.undo, /1 sender\(s\) Jev joined now have a group of their own\. Folders the run made stay\. 1 older mail\(s\) from those senders, filed by earlier runs, stay in the folder Jev picked: move them by hand\.$/);
   assert.deepEqual(s.aliases, {});
@@ -548,4 +565,8 @@ test("two runs in the same second get run ids of their own", opts, () => {
   const [a, b] = run().run_ids;
   assert.match(a, /^\d{8}T\d{6}Z-[0-9a-f]{6}$/);
   assert.notEqual(a, b);
+});
+
+test("a failed count of older mail never hides what the undo did", opts, () => {
+  assert.match(run().count_fails, /^put 0 mail\(s\) of run r2 back .*1 sender\(s\) Jev joined now have a group of their own\. Folders the run made stay\. Older mail of those senders not counted \(.*\)\.$/);
 });
