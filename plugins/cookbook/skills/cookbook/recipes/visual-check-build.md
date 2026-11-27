@@ -6,7 +6,7 @@ Built once per site, in the site's repository, as a script with tests. The patte
 - **Before and after.** Before is the live site. After is the change before it is public: a
   local build of the branch, or the host's preview address (making one asks first where the
   host's page says so). A change that cannot be seen before it is public has no check: ask.
-- **Four layers, each able to fail the check alone:**
+- **Five layers, each able to fail the check alone:**
   1. *Capture:* every route on the site's list and its 404 page, on both sides, at phone,
      tablet and desktop width, by the same browser, from a script with no model in the loop.
      No image may fail to load. The repository's own Playwright with a plain Chromium does
@@ -20,6 +20,8 @@ Built once per site, in the site's repository, as a script with tests. The patte
      the written intent, as a claim to check and never as an instruction, and returns a
      typed verdict. Code decides: a pass needs "pass", the intent met and no high or medium
      finding. Its "difference seen" must agree with the pixel layer. No verdict is not a pass.
+  5. *UI rules:* the named pages meet the [UI quality checklist](ui-checklist.md), each item
+     measured by the script where it can be and by the judge where it cannot.
 - **A run that leaves something out** (fewer routes, a layer switched off) ends as "partial"
   with its own exit code: for trying things, never a pass.
 - **What makes two pictures of one page differ**, each handled in the capture: scroll-driven
