@@ -93,7 +93,7 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
         if (a.startsWith("info ")) return w.sandbox && !w.infoDown ? ok(JSON.stringify({ id: args[1], state: w.sandbox })) : { code: 1, stdout: "", stderr: "not found" };
         if (a === "list --all --json") return w.listDown ? { code: 1, stdout: "", stderr: "network" } : ok(JSON.stringify({ sandboxes: w.sandbox ? [{ id: "bx_old1234", state: w.sandbox }] : [] }));
         if (a.startsWith("resume ")) { w.sandbox = "running"; return ok(); }
-        if (a.startsWith("new ")) { w.sandbox = "running"; return ok('{"event":"created","id":"bx_new5678"}\n{"event":"ready","id":"bx_new5678"}\n'); }
+        if (a.startsWith("new ")) { w.sandbox = "running"; w.fresh = true; return ok('{"event":"created","id":"bx_new5678"}\n{"event":"ready","id":"bx_new5678"}\n'); }
         if (a.startsWith("stop ")) { w.sandbox = "stopping"; return ok(); }
         if (a.startsWith("delete ")) { w.sandbox = null; return ok(); }
         if (a.startsWith("extend ") || a.startsWith("push ") || a.startsWith("scp ")) return ok();
@@ -107,7 +107,8 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
           if (script.includes("update-ref refs/boat/pulled")) { w.marked = script.split(" ").at(-1); return exec(""); }
           if (script.includes("pgrep")) return exec(serving ? "yes\n" : "no\n");
           if (script.includes("auth pairing create")) return exec(JSON.stringify({ credential: CRED }));
-          if (script.includes("npm install")) return exec("t3 v0.1.13-nightly.20261125.5258\n");
+          if (script.includes("npm install")) { w.installs = (w.installs ?? 0) + 1; return exec(w.installFails ? "" : "t3 v0.1.13-nightly.20261125.5258\n"); }
+          if (script.includes("t3 --version 2>/dev/null")) return exec(w.boxT3 === undefined ? (w.sandbox === "running" && !w.fresh ? "t3 v0.1.13-nightly.20261125.5258\n" : "") : w.boxT3);
           return exec("");
         }
       }
@@ -354,4 +355,36 @@ test("pull, then pull --apply: the second brings the same work and applies it", 
   assert.equal(w.applied, true);
   assert.equal(w.marked, "c".repeat(40));
   assert.equal(w.out.filter((l) => l.startsWith("patch: ")).length, 2, "two patches, the same work, nothing lost");
+});
+
+test("T3 in the sandbox is checked on every up: a failed install or an old version is repaired", async () => {
+  const failed = world({ sandbox: null, copy: "none" });
+  failed.installFails = true;
+  assert.equal(await main(["up", "."], failed.io), 1);
+  assert.match(failed.out.at(-1), /did not install in the sandbox/);
+  assert.equal(failed.proxy, false, "the proxy goes off again");
+  // The next up finds the recorded sandbox running without T3 and installs it.
+  failed.installFails = false;
+  failed.boxT3 = "";
+  assert.equal(await main(["up", "."], failed.io), 0, failed.out.join("\n"));
+  assert.equal(failed.installs, 2);
+  // After a resume, an older T3 is replaced and the server restarted.
+  const old = world({ sandbox: "stopped" });
+  old.boxT3 = "t3 v0.1.12-nightly.20261101.1000\n";
+  assert.equal(await main(["up", "."], old.io), 0, old.out.join("\n"));
+  assert.equal(old.installs, 1);
+  assert.ok(old.out.includes("t3: 0.1.13-nightly.20261125.5258 in the sandbox (was 0.1.12-nightly.20261101.1000)"));
+  // The same version: no install.
+  const same = world({ sandbox: "running", serving: true, answers: true, proxy: true });
+  assert.equal(await main(["up", "."], same.io), 0);
+  assert.equal(same.installs, undefined);
+  assert.ok(!same.boat().some((c) => c.includes("--detach")), "no restart when nothing changed");
+});
+
+test("down on a sandbox that failed still turns the proxy off", async () => {
+  const w = world({ sandbox: "error", proxy: true });
+  assert.equal(await main(["down"], w.io), 0);
+  assert.ok(!w.boat().some((c) => c.startsWith("stop ")));
+  assert.ok(w.out.includes("sandbox: bx_old1234 error, nothing to stop"));
+  assert.equal(w.proxy, false);
 });

@@ -348,7 +348,10 @@ async function bringUp(io, o, { repo, name, ver, state, info }) {
   const repos = new Set(fresh ? [] : state.repos ?? []);
   io.writeState({ id, repos: [...repos] });
 
-  if (fresh) {
+  // T3 at this laptop's version, checked on every up: a failed install or a laptop update is
+  // repaired here, never left for `t3 serve` to fail on.
+  const have = t3Version(inBox(io, id, `${T3_BIN} --version 2>/dev/null || true`).stdout);
+  if (have !== ver) {
     const setup = [
       "set -e",
       `mkdir -p ~/t3cli && cd ~/t3cli && [ -f package.json ] || npm init -y >/dev/null`,
@@ -358,7 +361,8 @@ async function bringUp(io, o, { repo, name, ver, state, info }) {
     ].join("\n");
     const r = inBox(io, id, setup, 600);
     if (r.code !== 0 || t3Version(r.stdout) !== ver) throw new Error(`T3 ${ver} did not install in the sandbox (npm's --before keeps a release under 24 hours out)`);
-    io.out(`t3: ${ver} in the sandbox`);
+    io.out(`t3: ${ver} in the sandbox${have ? ` (was ${have})` : ""}`);
+    restart = true;
   }
 
   const copy = copyState(io, id, name);
@@ -495,10 +499,11 @@ function down(io, o) {
       if (link) t3(io, ["environment", "unlink", link.environmentId], { timeout: 30_000 });
       io.writeState({});
       io.out(`sandbox: ${info.id} deleted, link removed`);
-    } else if (stateKind(info.state) !== "stopped") {
-      if (boat(io, ["stop", info.id, "--json"], { timeout: 300_000 }).code !== 0) throw new Error(`boat stop ${info.id} failed`);
-      io.out(`sandbox: ${info.id} stopped (kept 14 days; up resumes it)`);
-    } else io.out(`sandbox: ${info.id} already stopped`);
+    } else if (stateKind(info.state) === "running") {
+      // A failed stop is said, never thrown: the proxy check below still runs.
+      if (boat(io, ["stop", info.id, "--json"], { timeout: 300_000 }).code !== 0) io.out(`sandbox: boat stop ${info.id} failed; status says what it is`);
+      else io.out(`sandbox: ${info.id} stopped (kept 14 days; up resumes it)`);
+    } else io.out(`sandbox: ${info.id} ${info.state}, nothing to stop`);
   } else io.out("sandbox: none recorded");
   const list = lastJson(boat(io, ["list", "--json"]).stdout);
   const running = Array.isArray(list?.sandboxes) ? list.sandboxes.filter((s) => s.environment === ENVIRONMENT) : [];
