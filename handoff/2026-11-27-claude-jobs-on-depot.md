@@ -28,7 +28,11 @@ sandboxes with the plan token, Opus 5.5 at high effort, to spare the laptop's me
 20 s here, the sandbox 14.3 s at 2 vCPU, USD 0.0014 by Depot's record; `claude-opus-5-5`,
 `apiKeySource` `none`, 4 turns, USD 0.05 at list rates on the plan; the patch held exactly the
 new file; the token was in none of the returned files. Here the job's two Node processes
-peaked at 83 MB. Tests: `scripts/sandbox-claude.test.mjs` and the `--claude` tests in
+peaked at 83 MB. After the review's fixes (token out of the install's environment, the patch
+against the uploaded commit, the prompt on stdin, exit 4 on a scan finding) a second job with
+a prompt starting with "-" committed its own file: the patch held it; its Bash tool's
+`printenv CLAUDE_CODE_OAUTH_TOKEN` was empty (Claude Code keeps the token from its tools,
+though a process in the sandbox could still read it); USD 0.0015 by Depot's record. Tests: `scripts/sandbox-claude.test.mjs` and the `--claude` tests in
 `scripts/sandbox-run.test.mjs`; the suite in a Depot sandbox (see the pull request).
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-27-claude-jobs-on-depot/`
