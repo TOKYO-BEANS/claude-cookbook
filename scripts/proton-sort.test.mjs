@@ -110,7 +110,7 @@ out["settings_none"] = fails({"user": "u@pm.me"})
 out["settings_bad"] = fails({"user": "u@pm.me", "sort": {"accounts": ["a@b.dk, c@d.dk"]}})
 acc, own = ps.load_settings({"user": "u@pm.me", "sort": {"accounts": ["A@Gmail.com"], "own": ["me@x.dk"]}})
 out["settings_ok"] = [acc, sorted(own)]
-import http.client, os, tempfile, contextlib, email, email.policy
+import http.client, os, tempfile, contextlib, email, email.policy, time
 def raises(exc):
     def opener(req, timeout=0):
         raise exc
@@ -240,13 +240,114 @@ out["run"] = sort_run([])
 out["dry"] = sort_run(["--dry-run"])
 out["capped"] = sort_run(["--max-moves", "1"])
 out["unread"] = sort_run([], unseen={"1", "2", "7"})
+import re
+def mid_boxes():
+    b = boxes()
+    for msgs in b.values():
+        for u in list(msgs):
+            msgs[u] = f"Message-ID: <m{u}@example.org>\r\n".encode() + msgs[u]
+    return b
+class MidImap(FakeImap):
+    def uid(self, cmd, *a):
+        if cmd == "SEARCH" and "HEADER" in a:
+            want = b"Message-ID: " + a[-1].strip('"').encode() + b"\r\n"
+            box = self.boxes[self.cur]
+            return "OK", [" ".join(u for u in sorted(box, key=int) if want in box[u]).encode()]
+        return super().uid(cmd, *a)
+def said_by(fn, argv):
+    with contextlib.redirect_stdout(io.StringIO()) as o:
+        try:
+            fn(ps.parser().parse_args(argv))
+        except ps.Fail as e:
+            return "Fail: " + str(e)
+    return o.getvalue().strip()
+def full(fake):
+    return {k: v for k, v in fake.boxes.items() if v}
+def undo_flow(person_deletes=None):
+    fake = MidImap(mid_boxes())
+    ps.pm.imap_connect = lambda c: fake
+    ps.STATE_DIR = tempfile.mkdtemp()
+    before = json.loads(json.dumps({k: {u: m.decode() for u, m in v.items()} for k, v in full(fake).items()}))
+    sort = lambda a: ps.cmd_sort(cfg, a)
+    undo = lambda a: ps.cmd_undo(cfg, a)
+    r = {"sort": said_by(sort, ["sort"]), "after_sort": {k: sorted(v, key=int) for k, v in full(fake).items()}}
+    if person_deletes:
+        box, u = person_deletes
+        del fake.boxes[box][u]
+    r["changes"] = said_by(ps.cmd_changes, ["changes"])
+    r["dry"] = said_by(undo, ["undo", "--dry-run"])
+    r["dry_same"] = {k: sorted(v, key=int) for k, v in full(fake).items()} == r["after_sort"]
+    r["undo"] = said_by(undo, ["undo"])
+    r["restored"] = {k: {u: m.decode() for u, m in v.items()} for k, v in full(fake).items()} == before
+    r["boxes"] = {k: sorted(v, key=int) for k, v in full(fake).items()}
+    r["resort"] = said_by(sort, ["sort"])
+    run_id = re.search(r"run (\S+):", r["sort"]).group(1)
+    r["again"] = said_by(undo, ["undo", "--run", run_id])
+    r["none_left"] = said_by(ps.cmd_changes, ["changes"])
+    return r
+out["undo"] = undo_flow()
+out["undo_person"] = undo_flow(("Folders/home.mail@gmail.com/Amazon (amazon.dk)", "2"))
+class UndoMoveFails(MidImap):
+    fail_to = None
+    def uid(self, cmd, *a):
+        if cmd == "MOVE" and a[1].strip('"') == self.fail_to:
+            return "NO", [b"no space"]
+        return super().uid(cmd, *a)
+def undo_fails_flow():
+    fake = UndoMoveFails(mid_boxes())
+    ps.pm.imap_connect = lambda c: fake
+    ps.STATE_DIR = tempfile.mkdtemp()
+    said_by(lambda a: ps.cmd_sort(cfg, a), ["sort"])
+    fake.fail_to = "Folders/inbox@pm.me"
+    undone = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo"])
+    kept = json.load(open(os.path.join(ps.STATE_DIR, "state.json"))).get("kept")
+    fake.fail_to = None
+    said_by(lambda a: ps.cmd_sort(cfg, a), ["sort"])
+    return {"undo": undone, "kept": kept, "boxes": {k: sorted(v, key=int) for k, v in full(fake).items()}}
+out["undo_fails"] = undo_fails_flow()
+import threading
+ps.STATE_DIR = tempfile.mkdtemp()
+order = []
+def holder():
+    with ps.state_lock():
+        order.append("first in"); time.sleep(0.3); order.append("first out")
+t = threading.Thread(target=holder); t.start(); time.sleep(0.1)
+with ps.state_lock():
+    order.append("second in")
+t.join()
+out["lock_order"] = order
+def split_flow():
+    ps.STATE_DIR = tempfile.mkdtemp()
+    st = {"version": 1, "accounts": {}}
+    gj2 = ps.Grouper(st, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}, "imitation": {"type": "noul", "noul": 0.05}}}))
+    gj2.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+    tokens_before_join = list(st["accounts"]["a@gmail.com"]["groups"]["o:facebook.com"]["tokens"])
+    joined = gj2.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
+    follower = gj2.group_for("a@gmail.com", ps.sender_of("Facebook <help@facebookmail.com>"))
+    picked_before = json.loads(json.dumps(st["accounts"]["a@gmail.com"]["groups"]["o:facebook.com"]))
+    ps.save_state(os.path.join(ps.STATE_DIR, "state.json"), st)
+    for j in gj2.joins:
+        ps.log(os.path.join(ps.STATE_DIR, "moves.jsonl"), {"run": "r1", "join": j})
+    ps.pm.imap_connect = lambda c: MidImap({"INBOX": {}})
+    changes = said_by(ps.cmd_changes, ["changes"])
+    undone = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo"])
+    s2 = json.load(open(os.path.join(ps.STATE_DIR, "state.json")))
+    acc = s2["accounts"]["a@gmail.com"]
+    g = ps.Grouper(s2, "k", 5, None, opener_with({}))
+    return {"joined": joined, "joins": len(gj2.joins), "changes": changes, "undo": undone, "aliases": acc.get("aliases"),
+            "own": acc["senders"]["security@facebookmail.com"],
+            "after": g.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>")),
+            "follower": [follower, acc["senders"]["help@facebookmail.com"], g.group_for("a@gmail.com", ps.sender_of("Facebook <help@facebookmail.com>"))],
+            "picked_before": picked_before["addresses"], "tokens_before_join": tokens_before_join, "picked": acc["groups"]["o:facebook.com"],
+            "new_addresses": acc["groups"]["o:facebookmail.com"]["addresses"], "calls": g.jev_calls}
+out["split"] = split_flow()
 print(json.dumps(out))
 `;
 
 let cached;
 function run() {
   if (!cached) {
-    const r = spawnSync("python3", ["-I", "-c", PY, script], { encoding: "utf8" });
+    const r = spawnSync("python3", ["-I", "-B", "-c", PY, script], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
     cached = JSON.parse(r.stdout);
   }
@@ -385,4 +486,54 @@ test("unread mail waits in its account folder, so Proton's sidebar shows it; rea
     INBOX: ["3", "4"], "Folders/home.mail@gmail.com": ["1", "2"], "Folders/inbox@pm.me": ["7"],
   });
   assert.match(o.unread.said, /^moved 0 mail\(s\) into 0 sender folder\(s\); 2 unread moved to its account folder; 2 left in place; 3 unread waiting there/);
+});
+
+test("a run's changes can be shown and undone: mail goes back, stays back, and a mail a person moved is left alone", opts, () => {
+  const o = run();
+  const u = o.undo;
+  assert.match(u.sort, /\nrun \d{8}T\d{6}Z: see it with `proton-sort changes`, undo it with `proton-sort undo`\.$/);
+  assert.match(u.changes, /^run \d{8}T\d{6}Z: 3 mail\(s\) moved, 0 sender\(s\) joined to a group by Jev\.\n/);
+  assert.match(u.changes, /2\tINBOX -> Folders\/home\.mail@gmail\.com\/Amazon \(amazon\.dk\)/);
+  assert.match(u.changes, /\nundo: proton-sort undo --run \d{8}T\d{6}Z$/);
+  assert.match(u.dry, /^would put 3 mail\(s\) of run \S+ back \(1 to Folders\/inbox@pm\.me, 2 to INBOX\); 0 no longer/);
+  assert.equal(u.dry_same, true);
+  assert.match(u.undo, /^put 3 mail\(s\) of run \S+ back/);
+  assert.equal(u.restored, true);
+  assert.match(u.resort, /^moved 0 mail\(s\) into 0 sender folder\(s\); 0 unread moved to its account folder; 5 left in place/);
+  assert.match(u.again, /^Fail: run \S+ is already undone$/);
+  assert.equal(u.none_left, "Fail: no run to show or undo in moves.jsonl");
+  const p = o.undo_person;
+  assert.match(p.undo, /^put 2 mail\(s\) of run \S+ back \(1 to Folders\/inbox@pm\.me, 1 to INBOX\); 1 no longer where the run put them, left alone;/);
+  assert.deepEqual(p.boxes, { INBOX: ["1", "3", "4"], "Folders/inbox@pm.me": ["7"] });
+});
+
+test("a move that fails partway through an undo still keeps the mail already put back in place", opts, () => {
+  const f = run().undo_fails;
+  assert.match(f.undo, /^Fail: /);
+  assert.deepEqual(f.kept, ["<m1@example.org>", "<m2@example.org>"]);
+  assert.deepEqual(f.boxes, { INBOX: ["1", "2", "3", "4"], "Folders/inbox@pm.me/Netflix (netflix.com)": ["7"] });
+});
+
+test("undo splits a sender Jev joined into a group of its own, and the next run does not ask Jev again", opts, () => {
+  const s = run().split;
+  assert.equal(s.joined, "Facebook (facebook.com)");
+  assert.equal(s.joins, 1);
+  assert.match(s.changes, /^run r1: 0 mail\(s\) moved, 1 sender\(s\) joined to a group by Jev\.\nJev joined security@facebookmail\.com to Facebook \(facebook\.com\)\nundo: proton-sort undo --run r1$/);
+  assert.match(s.undo, /1 sender\(s\) Jev joined now have a group of their own/);
+  assert.deepEqual(s.aliases, {});
+  assert.equal(s.own, "o:facebookmail.com");
+  assert.notEqual(s.after, "Facebook (facebook.com)");
+  assert.equal(s.calls, 0);
+  // A later address that followed the join moves too, and the picked group is as before the join.
+  assert.equal(s.follower[0], "Facebook (facebook.com)");
+  assert.equal(s.follower[1], "o:facebookmail.com");
+  assert.equal(s.follower[2], s.after);
+  assert.deepEqual(s.picked_before, ["notify@facebook.com", "security@facebookmail.com", "help@facebookmail.com"]);
+  assert.deepEqual(s.picked.addresses, ["notify@facebook.com"]);
+  assert.deepEqual(s.picked.tokens, s.tokens_before_join);
+  assert.deepEqual(s.new_addresses, ["help@facebookmail.com", "security@facebookmail.com"]);
+});
+
+test("a sort and an undo never rewrite the state at once: the second waits for the lock", opts, () => {
+  assert.deepEqual(run().lock_order, ["first in", "first out", "second in"]);
 });

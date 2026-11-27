@@ -31,8 +31,14 @@ first, Jev only for a sender the rules cannot place.
 - **Config:** `"sort": {"accounts": [...], "own": [...]}` in `~/.config/proton-mail/config.json`
   (addresses stay out of this public repository). An account written `{"address": ...,
   "also": ["alias@..."]}` also matches a forwarding alias.
-- **State:** `~/.local/share/proton-sort/state.json` (sender to group; a group keeps its senders) and `log.jsonl` (each Jev pick and its scores). To move a sender to another
+- **State:** `~/.local/share/proton-sort/state.json` (sender to group; a group keeps its senders), `log.jsonl` (each Jev pick and its scores) and `moves.jsonl` (each run's moves by Message-ID, and the senders Jev joined). To move a sender to another
   group, edit its line in `senders` and move its folder's mail by hand.
+- **Show and undo a run** ([agent-changes](agent-changes.md)): a run that moved mail prints its
+  run id. `proton-sort.py changes [--run ID]` lists its moves (from, to, count) and Jev's joins;
+  `proton-sort.py undo [--run ID] [--dry-run]` (the same `with-key.mjs proton-bridge` wrapper)
+  moves each mail back if it is still where the run put it, keeps it there in later runs, and
+  gives each sender Jev joined a group of its own unless a person changed it since. Folders the
+  run made stay; nothing is deleted. A sort and an undo take turns (a lock file in the state folder).
 - **Run by hand:** `node ~/.local/bin/with-key.mjs proton-bridge PROTON_BRIDGE_PASSWORD node
   ~/.local/bin/with-key.mjs jev-compaction TYPESAFE_API_KEY python3 -I
   ~/.local/bin/proton-sort.py sort --dry-run --verbose`. Without `--dry-run` it moves.
