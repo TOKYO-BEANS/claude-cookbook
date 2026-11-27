@@ -88,7 +88,8 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
         if (a === "ai proxy --json") return ok(JSON.stringify({ enabled: w.proxy }));
         if (a === "ai proxy on --json") { w.proxy = true; return ok("{}"); }
         if (a === "ai proxy off --json") { w.proxy = false; return ok("{}"); }
-        if (a.startsWith("info ")) return w.sandbox ? ok(JSON.stringify({ id: args[1], state: w.sandbox })) : { code: 1, stdout: "", stderr: "not found" };
+        if (a.startsWith("info ")) return w.sandbox && !w.infoDown ? ok(JSON.stringify({ id: args[1], state: w.sandbox })) : { code: 1, stdout: "", stderr: "not found" };
+        if (a === "list --all --json") return w.listDown ? { code: 1, stdout: "", stderr: "network" } : ok(JSON.stringify({ sandboxes: w.sandbox ? [{ id: "bx_old1234", state: w.sandbox }] : [] }));
         if (a.startsWith("resume ")) { w.sandbox = "running"; return ok(); }
         if (a.startsWith("new ")) { w.sandbox = "running"; return ok('{"event":"created","id":"bx_new5678"}\n{"event":"ready","id":"bx_new5678"}\n'); }
         if (a.startsWith("stop ")) { w.sandbox = "stopping"; return ok(); }
@@ -241,10 +242,15 @@ test("pull: the patch is scanned before anything else reads it, and applied only
   const a = world({ sandbox: "running" });
   assert.equal(await main(["pull", ".", "--apply"], a.io), 0);
   assert.equal(a.applied, true);
+  assert.equal(a.marked, "c".repeat(40), "marked once applied");
   const d = world({ sandbox: "running", dirty: true });
   assert.equal(await main(["pull", ".", "--apply"], d.io), 1);
   assert.match(d.out.at(-1), /the folder has changes of its own/);
   assert.equal(d.applied, false);
+  assert.equal(d.marked, null, "a refused --apply leaves the mark: the next pull returns the same changes");
+  const n = world({ sandbox: "running", applies: false });
+  assert.equal(await main(["pull", ".", "--apply"], n.io), 1);
+  assert.equal(n.marked, null);
   const f = world({ sandbox: "running", found: "1 finding (generic-api-key in x/y): a security finding goes to the owner" });
   assert.equal(await main(["pull", ".", "--apply"], f.io), SCAN_FOUND);
   assert.ok(!f.calls.some((c) => c.cmd === "git" && c.args[2] === "apply"), "a finding: no git apply, not even --check");
@@ -277,4 +283,24 @@ test("down --delete never deletes unpulled work unless told to discard it", asyn
   assert.equal(await main(["down", "--delete", "--discard"], discard.io), 0);
   assert.ok(discard.boat().includes("delete bx_old1234 --yes --json"));
   assert.throws(() => parseArgs(["down", "--discard"]), /--discard goes with down --delete/);
+});
+
+test("a sandbox boat cannot be asked about is never replaced", async () => {
+  const w = world({ sandbox: "stopped" });
+  w.infoDown = true;
+  w.listDown = true;
+  assert.equal(await main(["up", "."], w.io), 1);
+  assert.match(w.out.at(-1), /could not read sandbox bx_old1234 from boat; nothing changed/);
+  assert.ok(!w.boat().some((c) => c.startsWith("new ")), "no new sandbox");
+  assert.deepEqual(w.state, { id: "bx_old1234", repos: ["claude-cookbook"] }, "the record keeps the old id");
+  // info fails but the full list still shows it: used as it is.
+  const v = world({ sandbox: "stopped" });
+  v.infoDown = true;
+  assert.equal(await main(["up", "."], v.io), 0, v.out.join("\n"));
+  assert.ok(v.boat().includes("resume bx_old1234 --json"));
+  // Gone from the full list: a new one.
+  const g = world({ sandbox: null, copy: "none" });
+  g.state = { id: "bx_old1234", repos: ["claude-cookbook"] };
+  assert.equal(await main(["up", "."], g.io), 0, g.out.join("\n"));
+  assert.ok(g.boat().some((c) => c.startsWith("new ")));
 });

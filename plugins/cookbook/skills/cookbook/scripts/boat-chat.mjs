@@ -230,13 +230,20 @@ function where(io, o) {
   return 0;
 }
 
+// The recorded sandbox, or null only when boat's full list confirms it is gone. A failed
+// read (network, auth, an outage) stops the command: the sandbox may hold unpulled work,
+// and a new one must never replace it in the record unseen.
 function sandboxInfo(io, id) {
   if (!id) return null;
   const r = boat(io, ["info", id, "--json"]);
-  if (r.code !== 0) return null;
-  const j = lastJson(r.stdout);
+  const j = r.code === 0 ? lastJson(r.stdout) : null;
   const s = j?.sandbox ?? j;
-  return s?.id === id ? s : null;
+  if (s?.id === id) return s;
+  const list = lastJson(boat(io, ["list", "--all", "--json"]).stdout);
+  if (!Array.isArray(list?.sandboxes)) throw new Error(`could not read sandbox ${id} from boat; nothing changed`);
+  const found = list.sandboxes.find((x) => x?.id === id);
+  if (found) return found;
+  return null;
 }
 
 function proxyOn(io) {
@@ -419,20 +426,24 @@ function pull(io, o) {
     io.out(`patch: ${file}`);
     return SCAN_FOUND;
   }
-  // Scanned and kept here: the next pull starts after it.
-  if (inBox(io, id, `cd /home/user/${name} && git update-ref refs/boat/pulled ${mark}`).code !== 0) throw new Error("could not mark the pull in the sandbox");
+  // Scanned and kept here: the next pull starts after it. With --apply, only once applied.
+  const markPull = () => {
+    if (inBox(io, id, `cd /home/user/${name} && git update-ref refs/boat/pulled ${mark}`).code !== 0) throw new Error("could not mark the pull in the sandbox");
+  };
   const size = io.size(file);
   io.out(`patch: ${file} (${size} bytes; ${lines.at(-2) ?? "base unknown"})`);
   if (size === 0) {
     io.out("no changes since the last pull");
     return 0;
   }
+  if (!o.apply) markPull();
   const check = io.run("git", ["-C", repo, "apply", "--check", file]);
   io.out(`git apply --check: ${check.code === 0 ? "applies" : "does not apply"}`);
   if (o.apply) {
     if (check.code !== 0) throw new Error("not applied: the patch does not apply here");
     if (io.run("git", ["-C", repo, "status", "--porcelain"]).stdout.trim() !== "") throw new Error("not applied: the folder has changes of its own");
     if (io.run("git", ["-C", repo, "apply", file]).code !== 0) throw new Error("git apply failed");
+    markPull();
     io.out(`applied to ${repo}: review, commit and open the pull request from here`);
   }
   return 0;
