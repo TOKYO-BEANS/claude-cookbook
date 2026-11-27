@@ -31,6 +31,9 @@ that project's `CLAUDE.md` and the owner has said yes to it once, always ask."
 - **The check is the gate.** A change to its thresholds, its route list, what its capture
   hides or skips, the judge's instructions or its pass rule needs the owner's yes, like any
   change that weakens a check. A false alarm is investigated, never waved through.
+- **What the site is held to:** its own design, and the [UI quality
+  checklist](ui-checklist.md) for every site and app: a layer of each site's check. A check
+  built before the list gets it through a pull request in the site's repository.
 - **A site with no check:** build one ([how](visual-check-build.md)), prove it with one pass
   and one fail, record it in the project's `CLAUDE.md`, then ask the owner once: "May a pass
   of this check lift the stop for this site?" Until the yes is recorded, always ask.
