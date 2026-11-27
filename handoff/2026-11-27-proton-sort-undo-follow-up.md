@@ -19,6 +19,11 @@ without a word.
 whole suite runs in a Depot sandbox (see the pull request). After the merge the script is
 copied to `~/.local/bin/` and one sort is run by hand.
 
+**Then (the review of that follow-up, two lows).** The count runs only after a real undo
+(in a dry run the run's own mail would be counted as older), and a failed count is named in
+the summary instead of hiding what the undo did; tests "a failed count of older mail never
+hides what the undo did" and the dry-run line in the split test. 18 of 18 pass locally.
+
 **Dead ends.** None.
 
 **Outstanding.** None.
