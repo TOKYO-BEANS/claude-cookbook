@@ -89,7 +89,9 @@ test("the summary: model, plan login, turns, list-rate cost and result from the 
     "not json",
     JSON.stringify({ type: "result", num_turns: 3, total_cost_usd: 0.42, usage: { output_tokens: 10 }, duration_ms: 1000, is_error: false, result: "done" }),
   ].join("\n"));
-  assert.deepEqual(s, { model: MODEL, apiKeySource: "none", tools: ["Read"], turns: 3, costUsd: 0.42, usage: { output_tokens: 10 }, durationMs: 1000, isError: false, result: "done" });
+  assert.deepEqual(s, { model: MODEL, planLogin: true, tools: ["Read"], turns: 3, costUsd: 0.42, usage: { output_tokens: 10 }, durationMs: 1000, isError: false, result: "done" });
+  assert.equal(summarize(JSON.stringify({ type: "system", subtype: "init", apiKeySource: "ANTHROPIC_API_KEY" })).planLogin, false);
+  assert.equal(summarize("").planLogin, null);
   assert.equal(localVersion("2.1.332 (Claude Code)\n"), "2.1.332");
   assert.equal(localVersion("nothing"), null);
 });

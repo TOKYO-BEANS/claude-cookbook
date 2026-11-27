@@ -71,7 +71,7 @@ export function parseArgs(argv) {
 export const FILTER = `const fs=require("fs");const out=fs.openSync(process.argv[1],"w");let buf="";
 const say=(t)=>process.stderr.write("${SAY}: "+t+"\\n");
 const line=(l)=>{fs.writeSync(out,l+"\\n");let m;try{m=JSON.parse(l)}catch{return}
-if(m.type==="system"&&m.subtype==="init"){if(m.apiKeySource!=="none"){say("refused: the run is not on the plan token (apiKeySource "+String(m.apiKeySource).slice(0,40)+")");process.exit(3)}say(m.model+" on the plan token, tools "+(m.tools||[]).join(","))}
+if(m.type==="system"&&m.subtype==="init"){if(m.apiKeySource!=="none"){say("refused: the run is not on the plan token");process.exit(3)}say(m.model+" on the plan token, tools "+(m.tools||[]).join(","))}
 else if(m.type==="assistant")for(const c of (m.message&&m.message.content)||[])if(c.type==="tool_use")say("tool "+c.name)};
 process.stdin.on("data",(d)=>{buf+=d;let i;while((i=buf.indexOf("\\n"))>=0){line(buf.slice(0,i));buf=buf.slice(i+1)}});
 process.stdin.on("end",()=>{if(buf)line(buf)});`;
@@ -124,8 +124,10 @@ export function splitOutput(text) {
 }
 
 // The run's figures from its event stream: model, plan login, turns, cost at list rates, result.
+// The login is kept only as yes or no (`apiKeySource` is "none" on the plan login): the field
+// names where a key came from, and a name of a key source is not written out.
 export function summarize(jsonl) {
-  const s = { model: null, apiKeySource: null, tools: [], turns: null, costUsd: null, usage: null, durationMs: null, isError: null, result: null };
+  const s = { model: null, planLogin: null, tools: [], turns: null, costUsd: null, usage: null, durationMs: null, isError: null, result: null };
   for (const line of String(jsonl).split("\n")) {
     let m;
     try {
@@ -133,7 +135,7 @@ export function summarize(jsonl) {
     } catch {
       continue;
     }
-    if (m?.type === "system" && m.subtype === "init") Object.assign(s, { model: m.model ?? null, apiKeySource: m.apiKeySource ?? null, tools: m.tools ?? [] });
+    if (m?.type === "system" && m.subtype === "init") Object.assign(s, { model: m.model ?? null, planLogin: m.apiKeySource === undefined ? null : m.apiKeySource === "none", tools: m.tools ?? [] });
     if (m?.type === "result") Object.assign(s, { turns: m.num_turns ?? null, costUsd: m.total_cost_usd ?? null, usage: m.usage ?? null, durationMs: m.duration_ms ?? null, isError: m.is_error ?? null, result: typeof m.result === "string" ? m.result : null });
   }
   return s;
@@ -197,7 +199,7 @@ async function main(argv) {
   if (summary.result) process.stdout.write(`${summary.result}\n`);
   const patch = join(dir, "changes.patch");
   const changed = existsSync(patch) && readFileSync(patch, "utf8").trim() !== "";
-  console.error(`${SAY}: ${summary.model ?? "no model"} (${EFFORT}), apiKeySource ${summary.apiKeySource ?? "unknown"}, ${summary.turns ?? "?"} turns, USD ${summary.costUsd ?? "?"} at API list rates (on the plan)`);
+  console.error(`${SAY}: ${summary.model ?? "no model"} (${EFFORT}), ${summary.planLogin === true ? "on the plan login" : summary.planLogin === false ? "NOT on the plan login" : "login unknown"}, ${summary.turns ?? "?"} turns, USD ${summary.costUsd ?? "?"} at API list rates (on the plan)`);
   if (!scanned.ok) console.error(`${SAY}: the secret scan of the returned files: ${scanned.reason}. Do not apply the patch; a finding goes to the owner`);
   console.error(`${SAY}: files in ${dir}${changed ? `; changes: read ${patch}, then git apply it` : "; no changes"}`);
   return code;
