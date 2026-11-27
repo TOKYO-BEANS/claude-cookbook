@@ -4,13 +4,19 @@
 // model: the limits below are numbers, and a job past them is the owner's to allow.
 //
 //   node sandbox-run.mjs [--type small|default|large] --timeout <seconds>
-//                        [--push <folder> | --vet <folder>] -- <command> [arguments]
+//                        [--push <folder> | --vet <folder>] [--claude] -- <command> [arguments]
 //   node sandbox-run.mjs --list            the org's sandboxes that are not stopped
 //   node sandbox-run.mjs --stop <id>       stops one
 //
 // - Every run gets its size, a timeout and none of the org's secrets: no CI secret, no
 //   variable, off the org's tailnet and without Depot Cache's credentials. The key stays in
 //   this process; the sandbox never sees it.
+// - --claude (owner's yes, 27 November 2026) gives the command one more variable: the
+//   Claude plan token from the key-store key `claude-depot`, a token made for Depot alone so
+//   it can be revoked alone, as CLAUDE_CODE_OAUTH_TOKEN. It goes with the command only, never
+//   with the sandbox or the unpack step, and never to --vet's outside code. Code in the
+//   sandbox can read it: run only our own jobs there (sandbox-claude.mjs). The token is
+//   masked in the output that comes back.
 // - --push sends a copy made here, never the folder itself: the files git tracks, with their
 //   uncommitted edits, and no untracked file. Gitleaks reads the copy first; a finding, or a
 //   scan with no result, stops the run. The copy is removed afterwards. In the sandbox the
@@ -85,7 +91,7 @@ export function parseArgs(argv) {
     if (argv.length !== 2 || !/^[a-z0-9]{6,40}$/.test(argv[1])) return { error: "--stop takes one sandbox id" };
     return { mode: "stop", id: argv[1] };
   }
-  const out = { mode: "run", type: "default", timeout: null, push: null, vet: null, command: [] };
+  const out = { mode: "run", type: "default", timeout: null, push: null, vet: null, claude: false, command: [] };
   const cut = argv.indexOf("--");
   const own = cut < 0 ? argv : argv.slice(0, cut);
   out.command = cut < 0 ? [] : argv.slice(cut + 1);
@@ -99,13 +105,16 @@ export function parseArgs(argv) {
       const v = value();
       if (v === null || !/^[1-9][0-9]{0,6}$/.test(v)) return { error: "--timeout takes whole seconds, 1 or more" };
       out.timeout = Number(v);
+    } else if (a === "--claude") {
+      out.claude = true;
     } else if (a === "--push" || a === "--vet") {
       const v = value();
       if (!v) return { error: `${a} takes a folder` };
       out[a.slice(2)] = v;
-    } else return { error: `${oneLine(a)} is not an option of sandbox-run: size, timeout and upload are the only ones` };
+    } else return { error: `${oneLine(a)} is not an option of sandbox-run: size, timeout, upload and --claude are the only ones` };
   }
   if (out.push !== null && out.vet !== null) return { error: "--push and --vet do not go together" };
+  if (out.claude && out.vet !== null) return { error: "--claude never goes with --vet: outside code gets no token" };
   if (out.timeout === null) return { error: "--timeout <seconds> is required" };
   if (out.command.length === 0) return { error: "a command is required after --" };
   if (out.vet !== null && (out.command[0] !== "bash" || out.command[1] !== "sandbox-probe.sh")) {
@@ -475,9 +484,10 @@ export function client(token, f = fetch) {
     stop: (id) => unary("StopSandbox", { sandbox: { id }, blocking: true }),
     // Runs one command: { started, code } (code null when no end was reported). Output
     // goes to out(stream, bytes) as it comes.
-    async run(id, cmd, args, { cwd, out = () => {}, signal } = {}) {
+    // env: variables for this command only (Depot's RunCommand `env`, a map of strings).
+    async run(id, cmd, args, { cwd, env, out = () => {}, signal } = {}) {
       const result = { started: false, code: null };
-      await stream("RunCommand", envelope({ sandbox: { id }, cmd, args, ...(cwd ? { cwd } : {}) }), (msg) => {
+      await stream("RunCommand", envelope({ sandbox: { id }, cmd, args, ...(cwd ? { cwd } : {}), ...(env ? { env } : {}) }), (msg) => {
         if (msg.started) result.started = true;
         if (msg.stdout) out("stdout", Buffer.from(msg.stdout.data ?? "", "base64"));
         if (msg.stderr) out("stderr", Buffer.from(msg.stderr.data ?? "", "base64"));
@@ -518,8 +528,34 @@ export const STATE = join(homedir(), ".local", "share", "sandbox-run");
 export const UPLOAD_LIST = join(STATE, "upload-allowed.txt");
 export const LEDGER = join(STATE, "ledger.jsonl");
 
+// The key-store key of the Claude plan token for Depot (--claude), and the variable it goes in.
+export const CLAUDE_KEY = "claude-depot";
+export const CLAUDE_VAR = "CLAUDE_CODE_OAUTH_TOKEN";
+export const MASK = "[the Claude token]";
+
+// Masks one secret in a stream that comes in pieces: the end of each piece that could be the
+// start of the secret is held until the next piece, and flush() gives the rest. Bytes are
+// taken one for one (latin1), so text in any encoding passes as it came.
+export function masker(secret, emit) {
+  if (!secret) return { push: emit, flush: () => {} };
+  let held = "";
+  return {
+    push(bytes) {
+      const text = (held + Buffer.from(bytes).toString("latin1")).split(secret).join(MASK);
+      const keep = Math.min(text.length, secret.length - 1);
+      held = text.slice(text.length - keep);
+      if (text.length > keep) emit(Buffer.from(text.slice(0, text.length - keep), "latin1"));
+    },
+    flush() {
+      if (held) emit(Buffer.from(held, "latin1"));
+      held = "";
+    },
+  };
+}
+
 const REAL = {
   key: async () => (await import("./with-key.mjs")).readKey("depot-org").then((k) => k.key),
+  claudeKey: async () => (await import("./with-key.mjs")).readKey(CLAUDE_KEY).then((k) => k.key),
   api: (token) => client(token),
   slot: (cost) => takeSlot(join(STATE, "slots"), { cost }),
   spent: (month) => spentIn(month, existsSync(LEDGER) ? readFileSync(LEDGER, "utf8") : ""),
@@ -596,6 +632,15 @@ export async function main(argv, deps = REAL) {
     api = deps.api(await deps.key());
   } catch (e) {
     return stop(`no result (the key depot-org could not be read: ${oneLine(e?.message ?? e)})`);
+  }
+  let claude = null;
+  if (run.claude) {
+    try {
+      claude = await deps.claudeKey();
+    } catch (e) {
+      claude = null;
+    }
+    if (typeof claude !== "string" || claude.length < 20) return stop(`no result (the key ${CLAUDE_KEY} could not be read)`);
   }
   if (run.mode !== "run") {
     try {
@@ -713,7 +758,14 @@ export async function main(argv, deps = REAL) {
     if (cut.signal.aborted) return stop("interrupted");
     timer = setTimeout(() => end("timeout"), run.timeout * 1000);
     started = true;
-    const r = await api.run(id, "/bin/bash", commandArgs(run), { cwd, out: deps.out, signal: cut.signal });
+    const masks = { stdout: masker(claude, (b) => deps.out("stdout", b)), stderr: masker(claude, (b) => deps.out("stderr", b)) };
+    let r;
+    try {
+      r = await api.run(id, "/bin/bash", commandArgs(run), { cwd, out: (stream, bytes) => masks[stream].push(bytes), signal: cut.signal, ...(claude ? { env: { [CLAUDE_VAR]: claude } } : {}) });
+    } finally {
+      masks.stdout.flush();
+      masks.stderr.flush();
+    }
     if (why === "timeout") throw new Error("timeout");
     if (r.code === null) {
       deps.say(`${SAY}: the command's end was not reported`);

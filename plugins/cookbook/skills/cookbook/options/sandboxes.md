@@ -25,16 +25,18 @@ upload, the upload list and the data-shaped file stop, a spend guard (a ledger o
 records, USD 10 a month), a timeout, ten at once, and a stop of every sandbox. A sandbox is
 created off the org's tailnet and without Depot Cache's credentials, and gets no CI secret.
 
-**The Claude job: not moved, and why.** boat's AI credentials proxy kept the plan's sign-in
-out of the sandbox. Depot's Managed Agents route for Claude Code needs a Claude Team or
-Enterprise plan with self-hosted environments (the owner's is Max), starts from Claude's
-apps rather than `claude -p`, and its Claude Managed Agents route bills an API key: never, by
-the plan-only rule. A plain sandbox running `claude -p` would hold the plan token as a
-readable variable. So `boat-claude.mjs` is retired, and a long Claude job runs as a
-plan-token `claude -p` on the laptop ([scripted-runs](../recipes/scripted-runs.md)).
+**The Claude job: moved on 27 November 2026.** boat's AI credentials proxy kept the plan's
+sign-in out of the sandbox. Depot's Managed Agents route for Claude Code needs a Claude Team or
+Enterprise plan with self-hosted environments (the owner's is Max), and its host-bound secrets
+(a gateway fills the value in, the sandbox never holds it) exist only for those connections.
+Its Claude Managed Agents route bills an API key: never, by the plan-only rule. So a plain
+sandbox runs `claude -p` with the plan token as a readable variable. The owner chose against
+that on 20 November and for it on 27 November ("we put the claude subscription token on Depot
+then, and use opus 5.5 high"), to spare the laptop's memory. The token is one made for Depot
+alone, sent with the job's command only ([sandboxes-claude](../recipes/sandboxes-claude.md)).
 
-**Weigh again** if the owner moves to a Claude Team or Enterprise plan, or if Depot runs
-Claude Code on an individual plan or behind a credentials proxy.
+**Weigh again** if the owner moves to a Claude Team or Enterprise plan, or if Depot offers
+host-bound secrets to plain sandboxes: then the token can stay out.
 
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-20-depot-vs-boat/` and
 `~/.local/share/claude-cookbook/evidence/2026-11-26-depot-sandboxes/`.

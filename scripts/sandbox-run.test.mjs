@@ -10,14 +10,14 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { AS_CHECKOUT, CALL_SECONDS, LIFETIME_MARGIN_MINUTES, NAME_LOOKUPS, SIGNALS, heldCost, vetFolder, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
+import { AS_CHECKOUT, CALL_SECONDS, CLAUDE_KEY, CLAUDE_VAR, MASK, masker, LIFETIME_MARGIN_MINUTES, NAME_LOOKUPS, SIGNALS, heldCost, vetFolder, DATA_SHAPED, INTERRUPTED, LIMITS, NOT_STARTED, RATE_USD, SIZES, TIMED_OUT, WORK, billed, client, commandArgs, dataFiles, envelope, frames, gate, listEntry, main, monthOf, normalKey, notStopped, onList, pack, parseArgs, repoKey, scan, spentIn, stage, takeSlot, unnamed } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
 
 const args = (...a) => parseArgs(a);
 // What the gate reads: nothing running, nothing under way, nothing spent this month.
 const seen = (over = {}) => ({ running: 0, waiting: 0, reserved: 0, spent: 0, ...over });
 
 test("arguments: a timeout and a command are required; default (4 vCPU) is the default size", async () => {
-  assert.deepEqual(args("--timeout", "300", "--", "npm", "test"), { mode: "run", type: "default", timeout: 300, push: null, vet: null, command: ["npm", "test"] });
+  assert.deepEqual(args("--timeout", "300", "--", "npm", "test"), { mode: "run", type: "default", timeout: 300, push: null, vet: null, claude: false, command: ["npm", "test"] });
   assert.equal(args("--type", "large", "--timeout", "60", "--push", ".", "--", "make").type, "large");
   assert.match(args("--", "npm", "test").error, /--timeout/);
   assert.match(args("--timeout", "300").error, /command/);
@@ -1089,4 +1089,67 @@ test("under its old name a run with no --type stays small, as boat-run's was", a
   for (const kept of [["--type", "large", "--timeout", "60", "--", "x"], ["--list"], ["--stop", "abcdef1"]]) assert.deepEqual(oldDefaults(kept), kept);
   // A --type after -- belongs to the command, not to the run.
   assert.deepEqual(oldDefaults(["--timeout", "60", "--", "node", "--type", "x"]).slice(0, 2), ["--type", "small"]);
+});
+
+test("--claude: a flag of a run, never with --vet", async () => {
+  assert.equal(args("--timeout", "60", "--claude", "--", "claude", "-p").claude, true);
+  assert.equal(args("--timeout", "60", "--claude", "--push", ".", "--", "x").push, ".");
+  assert.match(args("--timeout", "60", "--claude", "--vet", "/v", "--", "bash", "sandbox-probe.sh").error, /never goes with --vet/);
+  assert.equal(CLAUDE_KEY, "claude-depot");
+  assert.equal(CLAUDE_VAR, "CLAUDE_CODE_OAUTH_TOKEN");
+});
+
+test("the token is masked in output that comes in pieces, split anywhere", async () => {
+  const secret = "sk-ant-oat01-abcdefghijklmnopqrstuvwxyz";
+  const text = `start ${secret} middle ${secret}${secret} end`;
+  for (let size = 1; size <= text.length; size += 3) {
+    const got = [];
+    const m = masker(secret, (b) => got.push(b));
+    for (let i = 0; i < text.length; i += size) m.push(Buffer.from(text.slice(i, i + size)));
+    m.flush();
+    const all = Buffer.concat(got).toString();
+    assert.equal(all, `start ${MASK} middle ${MASK}${MASK} end`, `pieces of ${size}`);
+  }
+  const plain = [];
+  const none = masker(null, (s, b) => plain.push(b ?? s));
+  none.push(Buffer.from("x"));
+  assert.equal(plain.length, 1);
+  // Bytes that are not UTF-8 pass as they came.
+  const raw = [];
+  const m = masker(secret, (b) => raw.push(b));
+  m.push(Buffer.from([0xff, 0xfe, 0x41]));
+  m.flush();
+  assert.deepEqual([...Buffer.concat(raw)], [0xff, 0xfe, 0x41]);
+});
+
+test("--claude: the token goes with the command only, masked on the way back; without the key nothing starts", async () => {
+  const secret = "sk-ant-oat01-token-for-depot-0123456789";
+  const runs = [];
+  const w = world({ claudeKey: async () => secret }, {
+    run: async (id, cmd, a, o = {}) => {
+      if (cmd === "/bin/true") return { started: true, code: 0 };
+      runs.push({ a1: a[1], env: o.env });
+      if (a[1]?.startsWith("mkdir")) return { started: true, code: 0 };
+      o.out?.("stdout", Buffer.from(`said ${secret.slice(0, 10)}`));
+      o.out?.("stdout", Buffer.from(`${secret.slice(10)} done\n`));
+      return { started: true, code: 0 };
+    },
+  });
+  assert.equal(await main(["--timeout", "120", "--claude", "--push", ".", "--", "claude", "-p"], w.deps), 0);
+  assert.equal(runs.length, 2);
+  assert.equal(runs[0].env, undefined, "the unpack step gets no token");
+  assert.deepEqual(runs[1].env, { CLAUDE_CODE_OAUTH_TOKEN: secret });
+  assert.ok(w.out.includes(`stdout: said ${MASK} done`), w.out.join("|"));
+  assert.ok(!w.out.join("\n").includes(secret));
+  assert.ok(!("env" in w.calls.find((c) => c[0] === "create")[1]), "the sandbox itself gets no variable");
+
+  const plain = world({ claudeKey: async () => { throw new Error("must not be read"); } });
+  assert.equal(await main(["--timeout", "120", "--", "node", "-v"], plain.deps), 0);
+
+  for (const claudeKey of [async () => { throw new Error("locked"); }, async () => "", async () => undefined]) {
+    const none = world({ claudeKey });
+    assert.equal(await main(["--timeout", "120", "--claude", "--", "claude", "-p"], none.deps), NOT_STARTED);
+    assert.match(none.out.join("\n"), /the key claude-depot could not be read/);
+    assert.ok(!kinds(none).includes("create"));
+  }
 });

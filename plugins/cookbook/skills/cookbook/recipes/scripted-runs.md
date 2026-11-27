@@ -33,6 +33,8 @@ at least once in that test.
   are the `ai-review` job ([ai-review](ai-review.md)) and the judge of the first site's visual
   check ([how it is built](visual-check-build.md)): the model named in every run, a spend cap
   counted at API list rates (`--max-budget-usd`), and each run's usage logged beside its output.
+  A long job runs away from this laptop with its own token, key store `claude-depot`
+  ([sandboxes-claude](sandboxes-claude.md)).
 
 A run that changes something people use (files, mail, data, a page) leaves a summary, the
 changes and an undo: [agent-changes](agent-changes.md).
