@@ -52,5 +52,13 @@ sandbox. Both spare the laptop the same memory. The owner kept boat on 27 Novemb
 ("option 2"): the plan renews monthly (USD 20, next 16 December), for the chats that suit it
 and whenever the laptop nears its limits.
 
+**Snapshots of the chat sandbox: weighed, not built** (owner, question dialog, 27 November
+2026). `up` resumes the stopped sandbox in about 10 s and makes a new one in about 30 s; a
+snapshot would help only a new one (a failed sandbox, the 14-day hold run out, a second
+sandbox): about 20 s, a few times a month. Against it: a snapshot taken after `up` carries
+the T3 server's identity and link, so it must be taken before linking, and it is stale after
+every T3 update. The 17 November measurement for test runs (0.6 to 0.8 s a run) is in
+`handoff/2026-11-17-boat-snapshots.md`. Weigh it again if `up` of a new sandbox passes a minute.
+
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-20-depot-vs-boat/` and
 `~/.local/share/claude-cookbook/evidence/2026-11-26-depot-sandboxes/`.
