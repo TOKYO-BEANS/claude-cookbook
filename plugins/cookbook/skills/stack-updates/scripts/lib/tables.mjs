@@ -45,6 +45,7 @@ export const VERSION_COMMANDS = Object.freeze({
   "osv-scanner/cli": { argv: ["osv-scanner", "--version"], pattern: /^osv-scanner version: (\d+\.\d+\.\d+)/m },
   "lightcraft/cli": { argv: ["{share}/lightcraft/bin/lightcraft-cli", "--version"], pattern: /^lightcraft-cli (\d+\.\d+\.\d+)/m },
   "photocraft/cli": { argv: ["{share}/photocraft/bin/photocraft-cli", "--version"], pattern: /^photocraft-cli (\d+\.\d+\.\d+)/m },
+  "boat/cli": { argv: ["{share}/boat/boat", "--version"], pattern: /^boat (\d+\.\d+\.\d+)/m },
   "cliproxyapi/cli": { argv: ["{share}/cliproxyapi/bin/cli-proxy-api", "-h"], pattern: /^CLIProxyAPI Version: (\d+\.\d+\.\d+),/m },
   "proton-pass-cli/cli": { argv: ["{share}/proton-pass-cli/pass-cli", "--version"], pattern: /^Proton Pass CLI (\d+\.\d+\.\d+)/m },
   "google-workspace-cli/cli": { argv: ["{share}/gws/gws", "--version"], pattern: /^gws (\d+\.\d+\.\d+)/m },

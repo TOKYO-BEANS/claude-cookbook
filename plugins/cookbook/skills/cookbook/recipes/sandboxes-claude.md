@@ -41,6 +41,7 @@ plus its servers; a job sent to a sandbox leaves two small Node processes here (
   sandbox 14.3 s at 2 vCPU, USD 0.0014 by Depot's record; the Claude side is on the plan
   (USD 0.05 at list rates, counted against the plan's limits). `small` costs USD 0.36 an hour,
   inside `sandbox-run.mjs`'s cap of two hours a run and USD 10 a month.
-- **A whole T3 chat stays on the laptop.** Moving one needs a sandbox that lives as long as
-  the chat (a T3 linked environment): a long-lived sandbox is a recurring cost and holds the
-  token for hours, so it is the owner's spend question, not built.
+- **A whole T3 chat** is not run on Depot: a sandbox that lives as long as the chat costs
+  USD 0.36 an hour (`small`) and holds the token for hours. The owner chose a trial on boat
+  instead (27 November 2026), where the token stays out:
+  [whole chats on boat](sandboxes-boat-chat.md).

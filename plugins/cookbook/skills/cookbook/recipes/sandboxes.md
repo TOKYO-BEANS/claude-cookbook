@@ -13,7 +13,7 @@ that day); [why](../options/sandboxes.md).
   A repository's required checks stay on Depot CI. Hosting stays on Cloudflare.
 - **A long Claude job runs here too**, on the plan token (owner's yes, 27 November 2026):
   `sandbox-claude.mjs`, Opus 5.5 high ([its page](sandboxes-claude.md)). A whole T3 chat
-  stays on the laptop: a sandbox that lives as long as a chat is the owner's spend question.
+  runs on boat until 16 December 2026, a trial ([its page](sandboxes-boat-chat.md)).
 - **Every job goes through the script:** `node <this skill's folder>/scripts/sandbox-run.mjs
   [--type small|default|large] --timeout <seconds> [--push <folder>] [--claude] -- <command>`
   (`boat-run.mjs` is its old name and still works). It starts a sandbox, runs the command,

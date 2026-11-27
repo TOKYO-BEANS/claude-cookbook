@@ -105,6 +105,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "osv-scanner/cli": ["osv-scanner version: 2.7.0\nosv-scalibr version: 0.5.3\n", "2.7.0"],
     "lightcraft/cli": ["lightcraft-cli 0.21.1\n", "0.21.1"],
     "photocraft/cli": ["photocraft-cli 0.23.1 (45066c482, 2026-11-12)\n", "0.23.1"],
+    "boat/cli": ["boat 1.0.106\n", "1.0.106"],
     "cliproxyapi/cli": ["CLIProxyAPI Version: 8.0.76, Commit: 7df56074, BuiltAt: 2026-11-17T02:10:49Z\nUsage of cli-proxy-api.exe\n", "8.0.76"],
     "proton-pass-cli/cli": ["Proton Pass CLI 2.7.0 (ba80a19)\n", "2.7.0"],
     "proton-mail-bridge/app": ["protonmail-bridge\t3.27.2-1\n", "3.27.2"],
@@ -469,6 +470,7 @@ test("the tables name no Windows file: no .exe, .cmd or .bat, and no cmd.exe lau
 test("the binaries under ~/.local/share are read where the Linux installs put them", () => {
   const share = Object.fromEntries(Object.entries(VERSION_COMMANDS).filter(([, { argv }]) => argv[0].startsWith("{share}/")).map(([key, { argv }]) => [key, argv[0]]));
   assert.deepEqual(share, {
+    "boat/cli": "{share}/boat/boat",
     "cliproxyapi/cli": "{share}/cliproxyapi/bin/cli-proxy-api",
     "proton-pass-cli/cli": "{share}/proton-pass-cli/pass-cli",
     "google-workspace-cli/cli": "{share}/gws/gws",
