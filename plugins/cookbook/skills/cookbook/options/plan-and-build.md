@@ -38,6 +38,8 @@ fair trial; they never pick an owner.
   right on every person, face and window; its Subject and People masks are heuristics, not
   used. No cut-out. Sharpening weighed: Nero AI Unblur, Upscayl, Topaz Photo AI (paid).
   ArtCraft Studio is generative only: never on photos of real people.
+- **A rented GPU: none for now** (27 November 2026). Workers AI first when a job needs one,
+  then Modal on the owner's yes ([gpu-rental](gpu-rental.md)).
 - **Skills: Superpowers `writing-skills`.** It tests a skill the way code is tested. Weighed:
   the bundled `skill-creator` (the fallback: it ships with the app).
 - **Model per turn: the model budget.** Weighed: a T3 Code router, both apps' fallbacks
