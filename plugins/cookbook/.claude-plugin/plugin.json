@@ -1,5 +1,25 @@
 {
   "name": "cookbook",
   "description": "Task-to-tool recipes for Claude Code, the list of tools in the stack (catalog.json) and the daily update check.",
-  "author": { "name": "TOKYO-BEANS" }
+  "author": { "name": "TOKYO-BEANS" },
+  "lspServers": {
+    "typescript": {
+      "command": "typescript-language-server",
+      "args": ["--stdio"],
+      "extensionToLanguage": {
+        ".ts": "typescript",
+        ".tsx": "typescriptreact",
+        ".js": "javascript",
+        ".jsx": "javascriptreact",
+        ".mts": "typescript",
+        ".cts": "typescript",
+        ".mjs": "javascript",
+        ".cjs": "javascript"
+      },
+      "initializationOptions": {
+        "tsserver": { "useSyntaxServer": "never" },
+        "disableAutomaticTypingAcquisition": true
+      }
+    }
+  }
 }

@@ -12,6 +12,11 @@ that day); [why](../options/sandboxes.md).
   - a long build, test run or batch, and work that splits: one sandbox per part.
   A repository's required checks stay on Depot CI. Hosting stays on Cloudflare. A long Claude
   job runs as a plan-token `claude -p` here ([scripted-runs.md](scripted-runs.md)).
+- **A whole Claude thread away from the laptop** (weighed 27 November 2026, for memory): a
+  Depot sandbox or a remote T3 host would hold the plan token where code there can read it,
+  so neither is used. The one route on the Max plan that keeps the token out is Anthropic's
+  cloud sessions (`claude --cloud`); it needs GitHub access granted to Claude, which is the
+  owner's, and its sessions are not in T3's sidebar. Not set up.
 - **Every job goes through the script:** `node <this skill's folder>/scripts/sandbox-run.mjs
   [--type small|default|large] --timeout <seconds> [--push <folder>] -- <command>`
   (`boat-run.mjs` is its old name and still works). It starts a sandbox, runs the command,

@@ -12,6 +12,12 @@
   6.0.3 is installed, because 7.0.2 ships none. Rust gave no answer for a crate outside the
   session's workspace: not proven from a session. The TypeScript server and pyright are
   pinned copies: [pinned-copies.md](pinned-copies.md).
+- **The TypeScript server is the Cookbook plugin's own** (`lspServers` in its `plugin.json`;
+  `typescript-lsp@claude-plugins-official` is off, since two plugins cannot both take `.ts`).
+  It starts with no syntax server and no typings installer: 286 MB per session instead of
+  688, with hover and diagnostics unchanged (measured 27 November 2026). Every session in a
+  TypeScript repository pays it, so the laptop's memory is the reason; undo: turn the
+  official plugin back on in `~/.claude/settings.json`.
 - **A change of one code shape across many files: `ast-grep`.** `ast-grep run -p
   '<pattern>' -l <language> <folder>` finds it, `--rewrite '<new code>'` changes it; the
   pattern is code with `$HOLES`. Read the matches before a rewrite. A literal string stays
