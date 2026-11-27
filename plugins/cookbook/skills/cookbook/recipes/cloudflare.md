@@ -1,5 +1,8 @@
 # Cloudflare
 
+The default host. A Next.js front end may go on Vercel instead, DNS staying here:
+[vercel](vercel.md).
+
 - Projects with a `wrangler.jsonc` use the project-pinned Wrangler; a project with a
   `cloudflare.config.ts` uses the `cf` CLI the same way, pinned in its own `package.json`.
   Neither is installed machine-wide, whatever the plugin's skills say (`npm install --global
