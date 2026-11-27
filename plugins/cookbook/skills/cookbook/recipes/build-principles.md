@@ -4,7 +4,7 @@ How we build anything people use: sites, apps, forms, screens, and the parts of 
 a person touches (a command's defaults, a report, a status form). Every build and every design
 follows them; the [UI checklist](ui-checklist.md) then measures the finished page. Owner's yes,
 27 November 2026, from a public design interview's lessons (evidence
-`~/.local/share/claude-cookbook/evidence/2026-11-27-video-lessons/`, lessons 1, 3 to 6, 12 and
+`~/.local/share/claude-cookbook/evidence/2026-11-27-video-lessons/`, lessons 1, 3 to 6, 12, 13 and
 18 to 20).
 
 Each principle has a **Check**: what a builder confirms before calling the job done, and what a
@@ -77,6 +77,14 @@ so.
    that already exists, Claude chooses.
    *Check:* the pull request for an important screen names the versions tried, what using
    them showed, and why the kept one won.
+9. **Speed is core architecture.** An app people use daily answers from local data first and
+   syncs with the server in the background: a person's action shows at once, never after a
+   network round trip. This is decided at the start of a build, in its design, and never
+   added later as a fix. Which shared sync layer we use is still being chosen; this page
+   links that outcome once it exists.
+   *Check:* the design of a daily-use app says where its local copy lives and how it syncs;
+   one whose main actions wait on the network is a finding. The UI checklist's items 12 and
+   13 measure the result.
 
 ## Where they apply
 
