@@ -36,7 +36,11 @@ this repository is public.
 2. Start from a fresh `origin/<default branch>` on a new branch `quality/<date>`. A checkout
    holding changes that are not this run's is left alone: stop and say so.
 3. **One open at a time.** If last week's quality pull request is still open, finish that one
-   (its checks, review answers, merge) instead of starting another.
+   (its checks, review answers, merge) instead of starting another, and merge it only where
+   the stops below allow. One held for a visual check or a person's approval stays open: no
+   merge and no second question; say it is still waiting, and settle. One the owner answered
+   "not now", or held four Tuesdays without an answer, is closed with a comment saying why,
+   and the run goes on to step 4.
 4. **Find one problem a user would notice.** Look where users look: the running product or
    its public pages, its texts and labels, its slow or confusing steps, the handoff's
    outstanding lows, open issues, low review findings left for later. Pick the smallest one
