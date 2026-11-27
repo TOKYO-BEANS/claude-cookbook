@@ -3,6 +3,8 @@
 The details our sites and apps are held to, and a layer of each site's visual check
 ([visual-check](visual-check.md)). Owner's yes, 27 November 2026, from a public design
 interview's lessons (evidence `~/.local/share/claude-cookbook/evidence/2026-11-27-video-lessons/`).
+The ways of building behind a page (the default path, what a form asks, the mood) are the
+[build principles](build-principles.md); this list measures the result.
 
 ## How the check uses it
 

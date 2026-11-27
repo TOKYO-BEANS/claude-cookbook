@@ -11,6 +11,9 @@
   nothing more until one is picked, then carry over the parts of the others the owner names.
   Pick alone only inside a look that already exists. The canvas is the decision record; the
   repository holds the real implementation (themes, components, tests).
+- Every design follows the [build principles](build-principles.md): the mood decided first,
+  the right way on the default path, and, once the look is picked or already exists, two or
+  three working versions of an important screen used before one is kept.
 - Build the chosen option with no design skill on top: Google's `gemini-frontend-design` and
   Anthropic's `frontend-design` were both tried and neither is used
   ([weighed](../options/design-skills-compared.md)).
