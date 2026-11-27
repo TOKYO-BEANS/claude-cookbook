@@ -33,9 +33,8 @@ fallback and say that you did.
 | A literal string, comment or config value | `rg` | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a plan-token `claude -p` with a typed answer | [judgement](recipes/judgement.md) |
 | The look of anything visual | **Claude Design** | a plain HTML mockup | [visual-design](recipes/visual-design.md) |
-| Sharpen, cut out or straighten a photo | none: say so | — | [photos](recipes/photos.md) |
-| Photo masks by a word, colour by region | **LightCraft**, own photos | none: say so | [photos](recipes/photos.md) |
-| Images, 3D; new PDFs, notebooks; generative images | **ImageMagick**, **Typst** and the kit; **ArtCraft Studio** | — | [creative-kit](recipes/creative-kit.md), [documents-kit](recipes/documents-kit.md), [artcraft](recipes/artcraft.md) |
+| Photo masks by a word, colour by region; sharpen, cut out or straighten: none, say so | **LightCraft**, own photos | none: say so | [photos](recipes/photos.md) |
+| Images, 3D, watching videos; new PDFs, notebooks; generative images | **ImageMagick**, **Typst** and the kit; **yt-dlp**, **ffmpeg**; **ArtCraft Studio** | — | [creative-kit](recipes/creative-kit.md), [video](recipes/video.md), [documents-kit](recipes/documents-kit.md), [artcraft](recipes/artcraft.md) |
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
@@ -81,20 +80,20 @@ fallback and say that you did.
 | Keys and tokens | the OS key store, read by `with-key.mjs` and `key-header.mjs` | — | [keys](recipes/keys.md) |
 | The owner's Proton mail | **Proton Mail Bridge** | the web app | [proton-mail](recipes/proton-mail.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
-| Run code away from this PC: tests on Linux before a push, a long or parallel job | **Depot** sandboxes, through `sandbox-run.mjs` | Depot CI, for a repository's own checks | [sandboxes](recipes/sandboxes.md) |
+| Run code away from this laptop: tests before a push, a long or parallel job | **Depot** sandboxes, through `sandbox-run.mjs` | Depot CI, for a repository's own checks | [sandboxes](recipes/sandboxes.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
 | Connect a new app or service | the **Cookbook** first, then the lightest route | — | [connecting](recipes/connecting.md) |
 | Office files; editing PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |
 | **Keep healthy** | | | |
 | Big output kept out of the conversation | **context-mode** | ranged `Read` and `rg` | [context-mode](recipes/context-mode.md) |
 | Compaction | Jev compaction (plugin `fast-jev-compaction-atlas`) | the built-in compactor | [compaction](recipes/compaction.md) |
-| Open questions for the owner, and settling finished chats | the **Cookbook**'s `owner-questions` Stop hook, judged by **TypeSafe / Jev** | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
-| Several chats at once: a question another chat put to the owner, a job or file another chat has | the **Cookbook**'s `owner-answers` hooks; **T3 Code**'s thread list and read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
+| Open questions for the owner, and settling finished chats | the Cookbook's `owner-questions` Stop hook, judged by **TypeSafe / Jev** | the hook's phrase list, said aloud | [owner-questions](recipes/owner-questions.md) |
+| Several chats at once: a question another chat put to the owner, a job or file another chat has | the Cookbook's `owner-answers` hooks; **T3 Code**'s thread list and read | the same two looks by hand, before asking or changing a file | [parallel-chats](recipes/parallel-chats.md) |
 | Memory; lessons | the project's handoff (`HANDOFF.md` or `handoff/`); auto-memory for the owner's preferences | — | [parallel-chats](recipes/parallel-chats.md), [learning-loop](recipes/learning-loop.md) |
 | A plain script on a schedule | a systemd user timer | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | An agent run on a schedule | a **T3 Code** scheduled task | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | Claude Code from a script (`claude -p`) | the scripted-runs rules | — | [scripted-runs](recipes/scripted-runs.md) |
-| Updates, broken connections, close dates | the **Cookbook**'s `stack-updates` skill | — | [update-check](recipes/update-check.md) |
+| Updates, broken connections, close dates | the Cookbook's `stack-updates` skill | — | [update-check](recipes/update-check.md) |
 | Where a session runs | **T3 Code** | Claude Code in a terminal | — |
 
 ## Ground rules that apply to every recipe

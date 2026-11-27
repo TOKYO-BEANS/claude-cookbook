@@ -116,6 +116,7 @@ test("every table entry runs a bare command name and matches its own sample outp
     "yt-dlp/cli": ["2026.10.26\n", "2026.10.26"],
     "imagemagick/cli": ["Version: ImageMagick 7.1.2-18 Q16 x86_64 23822 https://imagemagick.org\nCopyright: (C) 1999 ImageMagick Studio LLC\n", "7.1.2-18"],
     "libvips/cli": ["vips-8.18.0\n", "8.18.0"],
+    "ffmpeg/cli": ["ffmpeg version 8.0.1-3ubuntu2+esm5 Copyright (c) 2000-2025 the FFmpeg developers\nbuilt with gcc 15\n", "8.0.1"],
     "inkscape/cli": ["Inkscape 1.4.3 (0d15f75042, 2025-12-25)\n", "1.4.3"],
     "blender/cli": ["Name     Version  Rev   Tracking       Publisher            Notes\nblender  5.2.4    7997  5.2lts/stable  blenderfoundation**  classic\n", "5.2.4"],
     "typst/cli": ["typst 0.15.1 (9dfd3a08)\n", "0.15.1"],
