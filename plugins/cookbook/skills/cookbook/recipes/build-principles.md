@@ -71,10 +71,11 @@ so.
    real data, on a preview or behind a flag), use each for the real task through its key
    interactions, note what using it showed, then keep one and delete the rest. Every other
    screen gets one version: size the method to the job ([building](building.md)).
-   *The owner's rule stands:* a new look (a new site, a redesign, a product's first screen) is
-   picked by the owner from full-page pictures ([visual design](visual-design.md)); the
-   versions go to the owner as those pictures, with what using them showed. Inside a look
-   that already exists, Claude chooses.
+   *The owner's rule stands:* for a new look (a new site, a redesign, a product's first screen)
+   the versions are Design-canvas options the owner picks from full-page pictures
+   ([visual design](visual-design.md)), with no UI code before the pick. Working versions are
+   built only inside a look that already exists, or after the owner's pick; there Claude
+   chooses.
    *Check:* the pull request for an important screen names the versions tried, what using
    them showed, and why the kept one won.
 9. **Speed is core architecture.** An app people use daily answers from local data first and
