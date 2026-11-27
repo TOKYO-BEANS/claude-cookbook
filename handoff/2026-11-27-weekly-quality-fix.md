@@ -21,6 +21,11 @@ week, small fixes counting as much as features.
 runs in a Depot sandbox (see the pull request). The three tasks were read back: enabled, next
 runs 1 December 2026.
 
+**Evidence.** The three tasks in T3 Code's task store (ids above); the pull request.
+
+**Dead ends.** None. One task in the Cookbook project that walks every product was weighed and
+not used: one task per product keeps each run in its own project, worktree and thread.
+
 **Outstanding.** The first runs, 1 December 2026: check that each bound a thread, opened at
 most one pull request, and stopped or asked where its product's rules say so. The store has no
 recorded visual check, so its customer-visible fixes will ask the owner until one exists.
