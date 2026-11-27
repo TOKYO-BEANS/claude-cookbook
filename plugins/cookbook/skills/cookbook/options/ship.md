@@ -32,9 +32,10 @@ Chosen by fit for the job on 15 November 2026.
   identities, the deployed version and health, and the release verifier keeps the ledger.
   Weighed: a look at the CI page (no record, no deployed version); a periodic monitor (late,
   and not tied to the commit).
-- **Hosting: Cloudflare.** Workers, D1, R2, KV and Access under one account and one CLI.
-  Weighed: Vercel and Netlify (strong for front ends, a second platform for data and access
-  control); a virtual server (upkeep). Sites that already live on Wix or Shopify stay there
+- **Hosting: Cloudflare, with Vercel for front ends.** Workers, D1, R2, KV and Access under one
+  account and one CLI. Vercel beside it since 27 November 2026 (owner: the two together) for
+  Next.js front ends, deployed from GitHub; which piece goes where: [vercel](../recipes/vercel.md).
+  Weighed: Netlify (a third platform for what the two cover); a virtual server (upkeep). Sites that already live on Wix or Shopify stay there
   as owner-approved exceptions. Sign-in for a product: [WorkOS](sign-in-workos.md), weighed.
 - **Wix: the Wix MCP.** Business data through `ExecuteWixAPI` with no token on this PC.
   Weighed: the Wix CLI (needs a token; for code-built sites); the dashboard in the built-in

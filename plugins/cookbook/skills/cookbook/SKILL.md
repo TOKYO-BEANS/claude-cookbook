@@ -28,7 +28,7 @@ fallback and say that you did.
 | A long job a program can check: run until the check passes | **Claude Code** `/goal` | a Stop hook with a script check | [goal-runs](recipes/goal-runs.md) |
 | Several agents on one job | the named **`sa-*`** workflows, within their budgets | plain parallel subagents | [workflows](recipes/workflows.md) |
 | One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (the `cookbook:*` agent types) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
-| A second opinion (a consult) on our own work from a model that is not Claude | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks (owner, 17 November 2026) or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
+| A second opinion (a consult) on our own work from a model that is not Claude | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks, or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a plan-token `claude -p` with a typed answer | [judgement](recipes/judgement.md) |
@@ -60,7 +60,7 @@ fallback and say that you did.
 | Pull request text | **pr-text** | plain prose | — |
 | From a finished change to a merged pull request | **sa-release** with `merge: true` | `gh pr merge`, once the merge condition holds | [ci-releases](recipes/ci-releases.md) |
 | After a merge or deploy | **Release Maintenance** through **sa-release** | the `release-maintenance` skill inline | [ci-releases](recipes/ci-releases.md) |
-| Hosting, edge, storage, access control | **Cloudflare**, with the project's own **Wrangler** or `cf` CLI | — | [cloudflare](recipes/cloudflare.md) |
+| Hosting, edge, storage, access control | **Cloudflare** with Wrangler or `cf`; **Vercel** for Next.js | — | [cloudflare](recipes/cloudflare.md), [vercel](recipes/vercel.md) |
 | A site that lives on Wix | the **Wix** MCP | the built-in browser on the Wix dashboard | [wix](recipes/wix.md) |
 | A Shopify store or theme | the **Shopify CLI** and the **Shopify theme skills** | the built-in browser on the Shopify admin | — |
 | Bring a repository onto the standard | **sa-onboard** | — | [workflows](recipes/workflows.md) |
