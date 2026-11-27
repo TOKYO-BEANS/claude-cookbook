@@ -250,6 +250,10 @@ function sandboxInfo(io, id) {
   return null;
 }
 
+// A failed sandbox still exists and may hold unpulled work: recovered first, or deleted on
+// the owner's word for that work.
+const failedSandbox = (info) => `sandbox ${info.id} is ${info.state}: boat recover ${info.id} first, or down --delete --discard`;
+
 // true, false, or null when boat could not say: an unknown is never read as off.
 function proxyOn(io) {
   const v = lastJson(boat(io, ["ai", "proxy", "--json"]).stdout)?.enabled;
@@ -330,6 +334,7 @@ async function up(io, o) {
   // Everything that needs no sandbox and costs nothing comes before the proxy.
   const state = io.readState();
   const info = sandboxInfo(io, state.id);
+  if (info && stateKind(info.state) === "failed") throw new Error(`${failedSandbox(info)} once its work is safe; no new one replaces it`);
   const was = proxyOn(io);
   if (was === null) throw new Error("could not read the proxy's state from boat; nothing changed");
   const turnedOn = was === false;
@@ -348,7 +353,6 @@ async function bringUp(io, o, { repo, name, ver, state, info }) {
   let id = info?.id ?? null;
   let fresh = false, restart = false;
   const kind = info ? stateKind(info.state) : "gone";
-  if (kind === "failed") throw new Error(`sandbox ${id} is ${info.state}: it may hold unpulled work, so no new one replaces it; boat recover ${id}, or down --delete (--discard) once its work is safe`);
   if (kind === "stopped") {
     if (boat(io, ["resume", id, "--json"], { timeout: 300_000 }).code !== 0) throw new Error(`boat resume ${id} failed`);
     restart = true;
@@ -448,6 +452,7 @@ async function bringUp(io, o, { repo, name, ver, state, info }) {
 // The sandbox recorded and running, or an error that says to run up.
 function runningSandbox(io) {
   const info = sandboxInfo(io, io.readState().id);
+  if (info && stateKind(info.state) === "failed") throw new Error(failedSandbox(info));
   if (!info || stateKind(info.state) !== "running") throw new Error("no running sandbox: run up first");
   return info.id;
 }
@@ -501,6 +506,7 @@ function down(io, o) {
   const info = sandboxInfo(io, state.id);
   // A chat's work lives only in the sandbox until it is pulled: never delete it unseen.
   if (info && o.del && !o.discard) {
+    if (stateKind(info.state) === "failed") throw new Error(`not deleted: ${failedSandbox(info)}`);
     if (stateKind(info.state) !== "running") throw new Error("not deleted: the sandbox is stopped, so its copies cannot be checked; run up, pull each repository, then down --delete (or add --discard)");
     // Every copy in the sandbox, not only the recorded ones: the record could miss one.
     const listed = inBox(io, info.id, `for d in /home/user/*/; do [ -d "$d.git" ] && basename "$d"; done; true`).stdout.split("\n").map((l) => l.trim());
