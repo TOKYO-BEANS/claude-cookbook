@@ -26,11 +26,12 @@ plus its servers; a job sent to a sandbox leaves two small Node processes here (
   can be revoked alone: revoke it at claude.ai, then delete both copies. `sandbox-run.mjs`
   reads it and sends it with the job's command only (`RunCommand`'s `env`), never with the
   sandbox, the unpack step or `--vet`; in the job only `claude -p` gets it, not the install. It is masked in the output that comes back, and a run
-  whose files hold it sends nothing back.
+  whose files hold a plain copy of it sends nothing back; an encoded copy would pass, which is
+  why only our own jobs run with it.
 - **Host-bound secrets** (the value outside the sandbox, filled in by a gateway) are Depot's
   only for Managed Runs connections, whose Claude Code route needs a Team or Enterprise plan
   (checked 27 November 2026). Weigh again when plain sandboxes get them.
-- **What comes back** is data: `~/.local/share/sandbox-run/claude/<run>/` holds
+- **What comes back** is data, three regular files and never a link: `~/.local/share/sandbox-run/claude/<run>/` holds
   `stream.jsonl` (every event), `claude.err`, `changes.patch` (for `--push`: every change
   against the uploaded copy, new files included) and `summary.json` (model, login, turns,
   usage, the list-rate figure). Gitleaks reads the folder; a finding ends with exit 4, goes

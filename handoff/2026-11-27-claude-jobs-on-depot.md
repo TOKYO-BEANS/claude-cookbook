@@ -15,8 +15,9 @@ sandboxes with the plan token, Opus 5.5 at high effort, to spare the laptop's me
   `claude -p` (Opus 5.5 high, listed tools, `dontAsk`, no settings, no MCP, no saved session,
   a budget cap, `env -i`), ended at its first event unless `apiKeySource` is `none`. Back
   come the event stream, the error output and a patch, unpacked only under their three names,
-  scanned by Gitleaks, never applied by the script; a run whose files hold the token sends
-  nothing back.
+  scanned by Gitleaks (exit 4 on a finding), never applied by the script; only three regular
+  files are unpacked, never a link (AI review); a run whose files hold a plain copy of the
+  token sends nothing back, an encoded copy would pass.
 - Pages: new `recipes/sandboxes-claude.md`; `recipes/sandboxes.md` (the whole-thread bullet
   corrected, `--claude`, the token as the one standing credential exception);
   `recipes/scripted-runs.md`; `options/sandboxes.md`; the Depot entry in `catalog.json`.
@@ -43,6 +44,7 @@ though a process in the sandbox could still read it); USD 0.0015 by Depot's reco
 exist only for Managed Runs connections; the Claude Code connection needs a Claude Team or
 Enterprise plan (Depot's docs, 27 November 2026). Weigh again when plain sandboxes get them.
 
-**Outstanding.** A whole T3 chat in a sandbox (a T3 linked environment) needs a sandbox that
+**Outstanding.** A test of `sandbox-claude.mjs`'s `main()` exit codes (AI review low, left for
+a follow-up). A whole T3 chat in a sandbox (a T3 linked environment) needs a sandbox that
 lives as long as the chat: a recurring cost (`small` USD 0.36 an hour) and the token held for
 hours. Asked of the owner in the chat that made this entry; the answer goes in the next entry.

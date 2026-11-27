@@ -15,8 +15,10 @@
 //   (the plan login) is ended at its first event.
 // - What comes back is data, never trusted: the run's event stream, its error output and,
 //   for --push, the changes as one patch against the uploaded commit (commits made during
-//   the run included). A run whose files hold
-//   the token sends nothing back. Gitleaks reads the files here, and a finding ends with exit
+//   the run included). A run whose files hold a plain copy of
+//   the token sends nothing back (an encoded copy passes that check: the token is readable in
+//   the sandbox, which is why only our own jobs run there). Only three regular files are
+//   unpacked, never a link. Gitleaks reads the files here, and a finding ends with exit
 //   4; the patch is applied only after it has been read, by `git apply`. The prompt goes on
 //   stdin, so one that starts with "-" is still the prompt.
 // - The files land in ~/.local/share/sandbox-run/claude/<run>/ with summary.json (model,

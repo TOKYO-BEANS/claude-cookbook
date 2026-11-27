@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { BEGIN, END, FILES, SCAN_FAILED, FILTER, MODEL, EFFORT, SCRIPT, TOOLS, localVersion, parseArgs, runArgs, splitOutput, summarize, unpack } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-claude.mjs";
@@ -83,6 +83,17 @@ test("the files are cut out of the output, and only the three expected names are
     const extra = spawnSync("tar", ["-czf", "-", "-C", src, ...FILES, "extra.sh"]).stdout.toString("base64");
     assert.match(unpack(extra, join(dir, "into")), /not the three expected/);
     assert.match(unpack("bm90IGEgdGFy", into), /could not be read/);
+    // A link made in the sandbox never becomes a link here.
+    const linked = join(dir, "linked");
+    mkdirSync(linked);
+    writeFileSync(join(linked, "stream.jsonl"), "x\n");
+    writeFileSync(join(linked, "claude.err"), "x\n");
+    symlinkSync("/etc/hostname", join(linked, "changes.patch"));
+    const link = spawnSync("tar", ["-czf", "-", "-C", linked, ...FILES]).stdout.toString("base64");
+    const fresh = join(dir, "fresh");
+    mkdirSync(fresh);
+    assert.match(unpack(link, fresh), /not three regular files/);
+    assert.deepEqual(readdirSync(fresh), []);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
