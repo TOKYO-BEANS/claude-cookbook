@@ -8,7 +8,9 @@ interview's lessons (evidence `~/.local/share/claude-cookbook/evidence/2026-11-2
 
 - **A fifth layer, "UI rules",** in the site's own check script, beside the layout rules: the
   same browser, on the pages a change names, before and after the change. It can fail the
-  check alone. A run that leaves it out is "partial", never a pass.
+  check alone. Once a site's check has the layer, a run that leaves it out is "partial",
+  never a pass. A check built before the list keeps its recorded pass rule, with no more
+  reach than before, until its layer is merged and proved; its `CLAUDE.md` says which.
 - **Each item is checked by the script where it can be, else by the judge** (the check's
   `claude -p` on another model). The script measures and writes a table per item; the judge
   gets the tables as data with the pictures, never as instructions.
