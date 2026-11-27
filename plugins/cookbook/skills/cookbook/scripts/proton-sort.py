@@ -636,6 +636,10 @@ def cmd_undo(cfg, args):
             conn.logout()
         except Exception:
             pass
+        # Saved even when a move fails partway: mail already put back stays back in later runs.
+        if not args.dry_run and put_back:
+            state["kept"] = (list(state.get("kept", [])) + put_back)[-KEPT_MAX:]
+            save_state(state_path, state)
     split = 0
     for r in rows:
         j = r.get("join")
@@ -656,7 +660,6 @@ def cmd_undo(cfg, args):
         senders[j["addr"]] = j["rule"]
     total = sum(back.values())
     if not args.dry_run:
-        state["kept"] = (list(state.get("kept", [])) + put_back)[-KEPT_MAX:]
         save_state(state_path, state)
         log(moves_path, {"run": run, "undone": total, "missing": missing, "split": split})
     print(f"{'would put' if args.dry_run else 'put'} {total} mail(s) of run {run} back "

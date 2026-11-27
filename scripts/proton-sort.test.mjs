@@ -287,6 +287,24 @@ def undo_flow(person_deletes=None):
     return r
 out["undo"] = undo_flow()
 out["undo_person"] = undo_flow(("Folders/home.mail@gmail.com/Amazon (amazon.dk)", "2"))
+class UndoMoveFails(MidImap):
+    fail_to = None
+    def uid(self, cmd, *a):
+        if cmd == "MOVE" and a[1].strip('"') == self.fail_to:
+            return "NO", [b"no space"]
+        return super().uid(cmd, *a)
+def undo_fails_flow():
+    fake = UndoMoveFails(mid_boxes())
+    ps.pm.imap_connect = lambda c: fake
+    ps.STATE_DIR = tempfile.mkdtemp()
+    said_by(lambda a: ps.cmd_sort(cfg, a), ["sort"])
+    fake.fail_to = "Folders/inbox@pm.me"
+    undone = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo"])
+    kept = json.load(open(os.path.join(ps.STATE_DIR, "state.json"))).get("kept")
+    fake.fail_to = None
+    said_by(lambda a: ps.cmd_sort(cfg, a), ["sort"])
+    return {"undo": undone, "kept": kept, "boxes": {k: sorted(v, key=int) for k, v in full(fake).items()}}
+out["undo_fails"] = undo_fails_flow()
 def split_flow():
     ps.STATE_DIR = tempfile.mkdtemp()
     st = {"version": 1, "accounts": {}}
@@ -470,6 +488,13 @@ test("a run's changes can be shown and undone: mail goes back, stays back, and a
   const p = o.undo_person;
   assert.match(p.undo, /^put 2 mail\(s\) of run \S+ back \(1 to Folders\/inbox@pm\.me, 1 to INBOX\); 1 no longer where the run put them, left alone;/);
   assert.deepEqual(p.boxes, { INBOX: ["1", "3", "4"], "Folders/inbox@pm.me": ["7"] });
+});
+
+test("a move that fails partway through an undo still keeps the mail already put back in place", opts, () => {
+  const f = run().undo_fails;
+  assert.match(f.undo, /^Fail: /);
+  assert.deepEqual(f.kept, ["<m1@example.org>", "<m2@example.org>"]);
+  assert.deepEqual(f.boxes, { INBOX: ["1", "2", "3", "4"], "Folders/inbox@pm.me/Netflix (netflix.com)": ["7"] });
 });
 
 test("undo splits a sender Jev joined into a group of its own, and the next run does not ask Jev again", opts, () => {
