@@ -98,6 +98,7 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
         if (a.startsWith("delete ")) { w.sandbox = null; return ok(); }
         if (a.startsWith("push ") && w.onPush) w.onPush();
         if (a.startsWith("extend ") || a.startsWith("push ") || a.startsWith("scp ")) return ok();
+        if (a === "list --json" && w.listShortDown) return { code: 1, stdout: "", stderr: "network" };
         if (a === "list --json") return ok(JSON.stringify({ sandboxes: w.sandbox === "running" ? [{ id: "bx_old1234", environment: "claude-proxy" }] : [] }));
         if (a === "billing --json") return ok(JSON.stringify({ walletStatus: { balanceDollars: wallet } }));
         if (a.includes("--detach")) return exec("", { pid: 42 });
@@ -223,7 +224,7 @@ test("where and usage", async () => {
 });
 
 test("boat's states: idle runs, stopped resumes, error is replaced", async () => {
-  assert.deepEqual(["running", "idle", "ready", "starting", "stopped", "stopping", "error", "deleted", undefined].map(stateKind), ["running", "running", "running", "running", "stopped", "stopped", "gone", "gone", "gone"]);
+  assert.deepEqual(["running", "idle", "ready", "starting", "stopped", "stopping", "error", "failed", "archived", "deleted", "deleting", undefined].map(stateKind), ["running", "running", "running", "running", "stopped", "stopped", "failed", "failed", "failed", "gone", "gone", "gone"]);
   const w = world({ sandbox: "idle", serving: true, answers: true, proxy: true });
   assert.equal(await main(["up", "."], w.io), 0, w.out.join("\n"));
   assert.ok(!w.boat().some((c) => c.startsWith("new ") || c.startsWith("resume ")), "an idle sandbox is used as it is");
@@ -424,4 +425,21 @@ test("an unknown proxy state is never read as off", async () => {
   s2.proxyUnknown = true;
   await main(["status"], s2.io);
   assert.ok(s2.out.includes("proxy: unknown (boat did not say)"));
+});
+
+test("a failed sandbox is never replaced: up stops with its id", async () => {
+  const w = world({ sandbox: "error" });
+  assert.equal(await main(["up", "."], w.io), 1);
+  assert.match(w.out.at(-1), /sandbox bx_old1234 is error: it may hold unpulled work, so no new one replaces it/);
+  assert.ok(!w.boat().some((c) => c.startsWith("new ")));
+  assert.equal(w.state.id, "bx_old1234");
+  assert.equal(w.proxy, false, "the proxy this up turned on goes off again");
+});
+
+test("down leaves the proxy as it is when boat's list cannot be read", async () => {
+  const w = world({ sandbox: "running", proxy: true });
+  w.listShortDown = true;
+  assert.equal(await main(["down"], w.io), 1);
+  assert.equal(w.out.at(-1), "proxy: left as it is, boat list failed; run down again");
+  assert.equal(w.proxy, true);
 });
