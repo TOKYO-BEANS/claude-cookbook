@@ -60,6 +60,7 @@ export const VERSION_COMMANDS = Object.freeze({
   // The creative kit and the documents kit. Written against the real output on the Ubuntu
   // laptop on 20 November 2026. Blender is read from snapd: its own --version starts the app.
   "imagemagick/cli": { argv: ["magick", "-version"], pattern: /^Version: ImageMagick (\d+\.\d+\.\d+-\d+)/m },
+  "ffmpeg/cli": { argv: ["ffmpeg", "-version"], pattern: /^ffmpeg version (\d+\.\d+(?:\.\d+)?)/m },
   "libvips/cli": { argv: ["vips", "--version"], pattern: /^vips-(\d+\.\d+\.\d+)/m },
   "inkscape/cli": { argv: ["inkscape", "--version"], pattern: /^Inkscape (\d+\.\d+(?:\.\d+)?) /m },
   "blender/cli": { argv: ["snap", "list", "blender"], pattern: /^blender\s+(\d+\.\d+\.\d+)\s/m },
