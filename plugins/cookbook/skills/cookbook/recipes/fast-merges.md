@@ -32,6 +32,10 @@ the waits; none changes [the merge condition](ci-releases.md).
 - **The handoff entry goes in the job's own pull request** (owner, 22 November 2026), naming
   the release log the run will write. A separate handoff pull request only when the release
   check fails or an owner answer arrives after the merge, at most one per repository a day.
+  One more case, and no other (owner, 27 November 2026): a repository's first onboarding
+  onto the Stack Atlas standard. That pull request may hold only the standard's own files,
+  so its entry goes in a pull request of its own after the merge, outside that limit. An
+  upgrade's entry, and every other job's, is as before.
   Here `node scripts/new-handoff.mjs <slug> "<title>"` writes the entry with its five parts.
 - **Tests before a push run in the background.** Start sandbox-run with `run_in_background`,
   write the pull request text meanwhile, and push only after exit 0. Never pipe its output
