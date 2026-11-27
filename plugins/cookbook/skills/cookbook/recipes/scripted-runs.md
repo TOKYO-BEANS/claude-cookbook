@@ -34,4 +34,7 @@ at least once in that test.
   check ([how it is built](visual-check-build.md)): the model named in every run, a spend cap
   counted at API list rates (`--max-budget-usd`), and each run's usage logged beside its output.
 
+A run that changes something people use (files, mail, data, a page) leaves a summary, the
+changes and an undo: [agent-changes](agent-changes.md).
+
 More: [permission rules and limits](scripted-runs-rules.md).
