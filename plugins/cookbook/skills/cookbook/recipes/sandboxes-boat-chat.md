@@ -63,8 +63,8 @@ on compute so the pc actually never has to throttle again". Why: a local chat ta
 - `boat-chat.mjs pull <repository folder> [--apply]`: everything the chat changed since the
   last pull (or the base commit), committed or not, as one patch in
   `~/.local/share/boat-chat/patches/`. Gitleaks reads it first (a finding: exit 4, nothing
-  applied, the same changes come back next time, the owner decides); `git apply --check`
-  tries it here; `--apply` applies it to a folder with no changes of its own.
+  applied, the owner decides); `git apply --check` tries it here; `--apply` applies it to a
+  folder with no changes of its own and only then counts it as pulled.
   Then review, commit and ship from here as usual (a branch or worktree of the job's own).
 - `boat-chat.mjs down [--delete]` when the last boat chat has settled and been pulled: the forward and its
   `ssh` ended, the sandbox stopped (data and memory kept 14 days; `up` resumes it), the proxy

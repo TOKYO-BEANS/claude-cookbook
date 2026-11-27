@@ -29,7 +29,7 @@ November wallet refund request withdrawn, the proxy off. This settles the #286 e
   on 16 December. SKILL.md: the "Where a session runs" row links the page (a few words cut
   elsewhere to fit 14,000 bytes). `recipes/sandboxes.md`, `sandboxes-claude.md`,
   `parallel-chats.md`, `options/sandboxes.md`, `hooks.json`'s description follow.
-- Tests: `scripts/boat-chat.test.mjs` (19), two new tests in `scripts/owner-answers.test.mjs`.
+- Tests: `scripts/boat-chat.test.mjs` (20), two new tests in `scripts/owner-answers.test.mjs`.
 
 **Verification (27 November 2026, this laptop and boat).** `up` on the stopped trial sandbox:
 23 s, then a turn in the trial thread answered on Opus 5.5 (no 401 after the resume). `up`
@@ -68,6 +68,10 @@ turns off a proxy it turned on. Copy names gained a short hash of the branch's o
 (`feat/x` and `feat-x` no longer meet). The hook's note named a script path that does not
 exist; it now says `<the cookbook skill's folder>/scripts/boat-chat.mjs`. `catalog.json` was
 left out of that review (over its input budget) and was read by a reader instead.
+
+**The fifth review (head de0d7ad): one medium, fixed.** A plain `pull` marked the work as
+pulled, so a following `pull --apply` came back empty and `down --delete` saw a clean copy:
+now only a successful `--apply` marks it; a plain pull is a look.
 
 **Dead ends.** A first `up` took boat's `idle` state for a gone sandbox and made a second
 one (`bx_cmsekx43`, deleted the same minute); `idle` now counts as running. `boat push`

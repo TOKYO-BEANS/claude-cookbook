@@ -22,8 +22,8 @@
 // - `pull` brings a chat's work back: everything changed since the last pull (or the base
 //   commit), committed or not, as one patch in ~/.local/share/boat-chat/patches/<name>-<time>/. Gitleaks reads
 //   it first (a finding: exit 4, nothing applied); `git apply --check` tries it on the
-//   folder; --apply applies it to a folder with no changes of its own. A clean scan marks
-//   what was pulled (refs/boat/pulled in the copy). The sandbox has no GitHub login: the
+//   folder; --apply applies it to a folder with no changes of its own and only then marks
+//   it pulled (refs/boat/pulled in the copy): a plain pull is a look. The sandbox has no GitHub login: the
 //   pull request is opened from here.
 // - `down` ends the forward (its `ssh` too), stops the sandbox (data kept 14 days; --delete
 //   deletes it and unlinks it, only when no copy holds unpulled changes, or with --discard) and turns the proxy off when no sandbox of ours runs. Run it
@@ -452,7 +452,8 @@ function pull(io, o) {
     io.out(`patch: ${file}`);
     return SCAN_FOUND;
   }
-  // Scanned and kept here: the next pull starts after it. With --apply, only once applied.
+  // Only work that reached this folder counts as pulled: a plain pull is a look, and the
+  // copy stays "changed" (no --push over it, no delete without --discard) until --apply.
   const markPull = () => {
     if (inBox(io, id, `cd /home/user/${name} && git update-ref refs/boat/pulled ${mark}`).code !== 0) throw new Error("could not mark the pull in the sandbox");
   };
@@ -464,7 +465,6 @@ function pull(io, o) {
     io.out("no changes since the last pull");
     return 0;
   }
-  if (!o.apply) markPull();
   const check = io.run("git", ["-C", repo, "apply", "--check", file]);
   io.out(`git apply --check: ${check.code === 0 ? "applies" : "does not apply"}`);
   if (o.apply) {

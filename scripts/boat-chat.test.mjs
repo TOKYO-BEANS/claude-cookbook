@@ -239,7 +239,7 @@ test("pull: the patch is scanned before anything else reads it, and applied only
   assert.ok(w.boat().includes("scp bx_old1234:/tmp/boat-chat-claude-cookbook-feat-x-79b4cc55.patch /fake/boat-chat/patches/claude-cookbook-feat-x-79b4cc55-2026-11-27T12-00-00-000Z/changes.patch"));
   assert.deepEqual(w.scanned, ["/fake/boat-chat/patches/claude-cookbook-feat-x-79b4cc55-2026-11-27T12-00-00-000Z"]);
   assert.ok(w.out.includes("git apply --check: applies"));
-  assert.equal(w.marked, "c".repeat(40), "a clean scan marks what was pulled");
+  assert.equal(w.marked, null, "a plain pull is a look: nothing is marked until it is applied");
   assert.equal(w.applied, false, "without --apply nothing changes here");
   const a = world({ sandbox: "running" });
   assert.equal(await main(["pull", ".", "--apply"], a.io), 0);
@@ -344,4 +344,14 @@ test("pull shows the base line only in the script's own shape", async () => {
   ok.subject = `base: ${"a".repeat(40)} with uncommitted edits`;
   await main(["pull", "."], ok.io);
   assert.ok(ok.out.some((l) => l.endsWith(`(748 bytes; base: ${"a".repeat(40)} with uncommitted edits)`)));
+});
+
+test("pull, then pull --apply: the second brings the same work and applies it", async () => {
+  const w = world({ sandbox: "running" });
+  assert.equal(await main(["pull", "."], w.io), 0);
+  assert.equal(w.marked, null);
+  assert.equal(await main(["pull", ".", "--apply"], w.io), 0);
+  assert.equal(w.applied, true);
+  assert.equal(w.marked, "c".repeat(40));
+  assert.equal(w.out.filter((l) => l.startsWith("patch: ")).length, 2, "two patches, the same work, nothing lost");
 });
