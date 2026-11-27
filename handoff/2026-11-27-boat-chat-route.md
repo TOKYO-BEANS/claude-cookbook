@@ -29,7 +29,7 @@ November wallet refund request withdrawn, the proxy off. This settles the #286 e
   on 16 December. SKILL.md: the "Where a session runs" row links the page (a few words cut
   elsewhere to fit 14,000 bytes). `recipes/sandboxes.md`, `sandboxes-claude.md`,
   `parallel-chats.md`, `options/sandboxes.md`, `hooks.json`'s description follow.
-- Tests: `scripts/boat-chat.test.mjs` (22), two new tests in `scripts/owner-answers.test.mjs`.
+- Tests: `scripts/boat-chat.test.mjs` (24), two new tests in `scripts/owner-answers.test.mjs`.
 
 **Verification (27 November 2026, this laptop and boat).** `up` on the stopped trial sandbox:
 23 s, then a turn in the trial thread answered on Opus 5.5 (no 401 after the resume). `up`
@@ -78,6 +78,12 @@ in a new sandbox, so a failed install or a laptop update was never repaired: eve
 checks the sandbox's T3 version and installs this laptop's when it differs. `down` on a
 failed sandbox threw before the proxy check: it now stops only a running sandbox and always
 reaches the proxy.
+
+**The seventh review (head 6c436de): one medium, one low, both fixed.** Two `up` runs at
+once could overwrite each other's record, and `down --delete` trusted the record: the record
+is now read again and added to before each write, and `down --delete` checks every copy it
+finds in the sandbox. An unreadable proxy state counted as "off": `up` now stops before any
+spend, `down` turns the proxy off anyway, and `status` says "unknown".
 
 **Dead ends.** A first `up` took boat's `idle` state for a gone sandbox and made a second
 one (`bx_cmsekx43`, deleted the same minute); `idle` now counts as running. `boat push`

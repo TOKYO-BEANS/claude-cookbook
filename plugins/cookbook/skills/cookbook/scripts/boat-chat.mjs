@@ -248,8 +248,18 @@ function sandboxInfo(io, id) {
   return null;
 }
 
+// true, false, or null when boat could not say: an unknown is never read as off.
 function proxyOn(io) {
-  return lastJson(boat(io, ["ai", "proxy", "--json"]).stdout)?.enabled === true;
+  const v = lastJson(boat(io, ["ai", "proxy", "--json"]).stdout)?.enabled;
+  return typeof v === "boolean" ? v : null;
+}
+
+// Adds copies to the record, read again just before the write: two `up` runs at once add
+// to it, never replace each other's names. A new sandbox starts a new record.
+function record(io, id, names) {
+  const now = io.readState();
+  const kept = now.id === id && Array.isArray(now.repos) ? now.repos : [];
+  io.writeState({ id, repos: [...new Set([...kept, ...names])] });
 }
 
 function walletLine(io) {
@@ -263,7 +273,8 @@ async function status(io) {
   const s = io.readState();
   const info = sandboxInfo(io, s.id);
   io.out(`sandbox: ${s.id ? `${s.id} ${info?.state ?? "gone"}` : "none recorded"}${s.repos?.length ? `, repositories ${s.repos.join(", ")}` : ""}`);
-  io.out(`proxy: ${proxyOn(io) ? "on (USD 1 a day while on)" : "off"}`);
+  const p = proxyOn(io);
+  io.out(`proxy: ${p === null ? "unknown (boat did not say)" : p ? "on (USD 1 a day while on)" : "off"}`);
   io.out(`forward ${LOCAL_URL}: ${(await io.answers()) ? "answers" : "does not answer"}`);
   const link = linkAt(lastJson(t3(io, ["environment", "list", "--json"], { timeout: 30_000 }).stdout));
   io.out(`link: ${link ? `${link.environmentId} ${link.status}` : "none"}`);
@@ -317,7 +328,9 @@ async function up(io, o) {
   // Everything that needs no sandbox and costs nothing comes before the proxy.
   const state = io.readState();
   const info = sandboxInfo(io, state.id);
-  const turnedOn = !proxyOn(io);
+  const was = proxyOn(io);
+  if (was === null) throw new Error("could not read the proxy's state from boat; nothing changed");
+  const turnedOn = was === false;
   if (turnedOn && boat(io, ["ai", "proxy", "on", "--json"]).code !== 0) throw new Error("boat ai proxy on failed");
   io.out("proxy: on");
   try {
@@ -345,8 +358,8 @@ async function bringUp(io, o, { repo, name, ver, state, info }) {
     io.out(`sandbox: ${id} new (${o.type})`);
   } else io.out(`sandbox: ${id} running`);
   if (boat(io, ["extend", id, "--hours", String(o.hours), "--json"]).code !== 0) throw new Error(`boat extend ${id} failed`);
-  const repos = new Set(fresh ? [] : state.repos ?? []);
-  io.writeState({ id, repos: [...repos] });
+  if (fresh) io.writeState({ id, repos: [] });
+  else record(io, id, []);
 
   // T3 at this laptop's version, checked on every up: a failed install or a laptop update is
   // repaired here, never left for `t3 serve` to fail on.
@@ -382,8 +395,7 @@ async function bringUp(io, o, { repo, name, ver, state, info }) {
     if (r.code !== 0) throw new Error("the base commit failed");
     io.out(`pushed: ${repo} → /home/user/${name} (${base})`);
   } else io.out(`repository: /home/user/${name} is there (${copy}; --push copies it again when clean)`);
-  repos.add(name);
-  io.writeState({ id, repos: [...repos] });
+  record(io, id, [name]);
 
   const serving = inBox(io, id, `pgrep -f '[t]3cli/.*t3 serve' >/dev/null && echo yes || echo no`).stdout.trim() === "yes";
   if (restart || !serving) {
@@ -487,7 +499,10 @@ function down(io, o) {
   // A chat's work lives only in the sandbox until it is pulled: never delete it unseen.
   if (info && o.del && !o.discard) {
     if (stateKind(info.state) !== "running") throw new Error("not deleted: the sandbox is stopped, so its copies cannot be checked; run up, pull each repository, then down --delete (or add --discard)");
-    const changed = (state.repos ?? []).filter((n) => NAME.test(n) && copyState(io, info.id, n) === "changed");
+    // Every copy in the sandbox, not only the recorded ones: the record could miss one.
+    const listed = inBox(io, info.id, `for d in /home/user/*/; do [ -d "$d.git" ] && basename "$d"; done; true`).stdout.split("\n").map((l) => l.trim());
+    const names = [...new Set([...(state.repos ?? []), ...listed])].filter((n) => NAME.test(n));
+    const changed = names.filter((n) => copyState(io, info.id, n) === "changed");
     if (changed.length > 0) throw new Error(`not deleted: unpulled changes in ${changed.map((n) => `/home/user/${n}`).join(", ")}; pull first (or add --discard)`);
   }
   stopForward(io);
@@ -508,7 +523,8 @@ function down(io, o) {
   const list = lastJson(boat(io, ["list", "--json"]).stdout);
   const running = Array.isArray(list?.sandboxes) ? list.sandboxes.filter((s) => s.environment === ENVIRONMENT) : [];
   if (running.length === 0) {
-    if (proxyOn(io) && boat(io, ["ai", "proxy", "off", "--json"]).code !== 0) throw new Error("boat ai proxy off failed");
+    // Turned off when on or unknown: only a reading of "off" skips the call.
+    if (proxyOn(io) !== false && boat(io, ["ai", "proxy", "off", "--json"]).code !== 0) throw new Error("boat ai proxy off failed");
     io.out("proxy: off");
   } else io.out(`proxy: left on, ${running.length} ${ENVIRONMENT} sandbox(es) still run`);
   return 0;

@@ -87,7 +87,7 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
         if (a.startsWith("environment link")) { w.linked = true; return ok(`${LOCAL_URL}: linked\n`); }
       }
       if (cmd === "boat") {
-        if (a === "ai proxy --json") return ok(JSON.stringify({ enabled: w.proxy }));
+        if (a === "ai proxy --json") return w.proxyUnknown ? { code: 1, stdout: "", stderr: "network" } : ok(JSON.stringify({ enabled: w.proxy }));
         if (a === "ai proxy on --json") { w.proxy = true; return ok("{}"); }
         if (a === "ai proxy off --json") { w.proxy = false; return ok("{}"); }
         if (a.startsWith("info ")) return w.sandbox && !w.infoDown ? ok(JSON.stringify({ id: args[1], state: w.sandbox })) : { code: 1, stdout: "", stderr: "not found" };
@@ -96,13 +96,18 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
         if (a.startsWith("new ")) { w.sandbox = "running"; w.fresh = true; return ok('{"event":"created","id":"bx_new5678"}\n{"event":"ready","id":"bx_new5678"}\n'); }
         if (a.startsWith("stop ")) { w.sandbox = "stopping"; return ok(); }
         if (a.startsWith("delete ")) { w.sandbox = null; return ok(); }
+        if (a.startsWith("push ") && w.onPush) w.onPush();
         if (a.startsWith("extend ") || a.startsWith("push ") || a.startsWith("scp ")) return ok();
         if (a === "list --json") return ok(JSON.stringify({ sandboxes: w.sandbox === "running" ? [{ id: "bx_old1234", environment: "claude-proxy" }] : [] }));
         if (a === "billing --json") return ok(JSON.stringify({ walletStatus: { balanceDollars: wallet } }));
         if (a.includes("--detach")) return exec("", { pid: 42 });
         if (a.startsWith("exec ")) {
           const script = args.at(-1);
-          if (script.includes("echo none")) return exec(`${copy}\n`);
+          if (script.includes("for d in /home/user/*/")) return exec((w.copies ?? []).map((c) => `${c}\n`).join(""));
+          if (script.includes("echo none")) {
+            const n = /cd \/home\/user\/([^ ]+) 2>/.exec(script)?.[1];
+            return exec(`${w.copyOf?.[n] ?? copy}\n`);
+          }
           if (script.includes("commit-tree")) return exec(`${w.subject ?? `base: ${"a".repeat(40)}`}\n${"c".repeat(40)}\n`);
           if (script.includes("update-ref refs/boat/pulled")) { w.marked = script.split(" ").at(-1); return exec(""); }
           if (script.includes("pgrep")) return exec(serving ? "yes\n" : "no\n");
@@ -387,4 +392,36 @@ test("down on a sandbox that failed still turns the proxy off", async () => {
   assert.ok(!w.boat().some((c) => c.startsWith("stop ")));
   assert.ok(w.out.includes("sandbox: bx_old1234 error, nothing to stop"));
   assert.equal(w.proxy, false);
+});
+
+test("two up runs at once add to the record, and down --delete checks every copy in the sandbox", async () => {
+  const w = world({ sandbox: "running", copy: "none", serving: true, answers: true, proxy: true });
+  // Another up writes its copy while this one pushes.
+  w.onPush = () => { w.state = { id: "bx_old1234", repos: [...w.state.repos, "other-copy"] }; };
+  assert.equal(await main(["up", "."], w.io), 0, w.out.join("\n"));
+  assert.ok(w.state.repos.includes("other-copy") && w.state.repos.some((r) => r.startsWith("claude-cookbook-feat-x-")), JSON.stringify(w.state));
+  // A copy the record missed still blocks a delete.
+  const d = world({ sandbox: "running", proxy: true });
+  d.state = { id: "bx_old1234", repos: [] };
+  d.copies = ["lost-copy"];
+  d.copyOf = { "lost-copy": "changed" };
+  assert.equal(await main(["down", "--delete"], d.io), 1);
+  assert.match(d.out.at(-1), /unpulled changes in \/home\/user\/lost-copy/);
+  assert.ok(!d.boat().some((c) => c.startsWith("delete ")));
+});
+
+test("an unknown proxy state is never read as off", async () => {
+  const u = world({ sandbox: "stopped" });
+  u.proxyUnknown = true;
+  assert.equal(await main(["up", "."], u.io), 1);
+  assert.match(u.out.at(-1), /could not read the proxy's state from boat; nothing changed/);
+  assert.ok(!u.boat().some((c) => c === "ai proxy on --json" || c.startsWith("resume ")), "nothing spent");
+  const d = world({ sandbox: "running" });
+  d.proxyUnknown = true;
+  assert.equal(await main(["down"], d.io), 0);
+  assert.ok(d.boat().includes("ai proxy off --json"), "turned off when unknown");
+  const s2 = world({ sandbox: "stopped" });
+  s2.proxyUnknown = true;
+  await main(["status"], s2.io);
+  assert.ok(s2.out.includes("proxy: unknown (boat did not say)"));
 });
