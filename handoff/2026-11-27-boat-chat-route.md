@@ -29,7 +29,7 @@ November wallet refund request withdrawn, the proxy off. This settles the #286 e
   on 16 December. SKILL.md: the "Where a session runs" row links the page (a few words cut
   elsewhere to fit 14,000 bytes). `recipes/sandboxes.md`, `sandboxes-claude.md`,
   `parallel-chats.md`, `options/sandboxes.md`, `hooks.json`'s description follow.
-- Tests: `scripts/boat-chat.test.mjs` (14), two new tests in `scripts/owner-answers.test.mjs`.
+- Tests: `scripts/boat-chat.test.mjs` (16), two new tests in `scripts/owner-answers.test.mjs`.
 
 **Verification (27 November 2026, this laptop and boat).** `up` on the stopped trial sandbox:
 23 s, then a turn in the trial thread answered on Opus 5.5 (no 401 after the resume). `up`
@@ -40,6 +40,16 @@ its old `environmentId` (11 s). `pull`: a 748-byte patch of a commit plus an edi
 clean, `--check` applies, `--apply` refused a folder with changes, `up --push` refused over
 an unpulled copy. `down`: 1 s, proxy off. Turning the proxy on three times that day charged
 one day (USD 1.03 that day in all). The full suite: see the pull request.
+
+**The AI review (head b1bd085): two medium findings and one low, all fixed.** `down --delete`
+could delete a chat's unpulled work: it now refuses while any copy holds unpulled changes, or
+while the sandbox is stopped, unless `--discard`. The upload was the working folder, not
+scanned: it is now made as `sandbox-run.mjs` makes one (upload list, tracked files with their
+edits, data-shaped files, Gitleaks). After a pull, `--push` stayed refused: a clean scan now
+marks the pull (`refs/boat/pulled`), and each pull returns only what changed since the last.
+Proven live the same evening: a commit, then an edit, came back as two patches (the second
+held only the edit); `down --delete` refused over the old trial copy; an untracked file on the
+laptop did not reach the sandbox.
 
 **Dead ends.** A first `up` took boat's `idle` state for a gone sandbox and made a second
 one (`bx_cmsekx43`, deleted the same minute); `idle` now counts as running. `boat push`

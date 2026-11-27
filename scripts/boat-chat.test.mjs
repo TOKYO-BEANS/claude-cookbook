@@ -40,7 +40,7 @@ test("a counter that cannot be read is no reading, never near", () => {
 });
 
 test("arguments: the commands, the limits on hours and size", () => {
-  assert.deepEqual(parseArgs(["up", "repo", "--hours", "6", "--push"]), { command: "up", repo: "repo", hours: 6, type: "small", push: true, del: false, json: false, apply: false });
+  assert.deepEqual(parseArgs(["up", "repo", "--hours", "6", "--push"]), { command: "up", repo: "repo", hours: 6, type: "small", push: true, del: false, json: false, apply: false, discard: false });
   assert.equal(parseArgs(["down", "--delete"]).del, true);
   for (const bad of [[], ["go"], ["up"], ["up", "r", "--hours", "0"], ["up", "r", "--hours", "25"], ["up", "r", "--type", "large"], ["down", "--force"], ["pull"]])
     assert.throws(() => parseArgs(bad), undefined, bad.join(" "));
@@ -61,8 +61,8 @@ test("the small parsers", () => {
 const CRED = "pairing-credential-0123456789abcdef";
 
 // A fake boat and t3: `sandbox` is the sandbox's state, null for none.
-function world({ sandbox = "stopped", proxy = false, linked = true, reachable = true, copy = "clean", serving = false, answers = false, wallet = 28.9, dirty = false, applies = true, found = null, size = 748 } = {}) {
-  const w = { calls: [], bg: [], out: [], state: sandbox ? { id: "bx_old1234", repos: ["claude-cookbook"] } : {}, answers, linked, sandbox, proxy, applied: false, scanned: [] };
+function world({ sandbox = "stopped", proxy = false, linked = true, reachable = true, copy = "clean", serving = false, answers = false, wallet = 28.9, dirty = false, applies = true, found = null, size = 748, upload = { ok: true } } = {}) {
+  const w = { calls: [], bg: [], out: [], state: sandbox ? { id: "bx_old1234", repos: ["claude-cookbook"] } : {}, answers, linked, sandbox, proxy, applied: false, scanned: [], removed: 0, marked: null };
   const ok = (stdout = "") => ({ code: 0, stdout, stderr: "" });
   const exec = (stdout, extra = {}) => ok(`${JSON.stringify({ exitCode: 0, stdout, ...extra })}\n`);
   w.io = {
@@ -100,7 +100,8 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
         if (a.startsWith("exec ")) {
           const script = args.at(-1);
           if (script.includes("echo none")) return exec(`${copy}\n`);
-          if (script.includes("git diff --cached")) return exec("base: aaaa\n");
+          if (script.includes("commit-tree")) return exec(`base: aaaa\n${"c".repeat(40)}\n`);
+          if (script.includes("update-ref refs/boat/pulled")) { w.marked = script.split(" ").at(-1); return exec(""); }
           if (script.includes("pgrep")) return exec(serving ? "yes\n" : "no\n");
           if (script.includes("auth pairing create")) return exec(JSON.stringify({ credential: CRED }));
           if (script.includes("npm install")) return exec("t3 v0.1.13-nightly.20261125.5258\n");
@@ -121,6 +122,7 @@ function world({ sandbox = "stopped", proxy = false, linked = true, reachable = 
     mkdir: () => {},
     scan: (dir) => { w.scanned.push(dir); return found ? { ok: false, reason: found } : { ok: true }; },
     size: () => size,
+    prepare: () => (upload.ok ? { ok: true, dir: "/tmp/staged/claude-cookbook", remove: () => { w.removed += 1; } } : upload),
     home: "/fake/boat-chat",
     now: () => Date.parse("2026-11-27T12:00:00Z"),
     out: (l) => w.out.push(l),
@@ -152,7 +154,8 @@ test("up with no sandbox: a new one, T3 installed under the age rule, pushed, li
   const setup = b.find((c) => c.includes("npm install"));
   assert.match(setup, /--before='2026-11-26T12:00:00\.000Z' 't3@0\.1\.13-nightly\.20261125\.5258'/);
   assert.match(setup, /linkedEnvironmentsEnabled/);
-  assert.ok(b.includes(`push bx_new5678 ${process.cwd()} --to /home/user/claude-cookbook --json`));
+  assert.ok(b.includes("push bx_new5678 /tmp/staged/claude-cookbook --to /home/user/claude-cookbook --json"), "the scanned copy is pushed, not the folder");
+  assert.equal(w.removed, 1, "the staged copy is removed after the push");
   const base = b.find((c) => c.includes("git init -q -b boat"));
   assert.match(base, /commit -q -m 'base: a{40}'/, "the base commit names the laptop's commit");
   assert.ok(w.calls.some((c) => c.cmd === "t3" && c.args.join(" ") === "environment unlink env-1"), "a fresh sandbox replaces the old link");
@@ -190,8 +193,8 @@ test("down: the forward ended, the sandbox stopped, the proxy off when none of o
   assert.ok(w.boat().includes("stop bx_old1234 --json"));
   assert.equal(w.proxy, false);
   assert.ok(w.linked, "a stop keeps the link for the resume");
-  const d = world({ sandbox: "stopped", proxy: true });
-  assert.equal(await main(["down", "--delete"], d.io), 0);
+  const d = world({ sandbox: "running", proxy: true });
+  assert.equal(await main(["down", "--delete"], d.io), 0, d.out.join("\n"));
   assert.ok(d.boat().includes("delete bx_old1234 --yes --json"));
   assert.equal(d.linked, false);
   assert.deepEqual(d.state, {});
@@ -233,6 +236,7 @@ test("pull: the patch is scanned before anything else reads it, and applied only
   assert.ok(w.boat().includes("scp bx_old1234:/tmp/boat-chat-claude-cookbook.patch /fake/boat-chat/patches/claude-cookbook-2026-11-27T12-00-00-000Z/changes.patch"));
   assert.deepEqual(w.scanned, ["/fake/boat-chat/patches/claude-cookbook-2026-11-27T12-00-00-000Z"]);
   assert.ok(w.out.includes("git apply --check: applies"));
+  assert.equal(w.marked, "c".repeat(40), "a clean scan marks what was pulled");
   assert.equal(w.applied, false, "without --apply nothing changes here");
   const a = world({ sandbox: "running" });
   assert.equal(await main(["pull", ".", "--apply"], a.io), 0);
@@ -244,10 +248,33 @@ test("pull: the patch is scanned before anything else reads it, and applied only
   const f = world({ sandbox: "running", found: "1 finding (generic-api-key in x/y): a security finding goes to the owner" });
   assert.equal(await main(["pull", ".", "--apply"], f.io), SCAN_FOUND);
   assert.ok(!f.calls.some((c) => c.cmd === "git" && c.args[2] === "apply"), "a finding: no git apply, not even --check");
+  assert.equal(f.marked, null, "a finding leaves the mark where it was: the next pull returns the same changes");
   const e = world({ sandbox: "running", size: 0 });
   assert.equal(await main(["pull", ".", "--apply"], e.io), 0);
-  assert.equal(e.out.at(-1), "no changes since the base");
+  assert.equal(e.out.at(-1), "no changes since the last pull");
   const s2 = world({ sandbox: "stopped" });
   assert.equal(await main(["pull", "."], s2.io), 1);
   assert.match(s2.out.at(-1), /run up first/);
+});
+
+test("an upload that fails the checks is never pushed", async () => {
+  const w = world({ sandbox: null, copy: "none", upload: { ok: false, reason: "the secret scan of the upload: 1 finding (generic-api-key in a/.env): a security finding goes to the owner" } });
+  assert.equal(await main(["up", "."], w.io), 1);
+  assert.match(w.out.at(-1), /^boat-chat: not pushed: the secret scan of the upload: 1 finding/);
+  assert.ok(!w.boat().some((c) => c.startsWith("push ")));
+});
+
+test("down --delete never deletes unpulled work unless told to discard it", async () => {
+  const changed = world({ sandbox: "running", copy: "changed", proxy: true });
+  assert.equal(await main(["down", "--delete"], changed.io), 1);
+  assert.match(changed.out.at(-1), /not deleted: unpulled changes in \/home\/user\/claude-cookbook; pull first/);
+  assert.ok(!changed.boat().some((c) => c.startsWith("delete ") || c.startsWith("stop ")), "nothing stopped or deleted");
+  assert.ok(!changed.calls.some((c) => c.cmd === "pkill"), "the forward is left for the pull");
+  const stopped = world({ sandbox: "stopped" });
+  assert.equal(await main(["down", "--delete"], stopped.io), 1);
+  assert.match(stopped.out.at(-1), /the sandbox is stopped, so its copies cannot be checked/);
+  const discard = world({ sandbox: "stopped" });
+  assert.equal(await main(["down", "--delete", "--discard"], discard.io), 0);
+  assert.ok(discard.boat().includes("delete bx_old1234 --yes --json"));
+  assert.throws(() => parseArgs(["down", "--discard"]), /--discard goes with down --delete/);
 });

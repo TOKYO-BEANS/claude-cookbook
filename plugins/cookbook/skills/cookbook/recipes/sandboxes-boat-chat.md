@@ -51,21 +51,26 @@ on compute so the pc actually never has to throttle again". Why: a local chat ta
   [--type small|default] [--push]` (about 10 s on a stopped sandbox, 30 s new): proxy on;
   the recorded sandbox resumed, or a new one (`small`, environment `claude-proxy`); T3 at
   this laptop's version (npm `--before` 24 hours ago) and `linkedEnvironmentsEnabled`; the
-  repository pushed to `/home/user/<name>` when it is not there, as a git repository with one
-  base commit (`--push` copies it again, only over a copy with no changes); `t3 serve` on 127.0.0.1:3773, restarted after a resume;
+  repository pushed to `/home/user/<name>` when it is not there, as `sandbox-run.mjs` uploads
+  one (on the upload list, the files git tracks with their edits, no unnamed data-shaped
+  file, Gitleaks clean; a finding goes to the owner), as a git repository with one base
+  commit (`--push` copies it again, only over a copy with nothing unpulled); `t3 serve` on 127.0.0.1:3773, restarted after a resume;
   `boat forward` to 127.0.0.1:13773; the link, kept or paired again. It prints the
   `environmentId` and the path. Then `t3_project_create` (that environment, that path; the
   default model is set afterwards with `t3_project_update`) and `t3_thread_launch` with
   model `claude-opus-5-5`, effort high. A second repository: `up` again; one sandbox holds
   several chats (a `small` one has 4 GB; one chat left 2.4 GB free).
 - `boat-chat.mjs pull <repository folder> [--apply]`: everything the chat changed since the
-  base commit, committed or not, as one patch in `~/.local/share/boat-chat/patches/`.
-  Gitleaks reads it first (a finding: exit 4, nothing applied, the owner decides); `git
-  apply --check` tries it here; `--apply` applies it to a folder with no changes of its own.
+  last pull (or the base commit), committed or not, as one patch in
+  `~/.local/share/boat-chat/patches/`. Gitleaks reads it first (a finding: exit 4, nothing
+  applied, the same changes come back next time, the owner decides); `git apply --check`
+  tries it here; `--apply` applies it to a folder with no changes of its own.
   Then review, commit and ship from here as usual (a branch or worktree of the job's own).
 - `boat-chat.mjs down [--delete]` when the last boat chat has settled and been pulled: the forward and its
   `ssh` ended, the sandbox stopped (data and memory kept 14 days; `up` resumes it), the proxy
-  off when no `claude-proxy` sandbox runs. `--delete` deletes the sandbox and unlinks it.
+  off when no `claude-proxy` sandbox runs. `--delete` deletes the sandbox and unlinks it, only
+  when it runs and no copy holds unpulled changes (the work lives only there); `--discard`
+  deletes anyway, and only on the owner's word for that work.
 - `boat-chat.mjs status`: the load, the sandbox, the proxy, the forward, the link, the wallet.
   State: `~/.local/share/boat-chat/state.json` (the sandbox's id and repositories).
 - The sandbox stops itself after `--hours`; a chat still working there stops with it and
@@ -85,9 +90,8 @@ on compute so the pc actually never has to throttle again". Why: a local chat ta
 - A T3 server refuses a link until `linkedEnvironmentsEnabled` is set. A new sandbox gets a
   new link; the old one at that address is unlinked first. A resumed one keeps its
   `environmentId`.
-- By hand, when the script fails: the same steps with `boat ai proxy on`, `boat new|resume`,
-  `boat push`, `boat exec --detach`, `boat forward --remote 3773 --local 13773`, the pairing as
-  above; `boat exec` ends at 30 s unless `--timeout`.
+- By hand, when the script fails: its steps in order (`up` in `boat-chat.mjs`); `boat exec`
+  ends at 30 s unless `--timeout`.
 
 ## Numbers (27 November 2026, `small`, the Cookbook)
 

@@ -6,24 +6,27 @@
 //   node boat-chat.mjs status                the load, the sandbox, the proxy, the forward, the link
 //   node boat-chat.mjs up <repository> [--hours <h>] [--type small|default] [--push]
 //   node boat-chat.mjs pull <repository> [--apply]
-//   node boat-chat.mjs down [--delete]
+//   node boat-chat.mjs down [--delete [--discard]]
 //
 // - `up` brings one sandbox up for chats: the AI credentials proxy on, the sandbox resumed
 //   (or made: `claude-proxy` environment, `small`), the repository pushed to
-//   /home/user/<name> when it is not there yet (or with --push), T3 Code at this laptop's
+//   /home/user/<name> when it is not there yet (or with --push) as sandbox-run uploads one:
+//   on the upload list, the files git tracks with their edits, no unnamed data-shaped file,
+//   Gitleaks clean (a finding goes to the owner), T3 Code at this laptop's
 //   version, `t3 serve` on 127.0.0.1:3773 (restarted after a resume: the proxy's placeholder
 //   changes), `boat forward` to 127.0.0.1:13773 here, and the link to this T3. It prints the
 //   `environmentId` for `t3_thread_launch` and the repository's path for `t3_project_create`.
 //   Run again for a second repository: the same sandbox holds several chats. A pushed copy
 //   becomes a git repository with one base commit, so the chat can commit and `pull` can
 //   tell what it changed. --push over a copy with changes stops: pull them first.
-// - `pull` brings a chat's work back: everything changed since the base commit, committed
-//   or not, as one patch in ~/.local/share/boat-chat/patches/<name>-<time>/. Gitleaks reads
+// - `pull` brings a chat's work back: everything changed since the last pull (or the base
+//   commit), committed or not, as one patch in ~/.local/share/boat-chat/patches/<name>-<time>/. Gitleaks reads
 //   it first (a finding: exit 4, nothing applied); `git apply --check` tries it on the
-//   folder; --apply applies it to a folder with no changes of its own. The sandbox has no
-//   GitHub login: the pull request is opened from here.
+//   folder; --apply applies it to a folder with no changes of its own. A clean scan marks
+//   what was pulled (refs/boat/pulled in the copy). The sandbox has no GitHub login: the
+//   pull request is opened from here.
 // - `down` ends the forward (its `ssh` too), stops the sandbox (data kept 14 days; --delete
-//   deletes it and unlinks it) and turns the proxy off when no sandbox of ours runs. Run it
+//   deletes it and unlinks it, only when no copy holds unpulled changes, or with --discard) and turns the proxy off when no sandbox of ours runs. Run it
 //   when the last boat chat has settled.
 // - The pairing credential goes from the sandbox's output to `t3 environment link` on stdin:
 //   never on a command line, never printed. The `t3 serve` log is never read (pairing QR).
@@ -35,7 +38,7 @@ import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { laptopLoad } from "../../../hooks/laptop-load-lib.mjs";
-import { scan } from "./sandbox-run.mjs";
+import { UPLOAD_LIST, dataFiles, listEntry, repoKey, scan, stage, unnamed } from "./sandbox-run.mjs";
 
 export const REMOTE_PORT = 3773;
 export const LOCAL_PORT = 13773;
@@ -85,7 +88,7 @@ export function firstId(text) {
 
 export function parseArgs(argv) {
   const [command = "", ...rest] = argv;
-  const o = { command, repo: "", hours: 4, type: "small", push: false, del: false, json: false, apply: false };
+  const o = { command, repo: "", hours: 4, type: "small", push: false, del: false, json: false, apply: false, discard: false };
   for (let i = 0; i < rest.length; i += 1) {
     const a = rest[i];
     if (a === "--hours") o.hours = Number(rest[++i]);
@@ -94,12 +97,14 @@ export function parseArgs(argv) {
     else if (a === "--delete") o.del = true;
     else if (a === "--json") o.json = true;
     else if (a === "--apply") o.apply = true;
+    else if (a === "--discard") o.discard = true;
     else if (!a.startsWith("-") && !o.repo) o.repo = a;
     else throw new Error(`unknown argument: ${a}`);
   }
   if (!["where", "status", "up", "pull", "down"].includes(o.command)) throw new Error("command: where, status, up, pull or down");
   if ((o.command === "up" || o.command === "pull") && !o.repo) throw new Error(`${o.command} needs a repository folder`);
   if (!(Number.isInteger(o.hours) && o.hours >= 1 && o.hours <= 24)) throw new Error("--hours: 1 to 24");
+  if (o.discard && !o.del) throw new Error("--discard goes with down --delete");
   if (!["small", "default"].includes(o.type)) throw new Error("--type: small or default (a larger size is the owner's)");
   return o;
 }
@@ -173,6 +178,30 @@ export function realIo() {
       }
     },
     size: (file) => statSync(file).size,
+    // The upload as sandbox-run makes one: { ok, dir, remove } or { ok: false, reason }.
+    prepare: (folder) => {
+      const key = repoKey(folder);
+      let list = "";
+      try {
+        list = readFileSync(UPLOAD_LIST, "utf8");
+      } catch {
+        // no list yet: nothing is allowed
+      }
+      const entry = listEntry(key, list);
+      if (!entry) return { ok: false, reason: `${key ?? "this folder"} is not on the upload list (${UPLOAD_LIST}): recipes/sandboxes-setup.md says when one is added` };
+      const staged = stage(folder);
+      const data = unnamed(dataFiles(staged.dir).map((f) => `${staged.prefix || ""}${f}`), entry.data);
+      if (data.length > 0) {
+        staged.remove();
+        return { ok: false, reason: `the upload holds ${data.length} data-shaped file(s) the upload list does not name (${data.slice(0, 5).join("; ")}): look at each; one with customer data goes to the owner` };
+      }
+      const found = scan(staged.dir, staged.tmp);
+      if (!found.ok) {
+        staged.remove();
+        return { ok: false, reason: `the secret scan of the upload: ${found.reason}` };
+      }
+      return { ok: true, dir: staged.dir, remove: staged.remove };
+    },
     now: () => Date.now(),
     out: (line) => process.stdout.write(`${line}\n`),
   };
@@ -246,10 +275,15 @@ function repoAndName(io, folder) {
   return { repo, name };
 }
 
-// The copy's state in the sandbox: "none", "clean" or "changed" (commits or edits since the
-// base commit).
+// The copy's files now, committed or not, as a tree, without touching the chat's index.
+const TREE_NOW = `export GIT_INDEX_FILE=$(mktemp -u); git read-tree HEAD; git add -A; now=$(git write-tree); rm -f "$GIT_INDEX_FILE"; unset GIT_INDEX_FILE`;
+// The commit the next pull starts from: the last one pulled, else the base commit.
+const FROM = `from=$(git rev-parse -q --verify refs/boat/pulled || git rev-list --max-parents=0 HEAD | tail -1)`;
+
+// The copy's state in the sandbox: "none", "clean" (its files are those of the last pull or
+// the base) or "changed".
 function copyState(io, id, name) {
-  const r = inBox(io, id, `cd /home/user/${name} 2>/dev/null || { echo none; exit 0; }; [ -d .git ] || { echo changed; exit 0; }; if [ "$(git rev-list --count HEAD)" = 1 ] && [ -z "$(git status --porcelain)" ]; then echo clean; else echo changed; fi`);
+  const r = inBox(io, id, `cd /home/user/${name} 2>/dev/null || { echo none; exit 0; }; [ -d .git ] || { echo changed; exit 0; }; ${TREE_NOW}; ${FROM}; [ "$now" = "$(git rev-parse "$from^{tree}")" ] && echo clean || echo changed`);
   return ["none", "clean", "changed"].includes(r.stdout.trim()) ? r.stdout.trim() : "changed";
 }
 
@@ -299,7 +333,13 @@ async function up(io, o) {
     if (copy === "changed") throw new Error(`/home/user/${name} has changes since its base: pull them first`);
     const head = io.run("git", ["-C", repo, "rev-parse", "HEAD"]).stdout.trim();
     const dirty = io.run("git", ["-C", repo, "status", "--porcelain"]).stdout.trim() !== "";
-    if (boat(io, ["push", id, repo, "--to", `/home/user/${name}`, "--json"], { timeout: 600_000 }).code !== 0) throw new Error("boat push failed");
+    const upload = io.prepare(repo);
+    if (!upload.ok) throw new Error(`not pushed: ${upload.reason}`);
+    try {
+      if (boat(io, ["push", id, upload.dir, "--to", `/home/user/${name}`, "--json"], { timeout: 600_000 }).code !== 0) throw new Error("boat push failed");
+    } finally {
+      upload.remove();
+    }
     const base = `base: ${/^[0-9a-f]{40}$/.test(head) ? head : "unknown"}${dirty ? " with uncommitted edits" : ""}`;
     const r = inBox(io, id, `set -e; cd /home/user/${name}; rm -rf .git; git init -q -b boat; git add -A; git ${GIT_ID} commit -q -m ${sq(base)}; git config user.name 'boat chat'; git config user.email boat-chat@localhost`, 120);
     if (r.code !== 0) throw new Error("the base commit failed");
@@ -364,8 +404,10 @@ function pull(io, o) {
   const { repo, name } = repoAndName(io, o.repo);
   const id = runningSandbox(io);
   const remote = `/tmp/boat-chat-${name}.patch`;
-  const r = inBox(io, id, `set -e; cd /home/user/${name}; root=$(git rev-list --max-parents=0 HEAD | tail -1); export GIT_INDEX_FILE=$(mktemp -u); git read-tree HEAD; git add -A; git diff --cached --binary "$root" > ${remote}; rm -f "$GIT_INDEX_FILE"; git log -1 --format=%s "$root"`, 120);
-  if (r.code !== 0) throw new Error(`no patch from /home/user/${name}`);
+  const r = inBox(io, id, `set -e; cd /home/user/${name}; ${TREE_NOW}; ${FROM}; mark=$(git ${GIT_ID} commit-tree "$now" -p HEAD -m pulled); git diff --binary "$from" "$mark" > ${remote}; git log -1 --format=%s "$(git rev-list --max-parents=0 HEAD | tail -1)"; echo "$mark"`, 120);
+  const lines = r.stdout.trim().split("\n");
+  const mark = lines.at(-1);
+  if (r.code !== 0 || !/^[0-9a-f]{40}$/.test(mark ?? "")) throw new Error(`no patch from /home/user/${name}`);
   const stamp = new Date(io.now()).toISOString().replace(/[:.]/g, "-");
   const dir = join(io.home ?? HOME, "patches", `${name}-${stamp}`);
   io.mkdir(dir);
@@ -377,10 +419,12 @@ function pull(io, o) {
     io.out(`patch: ${file}`);
     return SCAN_FOUND;
   }
+  // Scanned and kept here: the next pull starts after it.
+  if (inBox(io, id, `cd /home/user/${name} && git update-ref refs/boat/pulled ${mark}`).code !== 0) throw new Error("could not mark the pull in the sandbox");
   const size = io.size(file);
-  io.out(`patch: ${file} (${size} bytes; ${r.stdout.trim().split("\n").at(-1)})`);
+  io.out(`patch: ${file} (${size} bytes; ${lines.at(-2) ?? "base unknown"})`);
   if (size === 0) {
-    io.out("no changes since the base");
+    io.out("no changes since the last pull");
     return 0;
   }
   const check = io.run("git", ["-C", repo, "apply", "--check", file]);
@@ -396,9 +440,15 @@ function pull(io, o) {
 
 function down(io, o) {
   const state = io.readState();
+  const info = sandboxInfo(io, state.id);
+  // A chat's work lives only in the sandbox until it is pulled: never delete it unseen.
+  if (info && o.del && !o.discard) {
+    if (stateKind(info.state) !== "running") throw new Error("not deleted: the sandbox is stopped, so its copies cannot be checked; run up, pull each repository, then down --delete (or add --discard)");
+    const changed = (state.repos ?? []).filter((n) => NAME.test(n) && copyState(io, info.id, n) === "changed");
+    if (changed.length > 0) throw new Error(`not deleted: unpulled changes in ${changed.map((n) => `/home/user/${n}`).join(", ")}; pull first (or add --discard)`);
+  }
   stopForward(io);
   io.out("forward: ended");
-  const info = sandboxInfo(io, state.id);
   if (info) {
     if (o.del) {
       if (boat(io, ["delete", info.id, "--yes", "--json"], { timeout: 300_000 }).code !== 0) throw new Error(`boat delete ${info.id} failed`);
@@ -426,7 +476,7 @@ export async function main(argv, io = realIo()) {
     o = parseArgs(argv);
   } catch (e) {
     io.out(`boat-chat: ${e.message}`);
-    io.out("usage: boat-chat.mjs where [--json] | status | up <repository> [--hours h] [--type small|default] [--push] | pull <repository> [--apply] | down [--delete]");
+    io.out("usage: boat-chat.mjs where [--json] | status | up <repository> [--hours h] [--type small|default] [--push] | pull <repository> [--apply] | down [--delete [--discard]]");
     return 2;
   }
   try {
