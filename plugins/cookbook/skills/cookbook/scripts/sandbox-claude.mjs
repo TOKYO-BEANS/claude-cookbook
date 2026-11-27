@@ -81,12 +81,16 @@ process.stdin.on("end",()=>{if(buf)line(buf)});`;
 export const SCRIPT = [
   "set -u -o pipefail",
   'V="$1"; PROMPT="$2"; BUDGET="$3"; TOOLS="$4"; FILTER="$5"',
+  // The token stays a shell variable: no step but `claude -p` gets it in its environment.
+  "export -n CLAUDE_CODE_OAUTH_TOKEN",
   'O=$(mktemp -d /tmp/sandbox-claude.XXXXXX)',
+  // The uploaded commit: the patch is taken against it, so commits made during the run count.
+  'BASE=$(git rev-parse --verify -q "HEAD^{commit}" 2>/dev/null || true)',
   `npm install -g --prefix "$HOME/.claude-code" --no-fund --no-audit --loglevel=error "@anthropic-ai/claude-code@$V" >"$O/install.log" 2>&1 || { echo "${SAY}: not started: Claude Code $V could not be installed" >&2; tail -5 "$O/install.log" >&2; exit ${NOT_STARTED}; }`,
   `env -i HOME="$HOME" PATH="$HOME/.claude-code/bin:$PATH" USER="\${USER:-runner}" TERM=dumb LANG=C.UTF-8 CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1 DISABLE_AUTOUPDATER=1 claude -p "$PROMPT" --model ${MODEL} --effort ${EFFORT} --permission-mode dontAsk --tools "$TOOLS" --allowedTools "$TOOLS" --max-budget-usd "$BUDGET" --no-session-persistence --setting-sources "" --strict-mcp-config --output-format stream-json --verbose 2>"$O/claude.err" | node -e "$FILTER" "$O/stream.jsonl"`,
   "code=$?",
   ': >"$O/changes.patch"',
-  'if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git add --all >/dev/null 2>&1 && git diff --cached --binary HEAD >"$O/changes.patch"; fi',
+  'if [ -n "$BASE" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git add --all >/dev/null 2>&1 && git diff --cached --binary "$BASE" >"$O/changes.patch"; fi',
   `if grep -rqF -- "$CLAUDE_CODE_OAUTH_TOKEN" "$O"; then echo "${SAY}: the run's files hold the token: nothing is sent back" >&2; exit 3; fi`,
   `echo "${BEGIN}"`,
   `tar -czf - -C "$O" ${FILES.join(" ")} | base64 -w0`,
