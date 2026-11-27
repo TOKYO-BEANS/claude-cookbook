@@ -240,6 +240,72 @@ out["run"] = sort_run([])
 out["dry"] = sort_run(["--dry-run"])
 out["capped"] = sort_run(["--max-moves", "1"])
 out["unread"] = sort_run([], unseen={"1", "2", "7"})
+import re
+def mid_boxes():
+    b = boxes()
+    for msgs in b.values():
+        for u in list(msgs):
+            msgs[u] = f"Message-ID: <m{u}@example.org>\r\n".encode() + msgs[u]
+    return b
+class MidImap(FakeImap):
+    def uid(self, cmd, *a):
+        if cmd == "SEARCH" and "HEADER" in a:
+            want = b"Message-ID: " + a[-1].strip('"').encode() + b"\r\n"
+            box = self.boxes[self.cur]
+            return "OK", [" ".join(u for u in sorted(box, key=int) if want in box[u]).encode()]
+        return super().uid(cmd, *a)
+def said_by(fn, argv):
+    with contextlib.redirect_stdout(io.StringIO()) as o:
+        try:
+            fn(ps.parser().parse_args(argv))
+        except ps.Fail as e:
+            return "Fail: " + str(e)
+    return o.getvalue().strip()
+def full(fake):
+    return {k: v for k, v in fake.boxes.items() if v}
+def undo_flow(person_deletes=None):
+    fake = MidImap(mid_boxes())
+    ps.pm.imap_connect = lambda c: fake
+    ps.STATE_DIR = tempfile.mkdtemp()
+    before = json.loads(json.dumps({k: {u: m.decode() for u, m in v.items()} for k, v in full(fake).items()}))
+    sort = lambda a: ps.cmd_sort(cfg, a)
+    undo = lambda a: ps.cmd_undo(cfg, a)
+    r = {"sort": said_by(sort, ["sort"]), "after_sort": {k: sorted(v, key=int) for k, v in full(fake).items()}}
+    if person_deletes:
+        box, u = person_deletes
+        del fake.boxes[box][u]
+    r["changes"] = said_by(ps.cmd_changes, ["changes"])
+    r["dry"] = said_by(undo, ["undo", "--dry-run"])
+    r["dry_same"] = {k: sorted(v, key=int) for k, v in full(fake).items()} == r["after_sort"]
+    r["undo"] = said_by(undo, ["undo"])
+    r["restored"] = {k: {u: m.decode() for u, m in v.items()} for k, v in full(fake).items()} == before
+    r["boxes"] = {k: sorted(v, key=int) for k, v in full(fake).items()}
+    r["resort"] = said_by(sort, ["sort"])
+    run_id = re.search(r"run (\S+):", r["sort"]).group(1)
+    r["again"] = said_by(undo, ["undo", "--run", run_id])
+    r["none_left"] = said_by(ps.cmd_changes, ["changes"])
+    return r
+out["undo"] = undo_flow()
+out["undo_person"] = undo_flow(("Folders/home.mail@gmail.com/Amazon (amazon.dk)", "2"))
+def split_flow():
+    ps.STATE_DIR = tempfile.mkdtemp()
+    st = {"version": 1, "accounts": {}}
+    gj2 = ps.Grouper(st, "k", 5, None, opener_with({"answers": {"same_sender": {"type": "choice", "probabilities": {"g0": 0.95, "none": 0.05}}, "imitation": {"type": "noul", "noul": 0.05}}}))
+    gj2.group_for("a@gmail.com", ps.sender_of("Facebook <notify@facebook.com>"))
+    joined = gj2.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>"))
+    ps.save_state(os.path.join(ps.STATE_DIR, "state.json"), st)
+    for j in gj2.joins:
+        ps.log(os.path.join(ps.STATE_DIR, "moves.jsonl"), {"run": "r1", "join": j})
+    ps.pm.imap_connect = lambda c: MidImap({"INBOX": {}})
+    changes = said_by(ps.cmd_changes, ["changes"])
+    undone = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo"])
+    s2 = json.load(open(os.path.join(ps.STATE_DIR, "state.json")))
+    acc = s2["accounts"]["a@gmail.com"]
+    g = ps.Grouper(s2, "k", 5, None, opener_with({}))
+    return {"joined": joined, "joins": len(gj2.joins), "changes": changes, "undo": undone, "aliases": acc.get("aliases"),
+            "own": acc["senders"]["security@facebookmail.com"],
+            "after": g.group_for("a@gmail.com", ps.sender_of("Facebook <security@facebookmail.com>")), "calls": g.jev_calls}
+out["split"] = split_flow()
 print(json.dumps(out))
 `;
 
@@ -385,4 +451,35 @@ test("unread mail waits in its account folder, so Proton's sidebar shows it; rea
     INBOX: ["3", "4"], "Folders/home.mail@gmail.com": ["1", "2"], "Folders/inbox@pm.me": ["7"],
   });
   assert.match(o.unread.said, /^moved 0 mail\(s\) into 0 sender folder\(s\); 2 unread moved to its account folder; 2 left in place; 3 unread waiting there/);
+});
+
+test("a run's changes can be shown and undone: mail goes back, stays back, and a mail a person moved is left alone", opts, () => {
+  const o = run();
+  const u = o.undo;
+  assert.match(u.sort, /\nrun \d{8}T\d{6}Z: see it with `proton-sort changes`, undo it with `proton-sort undo`\.$/);
+  assert.match(u.changes, /^run \d{8}T\d{6}Z: 3 mail\(s\) moved, 0 sender\(s\) joined to a group by Jev\.\n/);
+  assert.match(u.changes, /2\tINBOX -> Folders\/home\.mail@gmail\.com\/Amazon \(amazon\.dk\)/);
+  assert.match(u.changes, /\nundo: proton-sort undo --run \d{8}T\d{6}Z$/);
+  assert.match(u.dry, /^would put 3 mail\(s\) of run \S+ back \(1 to Folders\/inbox@pm\.me, 2 to INBOX\); 0 no longer/);
+  assert.equal(u.dry_same, true);
+  assert.match(u.undo, /^put 3 mail\(s\) of run \S+ back/);
+  assert.equal(u.restored, true);
+  assert.match(u.resort, /^moved 0 mail\(s\) into 0 sender folder\(s\); 0 unread moved to its account folder; 5 left in place/);
+  assert.match(u.again, /^Fail: run \S+ is already undone$/);
+  assert.equal(u.none_left, "Fail: no run to show or undo in moves.jsonl");
+  const p = o.undo_person;
+  assert.match(p.undo, /^put 2 mail\(s\) of run \S+ back \(1 to Folders\/inbox@pm\.me, 1 to INBOX\); 1 no longer where the run put them, left alone;/);
+  assert.deepEqual(p.boxes, { INBOX: ["1", "3", "4"], "Folders/inbox@pm.me": ["7"] });
+});
+
+test("undo splits a sender Jev joined into a group of its own, and the next run does not ask Jev again", opts, () => {
+  const s = run().split;
+  assert.equal(s.joined, "Facebook (facebook.com)");
+  assert.equal(s.joins, 1);
+  assert.match(s.changes, /^run r1: 0 mail\(s\) moved, 1 sender\(s\) joined to a group by Jev\.\nJev joined security@facebookmail\.com to Facebook \(facebook\.com\)\nundo: proton-sort undo --run r1$/);
+  assert.match(s.undo, /1 sender\(s\) Jev joined now have a group of their own/);
+  assert.deepEqual(s.aliases, {});
+  assert.equal(s.own, "o:facebookmail.com");
+  assert.notEqual(s.after, "Facebook (facebook.com)");
+  assert.equal(s.calls, 0);
 });
