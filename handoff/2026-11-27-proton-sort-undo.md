@@ -12,14 +12,17 @@ only, recorded no move, and had no undo: a wrong join meant moving mail by hand 
   `undo [--run ID] [--dry-run]`. Undo moves each mail back only if it is still where the run
   put it, and keeps it there in later runs (`kept` in the state, last 5,000). It gives each
   sender Jev joined a group of its own unless a person changed it since, and refuses a run
-  already undone. Nothing is deleted; folders the run made stay.
+  already undone. Nothing is deleted; folders the run made stay. The mail already put back is
+  kept even when a move fails partway (an AI fix commit, from the review's medium finding),
+  and a sort and an undo hold a lock file in the state folder, so neither saves an older
+  state over the other (the review's low finding).
 - `recipes/proton-mail-sorting.md`: the new file and the two commands.
 - `scripts/proton-sort.test.mjs`: two tests. One sorts, shows, undoes (dry and real), checks
   the boxes equal the start, re-sorts and finds nothing to move, then a second undo is refused.
   Another case leaves a mail a person deleted alone. The other test undoes a Jev join and the
   next run does not ask Jev again.
 
-**Verification.** `node --test scripts/proton-sort.test.mjs`: 14 of 14 pass locally; the
+**Verification.** `node --test scripts/proton-sort.test.mjs`: 16 of 16 pass locally; the
 whole suite runs in a Depot sandbox (see the pull request). After the merge, the script is
 copied to `~/.local/bin/` and one run by hand is made (the recipe's "After a change").
 

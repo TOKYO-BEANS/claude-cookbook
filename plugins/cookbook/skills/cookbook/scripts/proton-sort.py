@@ -25,10 +25,12 @@ back where it was and splits the senders Jev joined in it (Cookbook recipes/agen
 """
 
 import argparse
+import contextlib
 import email
 import email.errors
 import email.header
 import email.policy
+import fcntl
 import http.client
 import importlib.util
 import json
@@ -237,6 +239,19 @@ def save_state(path, state):
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(state, f, indent=1, sort_keys=True)
     os.replace(tmp, path)
+
+
+@contextlib.contextmanager
+def state_lock():
+    """One sort or undo at a time: the timer's sort and a hand-run undo both rewrite state.json,
+    so the later one waits instead of saving an older copy over the other's changes."""
+    os.makedirs(STATE_DIR, mode=0o700, exist_ok=True)
+    fd = os.open(os.path.join(STATE_DIR, "lock"), os.O_WRONLY | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
 
 
 def log(path, row):
@@ -692,11 +707,13 @@ def main(argv=None):
             cmd_changes(args)
             return 0
         if args.cmd == "undo":
-            cmd_undo(pm.load_config(), args)
+            with state_lock():
+                cmd_undo(pm.load_config(), args)
             return 0
         if not 1 <= args.max_moves <= 5000 or not 0 <= args.max_jev <= 200:
             raise Fail("--max-moves is 1 to 5000, --max-jev 0 to 200")
-        cmd_sort(pm.load_config(), args)
+        with state_lock():
+            cmd_sort(pm.load_config(), args)
         return 0
     except Fail as e:
         print(f"proton-sort: {e}", file=sys.stderr)

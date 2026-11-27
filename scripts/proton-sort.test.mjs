@@ -110,7 +110,7 @@ out["settings_none"] = fails({"user": "u@pm.me"})
 out["settings_bad"] = fails({"user": "u@pm.me", "sort": {"accounts": ["a@b.dk, c@d.dk"]}})
 acc, own = ps.load_settings({"user": "u@pm.me", "sort": {"accounts": ["A@Gmail.com"], "own": ["me@x.dk"]}})
 out["settings_ok"] = [acc, sorted(own)]
-import http.client, os, tempfile, contextlib, email, email.policy
+import http.client, os, tempfile, contextlib, email, email.policy, time
 def raises(exc):
     def opener(req, timeout=0):
         raise exc
@@ -305,6 +305,17 @@ def undo_fails_flow():
     said_by(lambda a: ps.cmd_sort(cfg, a), ["sort"])
     return {"undo": undone, "kept": kept, "boxes": {k: sorted(v, key=int) for k, v in full(fake).items()}}
 out["undo_fails"] = undo_fails_flow()
+import threading
+ps.STATE_DIR = tempfile.mkdtemp()
+order = []
+def holder():
+    with ps.state_lock():
+        order.append("first in"); time.sleep(0.3); order.append("first out")
+t = threading.Thread(target=holder); t.start(); time.sleep(0.1)
+with ps.state_lock():
+    order.append("second in")
+t.join()
+out["lock_order"] = order
 def split_flow():
     ps.STATE_DIR = tempfile.mkdtemp()
     st = {"version": 1, "accounts": {}}
@@ -507,4 +518,8 @@ test("undo splits a sender Jev joined into a group of its own, and the next run 
   assert.equal(s.own, "o:facebookmail.com");
   assert.notEqual(s.after, "Facebook (facebook.com)");
   assert.equal(s.calls, 0);
+});
+
+test("a sort and an undo never rewrite the state at once: the second waits for the lock", opts, () => {
+  assert.deepEqual(run().lock_order, ["first in", "first out", "second in"]);
 });
