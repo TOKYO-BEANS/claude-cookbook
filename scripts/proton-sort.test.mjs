@@ -312,7 +312,7 @@ print(json.dumps(out))
 let cached;
 function run() {
   if (!cached) {
-    const r = spawnSync("python3", ["-I", "-c", PY, script], { encoding: "utf8" });
+    const r = spawnSync("python3", ["-I", "-B", "-c", PY, script], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);
     cached = JSON.parse(r.stdout);
   }
