@@ -68,14 +68,15 @@ front ends it is better at.
   (env, domains, project settings) follows the same stops as on Cloudflare.
 - **Docs**: every page has a Markdown copy (`vercel.com/docs/<page>.md`, the knowledge base
   at `vercel.com/kb/...`), read with Firecrawl or curl.
-- **The token**: a classic token `claude-linux`, scoped to the owner's team, made by the owner
-  at `vercel.com/account/tokens` (the sign-in is the owner's GitHub) and saved as the vault
-  note `key/vercel`. Vercel asks again for a mailed code before it makes a token: the account's
-  primary email must be one that receives mail: an Apple "Sign in with Apple" relay made for
-  GitHub drops all of Vercel's mail, and every way to change it (new email, passkey,
-  authenticator) asks for that code first. The way out is Vercel's Account Recovery form
-  (`vercel.com/accountrecovery`, "Not receiving one-time password"); its support agent cannot
-  change an email. Its expiry goes into the catalog entry's `dates` once the token exists.
+- **The token**: a classic token `claude-linux-laptop` on the owner's account, made by the
+  owner at `vercel.com/account/tokens`, saved as the vault note `key/vercel`, expires
+  28 November 2027 (the catalog entry's `dates`). Proved 27 November 2026: `GET /v2/user` and
+  `GET /v10/projects` answer 200. Vercel mails a code before it makes a token or authorizes a
+  device (`vercel login` included), so the account's primary email must receive mail. A "Sign
+  in with Apple" relay made for another app (GitHub) takes mail only from that app's maker and
+  drops Vercel's; the owner's first account had one and could not be changed or deleted, so
+  the account in use is a new one on the owner's Proton address (27 November 2026). A GitHub
+  login still tied to the first account may block connecting GitHub to the new one.
 
 ## Not used, and why (27 November 2026)
 
