@@ -52,12 +52,14 @@ export const STATE_FILE = join(HOME, "state.json");
 export const SCAN_FOUND = 4;
 const GIT_ID = "-c user.name='boat chat' -c user.email=boat-chat@localhost";
 const ID = /^bx_[a-z0-9]{4,40}$/;
-// boat's states: a stopped sandbox resumes; one that failed or went is replaced; every other
-// state (running, idle, ready, starting ...) is a sandbox that runs. `idle` runs: seen 27
+// boat's states: a stopped sandbox resumes; a deleted one is replaced; one that failed still
+// exists and may hold unpulled work, so it stops `up` with its id; every other state
+// (running, idle, ready, starting ...) is a sandbox that runs. `idle` runs: seen 27
 // November 2026, where a first version made a second sandbox.
 const STOPPED = new Set(["stopped", "stopping"]);
-const GONE = new Set(["error", "failed", "deleted", "deleting", "archived"]);
-export const stateKind = (state) => (STOPPED.has(state) ? "stopped" : GONE.has(state) || !state ? "gone" : "running");
+const GONE = new Set(["deleted", "deleting"]);
+const FAILED = new Set(["error", "failed", "archived"]);
+export const stateKind = (state) => (STOPPED.has(state) ? "stopped" : GONE.has(state) || !state ? "gone" : FAILED.has(state) ? "failed" : "running");
 const NAME = /^[A-Za-z0-9._-]{1,80}$/;
 const BASE_LINE = /^base: ([0-9a-f]{40}|unknown)( with uncommitted edits)?$/;
 const T3_VERSION = /^t3 v(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)\s*$/m;
@@ -346,6 +348,7 @@ async function bringUp(io, o, { repo, name, ver, state, info }) {
   let id = info?.id ?? null;
   let fresh = false, restart = false;
   const kind = info ? stateKind(info.state) : "gone";
+  if (kind === "failed") throw new Error(`sandbox ${id} is ${info.state}: it may hold unpulled work, so no new one replaces it; boat recover ${id}, or down --delete (--discard) once its work is safe`);
   if (kind === "stopped") {
     if (boat(io, ["resume", id, "--json"], { timeout: 300_000 }).code !== 0) throw new Error(`boat resume ${id} failed`);
     restart = true;
@@ -521,7 +524,12 @@ function down(io, o) {
     } else io.out(`sandbox: ${info.id} ${info.state}, nothing to stop`);
   } else io.out("sandbox: none recorded");
   const list = lastJson(boat(io, ["list", "--json"]).stdout);
-  const running = Array.isArray(list?.sandboxes) ? list.sandboxes.filter((s) => s.environment === ENVIRONMENT) : [];
+  // An unread list is never "none run": other chats' sandboxes may need the proxy.
+  if (!Array.isArray(list?.sandboxes)) {
+    io.out("proxy: left as it is, boat list failed; run down again");
+    return 1;
+  }
+  const running = list.sandboxes.filter((s) => s.environment === ENVIRONMENT);
   if (running.length === 0) {
     // Turned off when on or unknown: only a reading of "off" skips the call.
     if (proxyOn(io) !== false && boat(io, ["ai", "proxy", "off", "--json"]).code !== 0) throw new Error("boat ai proxy off failed");
