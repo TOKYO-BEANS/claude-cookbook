@@ -64,8 +64,9 @@ so.
    *The owner's rule stands:* a deadline the owner sets is kept by cutting scope, never the
    merge condition or a check. When even the cut scope cannot meet the bar by that date, the
    owner is asked before it, with the question dialog ([owner questions](owner-questions.md)).
-   *Check:* a pull request that ships a known user-visible flaw "to fix later" without an
-   owner's deadline behind it is a finding.
+   *Check:* a pull request that ships a known user-visible flaw "to fix later" is a finding;
+   under an owner's deadline, the flawed part is cut from scope or the owner was asked
+   before the date.
 8. **Build an important screen two or three ways, and use them before choosing.** An important
    screen is where people spend most of their time, a product's main or first screen, or a
    flow that is costly to change later. Build two or three working versions (real code and
