@@ -42,6 +42,12 @@
 - **Known gaps:** the session tool prints "?" for its fields. The server was written against
   a newer ArtCraft than 0.41.1: a tool that fails with a 404 or a parse error may be the API drifting from
   the build, not a sign-in fault.
+- **ArtCraft Launcher** (`storytold/craft-launcher`), the owner's app that lists, installs
+  and updates the Craft apps: 0.20.3 installed 27 November 2026 at
+  `~/.local/share/craft-launcher`, from the release tarball (no Flatpak here), with a menu
+  entry. Vetting: `~/.local/share/vetting/craft-launcher-0.20.3/NOTES.md`. What the owner
+  installs or updates from inside it, its own update included, skips our vetting: Claude never
+  clicks those. Claude updates it like LightCraft.
 - **To update:** the feed shows new commits. Rebuild from the newest commit over 24 hours old
   with the patches still needed, scan the source (Gitleaks, Trivy) and the server's dependency
   tree (OSV-Scanner on the lockfile, `cargo tree -p artcraft-mcp`), run `vet-build.sh` and
