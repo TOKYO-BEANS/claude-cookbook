@@ -35,3 +35,5 @@ this pull request. Vercel's API is not proven yet: no token (below).
   the owner creates the token (`claude-linux`, team scope, 1 year) and saves it as the vault
   note `key/vercel`. Then Claude copies it into the key store, proves it with `GET /v2/user` and
   `GET /v10/projects`, and adds the expiry to the catalog entry's `dates`.
+- **A shared sync back end** (owner, 27 November 2026): weighed in the Probiz local-first chat,
+  which has the hosting facts from this one; `recipes/vercel.md` follows its decision.
