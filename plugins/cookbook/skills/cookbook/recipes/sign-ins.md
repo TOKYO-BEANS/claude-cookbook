@@ -31,6 +31,10 @@ is for the sites that only have a web login.
   `fill <selector> <value>`, `press <key>`, `eval <expression>`, `screenshot <path>`, `status` and
   `stop`. One command, one short JSON answer. Never `fill` a credential by hand: that puts it in
   the conversation.
+- **After a change on a site:** `agent-browser actions [--session <id>]` prints what was done
+  (page, action, target, worked or not; never a typed value). Report it with the site's way back
+  ([agent-changes](agent-changes.md)). A used sign-in mail goes to the inbox's trash for 15
+  minutes; `agent-browser mail-restore <key>` brings it back.
 - **When it stops, report it; do not work around it.** `login` answers `ok: false` with the reason
   when the page shows a CAPTCHA, when the site asks for a one-time code and the item has none, and
   when the sign-in form is still shown afterwards. A site that signs in through Apple or Google
