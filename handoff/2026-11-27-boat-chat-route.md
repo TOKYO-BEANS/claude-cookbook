@@ -53,7 +53,7 @@ copies files without `.git`, so a chat could not commit until `up` made a base c
   is silent after. Roll it forward when touching the boat entry.
 - Left as they were: the trial sandbox `bx_22h8jbu4` (stopped; now the recorded sandbox in
   `~/.local/share/boat-chat/state.json`, data to about 11 December unless resumed) and its link
-  `a6224335-…`. GPU rental for creative work is its own chat ("GPU rental for GPU-heavy work").
+  `a6224335-…`. GPU rental for creative work was weighed apart (#287).
 
 **Evidence.** `~/.local/share/claude-cookbook/evidence/2026-11-27-boat-chat-route/`. Release
 log: this pull request's `sa-release` run.
