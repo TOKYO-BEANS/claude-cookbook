@@ -11,6 +11,11 @@ Say what was wrong or missing and what is different now, for whoever uses the co
 smallest picture that shows it: a diff sketch of the logic, a call tree, a file tree or
 pseudocode, each beside the sentence it supports.
 
+Give the size on a line of its own, as `node <this skill's folder>/meaningful-lines.mjs [base]`
+prints it (base `origin/HEAD` when left out): the meaningful lines (`+added / -deleted`), which
+leave out tests, lock files, fixtures and generated files, apart from all lines. The Stack Atlas
+AI review's comment counts the same way.
+
 ## Evidence
 
 Before and after, from commands you ran in this session. Paste the output lines as they were
@@ -31,4 +36,6 @@ Our adapted copy of the `pr` skill of `mattpocock/skills` (MIT: `LICENSE` beside
 upstream commit `abeeaf95660ba9e8b7c753eb38f441ca707a8823` (19 November 2026); that skill credits
 Humanlayer's `show-me`. The three parts above are the text that was tested
 (`options/skills-compared.md` in the `cookbook` skill), apart from the masking sentence, which
-was added after the review of the pull request that added this skill and is not tested.
+was added after the review of the pull request that added this skill, and the size line (owner's
+yes of 27 November 2026, from the Linear team's finding that review goes faster when the meaningful
+lines stand apart from the total); neither is tested.
