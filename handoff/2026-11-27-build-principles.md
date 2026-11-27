@@ -26,6 +26,10 @@ from the same interview are the UI checklist (`recipes/ui-checklist.md`).
 **Verification.** `node scripts/check.mjs` passes; the suite runs in a Depot sandbox (see the
 pull request).
 
+**Follow-up.** The last review of #276 left one low: principle 7's Check exempted a flaw
+shipped under an owner's deadline. A follow-up pull request closed it: under a deadline the
+flawed part is cut from scope or the owner was asked before the date.
+
 **Dead ends.** None.
 
 **Outstanding.** The shared sync layer is being weighed in its own chat; when the owner has
