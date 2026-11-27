@@ -17,7 +17,8 @@ the timer and the tasks on the Ubuntu laptop on 19 November.
   answered in 25 seconds. Today, in the Cookbook project: "Daily sidebar sweep" (daily;
   [owner-questions.md](owner-questions.md)), "AgentShield weekly scan" (Mondays 09:30;
   [agent-audit.md](agent-audit.md)), the weekly fixer (Mondays 08:30) and "Weekly lessons" (Mondays 09:00); in the standard's
-  project its daily run (07:30).
+  project its daily run (07:30); in each product's project "Weekly quality fix" (Tuesdays;
+  [quality-fix.md](quality-fix.md)).
   - The task tool takes no model: a task stores the model of the chat that made it. For a
     cheaper run, set the model on the task's thread (`t3_thread_configure`): the next run
     uses it (23 November 2026: the scan's second run on Sonnet 5.5, in 28 seconds against
