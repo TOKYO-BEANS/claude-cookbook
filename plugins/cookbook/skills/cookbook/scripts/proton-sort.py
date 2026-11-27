@@ -36,6 +36,7 @@ import importlib.util
 import json
 import os
 import re
+import secrets
 import sys
 import time
 import unicodedata
@@ -472,7 +473,7 @@ def cmd_sort(cfg, args):
     jev_key = None if args.dry_run else os.environ.get("TYPESAFE_API_KEY") or None
     grouper = Grouper(state, jev_key, args.max_jev, None if args.dry_run else os.path.join(STATE_DIR, "log.jsonl"))
     moves_path = os.path.join(STATE_DIR, "moves.jsonl")
-    run = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    run = new_run_id()
     kept = set(state.get("kept", []))
     conn = pm.imap_connect(cfg)
     moved, left, waiting, up, joins_logged = {}, 0, 0, 0, 0
@@ -561,6 +562,37 @@ def cmd_sort(cfg, args):
 
 
 # ---- changes and undo (Cookbook recipes/agent-changes.md) --------------------------------
+
+def new_run_id():
+    """The time to the second plus random hex: a hand run that waited on the lock can start in
+    the same second as the timer's sort, and each must stay a run of its own."""
+    return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + secrets.token_hex(3)
+
+
+SAFE_ADDR = re.compile(r"[^\s\"\\]{1,200}@[^\s\"\\]{1,200}")
+
+
+def older_mail(cfg, splits):
+    """How many mails from the split senders an earlier run filed in the folder Jev picked: the
+    undo leaves them there (they were not this run's moves) and says so."""
+    conn = pm.imap_connect(cfg)
+    n = 0
+    try:
+        folders = existing_folders(conn)
+        for folder, addrs in splits:
+            if folder not in folders:
+                continue
+            pm.ok(conn.select(pm.mailbox_name(folder), readonly=True), "open folder")
+            for a in addrs:
+                if SAFE_ADDR.fullmatch(a):
+                    n += len(pm.ok(conn.uid("SEARCH", None, "FROM", f'"{a}"'), "search")[0].split())
+    finally:
+        try:
+            conn.logout()
+        except Exception:
+            pass
+    return n
+
 
 def read_moves(path):
     rows = []
@@ -656,7 +688,7 @@ def cmd_undo(cfg, args):
         if not args.dry_run and put_back:
             state["kept"] = (list(state.get("kept", [])) + put_back)[-KEPT_MAX:]
             save_state(state_path, state)
-    split = 0
+    split, splits = 0, []
     for r in rows:
         j = r.get("join")
         if not isinstance(j, dict):
@@ -667,14 +699,15 @@ def cmd_undo(cfg, args):
         if aliases.get(j.get("rule")) != j.get("pick") or senders.get(j.get("addr")) != j.get("pick") or j.get("rule") in groups:
             continue
         split += 1
-        if args.dry_run:
-            continue
-        del aliases[j["rule"]]
         # Every address that reached the picked group through this join (the logged one and any
         # later one with the same rule key) moves to the new group and leaves the picked one.
         moving = sorted(a for a, k in senders.items() if k == j["pick"]
                         and (a == j["addr"] or (sender_of(a, j["account"]) or {}).get("key") == j["rule"]))
         picked = groups.get(j["pick"], {})
+        splits.append((f"Folders/{j['account']}/{picked.get('label', '')}", moving))
+        if args.dry_run:
+            continue
+        del aliases[j["rule"]]
         picked["addresses"] = [a for a in picked.get("addresses", []) if a not in moving]
         added = set(j.get("tokens") or []) - set(j.get("before_tokens") or [])
         picked["tokens"] = sorted(t for t in picked.get("tokens", []) if t not in added)
@@ -687,11 +720,13 @@ def cmd_undo(cfg, args):
     if not args.dry_run:
         save_state(state_path, state)
         log(moves_path, {"run": run, "undone": total, "missing": missing, "split": split})
+    older = older_mail(cfg, splits) if splits else 0
     print(f"{'would put' if args.dry_run else 'put'} {total} mail(s) of run {run} back "
           f"({', '.join(f'{n} to {pm.one_line(s, 120)}' for s, n in sorted(back.items())) or 'none'}); "
           f"{missing} no longer where the run put them, left alone; {unknown} without a Message-ID, not found; "
           f"{split} sender(s) Jev joined {'would get' if args.dry_run else 'now have'} a group of their own. "
-          f"Folders the run made stay.")
+          f"Folders the run made stay."
+          + (f" {older} older mail(s) from those senders, filed by earlier runs, stay in the folder Jev picked: move them by hand." if older else ""))
 
 
 def parser():

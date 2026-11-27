@@ -249,6 +249,10 @@ def mid_boxes():
     return b
 class MidImap(FakeImap):
     def uid(self, cmd, *a):
+        if cmd == "SEARCH" and "FROM" in a:
+            want = a[-1].strip('"').encode()
+            box = self.boxes[self.cur]
+            return "OK", [" ".join(u for u in sorted(box, key=int) if b"From: " in box[u] and want in box[u].split(b"From: ", 1)[1].split(b"\r\n", 1)[0]).encode()]
         if cmd == "SEARCH" and "HEADER" in a:
             want = b"Message-ID: " + a[-1].strip('"').encode() + b"\r\n"
             box = self.boxes[self.cur]
@@ -328,7 +332,8 @@ def split_flow():
     ps.save_state(os.path.join(ps.STATE_DIR, "state.json"), st)
     for j in gj2.joins:
         ps.log(os.path.join(ps.STATE_DIR, "moves.jsonl"), {"run": "r1", "join": j})
-    ps.pm.imap_connect = lambda c: MidImap({"INBOX": {}})
+    ps.pm.imap_connect = lambda c: MidImap({"INBOX": {}, "Folders/a@gmail.com/Facebook (facebook.com)": {
+        "5": mail(From="Facebook <help@facebookmail.com>", To="a@gmail.com"), "6": mail(From="Facebook <notify@facebook.com>", To="a@gmail.com")}})
     changes = said_by(ps.cmd_changes, ["changes"])
     undone = said_by(lambda a: ps.cmd_undo(cfg, a), ["undo"])
     s2 = json.load(open(os.path.join(ps.STATE_DIR, "state.json")))
@@ -341,6 +346,7 @@ def split_flow():
             "picked_before": picked_before["addresses"], "tokens_before_join": tokens_before_join, "picked": acc["groups"]["o:facebook.com"],
             "new_addresses": acc["groups"]["o:facebookmail.com"]["addresses"], "calls": g.jev_calls}
 out["split"] = split_flow()
+out["run_ids"] = [ps.new_run_id(), ps.new_run_id()]
 print(json.dumps(out))
 `;
 
@@ -491,10 +497,10 @@ test("unread mail waits in its account folder, so Proton's sidebar shows it; rea
 test("a run's changes can be shown and undone: mail goes back, stays back, and a mail a person moved is left alone", opts, () => {
   const o = run();
   const u = o.undo;
-  assert.match(u.sort, /\nrun \d{8}T\d{6}Z: see it with `proton-sort changes`, undo it with `proton-sort undo`\.$/);
-  assert.match(u.changes, /^run \d{8}T\d{6}Z: 3 mail\(s\) moved, 0 sender\(s\) joined to a group by Jev\.\n/);
+  assert.match(u.sort, /\nrun \d{8}T\d{6}Z-[0-9a-f]{6}: see it with `proton-sort changes`, undo it with `proton-sort undo`\.$/);
+  assert.match(u.changes, /^run \d{8}T\d{6}Z-[0-9a-f]{6}: 3 mail\(s\) moved, 0 sender\(s\) joined to a group by Jev\.\n/);
   assert.match(u.changes, /2\tINBOX -> Folders\/home\.mail@gmail\.com\/Amazon \(amazon\.dk\)/);
-  assert.match(u.changes, /\nundo: proton-sort undo --run \d{8}T\d{6}Z$/);
+  assert.match(u.changes, /\nundo: proton-sort undo --run \d{8}T\d{6}Z-[0-9a-f]{6}$/);
   assert.match(u.dry, /^would put 3 mail\(s\) of run \S+ back \(1 to Folders\/inbox@pm\.me, 2 to INBOX\); 0 no longer/);
   assert.equal(u.dry_same, true);
   assert.match(u.undo, /^put 3 mail\(s\) of run \S+ back/);
@@ -519,7 +525,7 @@ test("undo splits a sender Jev joined into a group of its own, and the next run 
   assert.equal(s.joined, "Facebook (facebook.com)");
   assert.equal(s.joins, 1);
   assert.match(s.changes, /^run r1: 0 mail\(s\) moved, 1 sender\(s\) joined to a group by Jev\.\nJev joined security@facebookmail\.com to Facebook \(facebook\.com\)\nundo: proton-sort undo --run r1$/);
-  assert.match(s.undo, /1 sender\(s\) Jev joined now have a group of their own/);
+  assert.match(s.undo, /1 sender\(s\) Jev joined now have a group of their own\. Folders the run made stay\. 1 older mail\(s\) from those senders, filed by earlier runs, stay in the folder Jev picked: move them by hand\.$/);
   assert.deepEqual(s.aliases, {});
   assert.equal(s.own, "o:facebookmail.com");
   assert.notEqual(s.after, "Facebook (facebook.com)");
@@ -536,4 +542,10 @@ test("undo splits a sender Jev joined into a group of its own, and the next run 
 
 test("a sort and an undo never rewrite the state at once: the second waits for the lock", opts, () => {
   assert.deepEqual(run().lock_order, ["first in", "first out", "second in"]);
+});
+
+test("two runs in the same second get run ids of their own", opts, () => {
+  const [a, b] = run().run_ids;
+  assert.match(a, /^\d{8}T\d{6}Z-[0-9a-f]{6}$/);
+  assert.notEqual(a, b);
 });
