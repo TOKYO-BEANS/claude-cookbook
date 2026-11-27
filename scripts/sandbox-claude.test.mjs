@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { BEGIN, END, FILES, FILTER, MODEL, EFFORT, SCRIPT, TOOLS, localVersion, parseArgs, runArgs, splitOutput, summarize, unpack } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-claude.mjs";
+import { BEGIN, END, FILES, SCAN_FAILED, FILTER, MODEL, EFFORT, SCRIPT, TOOLS, localVersion, parseArgs, runArgs, splitOutput, summarize, unpack } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-claude.mjs";
 import { parseArgs as runParse } from "../plugins/cookbook/skills/cookbook/scripts/sandbox-run.mjs";
 
 test("arguments: a prompt is required; small, an hour, USD 10 and the plain tools by default", () => {
@@ -41,7 +41,12 @@ test("the run in the sandbox is locked down: Opus 5.5 high, no settings, no MCP,
   }
   assert.ok(!/bypassPermissions|dangerously|ANTHROPIC_API_KEY/.test(SCRIPT));
   // The prompt and the other values are arguments, never pasted into the script.
-  assert.ok(SCRIPT.includes('PROMPT="$2"') && SCRIPT.includes('-p "$PROMPT"'));
+  assert.ok(SCRIPT.includes('PROMPT="$2"') && SCRIPT.includes(`printf '%s' "$PROMPT" | env -i`) && SCRIPT.includes("claude -p --model"));
+  // The token is out of the environment of every step but claude -p (the install included),
+  // and the patch is taken against the uploaded commit, so the run's own commits count.
+  assert.ok(SCRIPT.indexOf("export -n CLAUDE_CODE_OAUTH_TOKEN") < SCRIPT.indexOf("npm install"));
+  assert.ok(SCRIPT.includes('git diff --cached --binary "$BASE"'));
+  assert.equal(SCAN_FAILED, 4);
   assert.ok(SCRIPT.includes('grep -rqF -- "$CLAUDE_CODE_OAUTH_TOKEN"'), "a run whose files hold the token sends nothing back");
 });
 

@@ -25,7 +25,7 @@ plus its servers; a job sent to a sandbox leaves two small Node processes here (
   `claude setup-token` on the subscription account on 27 November 2026, for Depot alone so it
   can be revoked alone: revoke it at claude.ai, then delete both copies. `sandbox-run.mjs`
   reads it and sends it with the job's command only (`RunCommand`'s `env`), never with the
-  sandbox, the unpack step or `--vet`. It is masked in the output that comes back, and a run
+  sandbox, the unpack step or `--vet`; in the job only `claude -p` gets it, not the install. It is masked in the output that comes back, and a run
   whose files hold it sends nothing back.
 - **Host-bound secrets** (the value outside the sandbox, filled in by a gateway) are Depot's
   only for Managed Runs connections, whose Claude Code route needs a Team or Enterprise plan
@@ -33,8 +33,8 @@ plus its servers; a job sent to a sandbox leaves two small Node processes here (
 - **What comes back** is data: `~/.local/share/sandbox-run/claude/<run>/` holds
   `stream.jsonl` (every event), `claude.err`, `changes.patch` (for `--push`: every change
   against the uploaded copy, new files included) and `summary.json` (model, login, turns,
-  usage, the list-rate figure). Gitleaks reads the folder; a finding goes to the owner and
-  the patch is not applied. Read the patch, then `git apply` it on the state that was
+  usage, the list-rate figure). Gitleaks reads the folder; a finding ends with exit 4, goes
+  to the owner, and the patch is not applied. Read the patch, then `git apply` it on the state that was
   uploaded; the run committed nothing.
 - **Cost, measured 27 November 2026** (a read, a command and a new file): 20 s here, the
   sandbox 14.3 s at 2 vCPU, USD 0.0014 by Depot's record; the Claude side is on the plan

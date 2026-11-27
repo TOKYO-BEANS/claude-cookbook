@@ -14,9 +14,11 @@
 //   environment built from nothing but the token. A run whose `apiKeySource` is not `none`
 //   (the plan login) is ended at its first event.
 // - What comes back is data, never trusted: the run's event stream, its error output and,
-//   for --push, the changes as one patch against the uploaded commit. A run whose files hold
-//   the token sends nothing back. Gitleaks reads the files here; the patch is applied only
-//   after it has been read, by `git apply`.
+//   for --push, the changes as one patch against the uploaded commit (commits made during
+//   the run included). A run whose files hold
+//   the token sends nothing back. Gitleaks reads the files here, and a finding ends with exit
+//   4; the patch is applied only after it has been read, by `git apply`. The prompt goes on
+//   stdin, so one that starts with "-" is still the prompt.
 // - The files land in ~/.local/share/sandbox-run/claude/<run>/ with summary.json (model,
 //   turns, usage and the cap's figure), and the last lines say where.
 import { spawn, spawnSync } from "node:child_process";
@@ -36,6 +38,9 @@ export const BEGIN = "===SANDBOX-CLAUDE:BEGIN===";
 export const END = "===SANDBOX-CLAUDE:END===";
 export const FILES = Object.freeze(["stream.jsonl", "changes.patch", "claude.err"]);
 const SAY = "SANDBOX-CLAUDE";
+// The exit code when the returned files did not pass the secret scan, whatever the job's own
+// code: a caller that reads only the code must not take the patch as good.
+export const SCAN_FAILED = 4;
 
 export function parseArgs(argv) {
   const out = { push: null, type: "small", timeout: TIMEOUT, budget: BUDGET_USD, tools: TOOLS, promptFile: null, prompt: null };
@@ -87,7 +92,7 @@ export const SCRIPT = [
   // The uploaded commit: the patch is taken against it, so commits made during the run count.
   'BASE=$(git rev-parse --verify -q "HEAD^{commit}" 2>/dev/null || true)',
   `npm install -g --prefix "$HOME/.claude-code" --no-fund --no-audit --loglevel=error "@anthropic-ai/claude-code@$V" >"$O/install.log" 2>&1 || { echo "${SAY}: not started: Claude Code $V could not be installed" >&2; tail -5 "$O/install.log" >&2; exit ${NOT_STARTED}; }`,
-  `env -i HOME="$HOME" PATH="$HOME/.claude-code/bin:$PATH" USER="\${USER:-runner}" TERM=dumb LANG=C.UTF-8 CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1 DISABLE_AUTOUPDATER=1 claude -p "$PROMPT" --model ${MODEL} --effort ${EFFORT} --permission-mode dontAsk --tools "$TOOLS" --allowedTools "$TOOLS" --max-budget-usd "$BUDGET" --no-session-persistence --setting-sources "" --strict-mcp-config --output-format stream-json --verbose 2>"$O/claude.err" | node -e "$FILTER" "$O/stream.jsonl"`,
+  `printf '%s' "$PROMPT" | env -i HOME="$HOME" PATH="$HOME/.claude-code/bin:$PATH" USER="\${USER:-runner}" TERM=dumb LANG=C.UTF-8 CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1 DISABLE_AUTOUPDATER=1 claude -p --model ${MODEL} --effort ${EFFORT} --permission-mode dontAsk --tools "$TOOLS" --allowedTools "$TOOLS" --max-budget-usd "$BUDGET" --no-session-persistence --setting-sources "" --strict-mcp-config --output-format stream-json --verbose 2>"$O/claude.err" | node -e "$FILTER" "$O/stream.jsonl"`,
   "code=$?",
   ': >"$O/changes.patch"',
   'if [ -n "$BASE" ] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then git add --all >/dev/null 2>&1 && git diff --cached --binary "$BASE" >"$O/changes.patch"; fi',
@@ -200,7 +205,10 @@ async function main(argv) {
   const patch = join(dir, "changes.patch");
   const changed = existsSync(patch) && readFileSync(patch, "utf8").trim() !== "";
   console.error(`${SAY}: ${summary.model ?? "no model"} (${EFFORT}), ${summary.planLogin === true ? "on the plan login" : summary.planLogin === false ? "NOT on the plan login" : "login unknown"}, ${summary.turns ?? "?"} turns, USD ${summary.costUsd ?? "?"} at API list rates (on the plan)`);
-  if (!scanned.ok) console.error(`${SAY}: the secret scan of the returned files: ${scanned.reason}. Do not apply the patch; a finding goes to the owner`);
+  if (!scanned.ok) {
+    console.error(`${SAY}: the secret scan of the returned files: ${scanned.reason}. Do not apply the patch; a finding goes to the owner (files in ${dir})`);
+    return SCAN_FAILED;
+  }
   console.error(`${SAY}: files in ${dir}${changed ? `; changes: read ${patch}, then git apply it` : "; no changes"}`);
   return code;
 }
