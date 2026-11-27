@@ -38,8 +38,8 @@ alone, sent with the job's command only ([sandboxes-claude](../recipes/sandboxes
 **Weigh again** if the owner moves to a Claude Team or Enterprise plan, or if Depot offers
 host-bound secrets to plain sandboxes: then the token can stay out.
 
-**Whole chats: a boat trial, 27 November to 16 December 2026** (owner's yes, on boat's
-current plan and wallet; [the page](../recipes/sandboxes-boat-chat.md)). Measured that day,
+**Whole chats: boat, a trial from 27 November 2026, kept the same day** (owner's yes, on boat's
+plan and wallet; [the page](../recipes/sandboxes-boat-chat.md)). Measured that day,
 for a month of 22 workdays with 3 hours of the model working each:
 
 | | Machine | Claude | Token in the sandbox | Idle hours |
@@ -48,8 +48,9 @@ for a month of 22 workdays with 3 hours of the model working each:
 | Depot `small`, a long-lived sandbox | USD 0.36 an hour (8 hours: about USD 63) | the plan, no fee | yes, readable | billed while it runs; no stop with memory measured |
 
 boat: about USD 71 a month, keeping the plan; Depot: about USD 63, with the token in the
-sandbox. Both spare the laptop the same memory. The owner decides by 16 December whether
-boat's plan is renewed; without a yes it ends and the chats come back to the laptop.
+sandbox. Both spare the laptop the same memory. The owner kept boat on 27 November 2026
+("option 2"): the plan renews monthly (USD 20, next 16 December), for the chats that suit it
+and whenever the laptop nears its limits.
 
 Evidence: `~/.local/share/claude-cookbook/evidence/2026-11-20-depot-vs-boat/` and
 `~/.local/share/claude-cookbook/evidence/2026-11-26-depot-sandboxes/`.

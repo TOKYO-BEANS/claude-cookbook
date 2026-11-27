@@ -5,6 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { laptopLoad } from "./laptop-load-lib.mjs";
 import { CLOCK_SLACK_MS, WINDOW_MS, parseLedger, repoLabel } from "./owner-answers-lib.mjs";
 
 const LEDGER_LIMIT = 1_000_000; // bytes
@@ -252,6 +253,8 @@ export function openStore(env = process.env, { lockWaitMs = LOCK_WAIT_MS } = {})
       const repo = repoLabel(originUrl(folder));
       return { repo, onDefault: repo ? onDefaultBranch(folder) : false };
     },
+    // How close this laptop is to its limits (laptop-load-lib.mjs); read before a launch here.
+    laptopLoad: () => laptopLoad(),
     log(line) {
       ownFolder(dir);
       appendFileSync(join(dir, "log.jsonl"), `${JSON.stringify(line)}\n`, { mode: OWNER_FILE });

@@ -12,7 +12,7 @@ it. Read a page only when its job comes up. When the owner is missing or fails, 
 fallback and say that you did.
 
 - Recipe pages are in `recipes/` beside this file; every page fits one `Read`.
-- Why each owner was chosen, and what else was weighed:
+- Why each owner was chosen, and what was weighed:
   [build](options/plan-and-build.md), [check](options/check.md), [ship](options/ship.md),
   [reach outside](options/reach-outside.md), [keep healthy](options/keep-healthy.md).
 - `catalog.json` beside this skill lists every tool in the stack. Add, change or retire a tool
@@ -27,8 +27,8 @@ fallback and say that you did.
 | Plan, build or debug a change | **Superpowers** skills | the same steps inline | [building](recipes/building.md), [debugging](recipes/debugging.md) |
 | A long job a program can check: run until the check passes | **Claude Code** `/goal` | a Stop hook with a script check | [goal-runs](recipes/goal-runs.md) |
 | Several agents on one job | the named **`sa-*`** workflows, within their budgets | plain parallel subagents | [workflows](recipes/workflows.md) |
-| One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (the `cookbook:*` agent types) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
-| A second opinion (a consult) on our own work from a model that is not Claude | **Codex**, as a T3 `delegate_task` run, unattended on our own repositories after the checks, or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
+| One bounded side piece: an edit, a cited answer, a read-only review, a step that only reads | a Cookbook dispatch profile (`cookbook:*` agents) | T3 `delegate_task`, only for a piece that needs its own checkout | [dispatch](recipes/dispatch.md) |
+| A second opinion (a consult) on our own work from a model that is not Claude | **Codex**, a T3 `delegate_task` run, unattended on our own repositories after the checks, or supervised; never on text from outside | a `cookbook:review` subagent | [codex](recipes/codex.md), [codex-consult](recipes/codex-consult.md) |
 | Where X is defined, who calls Y, what breaks if Z changes | **Graphify** | `rg` and reading files | [code-navigation](recipes/code-navigation.md) |
 | A literal string, comment or config value | `rg` | — | — |
 | A judgement inside product code: classify, route, rank, match, extract | **TypeSafe / Jev** | a plan-token `claude -p` with a typed answer | [judgement](recipes/judgement.md) |
@@ -38,11 +38,11 @@ fallback and say that you did.
 | Long English prose | the **stop-slop** skill | — | — |
 | How shipped software works without its source | **REA** | the `rea` command line | [rea](recipes/rea.md) |
 | Write or change a skill | **Superpowers** `writing-skills` | the bundled `skill-creator` | — |
-| The model for a session or a piece: Fable or Opus, and when a banked limit reset is used | the model budget script and its hook, which set the thread's model in **T3 Code**; a dispatch profile per piece | the thread's model as it is, said aloud | [model-budget](recipes/model-budget.md) |
+| The model for a session or a piece: Fable or Opus, and when a banked limit reset is used | the model budget script and hook, which set the thread's model in **T3 Code**; a dispatch profile per piece | the thread's model as it is, said aloud | [model-budget](recipes/model-budget.md) |
 | Several Claude or Codex subscriptions behind one local address, always on | **CLIProxyAPI** | one subscription as it is | [subscription-proxy](recipes/subscription-proxy.md) |
 | **Check** | | | |
 | Tests, builds and container images | **Depot** CI | GitHub Actions, only as a documented exception | [ci-releases](recipes/ci-releases.md) |
-| Review of every pull request | the `ai-review` Depot job, once, when the pull request is marked ready for review | a **fallback review** of the head by a reviewer that did not write it, when its reviewer's API could not serve the call | [ai-review](recipes/ai-review.md) |
+| Review of every pull request | the `ai-review` Depot job, once, when the pull request is marked ready | a **fallback review** of the head by a reviewer that did not write it, when its reviewer's API could not serve the call | [ai-review](recipes/ai-review.md) |
 | Review of a commit range with no pull request | **sa-review** | a `cookbook:review` subagent | [workflows](recipes/workflows.md) |
 | A whole repository's structure: where to deepen | **architecture-review** | a `cookbook:review` walk | [architecture-review](recipes/architecture-review.md) |
 | Scan our code | the **Depot** `codeql` job | — | [codeql](recipes/codeql.md) |
@@ -51,7 +51,7 @@ fallback and say that you did.
 | Malicious packages at install | **Aikido** Safe Chain | — | [security](recipes/security.md) |
 | Dependency updates | Dependabot version updates | — | [security](recipes/security.md) |
 | Open CodeQL alerts and Semgrep findings | **sa-triage** | — | [workflows](recipes/workflows.md) |
-| Vet outside code before an install | the vetting scripts: **Gitleaks**, **OSV-Scanner**, **Trivy**, then one **Depot** sandbox run | none: "no result" stops the install | [connecting](recipes/connecting.md), [vetting-sandbox](recipes/vetting-sandbox.md) |
+| Vet outside code before an install | the vetting scripts: **Gitleaks**, **OSV-Scanner**, **Trivy**, then a **Depot** sandbox run | none: "no result" stops the install | [connecting](recipes/connecting.md), [vetting-sandbox](recipes/vetting-sandbox.md) |
 | Visual check of a live site before a customer-visible change | the site's own check script, in its repository: capture, pixels, layout rules, a judge on another model | none: no check recorded and approved for the site, or no pass, means ask the owner | [visual-check](recipes/visual-check.md) |
 | Agent configuration: permissions, hooks, MCP servers | **AgentShield** on a sanitized copy | — | [agent-audit](recipes/agent-audit.md) |
 | Health of the Claude setup and its instruction files | **doctor-plus** | Claude Code's own `/doctor` | [add-ons](recipes/add-ons.md) |
@@ -80,7 +80,7 @@ fallback and say that you did.
 | Keys and tokens | the OS key store, read by `with-key.mjs` and `key-header.mjs` | — | [keys](recipes/keys.md) |
 | The owner's Proton mail | **Proton Mail Bridge** | the web app | [proton-mail](recipes/proton-mail.md) |
 | Google Drive, Sheets, Docs, Calendar, Search Console, Analytics | the **Google Workspace CLI**, through `google` | OpenSEO, for Search Console on a connected project | [google](recipes/google.md) |
-| Run code away from this laptop: tests before a push, a long or parallel job | **Depot** sandboxes, through `sandbox-run.mjs` | Depot CI, for a repository's own checks | [sandboxes](recipes/sandboxes.md) |
+| Run code away from this laptop: tests before a push, a long or parallel job | **Depot** sandboxes (`sandbox-run.mjs`) | Depot CI, for a repository's own checks | [sandboxes](recipes/sandboxes.md) |
 | SEO research for a website | **OpenSEO** | Firecrawl scrape, for one page | [seo](recipes/seo.md) |
 | Connect a new app or service | the **Cookbook** first, then the lightest route | — | [connecting](recipes/connecting.md) |
 | Office files; editing PDFs | the bundled `docx`, `pdf`, `pptx` and `xlsx` skills | — | — |
@@ -94,7 +94,7 @@ fallback and say that you did.
 | An agent run on a schedule | a **T3 Code** scheduled task | — | [scheduled-runs](recipes/scheduled-runs.md) |
 | Claude Code from a script (`claude -p`) | the scripted-runs rules | — | [scripted-runs](recipes/scripted-runs.md) |
 | Updates, broken connections, close dates | the Cookbook's `stack-updates` skill | — | [update-check](recipes/update-check.md) |
-| Where a session runs | **T3 Code** | Claude Code in a terminal | — |
+| Where a session runs | **T3 Code** | Claude Code in a terminal | [boat](recipes/sandboxes-boat-chat.md) |
 
 ## Ground rules that apply to every recipe
 

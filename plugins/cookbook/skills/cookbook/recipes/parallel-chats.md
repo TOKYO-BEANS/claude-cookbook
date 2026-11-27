@@ -45,7 +45,9 @@ and `create_threads` (then passing ten minutes); no delegate ever. The look:
 A chat or pull request that has the job gets what you know (`t3_thread_send`): change
 nothing, start no second chat. One that only changes the same files: build on its branch,
 wait for its merge or keep to other files, and name it in a new chat's brief. On the
-default branch, move to a worktree or a branch first.
+default branch, move to a worktree or a branch first. A new chat that would start on this
+laptop while it nears its limits gets one more stop: a chat that fits boat starts there
+([boat chats](sandboxes-boat-chat.md)).
 
 Not caught: a change by a shell command alone, and two chats that look in the same minutes.
 
