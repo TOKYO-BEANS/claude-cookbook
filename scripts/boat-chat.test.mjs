@@ -62,7 +62,7 @@ const CRED = "pairing-credential-0123456789abcdef";
 
 // A fake boat and t3: `sandbox` is the sandbox's state, null for none.
 function world({ sandbox = "stopped", proxy = false, linked = true, reachable = true, copy = "clean", serving = false, answers = false, wallet = 28.9, dirty = false, applies = true, found = null, size = 748, upload = { ok: true } } = {}) {
-  const w = { calls: [], bg: [], out: [], state: sandbox ? { id: "bx_old1234", repos: ["claude-cookbook-feat-x"] } : {}, answers, linked, sandbox, proxy, applied: false, scanned: [], removed: 0, marked: null };
+  const w = { calls: [], bg: [], out: [], state: sandbox ? { id: "bx_old1234", repos: ["claude-cookbook-feat-x-79b4cc55"] } : {}, answers, linked, sandbox, proxy, applied: false, scanned: [], removed: 0, marked: null };
   const ok = (stdout = "") => ({ code: 0, stdout, stderr: "" });
   const exec = (stdout, extra = {}) => ok(`${JSON.stringify({ exitCode: 0, stdout, ...extra })}\n`);
   w.io = {
@@ -141,12 +141,12 @@ test("up on a stopped sandbox: proxy on, resume, restart t3 serve, a new forward
   assert.ok(b.indexOf("ai proxy on --json") < b.indexOf("resume bx_old1234 --json"), "the proxy is on before the sandbox runs");
   assert.ok(b.some((c) => c.startsWith("exec bx_old1234 --json --timeout 30 -- bash -lc pkill -f '[t]3cli/")), "the old t3 serve is ended after a resume");
   const serve = b.find((c) => c.includes("--detach"));
-  assert.match(serve, /t3 serve --host 127\.0\.0\.1 --port 3773 \/home\/user\/claude-cookbook-feat-x >\/dev\/null 2>&1$/, "bound to loopback, its log never read");
+  assert.match(serve, /t3 serve --host 127\.0\.0\.1 --port 3773 \/home\/user\/claude-cookbook-feat-x-79b4cc55 >\/dev\/null 2>&1$/, "bound to loopback, its log never read");
   assert.deepEqual(w.bg, ["boat forward bx_old1234 --remote 3773 --local 13773 --bind 127.0.0.1"]);
   assert.ok(!b.some((c) => c.startsWith("push ") || c.startsWith("new ")), "the repository is there: no push, no new sandbox");
   assert.ok(!w.calls.some((c) => c.cmd === "t3" && c.args[1] === "link"), "a reachable link is kept");
-  assert.ok(w.out.includes("environmentId: env-1") && w.out.includes("repository path: /home/user/claude-cookbook-feat-x"));
-  assert.deepEqual(w.state, { id: "bx_old1234", repos: ["claude-cookbook-feat-x"] });
+  assert.ok(w.out.includes("environmentId: env-1") && w.out.includes("repository path: /home/user/claude-cookbook-feat-x-79b4cc55"));
+  assert.deepEqual(w.state, { id: "bx_old1234", repos: ["claude-cookbook-feat-x-79b4cc55"] });
 });
 
 test("up with no sandbox: a new one, T3 installed under the age rule, pushed, linked; the credential only on stdin", async () => {
@@ -157,7 +157,7 @@ test("up with no sandbox: a new one, T3 installed under the age rule, pushed, li
   const setup = b.find((c) => c.includes("npm install"));
   assert.match(setup, /--before='2026-11-26T12:00:00\.000Z' 't3@0\.1\.13-nightly\.20261125\.5258'/);
   assert.match(setup, /linkedEnvironmentsEnabled/);
-  assert.ok(b.includes("push bx_new5678 /tmp/staged/claude-cookbook --to /home/user/claude-cookbook-feat-x --json"), "the scanned copy is pushed, not the folder");
+  assert.ok(b.includes("push bx_new5678 /tmp/staged/claude-cookbook --to /home/user/claude-cookbook-feat-x-79b4cc55 --json"), "the scanned copy is pushed, not the folder");
   assert.equal(w.removed, 1, "the staged copy is removed after the push");
   const base = b.find((c) => c.includes("git init -q -b boat"));
   assert.match(base, /commit -q -m 'base: a{40}'/, "the base commit names the laptop's commit");
@@ -166,7 +166,7 @@ test("up with no sandbox: a new one, T3 installed under the age rule, pushed, li
   assert.equal(link.input, `${LOCAL_URL} ${CRED}\n`);
   assert.ok(!w.calls.some((c) => c.args.join(" ").includes(CRED)), "never on a command line");
   assert.ok(!w.out.join("\n").includes(CRED), "never printed");
-  assert.deepEqual(w.state, { id: "bx_new5678", repos: ["claude-cookbook-feat-x"] });
+  assert.deepEqual(w.state, { id: "bx_new5678", repos: ["claude-cookbook-feat-x-79b4cc55"] });
 });
 
 test("up on a running sandbox with a live forward changes nothing it need not", async () => {
@@ -236,8 +236,8 @@ test("--push over a copy a chat changed stops: pull first", async () => {
 test("pull: the patch is scanned before anything else reads it, and applied only to a clean folder", async () => {
   const w = world({ sandbox: "running" });
   assert.equal(await main(["pull", "."], w.io), 0, w.out.join("\n"));
-  assert.ok(w.boat().includes("scp bx_old1234:/tmp/boat-chat-claude-cookbook-feat-x.patch /fake/boat-chat/patches/claude-cookbook-feat-x-2026-11-27T12-00-00-000Z/changes.patch"));
-  assert.deepEqual(w.scanned, ["/fake/boat-chat/patches/claude-cookbook-feat-x-2026-11-27T12-00-00-000Z"]);
+  assert.ok(w.boat().includes("scp bx_old1234:/tmp/boat-chat-claude-cookbook-feat-x-79b4cc55.patch /fake/boat-chat/patches/claude-cookbook-feat-x-79b4cc55-2026-11-27T12-00-00-000Z/changes.patch"));
+  assert.deepEqual(w.scanned, ["/fake/boat-chat/patches/claude-cookbook-feat-x-79b4cc55-2026-11-27T12-00-00-000Z"]);
   assert.ok(w.out.includes("git apply --check: applies"));
   assert.equal(w.marked, "c".repeat(40), "a clean scan marks what was pulled");
   assert.equal(w.applied, false, "without --apply nothing changes here");
@@ -265,9 +265,19 @@ test("pull: the patch is scanned before anything else reads it, and applied only
   assert.match(s2.out.at(-1), /run up first/);
 });
 
-test("an upload that fails the checks is never pushed", async () => {
+test("an upload that fails the checks is never pushed, and the proxy this up turned on goes off again", async () => {
   const w = world({ sandbox: null, copy: "none", upload: { ok: false, reason: "the secret scan of the upload: 1 finding (generic-api-key in a/.env): a security finding goes to the owner" } });
   assert.equal(await main(["up", "."], w.io), 1);
+  assert.equal(w.proxy, false, "off again");
+  assert.ok(w.out.includes("proxy: off again (this up turned it on)"));
+  const was = world({ sandbox: null, copy: "none", proxy: true, upload: { ok: false, reason: "not on the upload list" } });
+  assert.equal(await main(["up", "."], was.io), 1);
+  assert.equal(was.proxy, true, "a proxy that was on before is left for the chats that use it");
+  const unread = world({ sandbox: "stopped" });
+  unread.infoDown = true;
+  unread.listDown = true;
+  await main(["up", "."], unread.io);
+  assert.ok(!unread.boat().includes("ai proxy on --json"), "a sandbox that cannot be read stops up before any spend");
   assert.match(w.out.at(-1), /^boat-chat: not pushed: the secret scan of the upload: 1 finding/);
   assert.ok(!w.boat().some((c) => c.startsWith("push ")));
 });
@@ -275,7 +285,7 @@ test("an upload that fails the checks is never pushed", async () => {
 test("down --delete never deletes unpulled work unless told to discard it", async () => {
   const changed = world({ sandbox: "running", copy: "changed", proxy: true });
   assert.equal(await main(["down", "--delete"], changed.io), 1);
-  assert.match(changed.out.at(-1), /not deleted: unpulled changes in \/home\/user\/claude-cookbook-feat-x; pull first/);
+  assert.match(changed.out.at(-1), /not deleted: unpulled changes in \/home\/user\/claude-cookbook-feat-x-79b4cc55; pull first/);
   assert.ok(!changed.boat().some((c) => c.startsWith("delete ") || c.startsWith("stop ")), "nothing stopped or deleted");
   assert.ok(!changed.calls.some((c) => c.cmd === "pkill"), "the forward is left for the pull");
   const stopped = world({ sandbox: "stopped" });
@@ -294,7 +304,7 @@ test("a sandbox boat cannot be asked about is never replaced", async () => {
   assert.equal(await main(["up", "."], w.io), 1);
   assert.match(w.out.at(-1), /could not read sandbox bx_old1234 from boat; nothing changed/);
   assert.ok(!w.boat().some((c) => c.startsWith("new ")), "no new sandbox");
-  assert.deepEqual(w.state, { id: "bx_old1234", repos: ["claude-cookbook-feat-x"] }, "the record keeps the old id");
+  assert.deepEqual(w.state, { id: "bx_old1234", repos: ["claude-cookbook-feat-x-79b4cc55"] }, "the record keeps the old id");
   // info fails but the full list still shows it: used as it is.
   const v = world({ sandbox: "stopped" });
   v.infoDown = true;
@@ -302,24 +312,26 @@ test("a sandbox boat cannot be asked about is never replaced", async () => {
   assert.ok(v.boat().includes("resume bx_old1234 --json"));
   // Gone from the full list: a new one.
   const g = world({ sandbox: null, copy: "none" });
-  g.state = { id: "bx_old1234", repos: ["claude-cookbook-feat-x"] };
+  g.state = { id: "bx_old1234", repos: ["claude-cookbook-feat-x-79b4cc55"] };
   assert.equal(await main(["up", "."], g.io), 0, g.out.join("\n"));
   assert.ok(g.boat().some((c) => c.startsWith("new ")));
 });
 
 test("two checkouts of one repository get copies of their own", async () => {
   const { copyName } = await import("../plugins/cookbook/skills/cookbook/scripts/boat-chat.mjs");
-  assert.equal(copyName("claude-cookbook", "feat/boat-chat-route"), "claude-cookbook-feat-boat-chat-route");
-  assert.equal(copyName("claude-cookbook", "main"), "claude-cookbook-main");
-  assert.equal(copyName("r", "a b;rm -rf ~/"), "r-a-b-rm--rf");
+  assert.equal(copyName("claude-cookbook", "feat/boat-chat-route"), "claude-cookbook-feat-boat-chat-route-16c5366c");
+  assert.equal(copyName("r", "a b;rm -rf ~/"), "r-a-b-rm--rf-54a9b32a");
+  assert.notEqual(copyName("r", "feat/x"), copyName("r", "feat-x"), "names that read alike still differ");
+  assert.notEqual(copyName("r", `${"x".repeat(100)}a`), copyName("r", `${"x".repeat(100)}b`), "long names that share a start still differ");
+  assert.ok(copyName("r", "x".repeat(300)).length <= 80);
   const one = world({ sandbox: "running", serving: true, answers: true, proxy: true });
   one.branch = "main";
   await main(["up", "."], one.io);
-  assert.ok(one.out.includes("repository path: /home/user/claude-cookbook-main"));
+  assert.ok(one.out.includes("repository path: /home/user/claude-cookbook-main-0d6e4079"));
   const detached = world({ sandbox: "running", serving: true, answers: true, proxy: true });
   detached.branch = "HEAD";
   await main(["up", "."], detached.io);
-  assert.ok(detached.out.includes("repository path: /home/user/claude-cookbook-abc1234"));
+  assert.ok(detached.out.includes("repository path: /home/user/claude-cookbook-abc1234-36f583dd"));
 });
 
 test("pull shows the base line only in the script's own shape", async () => {

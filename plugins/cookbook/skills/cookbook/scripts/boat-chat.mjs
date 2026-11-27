@@ -33,6 +33,7 @@
 // - Money: the proxy is USD 1 a day while on plus USD 1 per 1,000 requests, inside the
 //   owner's yes; a wallet under USD 5 is said aloud, a top-up is the owner's.
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
@@ -276,9 +277,15 @@ const stopForward = (io) => {
   io.run("pkill", ["-f", `[s]sh.*${LOCAL_PORT}`]);
 };
 
-// The copy's name in the sandbox: the repository and the checkout's branch, so two
-// worktrees of one repository never share a copy, a base or a pull mark.
-export const copyName = (repo, branch) => `${repo}-${String(branch ?? "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "")}`.slice(0, 80).replace(/-+$/, "");
+// The copy's name in the sandbox: the repository, the checkout's branch and a short hash of
+// the branch's own name, so two worktrees of one repository never share a copy, a base or a
+// pull mark, even when their names read alike ("feat/x" and "feat-x").
+export const copyName = (repo, branch) => {
+  const raw = String(branch ?? "");
+  const hash = createHash("sha256").update(raw).digest("hex").slice(0, 8);
+  const readable = `${repo}-${raw.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "")}`.slice(0, 71).replace(/-+$/, "");
+  return `${readable}-${hash}`;
+};
 
 function repoAndName(io, folder) {
   const repo = resolve(folder);
@@ -307,11 +314,22 @@ async function up(io, o) {
   const ver = t3Version(t3(io, ["--version"]).stdout);
   if (!ver) throw new Error("could not read this laptop's t3 version");
 
-  if (!proxyOn(io) && boat(io, ["ai", "proxy", "on", "--json"]).code !== 0) throw new Error("boat ai proxy on failed");
-  io.out("proxy: on");
-
+  // Everything that needs no sandbox and costs nothing comes before the proxy.
   const state = io.readState();
-  let info = sandboxInfo(io, state.id);
+  const info = sandboxInfo(io, state.id);
+  const turnedOn = !proxyOn(io);
+  if (turnedOn && boat(io, ["ai", "proxy", "on", "--json"]).code !== 0) throw new Error("boat ai proxy on failed");
+  io.out("proxy: on");
+  try {
+    return await bringUp(io, o, { repo, name, ver, state, info });
+  } catch (e) {
+    // A failed up never leaves a proxy on that it turned on: it is paid by the day.
+    if (turnedOn) io.out(boat(io, ["ai", "proxy", "off", "--json"]).code === 0 ? "proxy: off again (this up turned it on)" : "proxy: still on, turning it off failed: run down");
+    throw e;
+  }
+}
+
+async function bringUp(io, o, { repo, name, ver, state, info }) {
   let id = info?.id ?? null;
   let fresh = false, restart = false;
   const kind = info ? stateKind(info.state) : "gone";

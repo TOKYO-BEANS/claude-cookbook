@@ -279,7 +279,7 @@ test("near its limits, the laptop sends a chat that starts here to boat, once pe
   const first = reason(run({ input: launch("me"), env: {}, now: NOW, io: s.io }));
   assert.match(first, /t3_thread_list/, "the look at other chats comes first");
   assert.match(first, /Laptop load \(the Cookbook, recipes\/sandboxes-boat-chat\.md\): memory available 19\.5% \(2\.7 GB\), under 25%\./);
-  assert.match(first, /boat-chat\.mjs up <repository path>/);
+  assert.match(first, /`node <the cookbook skill's folder>\/scripts\/boat-chat\.mjs up <repository path>`/);
   assert.equal(run({ input: launch("me"), env: {}, now: NOW + 60_000, io: s.io }), null, "told once: the chat decides");
   // The look passed earlier and the load rose later: the note comes alone.
   const t = store();

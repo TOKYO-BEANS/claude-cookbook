@@ -62,6 +62,13 @@ repository shared one copy, base and pull mark: the copy is now `/home/user/<rep
 (a short commit id when detached). The base line `pull` prints comes from the sandbox: it is
 shown only in the script's own shape, else "base unknown".
 
+**The fourth review (head e48747c): one medium, two lows, all fixed.** A failed `up` left the
+proxy on (paid by the day): the sandbox is now read before any spend, and an `up` that fails
+turns off a proxy it turned on. Copy names gained a short hash of the branch's own name
+(`feat/x` and `feat-x` no longer meet). The hook's note named a script path that does not
+exist; it now says `<the cookbook skill's folder>/scripts/boat-chat.mjs`. `catalog.json` was
+left out of that review (over its input budget) and was read by a reader instead.
+
 **Dead ends.** A first `up` took boat's `idle` state for a gone sandbox and made a second
 one (`bx_cmsekx43`, deleted the same minute); `idle` now counts as running. `boat push`
 copies files without `.git`, so a chat could not commit until `up` made a base commit.

@@ -220,7 +220,7 @@ export function launchesHere(input) {
 export const boatReason = (reasons) => [
   `Laptop load (the Cookbook, recipes/sandboxes-boat-chat.md): ${reasons.join("; ")}.`,
   "A new chat that fits boat starts there now, before this laptop throttles: long, self-contained work in one of our own repositories that needs nothing of this laptop (no key store, display, desktop apps, local-only MCP servers or the owner's sign-ins).",
-  "Bring it up with the Cookbook's `node scripts/boat-chat.mjs up <repository path>` and launch with the `environmentId` it prints. A chat that does not fit starts here.",
+  "Bring it up with `node <the cookbook skill's folder>/scripts/boat-chat.mjs up <repository path>` and launch with the `environmentId` it prints. A chat that does not fit starts here.",
 ].join("\n");
 
 const passed = (at, now, ms) => typeof at === "number" && now - at >= 0 && now - at < ms;
