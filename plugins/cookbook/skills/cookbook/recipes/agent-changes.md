@@ -32,7 +32,7 @@ pages and dashboards.
 | Product data a model changes (Jev in a product) | a label on the record and a line in the page's log | the log row: old and new value of every field | per row or per run, on the same page |
 | Mail, files or notes a script moves or edits | one line per run | a log per item: id, from, to | a command that plays the run's log backwards |
 | Dashboards and artifacts an agent refreshes | one line per run | the earlier version kept | publish the earlier version again |
-| Memory, notes and other files outside git | the run's report names each file | a copy of the file before the edit, in `~/.local/share/claude-cookbook/agent-changes/<date>/` | copy it back |
+| Memory, notes and other files outside git | the run's report names each file and its copy | a copy before and after the edit, under `~/.local/share/claude-cookbook/agent-changes/<date>/<task>-<time>/` at the file's full path, never overwritten | copy the before copy back while the file still equals the after copy; otherwise show the difference and ask |
 | Actions on a website in a browser | the report names each change | page, action and target, never a typed value | the way back on that site, named; none means it is a write on a live system and its stops hold |
 
 Out of scope: what changes no one's data (a review comment that only reports, a model's own

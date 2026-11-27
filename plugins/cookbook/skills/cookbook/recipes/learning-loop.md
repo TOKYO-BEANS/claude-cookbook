@@ -38,8 +38,9 @@ Asked on 21 November 2026, the owner leaned to the full loop; no model of our ow
   first and counts a lesson already there as "law not working" instead of a new law.
 - The review writes `reviews/<date>.md`, opens at most one pull request per repository, and
   ends with one line to the owner: the laws added and the repeats that remain.
-- Before it edits `laws.md` or a memory note, the run copies the file to
-  `~/.local/share/claude-cookbook/agent-changes/<date>/`, and its closing line names each file
-  it changed: the summary, the changes and the undo of [agent-changes](agent-changes.md).
+- When it edits `laws.md` or a memory note, the run keeps a copy before and after, under
+  `~/.local/share/claude-cookbook/agent-changes/<date>/weekly-lessons-<time>/` at the file's
+  full path, and its closing line names each file and its copy: the summary, the changes and
+  the undo of [agent-changes](agent-changes.md).
 - The Cookbook is public: a pull request names the rule and the count, never a project,
   client or transcript text.

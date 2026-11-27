@@ -14,9 +14,11 @@ model-driven script change something, people get those three.
 - `recipes/learning-loop.md`: the weekly run copies `laws.md` and a memory note before it
   edits one, and names each file it changed.
 - Two T3 tasks in the Cookbook project, updated and read back (not in git): "Weekly fixer"
-  (`scheduled-task:09b58e27-…`) and "Weekly lessons" (`scheduled-task:b8af2b86-…`) copy each
-  memory note or `laws.md` to `~/.local/share/claude-cookbook/agent-changes/<date>/` before
-  an edit and name each file and the undo in their closing message.
+  (`scheduled-task:09b58e27-…`) and "Weekly lessons" (`scheduled-task:b8af2b86-…`) keep a copy of each
+  memory note or `laws.md` before and after an edit, under
+  `~/.local/share/claude-cookbook/agent-changes/<date>/<task>-<time>/` at its full path, never
+  overwritten, and name each file, its copy and the undo in their closing message. The undo
+  copies back only while the file still equals the after copy (AI review, first round).
 
 **The inventory.** 11 repositories and the live task prompts, read from each default branch:
 22 places a model or agent changes something. 12 met the rule or were out of scope (a
