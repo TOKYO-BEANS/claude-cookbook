@@ -5,7 +5,8 @@
 //    not even as a hash on its own;
 //  - before a question dialog, a chat is told once which other chats of its repository put
 //    questions to the owner, so it can read the owner's answer there, in the chat itself;
-//  - before a chat starts a new chat, it is told once to look at the chats that exist;
+//  - before a chat starts a new chat, it is told once to look at the chats that exist, and,
+//    when this laptop nears its limits, to start a chat that fits boat there;
 //  - before a chat's first change to a file of a repository, it is told once to look at the
 //    chats that exist and at the files the open pull requests change.
 // The list is a pointer, never a source: any chat on this PC could write the file, so what
@@ -206,12 +207,34 @@ export function decideEdit({ input, env = {}, now, state = {}, repo = "", onDefa
   return { output: deny(editReason(onDefault === true)), state: { ...state, editLooks: { ...looks, [repo]: now } } };
 }
 
-// Before a chat starts a new chat: { output, state }.
-export function decideLaunch({ env = {}, now, state = {} }) {
+// A launch that names no environment starts its chat on this laptop. create_threads starts
+// every thread here unless each names one.
+export function launchesHere(input) {
+  const ti = isObject(input?.tool_input) ? input.tool_input : {};
+  if (Array.isArray(ti.threads)) return ti.threads.some((t) => !str(t?.target?.environmentId));
+  return !str(ti.environmentId);
+}
+
+// The laptop-load note (recipes/sandboxes-boat-chat.md). `reasons` come from
+// laptop-load-lib.mjs: fixed phrases holding numbers only.
+export const boatReason = (reasons) => [
+  `Laptop load (the Cookbook, recipes/sandboxes-boat-chat.md): ${reasons.join("; ")}.`,
+  "A new chat that fits boat starts there now, before this laptop throttles: long, self-contained work in one of our own repositories that needs nothing of this laptop (no key store, display, desktop apps, local-only MCP servers or the owner's sign-ins).",
+  "Bring it up with the Cookbook's `node scripts/boat-chat.mjs up <repository path>` and launch with the `environmentId` it prints. A chat that does not fit starts here.",
+].join("\n");
+
+const passed = (at, now, ms) => typeof at === "number" && now - at >= 0 && now - at < ms;
+
+// Before a chat starts a new chat: { output, state }. `load` is a laptop-load-lib reading,
+// taken only for a launch that starts here.
+export function decideLaunch({ input, env = {}, now, state = {}, load = null }) {
   if (isDelegate(env)) return { output: null, state };
-  const last = typeof state.launchCheckedAt === "number" ? state.launchCheckedAt : null;
-  if (last !== null && now - last >= 0 && now - last < LAUNCH_PASS_MS) return { output: null, state };
-  return { output: deny(LAUNCH_REASON), state: { ...state, launchCheckedAt: now } };
+  const look = !passed(state.launchCheckedAt, now, LAUNCH_PASS_MS);
+  const boat = load?.near === true && Array.isArray(load.reasons) && launchesHere(input) && !passed(state.boatToldAt, now, LAUNCH_PASS_MS);
+  if (!look && !boat) return { output: null, state };
+  const reason = [look ? LAUNCH_REASON : null, boat ? boatReason(load.reasons) : null].filter(Boolean).join("\n\n");
+  const next = { ...state, ...(look ? { launchCheckedAt: now } : {}), ...(boat ? { boatToldAt: now } : {}) };
+  return { output: deny(reason), state: next };
 }
 
 // One hook call. It never stops a tool for a failure of its own: an error is logged as a
@@ -238,7 +261,8 @@ export function run({ input, env = {}, now = Date.now(), io }) {
       return null;
     }
     if (LAUNCH.test(tool) && event === "PreToolUse") {
-      const r = decideLaunch({ env, now, state: io.readState(session) });
+      const load = launchesHere(input) && typeof io.laptopLoad === "function" ? io.laptopLoad() : null;
+      const r = decideLaunch({ input, env, now, state: io.readState(session), load });
       if (r.output) io.writeState(session, r.state);
       return r.output;
     }

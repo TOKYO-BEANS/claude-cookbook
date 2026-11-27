@@ -22,6 +22,7 @@ import {
   decideAsk,
   decideEdit,
   decideLaunch,
+  launchesHere,
   entryId,
   parseLedger,
   recordAnswers,
@@ -264,6 +265,45 @@ test("a new chat is stopped once, then passes for ten minutes", () => {
   // A subagent that starts a chat is stopped like any chat: only its edits are left alone.
   assert.equal(run({ input: { ...launch("sub"), agent_id: "a1" }, env: {}, now: NOW, io: s.io }).hookSpecificOutput.permissionDecision, "deny");
   assert.equal(s.lines.length, 0, "a launch writes nothing to the list");
+});
+
+test("near its limits, the laptop sends a chat that starts here to boat, once per ten minutes", () => {
+  const s = store();
+  const near = { near: true, reasons: ["memory available 19.5% (2.7 GB), under 25%"], numbers: {} };
+  let reads = 0;
+  s.io.laptopLoad = () => {
+    reads += 1;
+    return near;
+  };
+  const launch = (session, tool_input = { message: "Do the job" }) => ({ hook_event_name: "PreToolUse", tool_name: "mcp__t3-code__t3_thread_launch", session_id: session, tool_input });
+  const first = reason(run({ input: launch("me"), env: {}, now: NOW, io: s.io }));
+  assert.match(first, /t3_thread_list/, "the look at other chats comes first");
+  assert.match(first, /Laptop load \(the Cookbook, recipes\/sandboxes-boat-chat\.md\): memory available 19\.5% \(2\.7 GB\), under 25%\./);
+  assert.match(first, /boat-chat\.mjs up <repository path>/);
+  assert.equal(run({ input: launch("me"), env: {}, now: NOW + 60_000, io: s.io }), null, "told once: the chat decides");
+  // The look passed earlier and the load rose later: the note comes alone.
+  const t = store();
+  t.io.laptopLoad = () => ({ near: false, reasons: [], numbers: {} });
+  assert.match(reason(run({ input: launch("me"), env: {}, now: NOW, io: t.io })), /t3_thread_list/);
+  t.io.laptopLoad = () => near;
+  const alone = reason(run({ input: launch("me"), env: {}, now: NOW + 1000, io: t.io }));
+  assert.match(alone, /^Laptop load/);
+  assert.doesNotMatch(alone, /t3_thread_list/);
+  // A launch that names an environment is not read for load, and one with no reading passes.
+  const before = reads;
+  const u = store();
+  u.io.laptopLoad = s.io.laptopLoad;
+  assert.match(reason(run({ input: launch("you", { environmentId: "env-1" }), env: {}, now: NOW, io: u.io })), /t3_thread_list/);
+  assert.equal(reads, before, "no reading for a chat that starts elsewhere");
+  assert.doesNotMatch(reason(decideLaunch({ input: launch("x"), env: {}, now: NOW, state: {}, load: null }).output), /Laptop load/);
+});
+
+test("which launches start their chat here", () => {
+  assert.equal(launchesHere({ tool_input: { message: "x" } }), true);
+  assert.equal(launchesHere({ tool_input: { environmentId: "env-1" } }), false);
+  assert.equal(launchesHere({ tool_input: { threads: [{ target: { environmentId: "env-1" } }, { target: { environmentId: "env-2" } }] } }), false);
+  assert.equal(launchesHere({ tool_input: { threads: [{ target: { environmentId: "env-1" } }, { prompt: "y" }] } }), true);
+  assert.equal(launchesHere({}), true);
 });
 
 test("the hook only ever denies or stays silent, and other tools and events pass untouched", () => {

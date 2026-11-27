@@ -1,61 +1,102 @@
-# Whole Claude chats on boat (trial)
+# Whole Claude chats on boat
 
-A trial until 16 December 2026, when boat's plan ends (owner, 27 November 2026, question
-dialog in the chat that built #285: "try it out on boat all ready have the active sub and a
-wallet with 30usd on it"). Why: the laptop's memory. A local session here takes 208 to 332 MB
-for Claude Code alone and 0.3 to 4 GB with its children (six sessions measured that day). A
-chat on boat leaves one `ssh` port forward here (6 MB). Keeping boat after 16 December is the
-owner's decision, with the numbers below; never renew, top up or move to a larger plan
-without it.
+A standing route since 27 November 2026: a trial that day, kept the same day (owner, question
+dialog, "option 2"): "not all threads have to start there, some makes more sense than others
+and sometimes it also makes sense if we are limited on compute and even before we get limited
+on compute so the pc actually never has to throttle again". Why: a local chat takes 0.3 to
+4 GB of this laptop with its children; a chat on boat takes one `ssh` forward here (6 MB).
 
-- **What it is:** a T3 Code server inside a boat sandbox, reached through `boat forward` and
-  linked to this T3 as an environment. A thread launched there is a whole T3 chat: Claude Code
-  runs in the sandbox, on the owner's subscription through boat's AI credentials proxy, which
-  gives the sandbox placeholder keys only. The plan token never enters it (unlike
+- **What it is:** a T3 Code server in a boat sandbox, reached through `boat forward` and
+  linked to this T3 as an environment. A thread launched there is a whole T3 chat: Claude
+  Code runs in the sandbox on the owner's subscription through boat's AI credentials proxy,
+  which gives the sandbox placeholder keys only; the plan token never enters it (unlike
   [Depot](sandboxes-claude.md)). Opus 5.5 at high effort.
-- **The owner's yes covers** boat's current plan and the proxy on from the wallet (USD 1 a day
-  while on, plus USD 1 per 1,000 requests). Turn it on with `boat ai proxy on` when a chat
-  starts and `off` when none runs: a day is charged when it is turned on. Anything else that
-  costs money stops for the owner.
-- **The CLI:** `boat` is the launcher in `~/.local/bin` (key `boat` from the key store, the
-  CLI's self-update off), the binary a pinned copy in `~/.local/share/boat` with
-  `PROVENANCE.txt` (1.0.106 from GitHub `ariana-dot-dev/agent-server`, tag
-  `boat-cli-v<version>`; never boat's installer). The key: vault note "Claude - Boat" (all
-  scopes, ends 27 November 2027), key-store name `boat`.
-- **Start a chat** (each step proven 27 November 2026):
-  1. `boat ai proxy on`; `boat new --type small --environment claude-proxy --name <name>`
-     (`claude-proxy` is safe for third parties with proxy credentials on); `boat extend <id>
-     --hours <h>` (one hour by default).
-  2. `boat push <id> <repository> --to /home/user/<name>` (files git tracks or does not
-     ignore). Install `t3` at this laptop's version (`t3 --version`, over 24 hours old) with
-     npm in the sandbox; set `"linkedEnvironmentsEnabled": true` in its
-     `~/.t3/userdata/settings.json`, or the link is refused.
-  3. `boat exec <id> --detach -- bash -lc 'cd <repo> && exec <t3> serve --host 127.0.0.1
-     --port 3773 <repo>'`. Bind 127.0.0.1: the sandbox's inbound is open. Never print its log:
-     the server prints a pairing QR at start.
-  4. `boat forward <id> --remote 3773 --local 13773` in the background.
-  5. Pairing: `t3 auth pairing create --json --ttl 5m` in the sandbox, its `credential` piped
-     to `t3 environment link --from - --access full-access` as `http://127.0.0.1:13773
-     <credential>`, never shown or on a command line.
-  6. `t3_project_create` and `t3_thread_launch` with that `environmentId`, model
-     `claude-opus-5-5`, effort high. The chat answers through `t3_thread_send` and `_read`.
-- **Between sessions:** `boat stop <id>` (5 s) keeps disk and memory 14 days; `boat resume`
-  (1 s) brings the processes back. The proxy's placeholder changes at resume, so restart
-  `t3 serve` (otherwise 401: "This placeholder credential is not valid any more"); the thread
-  keeps its context. A stopped sandbox uses no plan time.
-- **End:** `boat ai proxy off`; stop or `boat delete` the sandbox; stop the forward by its
-  `ssh` too (`pkill -f '[s]sh.*13773'`: it outlives `boat forward`); `t3 environment unlink`.
-  `boat list --all` and `boat ai proxy` confirm.
-- **Simpler shape, no T3:** `boat prompt <id> --provider claude --model opus-5-5
-  --reasoning-effort high "<prompt>"`, then `--resume <conversation>` for each turn (50 MB
-  here while it waits). `boat exec` ends at 30 s unless `--timeout`.
-- **Measured 27 November 2026** (sandbox `small`, the Cookbook): six turns of real work (the
-  tests of `sandbox-claude.mjs`'s exit codes, written and reviewed there and kept) and the
-  full suite (797 passed): 23 proxied requests, USD 0.023; 355 plan seconds (12 minutes at
-  half rate), USD 0.0036 of the plan's value; the day's proxy USD 1. In the sandbox the T3
+- **Money:** boat's plan renews monthly (USD 20, next 16 December 2026); the proxy is USD 1
+  a day while on (turning it on again the same day adds nothing, seen 27 November) plus USD 1
+  per 1,000 requests, from the wallet. Both are inside the owner's yes. A top-up, a larger
+  plan or a size above `default` stops for the owner; `up` says a wallet under USD 5 aloud.
+
+## Which chats start on boat
+
+- **Fits boat:** long, self-contained work in one of our own repositories (a build, a
+  refactor, a test-and-fix loop, a review round) that needs nothing of this laptop: no key
+  from the key store, no display or desktop app, no MCP server that only runs here, no
+  sign-in of the owner's, no device. The sandbox has no GitHub login (giving it one is an
+  access change): the chat commits there, `pull` brings the work back, and the pull request
+  is opened here.
+- **Stays here:** a chat that needs any of those; a short job (minutes); work on the owner's
+  mail, photos or files; anything that sends, publishes or changes a live site; a customer's
+  data; a chat the owner is steering turn by turn.
+- **When:** a fitting chat starts on boat when it is long or when the laptop nears its limits;
+  a short fitting chat stays here while the laptop has room.
+
+## Offload before the laptop runs short
+
+- `node <this skill's folder>/scripts/boat-chat.mjs where` prints `boat` or `local` and why,
+  from Linux's own counters (`laptop-load-lib.mjs` in the plugin's hooks). The laptop is
+  *near* at any one of: memory available under 25% of RAM (room for one more local chat);
+  swap 90% used with memory available under 35%; memory pressure (some, one minute) 5% or
+  more; CPU pressure 30% or more; load one per CPU or more.
+- **The launch hook asks it for you.** Before `t3_thread_launch` or `create_threads` starts a
+  chat here (no `environmentId`), the `owner-answers` hook reads the load; when near, it stops
+  the call once (ten minutes) with the reasons: a fitting chat then goes to boat, the rest
+  repeat the call. A launch that names an environment is not read.
+- **A chat the owner started here** that fits boat, while the laptop is near: hand the job
+  to a boat chat with a full brief (`up`, then `t3_thread_launch` there), give the owner its
+  link, and settle this one.
+
+## Bring a chat up, and down
+
+- `node <this skill's folder>/scripts/boat-chat.mjs up <repository folder> [--hours 4]
+  [--type small|default] [--push]` (about 10 s on a stopped sandbox, 30 s new): proxy on;
+  the recorded sandbox resumed, or a new one (`small`, environment `claude-proxy`); T3 at
+  this laptop's version (npm `--before` 24 hours ago) and `linkedEnvironmentsEnabled`; the
+  repository pushed to `/home/user/<name>` when it is not there, as a git repository with one
+  base commit (`--push` copies it again, only over a copy with no changes); `t3 serve` on 127.0.0.1:3773, restarted after a resume;
+  `boat forward` to 127.0.0.1:13773; the link, kept or paired again. It prints the
+  `environmentId` and the path. Then `t3_project_create` (that environment, that path; the
+  default model is set afterwards with `t3_project_update`) and `t3_thread_launch` with
+  model `claude-opus-5-5`, effort high. A second repository: `up` again; one sandbox holds
+  several chats (a `small` one has 4 GB; one chat left 2.4 GB free).
+- `boat-chat.mjs pull <repository folder> [--apply]`: everything the chat changed since the
+  base commit, committed or not, as one patch in `~/.local/share/boat-chat/patches/`.
+  Gitleaks reads it first (a finding: exit 4, nothing applied, the owner decides); `git
+  apply --check` tries it here; `--apply` applies it to a folder with no changes of its own.
+  Then review, commit and ship from here as usual (a branch or worktree of the job's own).
+- `boat-chat.mjs down [--delete]` when the last boat chat has settled and been pulled: the forward and its
+  `ssh` ended, the sandbox stopped (data and memory kept 14 days; `up` resumes it), the proxy
+  off when no `claude-proxy` sandbox runs. `--delete` deletes the sandbox and unlinks it.
+- `boat-chat.mjs status`: the load, the sandbox, the proxy, the forward, the link, the wallet.
+  State: `~/.local/share/boat-chat/state.json` (the sandbox's id and repositories).
+- The sandbox stops itself after `--hours`; a chat still working there stops with it and
+  goes on after `up`. A long job: `up --hours 8`.
+
+## What the script keeps right (the traps of 27 November)
+
+- At resume the proxy's placeholder changes: `t3 serve` is restarted, or the chat gets 401
+  ("This placeholder credential is not valid any more"). The thread keeps its context.
+- `t3 serve` binds 127.0.0.1 (the sandbox's inbound is open) and its log is never read: it
+  prints a pairing QR at start.
+- The pairing credential (`t3 auth pairing create --ttl 5m`) goes to `t3 environment link
+  --from -` on stdin, never on a command line or in output.
+- Killing `boat forward` leaves its `ssh` child holding the port: both are ended.
+- boat calls a running sandbox with nothing to do `idle`: it counts as running (a first
+  version took it for gone and made a second sandbox).
+- A T3 server refuses a link until `linkedEnvironmentsEnabled` is set. A new sandbox gets a
+  new link; the old one at that address is unlinked first. A resumed one keeps its
+  `environmentId`.
+- By hand, when the script fails: the same steps with `boat ai proxy on`, `boat new|resume`,
+  `boat push`, `boat exec --detach`, `boat forward --remote 3773 --local 13773`, the pairing as
+  above; `boat exec` ends at 30 s unless `--timeout`.
+
+## Numbers (27 November 2026, `small`, the Cookbook)
+
+- Six turns of real work and the full suite (797 passed): 23 proxied requests (USD 0.023),
+  355 plan seconds (USD 0.0036 of the plan), the proxy's day USD 1. In the sandbox the T3
   server took 441 MB, Claude Code 253 MB; 2.4 GB of 4 GB stayed free.
-- **Cost of a chat hour:** the machine is inside the plan (552 hours of `default` left on 27
-  November, twice that of `small`). The proxy: 23 requests in 188 s of the model working
-  (about 440 an hour, USD 0.44), nothing while the chat waits, plus USD 1 a day. A day with
-  3 hours of the model working: about USD 2.3.
+- A chat hour: the machine is inside the plan (552 hours of `default` left that day, twice
+  that of `small`); the proxy about 440 requests an hour of the model working (USD 0.44),
+  nothing while the chat waits. A day with 3 hours of the model working: about USD 2.3.
   [The comparison](../options/sandboxes.md).
+- Simpler shape, no T3: `boat prompt <id> --provider claude --model opus-5-5
+  --reasoning-effort high "<prompt>"`, then `--resume <conversation>` (50 MB here).
