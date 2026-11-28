@@ -26,6 +26,9 @@ is for the sites that only have a web login.
   address, user name, password and, when the item has one, its one-time code, fills the form and
   answers with `ok`, the final address and the page title. Nothing else comes back. Selectors can be
   given when a form is unusual (`--user-selector`, `--password-selector`, `--submit-selector`).
+  A form that appears only after a click on the same address ("Continue with email") takes
+  `--reveal-selector '<selector>'`, clicked once the page has loaded (OpenSEO: `'text=Continue
+  with email'`). After submitting, `login` waits up to 20 seconds for the form to go.
 - **Then work on the site:** `agent-browser goto <url>`, `text` (the page's text, 4,000 characters
   unless `--max` says otherwise), `snapshot` (the accessibility tree), `click <selector>`,
   `fill <selector> <value>`, `press <key>`, `eval <expression>`, `screenshot <path>`, `status` and
