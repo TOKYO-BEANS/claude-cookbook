@@ -32,3 +32,20 @@
   (owner, 28 November 2026): a 2.3 GB local `semgrep ci` and ten open chats filled RAM and
   swap. Run it in a sandbox or wait. The laptop has 4 GB of zram (compressed swap in RAM)
   before `/swap.img` since that day.
+- **At the owner's message** (hook `laptop-load-note.mjs`, UserPromptSubmit), in a T3 chat on
+  the laptop while it is near ([the limits](sandboxes-boat-chat.md)), once an hour per chat, the
+  chat hears the reasons and the route: a chat that fits boat (a first message or one already
+  running) commits and pushes its work, writes a brief (the request word for word, what is done,
+  the branch, what is next, open questions), runs `boat-chat.mjs up`, starts the boat chat with
+  `t3_thread_launch` and settles here; it asks the owner there, in T3. A job that needs no input
+  at all (a long change ending in a pull request) may go to a cloud session (`claude --cloud`)
+  once set up: the first needs the owner's GitHub grant. Cloud chats are not in T3's sidebar
+  (owner, 28 November 2026: boat, cloud only for no-input jobs).
+- **Idle chats** (`scripts/idle-chats/`, owner, 28 November 2026): T3 keeps each chat's `claude`
+  process (about 300 MB) until T3 stops. A user timer runs `idle-chats.mjs` every 10 minutes
+  and ends (SIGTERM) a chat's process when T3's state shows no unfinished run and the last run
+  ended 30 minutes ago, and no Bash shell (a tool, a background command or monitor) runs under
+  it. T3 starts it again with `--resume` at the next message. `--dry-run` shows the choice;
+  each end is a line in `~/.local/share/claude-cookbook/idle-chats/log.jsonl`. Install: copy
+  `idle-chats.mjs` to `~/.local/bin`, the two units to `~/.config/systemd/user`, then
+  `systemctl --user enable --now idle-chats.timer`.

@@ -41,9 +41,8 @@ on compute so the pc actually never has to throttle again". Why: a local chat ta
   chat here (no `environmentId`), the `owner-answers` hook reads the load; when near, it stops
   the call once (ten minutes) with the reasons: a fitting chat then goes to boat, the rest
   repeat the call. A launch that names an environment is not read.
-- **A chat the owner started here** that fits boat, while the laptop is near: hand the job
-  to a boat chat with a full brief (`up`, then `t3_thread_launch` there), give the owner its
-  link, and settle this one.
+- **Owner-started and running chats** hear it at the owner's message, once an hour
+  (`laptop-load-note.mjs`); a fitting one moves with a brief. Idle chats: [setup](sandboxes-setup.md).
 
 ## Bring a chat up, and down
 

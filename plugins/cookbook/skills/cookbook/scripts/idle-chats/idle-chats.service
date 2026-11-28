@@ -1,0 +1,12 @@
+[Unit]
+Description=End the Claude process of a T3 chat idle for 30 minutes (the Cookbook, recipes/sandboxes-boat-chat.md)
+Documentation=https://github.com/TOKYO-BEANS/claude-cookbook/blob/main/plugins/cookbook/skills/cookbook/recipes/sandboxes-boat-chat.md
+ConditionPathExists=%h/.local/bin/idle-chats.mjs
+
+[Service]
+Type=oneshot
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+WorkingDirectory=%h
+Nice=10
+ExecStart=/usr/bin/node %h/.local/bin/idle-chats.mjs
+TimeoutStartSec=2min
