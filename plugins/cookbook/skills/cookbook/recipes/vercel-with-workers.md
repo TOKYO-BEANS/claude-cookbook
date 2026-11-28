@@ -13,14 +13,16 @@ preview and a passing `Vercel` check; its merge went to production. Which piece 
   `worker/` with its own `package.json` pinning Wrangler, `wrangler.jsonc` and D1 migrations.
   The page calls the Worker's `workers.dev` address over HTTPS (a public value, kept in the
   code or as `NEXT_PUBLIC_WORKER_URL`). Never Cloudflare's proxy in front of Vercel.
-- **CORS from configuration**: the Worker's `vars` hold the exact production origin
-  (`https://<project>.vercel.app`) and an anchored pattern for this project's previews in this
-  Vercel team (`^https://<project>-[a-z0-9]{9}-<team>\.vercel\.app$`, the deployment hash
-  only); a branch alias (`<project>-git-<branch>-<team>.vercel.app`) is listed exactly. Never a
-  class with a hyphen in the middle: anyone can make a scope `evil-<team>` whose project's
-  hosts then match. Any other origin gets no CORS headers, a write from it answers 403, and the
-  WebSocket upgrade checks the same list. An Origin check stops browsers only, not curl or a
-  script: it is not authentication.
+- **CORS from configuration**: the Worker's `vars` hold exact origins only: the production
+  origin (`https://<project>.vercel.app`) and each branch alias
+  (`https://<project>-git-<branch>-<team>.vercel.app`) the Worker is told about. Never a pattern
+  for preview hosts, not even `^https://<project>-[a-z0-9]{9}-<team>\.vercel\.app$`: scope
+  slugs may hold hyphens, so anyone can make a scope `abcdefghi-<team>` and a project
+  `<project>`, whose automatic alias `<project>-abcdefghi-<team>.vercel.app` matches. A
+  per-deployment preview host is allowed only after `GET /v13/deployments/<host>` with the
+  project's token shows it belongs to this project. Any other origin gets no CORS headers, a
+  write from it answers 403, and the WebSocket upgrade checks the same list. An Origin check
+  stops browsers only, not curl or a script: it is not authentication.
 - **Writes are bounded**: text 1 to 200 characters, the table trimmed to its last 100 rows, so
   a public endpoint cannot grow without limit.
 - **Live updates**: one Durable Object room (`env.ROOM.getByName("main")`), SQLite-backed (the
@@ -51,7 +53,8 @@ preview and a passing `Vercel` check; its merge went to production. Which piece 
 ## Checks that proved it
 
 - curl: a write with the production `Origin` answers 201 with that origin in
-  `Access-Control-Allow-Origin`; another origin 403; a preview origin's preflight 204.
+  `Access-Control-Allow-Origin`; another origin 403; a preview origin's preflight 204. Check
+  too that `https://<project>-abcdefghi-<team>.vercel.app` (another scope's alias) gets 403.
 - Two WebSocket clients in Node (`new WebSocket(url, { headers: { Origin } })`) both receive a
   note posted by a third request; another origin's upgrade fails.
 - Two T3 preview tabs (default and incognito profiles) on the production page: a note saved in

@@ -33,10 +33,12 @@ the second window with the live note). Release log: the `sa-release` run of this
   Cause and rule in the new page.
 - Linking by the API before the GitHub App was installed: `repo_not_found`.
 - The AI review (medium) found the first preview-origin pattern too loose: a hyphen in its
-  middle class let a host in another Vercel scope ending in `-<team>` match. The page (AI fix
-  commit) and the test Worker now match the 9-character deployment hash only; the redeployed
-  Worker answers 403 to such a host and 204 to a real preview, and two WebSocket clients still
-  get a posted note.
+  middle class let a host in another Vercel scope ending in `-<team>` match. The next pattern,
+  the 9-character deployment hash only, was still open (second AI review, medium): a scope
+  `abcdefghi-<team>` with a project `<project>` gets the alias
+  `<project>-abcdefghi-<team>.vercel.app`, which matches. The page now allows exact origins only
+  (production and each branch alias), or a preview host the Vercel API shows belongs to the
+  project.
 - GitHub sudo by email code: mailed to the Apple relay, never reached Proton; the owner
   approved by GitHub Mobile instead.
 
@@ -44,3 +46,5 @@ the second window with the live note). Release log: the `sa-release` run of this
 - The test repository: keep it archived as a template, or delete it with its Vercel project,
   Worker and D1 database (asked of the owner, 28 November 2026).
 - The Protection Bypass for Automation secret was not captured: no capture script needs it yet.
+- The test Worker still uses the 9-character-hash pattern: change it to exact origins,
+  redeploy, and check that `https://<project>-abcdefghi-<team>.vercel.app` gets 403.
