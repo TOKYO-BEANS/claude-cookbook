@@ -2,7 +2,7 @@
 // limits, the argument rules, and the up and down sequences against a fake boat and t3.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { LIMITS, judgeLoad, laptopLoad, parseMeminfo, parsePressure } from "../plugins/cookbook/hooks/laptop-load-lib.mjs";
+import { LIMITS, judgeLoad, laptopLoad, memoryReasons, parseMeminfo, parsePressure } from "../plugins/cookbook/hooks/laptop-load-lib.mjs";
 import { LOCAL_URL, SCAN_FOUND, before, firstId, lastJson, linkAt, main, parseArgs, repoName, stateKind, t3Version } from "../plugins/cookbook/skills/cookbook/scripts/boat-chat.mjs";
 
 const GB = 1048576; // kB
@@ -454,4 +454,11 @@ test("down leaves the proxy as it is when boat's list cannot be read", async () 
   assert.equal(await main(["down"], w.io), 1);
   assert.equal(w.out.at(-1), "proxy: left as it is, boat list failed; run down again");
   assert.equal(w.proxy, true);
+});
+
+test("memoryReasons keeps the memory and swap reasons, never CPU or load", () => {
+  const load = { reasons: ["memory available 9% (1.3 GB), under 25%", "memory pressure 40% (one minute), at or over 5%", "swap 95% used and memory available 30%, under 35%", "CPU pressure 50% (one minute), at or over 30%", "load 2 per CPU (one minute), at or over 1"] };
+  assert.deepEqual(memoryReasons(load), load.reasons.slice(0, 3));
+  assert.deepEqual(memoryReasons(null), []);
+  assert.deepEqual(memoryReasons({}), []);
 });
