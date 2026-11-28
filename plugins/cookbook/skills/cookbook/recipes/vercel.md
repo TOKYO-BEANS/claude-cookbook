@@ -37,8 +37,7 @@ front ends it is better at.
   to `vercel.com/sso-api`; the production `<project>.vercel.app` answers 200), and a capture
   script passes it with the project's "Protection Bypass for Automation" secret (all plans),
   kept in the key store like any key.
-- **A Next.js preview of a commercial site** goes on Cloudflare (static export, or OpenNext
-  for per-request pages), no Pro needed: [vercel-with-workers](vercel-with-workers.md#a-nextjs-preview-without-vercel).
+- **A Next.js preview of a commercial site**: Cloudflare (static export or OpenNext), no Pro: [vercel-with-workers](vercel-with-workers.md#a-nextjs-preview-without-vercel).
 - **A sync or real-time back end** (shared state, WebSockets): Cloudflare Durable Objects hold
   a room's state and connections with their own storage. Vercel Functions hold WebSockets but
   each connection is pinned to one instance for a limited time, so shared state needs an outside
