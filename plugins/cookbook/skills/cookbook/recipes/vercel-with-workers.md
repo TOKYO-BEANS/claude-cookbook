@@ -76,16 +76,24 @@ preview and a passing `Vercel` check; its merge went to production. Which piece 
 
 ## A Next.js preview without Vercel
 
-Proved 28 November 2026 (WeCare trial, `TOKYO-BEANS/WeCare-Wix` branch `trial/nextjs-preview`): Next.js 16 through
-`@opennextjs/cloudflare` as its own Worker on `workers.dev`, deployed with the project's pinned
-Wrangler. Four pages and a Route Handler came to 1.08 MB gzipped (free plan limit 3 MB). The
-address is public: send `X-Robots-Tag: noindex` from `next.config` headers and a robots.txt that
-disallows all, and stub every form that would write to the live business. Traps: a Next app in a
-subfolder with `turbopack.root` set to the repository root takes the parent's
-`src/middleware.ts` as its own (copy the shared files into the app before the build instead);
-Wrangler refuses while a parent folder holds `.wrangler/deploy/config.json` from another build
-(pass `--config wrangler.jsonc`); npm on Node 26 skips the esbuild and workerd install scripts
-until `npm install-scripts approve esbuild workerd`. Advisories: the React Server Components
-remote-code flaws reach Next through its vendored React, so read Next's own advisories, not
-only React's (Next 16.4.1 changed its vendored `react-server-dom` files for GHSA-673q-mjm6-r5xr,
-the typed-array flaw React lists as GHSA-xqc2-xf4c-x3h3).
+Proved 28 November 2026 (WeCare trial, `TOKYO-BEANS/WeCare-Wix` branch `trial/nextjs-preview`). For pages that
+are the same for every visitor, `output: "export"` on Workers static assets beat OpenNext: first byte in about
+40 ms instead of 340, build 11 s instead of 30, Lighthouse level with the Astro site. A small Worker beside the
+assets takes what is not a file (a form POST, redirects), with `run_worker_first: ["/api/*"]`: without it a
+browser form POST, a navigation, gets 405 from the assets layer (curl passes, so test in a browser). OpenNext
+(`@opennextjs/cloudflare`) is for per-request rendering; four pages and a Route Handler came to 1.08 MB gzipped
+(free plan limit 3 MB). The address is public: `X-Robots-Tag: noindex` (`_headers` for static assets, or
+`next.config` headers) and a robots.txt that disallows all, and stub every form that would write to the live
+business.
+
+- Set `turbopack.root` to the app's own folder when it sits inside another project: Next infers the root from a
+  parent lockfile and then takes the parent's `src/middleware.ts` for its own ("Middleware is missing expected
+  function export name").
+- Wrangler refuses while a parent folder holds `.wrangler/deploy/config.json` from another build: pass
+  `--config wrangler.jsonc`.
+- npm on Node 26 skips the esbuild and workerd install scripts until `npm install-scripts approve esbuild workerd`.
+- Advisories: the React Server Components remote-code flaws reach Next through its vendored React, so read Next's
+  own advisories, not only React's (Next 16.4.1 changed its vendored `react-server-dom` files for
+  GHSA-673q-mjm6-r5xr, the typed-array flaw React lists as GHSA-xqc2-xf4c-x3h3).
+- Weight: the App Router sends React and its router (about 125 KB on the wire) to every page, and each page's
+  HTML carries a second copy of its content; for a site of text and photos Astro sent 31 KB in all.
