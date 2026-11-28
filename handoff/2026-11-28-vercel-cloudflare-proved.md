@@ -35,8 +35,8 @@ the second window with the live note). Release log: the `sa-release` run of this
 - The AI review (medium) found the first preview-origin pattern too loose: a hyphen in its
   middle class let a host in another Vercel scope ending in `-<team>` match. The page (AI fix
   commit) and the test Worker now match the 9-character deployment hash only; the redeployed
-  Worker answers 403 to such a host and 204 to a real preview (rollback version noted in the
-  test repository's second pull request).
+  Worker answers 403 to such a host and 204 to a real preview, and two WebSocket clients still
+  get a posted note.
 - GitHub sudo by email code: mailed to the Apple relay, never reached Proton; the owner
   approved by GitHub Mobile instead.
 
