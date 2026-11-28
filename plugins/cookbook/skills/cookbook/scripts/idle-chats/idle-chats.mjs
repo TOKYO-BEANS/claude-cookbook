@@ -58,7 +58,7 @@ const read = (path) => {
     return null;
   }
 };
-const argvOf = (pid) => (read(`/proc/${pid}/cmdline`)?.toString("utf8") ?? "").split("\0").filter(Boolean);
+const argvOf = (pid, proc = "/proc") => (read(`${proc}/${pid}/cmdline`)?.toString("utf8") ?? "").split("\0").filter(Boolean);
 
 // The T3 chat processes on this machine: { pid, thread, shell, mb }.
 export function chatProcesses(proc = "/proc") {
@@ -71,13 +71,13 @@ export function chatProcesses(proc = "/proc") {
   }
   const shells = new Set();
   for (const pid of pids) {
-    if (SHELL.test(argvOf(pid).join(" "))) {
+    if (SHELL.test(argvOf(pid, proc).join(" "))) {
       for (let p = parent.get(pid), hops = 0; p && hops < 6; p = parent.get(p), hops++) shells.add(p);
     }
   }
   const out = [];
   for (const pid of pids) {
-    const argv = argvOf(pid);
+    const argv = argvOf(pid, proc);
     if (basename(argv[0] ?? "") !== "claude" || !argv.includes("stream-json")) continue;
     const env = read(`${proc}/${pid}/environ`)?.toString("utf8").split("\0") ?? [];
     const thread = env.find((e) => e.startsWith("T3CODE_THREAD_ID="))?.slice("T3CODE_THREAD_ID=".length) || null;
