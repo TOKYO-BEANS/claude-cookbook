@@ -1,7 +1,7 @@
 // The sandbox route hook (plugins/cookbook/hooks/sandbox-route*.mjs, recipes/sandboxes.md).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -171,13 +171,41 @@ test("decide: a listed repository is denied with the route; others run", () => {
   assert.match(decide({ input: ask("semgrep ci"), deps: deps() }).hookSpecificOutput.permissionDecisionReason, /CI `semgrep` job/);
 });
 
+test("decide: while memory is short, a run waits in any folder, past # local-run", () => {
+  const short = ["memory available 9% (1.3 GB), under 25%"];
+  const withLoad = (repo, load) => ({ ...deps(repo), load: () => load });
+  for (const [command, repo] of [["npm test", null], ["npm test", { ...REPO, listed: false }], ["npm test # local-run: needs the key store here", REPO], ["node /h/with-key.mjs semgrep SEMGREP_APP_TOKEN semgrep ci --supply-chain", null]]) {
+    const out = decide({ input: ask(command), deps: withLoad(repo, short) });
+    assert.equal(out.hookSpecificOutput.permissionDecision, "deny", command);
+    const why = out.hookSpecificOutput.permissionDecisionReason;
+    assert.match(why, /^Not run now: this laptop is short of memory \(memory available 9% \(1\.3 GB\), under 25%\)/);
+    assert.match(why, /sandbox-run\.mjs, or wait a few minutes/);
+  }
+  // Enough memory: the route as before. No reading: the same.
+  assert.equal(decide({ input: ask("npm test"), deps: withLoad(null, []) }), null);
+  assert.equal(decide({ input: ask("npm test"), deps: deps(null) }), null);
+  // A command that runs nothing heavy is never held.
+  assert.equal(decide({ input: ask("git status"), deps: withLoad(REPO, short) }), null);
+});
+
 // The hook as a process, on a repository made here and on the real upload list: a folder
 // that is no repository, and one whose origin is not listed, both run.
-test("the hook process lets unlisted folders run, and never fails the call", () => {
+test("the hook process lets unlisted folders run unless memory is short, and never fails the call", () => {
   const tmp = mkdtempSync(join(tmpdir(), "sandbox-route-"));
   try {
-    const hook = (input) => spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), encoding: "utf8" });
-    let r = hook({ tool_name: "Bash", cwd: tmp, tool_input: { command: "npm test" } });
+    // A stand-in /proc with plenty of memory, then one that is short.
+    const proc = (avail) => {
+      const dir = join(tmp, `proc-${avail}`);
+      mkdirSync(join(dir, "pressure"), { recursive: true });
+      writeFileSync(join(dir, "meminfo"), `MemTotal: 16000000 kB\nMemAvailable: ${avail} kB\nSwapTotal: 0 kB\nSwapFree: 0 kB\n`);
+      return dir;
+    };
+    const calm = proc(8000000);
+    const hook = (input, dir = calm) => spawnSync(process.execPath, [HOOK], { input: JSON.stringify(input), encoding: "utf8", env: { ...process.env, COOKBOOK_LAPTOP_PROC: dir } });
+    let r = hook({ tool_name: "Bash", cwd: tmp, tool_input: { command: "npm test" } }, proc(1000000));
+    assert.equal(r.status, 0);
+    assert.match(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, /short of memory \(memory available 6\.3%/);
+    r = hook({ tool_name: "Bash", cwd: tmp, tool_input: { command: "npm test" } });
     assert.equal(r.status, 0);
     assert.equal(r.stdout, "");
     spawnSync("git", ["init", "-q", tmp]);
@@ -186,7 +214,7 @@ test("the hook process lets unlisted folders run, and never fails the call", () 
     r = hook({ tool_name: "Bash", cwd: tmp, tool_input: { command: "npm test" } });
     assert.equal(r.status, 0);
     assert.equal(r.stdout, "");
-    r = spawnSync(process.execPath, [HOOK], { input: "not json", encoding: "utf8" });
+    r = spawnSync(process.execPath, [HOOK], { input: "not json", encoding: "utf8", env: { ...process.env, COOKBOOK_LAPTOP_PROC: calm } });
     assert.equal(r.status, 0);
     assert.equal(r.stdout, "");
   } finally {

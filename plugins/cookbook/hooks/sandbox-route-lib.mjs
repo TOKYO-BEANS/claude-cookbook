@@ -317,7 +317,12 @@ export function decide({ input, deps }) {
   if (typeof command !== "string" || !HINT.test(command)) return null;
   const shell = tool === "PowerShell" ? "powershell" : "bash";
   const found = find(command, { shell, cwd: deps.cwd(input), home: deps.home, windows: deps.windows });
-  if (!found.runs.length || marked(found.comments)) return null;
+  if (!found.runs.length) return null;
+  // Memory first, in any folder and past `# local-run:` (owner, 28 November 2026): a run
+  // started while the laptop is short pushes it into swap and slows every chat.
+  const short = typeof deps.load === "function" ? deps.load() : [];
+  if (short.length) return deny(waitReason(found.runs, short));
+  if (marked(found.comments)) return null;
   const lines = [];
   const repos = new Set();
   for (const run of found.runs) {
@@ -336,5 +341,16 @@ export function decide({ input, deps }) {
     ...lines,
     "A run stays here only when it needs this PC itself: its key store, its display, or an app installed on it (owner, 19 November 2026). End such a command with `# local-run: <why>`, a reason of at least ten characters that says which of the three. Everything else runs in a sandbox.",
   ].join("\n");
-  return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } };
+  return deny(reason);
+}
+
+const deny = (reason) => ({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } });
+
+// Why a run waits while memory is short. `short` are laptop-load-lib's fixed phrases.
+export function waitReason(runs, short) {
+  return [
+    `Not run now: this laptop is short of memory (${short.join("; ")}). A test run or scan started now pushes it into swap and slows every open chat (recipes/sandboxes.md).`,
+    ...runs.map((r) => `- \`${r.raw}\``),
+    "Run it in a Depot sandbox with sandbox-run.mjs, or wait a few minutes and try again; `semgrep ci` waits, since its token does not go into a sandbox. This holds with `# local-run:` too.",
+  ].join("\n");
 }

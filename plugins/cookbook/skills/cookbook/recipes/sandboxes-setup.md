@@ -27,4 +27,8 @@
 - **The hook** `hooks/sandbox-route.mjs` denies local tests and `semgrep` in a listed
   repository, naming the sandbox-run command (`semgrep ci`: the CI job); give sa-review that
   command. Only a run that needs this PC itself (its key store, its display or an app on it):
-  end `# local-run: <why, 10+ chars>`.
+  end `# local-run: <why, 10+ chars>`. While memory is short (laptop-load-lib's memory and
+  swap limits), every local test run or scan waits, in any folder and past `# local-run`
+  (owner, 28 November 2026): a 2.3 GB local `semgrep ci` and ten open chats filled RAM and
+  swap. Run it in a sandbox or wait. The laptop has 4 GB of zram (compressed swap in RAM)
+  before `/swap.img` since that day.

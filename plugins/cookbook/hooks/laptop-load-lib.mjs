@@ -60,6 +60,10 @@ export function judgeLoad({ meminfo = "", memPsi = "", cpuPsi = "", loadavg = ""
   return { near: reasons.length > 0, reasons, numbers: { availPct, availGB, swapUsedPct, memPressure, cpuPressure, loadPerCpu } };
 }
 
+// The memory reasons of a reading only: what a heavy local run (a test suite, a Semgrep
+// scan) waits on in sandbox-route.mjs. CPU and load stay with the chat launch.
+export const memoryReasons = (load) => (Array.isArray(load?.reasons) ? load.reasons : []).filter((r) => /^(memory|swap) /.test(r));
+
 const readOr = (path, read) => {
   try {
     return read(path, "utf8");

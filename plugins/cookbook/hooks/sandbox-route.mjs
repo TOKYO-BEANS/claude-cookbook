@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // PreToolUse hook of the Cookbook plugin: the sandbox route (sandbox-route-lib.mjs, recipes/sandboxes.md).
 // A local test run or Semgrep scan in a repository on sandbox-run's upload list is denied, with
-// the sandbox-run.mjs command to use instead. First, in the same Node start, the shell guard
+// the sandbox-run.mjs command to use instead; in any folder, while the laptop is short of memory. First, in the same Node start, the shell guard
 // (shell-guard-lib.mjs) stops a `pkill -f` that would kill its own shell and an `rm -rf`, with
 // the next step. Both are routes, not security gates: whatever goes wrong here lets the call run.
 import { spawnSync } from "node:child_process";
@@ -39,6 +39,7 @@ try {
       windows,
       script: resolve(here, "../skills/cookbook/scripts/sandbox-run.mjs").replace(/\\/g, "/"),
       repo: await repoReader(),
+      load: await loadReader(),
     },
   });
 } catch {
@@ -46,6 +47,15 @@ try {
 }
 if (out) process.stdout.write(`${JSON.stringify(out)}\n`);
 process.exitCode = 0;
+
+// The memory reasons of this laptop now (laptop-load-lib.mjs). COOKBOOK_LAPTOP_PROC names a
+// folder that stands in for /proc, for the tests.
+async function loadReader() {
+  const { laptopLoad, memoryReasons } = await import("./laptop-load-lib.mjs");
+  const proc = process.env.COOKBOOK_LAPTOP_PROC;
+  const read = proc ? (path, enc) => readFileSync(join(proc, path.replace(/^\/proc\//, "")), enc) : readFileSync;
+  return () => memoryReasons(laptopLoad({ read }));
+}
 
 async function repoReader() {
   const { listEntry, normalKey, UPLOAD_LIST } = await import("../skills/cookbook/scripts/sandbox-run.mjs");
