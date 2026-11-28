@@ -15,8 +15,12 @@ preview and a passing `Vercel` check; its merge went to production. Which piece 
   code or as `NEXT_PUBLIC_WORKER_URL`). Never Cloudflare's proxy in front of Vercel.
 - **CORS from configuration**: the Worker's `vars` hold the exact production origin
   (`https://<project>.vercel.app`) and an anchored pattern for this project's previews in this
-  Vercel team (`^https://<project>-[a-z0-9-]+-<team>\.vercel\.app$`). Any other origin gets no
-  CORS headers, a write from it answers 403, and the WebSocket upgrade checks the same list.
+  Vercel team (`^https://<project>-[a-z0-9]{9}-<team>\.vercel\.app$`, the deployment hash
+  only); a branch alias (`<project>-git-<branch>-<team>.vercel.app`) is listed exactly. Never a
+  class with a hyphen in the middle: anyone can make a scope `evil-<team>` whose project's
+  hosts then match. Any other origin gets no CORS headers, a write from it answers 403, and the
+  WebSocket upgrade checks the same list. An Origin check stops browsers only, not curl or a
+  script: it is not authentication.
 - **Writes are bounded**: text 1 to 200 characters, the table trimmed to its last 100 rows, so
   a public endpoint cannot grow without limit.
 - **Live updates**: one Durable Object room (`env.ROOM.getByName("main")`), SQLite-backed (the
