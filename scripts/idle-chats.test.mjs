@@ -2,17 +2,41 @@
 // laptop-load note a chat hears at an owner's message (hooks/laptop-load-note.mjs).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { chatProcesses, pickIdle } from "../plugins/cookbook/skills/cookbook/scripts/idle-chats/idle-chats.mjs";
+import { chatProcesses, chatRuns, main, pickIdle } from "../plugins/cookbook/skills/cookbook/scripts/idle-chats/idle-chats.mjs";
 import { noteDue, offloadNote } from "../plugins/cookbook/hooks/laptop-load-lib.mjs";
 
 const NOW = Date.parse("2026-11-28T12:00:00Z");
 const ago = (min) => new Date(NOW - min * 60000).toISOString();
 const run = (thread, status, endedMinAgo) => ({ thread, status, requestedAt: ago(endedMinAgo + 5), completedAt: status === "running" ? null : ago(endedMinAgo) });
+
+// A stand-in /proc: one folder per process, with the four files chatProcesses reads.
+const fakeProc = (proc, pid, ppid, argv, env = [], rssKb = 0) => {
+  mkdirSync(join(proc, String(pid)));
+  writeFileSync(join(proc, String(pid), "cmdline"), `${argv.join("\0")}\0`);
+  writeFileSync(join(proc, String(pid), "environ"), `${env.join("\0")}\0`);
+  writeFileSync(join(proc, String(pid), "stat"), `${pid} (x y) S ${ppid} 1 1`);
+  writeFileSync(join(proc, String(pid), "status"), `Name: x\nVmRSS:\t${rssKb} kB\n`);
+};
+const CHAT = ["/home/u/.local/bin/claude", "--output-format", "stream-json"];
+const SHELL = ["/bin/bash", "-c", "source /home/u/.claude/shell-snapshots/snapshot-bash-1.sh && eval 'sleep 9'"];
+
+// A stand-in T3 state with T3's own table definition (statev2.sqlite, read 28 November 2026).
+const fakeState = (db, runs) => {
+  const conn = new DatabaseSync(db);
+  conn.exec(`CREATE TABLE IF NOT EXISTS orchestration_v2_projection_runs (
+    run_id TEXT PRIMARY KEY, thread_id TEXT NOT NULL, ordinal INTEGER NOT NULL, provider TEXT NOT NULL,
+    provider_thread_id TEXT, status TEXT NOT NULL, requested_at TEXT NOT NULL, completed_at TEXT,
+    payload_json TEXT NOT NULL, provider_instance_id TEXT)`);
+  const add = conn.prepare("INSERT INTO orchestration_v2_projection_runs (run_id, thread_id, ordinal, provider, status, requested_at, completed_at, payload_json) VALUES (?, ?, ?, 'claude', ?, ?, ?, '{}')");
+  for (const r of runs) add.run(`${r.thread}-${Math.random()}`, r.thread, 1, r.status, r.requestedAt, r.completedAt);
+  conn.close();
+};
 
 test("pickIdle ends only a chat whose runs all ended long enough ago, with no shell under it", () => {
   const procs = [
@@ -43,13 +67,7 @@ test("pickIdle ends only a chat whose runs all ended long enough ago, with no sh
 test("chatProcesses reads T3's chat id, the RSS and a Bash shell anywhere under the process, from a stand-in /proc", () => {
   const proc = mkdtempSync(join(tmpdir(), "idle-chats-proc-"));
   try {
-    const p = (pid, ppid, argv, env = [], rssKb = 0) => {
-      mkdirSync(join(proc, String(pid)));
-      writeFileSync(join(proc, String(pid), "cmdline"), `${argv.join("\0")}\0`);
-      writeFileSync(join(proc, String(pid), "environ"), `${env.join("\0")}\0`);
-      writeFileSync(join(proc, String(pid), "stat"), `${pid} (x y) S ${ppid} 1 1`);
-      writeFileSync(join(proc, String(pid), "status"), `Name: x\nVmRSS:\t${rssKb} kB\n`);
-    };
+    const p = (...a) => fakeProc(proc, ...a);
     p(10, 1, ["/home/u/.local/bin/claude", "--output-format", "stream-json"], ["T3CODE_THREAD_ID=t1"], 307200);
     p(11, 10, ["/bin/sh", "-c", "read -r _ <&4; claude --output-format stream-json"]);
     p(20, 1, ["/home/u/.local/bin/claude", "--output-format", "stream-json"], ["T3CODE_THREAD_ID=t2"], 102400);
@@ -62,6 +80,71 @@ test("chatProcesses reads T3's chat id, the RSS and a Bash shell anywhere under 
     ]);
   } finally {
     rmSync(proc, { recursive: true, force: true });
+  }
+});
+
+test("chatRuns reads T3's runs table read-only and maps its fields", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "idle-chats-db-"));
+  try {
+    const db = join(dir, "statev2.sqlite");
+    fakeState(db, [run("t1", "completed", 50), run("t1", "running", 0), run("t2", "waiting", 5), run("t3", "completed", 60)]);
+    const got = await chatRuns(["t1", "t2"], db);
+    const order = (a, b) => `${a.thread}${a.status}`.localeCompare(`${b.thread}${b.status}`);
+    assert.deepEqual(got.sort(order), [run("t1", "completed", 50), run("t1", "running", 0), run("t2", "waiting", 5)].sort(order));
+    // No chats: nothing opened. A missing state throws and is not created (a read-only open).
+    const missing = join(dir, "none.sqlite");
+    assert.deepEqual(await chatRuns([], missing), []);
+    await assert.rejects(chatRuns(["t1"], missing));
+    assert.equal(existsSync(missing), false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("main ends an idle chat, and looks again before each kill: a run or a shell that started in the gap keeps the process", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "idle-chats-main-"));
+  try {
+    const proc = join(dir, "proc");
+    mkdirSync(proc);
+    const db = join(dir, "statev2.sqlite");
+    const logDir = join(dir, "log");
+    for (const [pid, thread] of [[10, "t1"], [20, "t2"], [30, "t3"], [40, "t4"]]) fakeProc(proc, pid, 1, CHAT, [`T3CODE_THREAD_ID=${thread}`], 307200);
+    fakeState(db, [run("t1", "completed", 45), run("t2", "completed", 45), run("t3", "completed", 45), run("t4", "completed", 5)]);
+    const go = async (args, kill) => {
+      const lines = [];
+      const code = await main(args, { proc, db, nowMs: NOW, kill, logDir, log: (l) => lines.push(l), warn: (l) => lines.push(l) });
+      return { code, lines };
+    };
+
+    // A dry run ends nothing and names the three idle chats.
+    const dry = await go(["--dry-run"], () => assert.fail("a dry run killed"));
+    assert.equal(dry.code, 0);
+    assert.deepEqual(dry.lines.filter((l) => l.startsWith("would end")).map((l) => l.split(":")[0]), ["would end 10", "would end 20", "would end 30"]);
+
+    // The first kill is the gap: while it happens, chat t2 starts a run and a shell starts under t3.
+    const killed = [];
+    const real = await go([], (pid, sig) => {
+      killed.push([pid, sig]);
+      if (pid === 10) {
+        fakeState(db, [run("t2", "running", 0)]);
+        fakeProc(proc, 31, 30, SHELL);
+      }
+    });
+    assert.equal(real.code, 0);
+    assert.deepEqual(killed, [[10, "SIGTERM"]]);
+    assert.ok(real.lines.includes("keep 40: idle 5 min"), real.lines.join("\n"));
+    assert.ok(real.lines.includes("keep 20: its runs changed"), real.lines.join("\n"));
+    assert.ok(real.lines.includes("keep 30: a shell runs under it now"), real.lines.join("\n"));
+    const logged = readFileSync(join(logDir, "log.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    assert.deepEqual(logged, [{ at: new Date(NOW).toISOString(), pid: 10, thread: "t1", idleMin: 45, mb: 300 }]);
+
+    // --thread limits it to one chat; a state it cannot read ends nothing; a bad --idle is refused.
+    assert.deepEqual((await go(["--dry-run", "--thread", "t4"])).lines, ["keep 40: idle 5 min"]);
+    const unread = await main([], { proc, db: join(dir, "none.sqlite"), nowMs: NOW, kill: () => assert.fail("killed"), logDir, log: () => {}, warn: () => {} });
+    assert.equal(unread, 0);
+    assert.equal((await go(["--idle", "0"])).code, 2);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
