@@ -16,8 +16,9 @@ on GitHub, for this app only.
 - New `recipes/vercel-with-workers.md`: the shape, the one-time API steps, the checks and what
   went wrong.
 
-**Verification.** Worker: write 201 with the production origin, 403 from another origin, preview
-preflight 204; two WebSocket clients got a posted note. Vercel: first production deploy READY,
+**Verification.** Worker, as first deployed: write 201 with the production origin, 403 from
+another origin; two WebSocket clients got a posted note. After the review fixes it allows the
+production origin only: a real preview of ours gets 403 too (see Failures and dead ends). Vercel: first production deploy READY,
 `<project>.vercel.app` 200; two T3 browser tabs saw each other's note live and D1 read it back;
 the test pull request got a READY preview (302 to Vercel's sign-in) and a passing `Vercel`
 check; its merge deployed to production, READY, the change visible. `node scripts/check.mjs`
@@ -44,6 +45,10 @@ the second window with the live note). Release log: the `sa-release` run of this
   approved by GitHub Mobile instead.
 
 **Outstanding.**
-- The test repository: keep it archived as a template, or delete it with its Vercel project,
-  Worker and D1 database (asked of the owner, 28 November 2026).
+- The test repository: the owner chose to keep it as a template (28 November 2026). It is
+  marked a template and archived on GitHub; its Vercel project, Worker and D1 database stay up
+  on the free tiers (the production page still answers 200). Deleting them later is asked.
+- GitHub sudo without the owner's phone: the owner said yes (28 November 2026) to adding their
+  GitHub authenticator (TOTP) code to the vault "Claude" themselves; the owner adds that item.
+  Once it is there, Claude proves it on the next sudo prompt and records the route.
 - The Protection Bypass for Automation secret was not captured: no capture script needs it yet.
