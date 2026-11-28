@@ -32,9 +32,11 @@ front ends it is better at.
   on Cloudflare, Workers Builds gives each branch of a linked repository a stable preview URL
   (`<alias>-<worker>.<subdomain>.workers.dev`, or `wrangler versions upload --preview-alias
   <branch>`); public once preview URLs are on, so nothing secret goes on them. On Vercel every
-  push to a branch builds a preview with a branch URL; previews sit behind Vercel's sign-in, and
-  a capture script passes it with the project's "Protection Bypass for Automation" secret (all
-  plans), kept in the key store like any key.
+  push to a branch builds a preview with a branch URL; previews sit behind Vercel's sign-in
+  (proved 28 November 2026: a preview, its branch URL and each deployment's own URL answer 302
+  to `vercel.com/sso-api`; the production `<project>.vercel.app` answers 200), and a capture
+  script passes it with the project's "Protection Bypass for Automation" secret (all plans),
+  kept in the key store like any key.
 - **A sync or real-time back end** (shared state, WebSockets): Cloudflare Durable Objects hold
   a room's state and connections with their own storage. Vercel Functions hold WebSockets but
   each connection is pinned to one instance for a limited time, so shared state needs an outside
@@ -47,9 +49,12 @@ front ends it is better at.
 
 ## How Claude works with it
 
-- **Deploys come from GitHub.** The owner connected GitHub to Vercel: a push to a linked
-  repository builds on Vercel, a pull request gets a preview URL, a merge to the default branch
-  goes to production. The same rules as any deploy ([ci-releases](ci-releases.md)): it follows
+- **Deploys come from GitHub.** A push to a linked repository builds on Vercel, a pull request
+  gets a preview URL and a passing `Vercel` check, a merge to the default branch goes to
+  production (proved end to end on 28 November 2026, with a Cloudflare Worker back end:
+  [vercel-with-workers](vercel-with-workers.md), which also has the one-time linking steps).
+  On Hobby the repository must be on the owner's personal GitHub account: Hobby cannot connect
+  a GitHub organization. The same rules as any deploy ([ci-releases](ci-releases.md)): it follows
   a merge whose checks passed, then the release check. Linking a repository to Vercel the first
   time, a first public deploy, and a DNS change on a live domain are each asked first; a change
   customers see needs the site's visual check ([visual-check](visual-check.md)).
@@ -75,8 +80,8 @@ front ends it is better at.
   device (`vercel login` included), so the account's primary email must receive mail. A "Sign
   in with Apple" relay made for another app (GitHub) takes mail only from that app's maker and
   drops Vercel's; the owner's first account had one and could not be changed or deleted, so
-  the account in use is a new one on the owner's Proton address (27 November 2026). A GitHub
-  login still tied to the first account may block connecting GitHub to the new one.
+  the account in use is a new one on the owner's Proton address (27 November 2026); the owner's
+  GitHub login is connected to it (the first account has none).
 
 ## Not used, and why (27 November 2026)
 
