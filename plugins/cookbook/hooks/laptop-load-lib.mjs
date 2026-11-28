@@ -82,3 +82,25 @@ export function laptopLoad({ read = readFileSync, cpuCount = cpus().length, limi
     cpuCount,
   }, limits);
 }
+
+// The note a chat hears at an owner's message while this laptop nears a limit (owner,
+// 28 November 2026: a chat the owner starts, and a running chat, move off the laptop when they
+// fit; boat for anything the owner may be asked about, a cloud session only for a job that
+// needs no input). `reasons` are judgeLoad's fixed phrases; `script` is boat-chat.mjs's path.
+export const NOTE_HOLD_MS = 60 * 60 * 1000;
+export function offloadNote(reasons, script) {
+  return [
+    `Laptop load (the Cookbook, recipes/sandboxes-boat-chat.md): ${reasons.join("; ")}.`,
+    "Before working, decide whether this chat moves off the laptop:",
+    "- It fits boat when its job is long, self-contained work in one of our own repositories that needs nothing of this laptop (no key store, display, desktop apps, local-only MCP servers or the owner's sign-ins). Then: commit and push the work in progress to its branch; write a brief (the owner's request word for word, what is done, the branch, what comes next, open questions); run `node " + JSON.stringify(script) + " up <repository path>`; start the chat with `t3_thread_launch`, the `environmentId` it prints and the brief; say in one line where it went, and settle this chat. It asks the owner there, in T3.",
+    "- A job that needs no input from the owner at all (a long change that ends in a pull request) may go to a cloud session (`claude --cloud`) instead, once cloud is set up: the first one needs the owner's GitHub grant, asked then. Its pull request is merged from here.",
+    "- Anything else stays here: say so in one line and go on.",
+    "This chat hears it again in an hour at the earliest.",
+  ].join("\n");
+}
+
+// Whether to say the note now: a near reading, and none said in this chat within the hold.
+export function noteDue(load, lastSaidMs, nowMs, hold = NOTE_HOLD_MS) {
+  if (!load?.near) return false;
+  return !(Number.isFinite(lastSaidMs) && nowMs - lastSaidMs < hold);
+}
