@@ -10,7 +10,9 @@
 // - it is `claude` started by T3 for a chat (`T3CODE_THREAD_ID` in its environment);
 // - T3's state (read-only) shows no run of that chat queued, starting, running or waiting,
 //   and its last run ended at least --idle minutes ago (30 by default);
-// - it has no Bash shell alive under it (a tool call or a background command or monitor).
+// - it has no Bash shell alive under it (a tool call or a background command or monitor);
+// - a second look just before the kill finds that chat's runs and its shell state unchanged
+//   (a run that starts between the first look and the kill keeps the process).
 // Anything it cannot read counts as busy: it keeps the process. Each process it ends is one line
 // in ~/.local/share/claude-cookbook/idle-chats/log.jsonl (time, pid, chat id, minutes idle, MB).
 import { appendFileSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
@@ -62,7 +64,9 @@ const argvOf = (pid, proc = "/proc") => (read(`${proc}/${pid}/cmdline`)?.toStrin
 
 // The T3 chat processes on this machine: { pid, thread, shell, mb }.
 export function chatProcesses(proc = "/proc") {
-  const pids = readdirSync(proc).filter((n) => /^\d+$/.test(n));
+  const pids = readdirSync(proc)
+    .filter((n) => /^\d+$/.test(n))
+    .sort((a, b) => a - b);
   const parent = new Map();
   for (const pid of pids) {
     const stat = read(`${proc}/${pid}/stat`)?.toString("utf8") ?? "";
@@ -100,37 +104,66 @@ export async function chatRuns(threads, db = join(homedir(), ".t3", "userdata", 
   }
 }
 
-async function main(args) {
+const sameRuns = (a, b) => {
+  const key = (runs) => runs.map((r) => JSON.stringify([r.status, r.requestedAt, r.completedAt])).sort().join("\n");
+  return key(a) === key(b);
+};
+
+// The second look, just before a kill: the same chat process, still no shell under it, and the
+// chat's runs exactly as the first look read them. Returns null when the kill may go ahead, else why not.
+export async function changedSince({ pid, thread }, runsBefore, { proc = "/proc", db } = {}) {
+  const now = chatProcesses(proc).find((p) => p.pid === pid);
+  if (!now || now.thread !== thread) return "the process is gone or not that chat";
+  if (now.shell) return "a shell runs under it now";
+  let runs;
+  try {
+    runs = await chatRuns([thread], db);
+  } catch (e) {
+    return `T3's state could not be read again (${e?.code ?? "error"})`;
+  }
+  return sameRuns(runs, runsBefore) ? null : "its runs changed";
+}
+
+// opts are for the tests only: a stand-in /proc and T3 state, the clock, the kill and the log folder.
+export async function main(args, opts = {}) {
+  const { proc = "/proc", db, nowMs = Date.now(), kill = (pid, sig) => process.kill(pid, sig), logDir = join(homedir(), ".local", "share", "claude-cookbook", "idle-chats"), log = console.log, warn = console.error } = opts;
   const dry = args.includes("--dry-run");
   const i = args.indexOf("--idle");
   const idleMinutes = i >= 0 ? Number(args[i + 1]) : IDLE_MINUTES;
   if (!Number.isFinite(idleMinutes) || idleMinutes < 1) {
-    console.error("usage: idle-chats.mjs [--dry-run] [--idle <minutes, 1 or more>] [--thread <chat id>]");
+    warn("usage: idle-chats.mjs [--dry-run] [--idle <minutes, 1 or more>] [--thread <chat id>]");
     return 2;
   }
   const t = args.indexOf("--thread");
   const only = t >= 0 ? args[t + 1] : null;
-  const procs = chatProcesses().filter((p) => !only || p.thread === only);
+  const procs = chatProcesses(proc).filter((p) => !only || p.thread === only);
   let runs;
   try {
-    runs = await chatRuns([...new Set(procs.map((p) => p.thread).filter(Boolean))]);
+    runs = await chatRuns([...new Set(procs.map((p) => p.thread).filter(Boolean))], db);
   } catch (e) {
-    console.error(`idle-chats: T3's state could not be read (${e?.code ?? "error"}); nothing ended`);
+    warn(`idle-chats: T3's state could not be read (${e?.code ?? "error"}); nothing ended`);
     return 0;
   }
-  const { end, keep } = pickIdle({ procs, runs, nowMs: Date.now(), idleMinutes });
-  for (const k of keep) console.log(`keep ${k.pid}: ${k.why}`);
-  const logDir = join(homedir(), ".local", "share", "claude-cookbook", "idle-chats");
+  const { end, keep } = pickIdle({ procs, runs, nowMs, idleMinutes });
+  for (const k of keep) log(`keep ${k.pid}: ${k.why}`);
   for (const e of end) {
     const mb = procs.find((p) => p.pid === e.pid)?.mb ?? null;
-    console.log(`${dry ? "would end" : "end"} ${e.pid}: chat ${e.thread}, idle ${e.idleMin} min, ${mb ?? "?"} MB`);
-    if (dry) continue;
+    if (dry) {
+      log(`would end ${e.pid}: chat ${e.thread}, idle ${e.idleMin} min, ${mb ?? "?"} MB`);
+      continue;
+    }
+    const why = await changedSince(e, runs.filter((r) => r.thread === e.thread), { proc, db });
+    if (why) {
+      log(`keep ${e.pid}: ${why}`);
+      continue;
+    }
+    log(`end ${e.pid}: chat ${e.thread}, idle ${e.idleMin} min, ${mb ?? "?"} MB`);
     try {
-      process.kill(e.pid, "SIGTERM");
+      kill(e.pid, "SIGTERM");
       mkdirSync(logDir, { recursive: true });
-      appendFileSync(join(logDir, "log.jsonl"), `${JSON.stringify({ at: new Date().toISOString(), pid: e.pid, thread: e.thread, idleMin: e.idleMin, mb })}\n`);
+      appendFileSync(join(logDir, "log.jsonl"), `${JSON.stringify({ at: new Date(nowMs).toISOString(), pid: e.pid, thread: e.thread, idleMin: e.idleMin, mb })}\n`);
     } catch (err) {
-      console.error(`idle-chats: ${e.pid} not ended (${err?.code ?? "error"})`);
+      warn(`idle-chats: ${e.pid} not ended (${err?.code ?? "error"})`);
     }
   }
   return 0;
