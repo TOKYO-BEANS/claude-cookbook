@@ -36,9 +36,10 @@ the second window with the live note). Release log: the `sa-release` run of this
   middle class let a host in another Vercel scope ending in `-<team>` match. The next pattern,
   the 9-character deployment hash only, was still open (second AI review, medium): a scope
   `abcdefghi-<team>` with a project `<project>` gets the alias
-  `<project>-abcdefghi-<team>.vercel.app`, which matches. The page now allows exact origins only
-  (production and each branch alias), or a preview host the Vercel API shows belongs to the
-  project.
+  `<project>-abcdefghi-<team>.vercel.app`, which matches; a branch alias collides the same way.
+  After two failed patterns, no third: the page and the test Worker allow the exact production
+  origin only. The redeployed Worker answers 403 to both crafted hosts and to a real preview,
+  204 to production, and two WebSocket clients still get a posted note.
 - GitHub sudo by email code: mailed to the Apple relay, never reached Proton; the owner
   approved by GitHub Mobile instead.
 
@@ -46,5 +47,3 @@ the second window with the live note). Release log: the `sa-release` run of this
 - The test repository: keep it archived as a template, or delete it with its Vercel project,
   Worker and D1 database (asked of the owner, 28 November 2026).
 - The Protection Bypass for Automation secret was not captured: no capture script needs it yet.
-- The test Worker still uses the 9-character-hash pattern: change it to exact origins,
-  redeploy, and check that `https://<project>-abcdefghi-<team>.vercel.app` gets 403.
