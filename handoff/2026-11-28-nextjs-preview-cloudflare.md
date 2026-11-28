@@ -5,7 +5,7 @@ plan allowed if needed. WeCare's trial showed that a Cloudflare preview through 
 for a commercial site: no Pro plan and no Vercel GitHub App on the organisation.
 
 **What changed.**
-- `recipes/vercel.md`: a bullet on a Next.js preview through `@opennextjs/cloudflare` on
+- `recipes/vercel-with-workers.md`: a section "A Next.js preview without Vercel", pointed to from `recipes/vercel.md`: a Next.js preview through `@opennextjs/cloudflare` on
   `workers.dev` (size, noindex, stubbed forms) and the three traps met on the way, plus where to read
   the advisories for Next's vendored React.
 

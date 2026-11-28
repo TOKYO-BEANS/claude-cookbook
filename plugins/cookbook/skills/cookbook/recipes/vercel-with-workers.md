@@ -73,3 +73,19 @@ preview and a passing `Vercel` check; its merge went to production. Which piece 
   the Proton inbox in 10 minutes. GitHub Mobile is the route.
 - T3's default browser profile was signed in to the first Vercel account; the new one signs in
   with a mailed code to its Proton address (read through Bridge: [proton-mail](proton-mail.md)).
+
+## A Next.js preview without Vercel
+
+Proved 28 November 2026 (WeCare trial, `TOKYO-BEANS/WeCare-Wix` branch `trial/nextjs-preview`): Next.js 16 through
+`@opennextjs/cloudflare` as its own Worker on `workers.dev`, deployed with the project's pinned
+Wrangler. Four pages and a Route Handler came to 1.08 MB gzipped (free plan limit 3 MB). The
+address is public: send `X-Robots-Tag: noindex` from `next.config` headers and a robots.txt that
+disallows all, and stub every form that would write to the live business. Traps: a Next app in a
+subfolder with `turbopack.root` set to the repository root takes the parent's
+`src/middleware.ts` as its own (copy the shared files into the app before the build instead);
+Wrangler refuses while a parent folder holds `.wrangler/deploy/config.json` from another build
+(pass `--config wrangler.jsonc`); npm on Node 26 skips the esbuild and workerd install scripts
+until `npm install-scripts approve esbuild workerd`. Advisories: the React Server Components
+remote-code flaws reach Next through its vendored React, so read Next's own advisories, not
+only React's (Next 16.4.1 changed its vendored `react-server-dom` files for GHSA-673q-mjm6-r5xr,
+the typed-array flaw React lists as GHSA-xqc2-xf4c-x3h3).
