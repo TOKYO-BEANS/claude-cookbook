@@ -17,8 +17,10 @@ the desktop apps.
 - `recipes/sandboxes-setup.md`: the hook paragraph says so.
 - The laptop (owner's yes and sudo password, 28 November 2026): Ubuntu's
   `systemd-zram-generator` 1.2.1-2, `/etc/systemd/zram-generator.conf` (`zram-size = ram / 2`,
-  zstd, priority 100; the generator caps it at 4 GB). `/dev/zram0` is used before `/swap.img`,
-  which stays as overflow.
+  zstd, priority 100; the device running since the install is the package's own default,
+  min(ram / 2, 4096) with lzo-rle, started 4 s before this file was written; with this file it
+  is ram / 2, about 7 GB, with zstd, from the next start). `/dev/zram0` is used before
+  `/swap.img`, which stays as overflow.
 
 **Verification.** `swapon --show` lists `/dev/zram0` 4G at priority 100 beside `/swap.img`.
 Stopping the scan took available memory from 1.8 to 3.5 GB. The suite ran in a Depot sandbox

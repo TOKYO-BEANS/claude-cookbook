@@ -30,8 +30,8 @@
   end `# local-run: <why, 10+ chars>`. While memory is short (laptop-load-lib's memory and
   swap limits), every local test run or scan waits, in any folder and past `# local-run`
   (owner, 28 November 2026): a 2.3 GB local `semgrep ci` and ten open chats filled RAM and
-  swap. Run it in a sandbox or wait. The laptop has 4 GB of zram (compressed swap in RAM)
-  before `/swap.img` since that day.
+  swap. Run it in a sandbox or wait. The laptop has zram (compressed swap in RAM, half the
+  RAM, zstd from the next start) before `/swap.img` since that day.
 - **At the owner's message** (hook `laptop-load-note.mjs`, UserPromptSubmit), in a T3 chat on
   the laptop while it is near ([the limits](sandboxes-boat-chat.md)), once an hour per chat, the
   chat hears the reasons and the route: a chat that fits boat (a first message or one already
